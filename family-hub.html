@@ -110,9 +110,6 @@
     </div>
 
     <!-- Budget total summary (month/week only) -->
-    <div id="budgetTotalCard" style="display:none">
-      <div id="budgetTotalInner"></div>
-    </div>
 
     <!-- Calendars toggle -->
     <div class="card" id="calendarCard" style="display:none">
@@ -222,6 +219,9 @@
         </div>
         <button class="btn btn-sm btn-primary" onclick="openBudgetCardAdd()" id="budgetAddBtn"
                 style="padding:4px 10px">+ Add</button>
+      </div>
+      <div id="budgetTotalCard" style="display:none">
+        <div id="budgetTotalInner"></div>
       </div>
       <div class="card-body" id="budgetCardBody">
         <!-- populated by renderBudgetCard() -->

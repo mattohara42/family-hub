@@ -357,13 +357,19 @@ function renderBudgetCard() {
     }
   }
 
-  // Hide main budget card if no items for this period
-  if (!budgetItems.length || !upcoming.length) {
+  // Hide entire budget card only when there are no budget items at all
+  if (!budgetItems.length) {
     card.style.display = 'none';
     return;
   }
-  // Restore visibility if widget is enabled
   if (widgetVisibility.budget) card.style.display = '';
+
+  // No line items for this period — show totals strip but no list
+  if (!upcoming.length) {
+    if (labelEl) labelEl.textContent = periodLabel;
+    body.innerHTML = '';
+    return;
+  }
 
   if (labelEl) labelEl.textContent = periodLabel;
   body.innerHTML = '';
