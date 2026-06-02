@@ -24,9 +24,8 @@ Move sensitive API keys off the client by adding serverless proxy functions.
 
 ## Sharing & Sync
 
-### Shared family member list
-**Priority: Medium**
-The family members list (used for to-do assignment) is stored per-device. A single Firestore `config/familyMembers` document would mean set-it-once across all devices. Currently every device must add members manually in Settings → General.
+### ~~Shared family member list~~ ✅ Done
+Family members are now stored in the Firestore `familyMembers` collection and sync in real time across all devices.
 
 ### ~~Shared budget items via Firebase~~ ✅ Done
 Budget items are already in the Firestore `budget` collection and sync in real time.

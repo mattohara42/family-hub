@@ -2180,6 +2180,25 @@ function setupListeners() {
       console.log('[MealPlan] Migrated', legacyMealEntries.length, 'meal(s) from localStorage to Firestore.');
     });
   }
+
+  // Family members — real-time sync so every device shares the same list
+  db.collection('familyMembers').orderBy('name').onSnapshot(snap => {
+    familyMembers = snap.docs.map(doc => ({ id: doc.id, name: doc.data().name }));
+    renderFamilyMemberList();
+  });
+
+  // One-time migration: push localStorage family members to Firestore
+  const legacyMembers = lsGet('fh_familyMembers', []);
+  if (legacyMembers.length) {
+    const memberBatch = db.batch();
+    legacyMembers.forEach(m => {
+      memberBatch.set(db.collection('familyMembers').doc(), { name: m.name });
+    });
+    memberBatch.commit().then(() => {
+      localStorage.removeItem('fh_familyMembers');
+      console.log('[FamilyMembers] Migrated', legacyMembers.length, 'member(s) from localStorage to Firestore.');
+    });
+  }
 }
 
 function renderTodoList() {
@@ -2377,26 +2396,37 @@ function renderFamilyMemberList() {
     familyMembers.forEach((m, i) => {
       const row = document.createElement('div');
       row.style.cssText = 'display:flex;align-items:center;gap:8px;background:var(--surface2);border-radius:8px;padding:6px 10px;font-size:.84rem;margin-bottom:6px';
+      const removeArg = db ? `'${m.id}'` : i;
       row.innerHTML = `<span style="flex:1">👤 ${esc(m.name)}</span>
-        <button onclick="removeFamilyMember(${i})" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem;line-height:1;padding:0 2px">✕</button>`;
+        <button onclick="removeFamilyMember(${removeArg})" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem;line-height:1;padding:0 2px">✕</button>`;
       el.appendChild(row);
     });
   }
   populateTodoAssigneeDropdown();
 }
 
-function addFamilyMember() {
+async function addFamilyMember() {
   const input = document.getElementById('newFamilyMemberInput');
   const name  = input.value.trim();
   if (!name) return;
+  input.value = '';
+  if (db) {
+    await db.collection('familyMembers').add({ name });
+    // onSnapshot updates familyMembers + renderFamilyMemberList
+    return;
+  }
   familyMembers.push({ name });
   localStorage.setItem('fh_familyMembers', JSON.stringify(familyMembers));
-  input.value = '';
   renderFamilyMemberList();
 }
 
-function removeFamilyMember(i) {
-  familyMembers.splice(i, 1);
+async function removeFamilyMember(idOrIndex) {
+  if (db) {
+    await db.collection('familyMembers').doc(idOrIndex).delete();
+    // onSnapshot updates familyMembers + renderFamilyMemberList
+    return;
+  }
+  familyMembers.splice(idOrIndex, 1);
   localStorage.setItem('fh_familyMembers', JSON.stringify(familyMembers));
   renderFamilyMemberList();
 }
