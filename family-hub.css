@@ -2192,6 +2192,85 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
   .widget-toggle-row input[type=checkbox] { width: 20px; height: 20px; }
 }
 
+/* ── 8. Mobile bottom navigation ── */
+
+/* Hidden on desktop — shown only inside the 640px media query below */
+.mobile-bottom-nav { display: none; }
+
+@media (max-width: 640px) {
+  /* Calendar tab: hide sidebar */
+  body[data-mobile-tab="cal"] .sidebar    { display: none; }
+
+  /* Widgets tab: hide calendar column, make sidebar scrollable */
+  body[data-mobile-tab="widgets"] .cal-column { display: none; }
+  body[data-mobile-tab="widgets"] .sidebar {
+    display: flex !important;
+    flex-direction: column;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* Bottom nav bar */
+  .mobile-bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: var(--surface);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    z-index: 200;
+  }
+  .mobile-nav-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 0.65rem;
+    font-weight: var(--weight-semi);
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    padding: 6px 0;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+    transition: color 0.15s;
+  }
+  .mobile-nav-btn.active { color: var(--accent); }
+  .mobile-nav-icon { font-size: 1.3rem; line-height: 1; }
+
+  /* Pad body bottom so content doesn't sit under the nav bar */
+  body { padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px)); }
+
+  /* Safe-area left/right (notched phones in landscape) */
+  body {
+    padding-left:  max(10px, env(safe-area-inset-left));
+    padding-right: max(10px, env(safe-area-inset-right));
+  }
+
+  /* iOS: prevent auto-zoom when focusing any text input */
+  input:not([type=checkbox]):not([type=radio]),
+  select,
+  textarea {
+    font-size: max(16px, 1em);
+  }
+}
+
+/* ≤400px: re-apply bottom padding (that breakpoint resets padding shorthand) */
+@media (max-width: 400px) {
+  body { padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px)); }
+}
+
 /* ── Budget Card ── */
 .budget-card-nav {
   background: var(--surface2);

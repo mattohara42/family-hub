@@ -107,6 +107,7 @@ let todoItems       = []; // in-memory mirror of Firestore 'todo' collection for
 // Migrate old 'amazing' mode name to 'nautical'
 if (localStorage.getItem('fh_mode') === 'amazing') localStorage.setItem('fh_mode', 'nautical');
 let appMode         = localStorage.getItem('fh_mode') || 'dark';   // 'light' | 'dark' | 'nautical'
+let mobileTab       = localStorage.getItem('fh_mobileTab') || 'cal';  // 'cal' | 'widgets'
 let smsContacts     = lsGet('fh_smsContacts', []);
 // migrate legacy single-number setting
 (function(){
@@ -573,6 +574,7 @@ window.addEventListener('load', () => {
     initGoogleAuth();
   }
   applyAppMode(appMode);
+  setMobileTab(mobileTab);
   if (weatherLocations.length) showWeatherLocation(0);
   else if (weatherCity) { weatherLocations = [weatherCity]; showWeatherLocation(0); }
   switchCalView(calView);   // sets up tabs + renders the right view
@@ -3653,6 +3655,16 @@ function removeSmsContact(idx) {
 }
 
 // ── Appearance mode ────────────────────────────────────────────
+function setMobileTab(tab) {
+  mobileTab = tab;
+  localStorage.setItem('fh_mobileTab', tab);
+  document.body.setAttribute('data-mobile-tab', tab);
+  const calBtn = document.getElementById('mobileNavCal');
+  const widBtn = document.getElementById('mobileNavWidgets');
+  if (calBtn) calBtn.classList.toggle('active', tab === 'cal');
+  if (widBtn) widBtn.classList.toggle('active', tab === 'widgets');
+}
+
 function applyAppMode(mode) {
   appMode = mode;
   document.body.classList.remove('light-mode', 'nautical-mode');

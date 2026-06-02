@@ -3,6 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f1117" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Family Hub" />
   <title>Family Hub</title>
   <!-- Content Security Policy — restricts script/connect sources to known origins -->
   <meta http-equiv="Content-Security-Policy"
@@ -25,7 +29,7 @@
 
   <link rel="stylesheet" href="family-hub.css" />
 </head>
-<body class="colors">
+<body class="colors" data-mobile-tab="cal">
 
 <div id="bgPhoto"></div>
 
@@ -292,6 +296,18 @@
   </div><!-- /sidebar -->
 
 </div><!-- /layout -->
+
+<!-- Mobile bottom navigation (shown only on small screens via CSS) -->
+<nav class="mobile-bottom-nav" id="mobileNav">
+  <button class="mobile-nav-btn" id="mobileNavCal" onclick="setMobileTab('cal')">
+    <span class="mobile-nav-icon">📅</span>
+    <span>Calendar</span>
+  </button>
+  <button class="mobile-nav-btn" id="mobileNavWidgets" onclick="setMobileTab('widgets')">
+    <span class="mobile-nav-icon">🧩</span>
+    <span>Widgets</span>
+  </button>
+</nav>
 
 <!-- Settings Modal -->
 <div class="modal-overlay" id="settingsModal" onclick="if(event.target===this)closeSettings()">
