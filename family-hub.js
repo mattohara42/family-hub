@@ -347,10 +347,8 @@ function renderBudgetCard() {
 
     if (budgetItems.length && (weekTotal > 0 || monthTotal > 0)) {
       totalInner.innerHTML =
-        `<span class="budget-total-label">Total Bills this Week</span>
-         <span class="budget-total-amount">${fmt$(weekTotal)}</span>
-         <span class="budget-total-label" style="margin-top:6px">Total Bills this Month</span>
-         <span class="budget-total-amount">${fmt$(monthTotal)}</span>`;
+        `<div class="budget-total-row"><span class="budget-total-label">Total Bills this Week</span><span class="budget-total-amount">${fmt$(weekTotal)}</span></div>
+         <div class="budget-total-row"><span class="budget-total-label">Total Bills this Month</span><span class="budget-total-amount">${fmt$(monthTotal)}</span></div>`;
       totalCard.style.display = '';
     } else {
       totalCard.style.display = 'none';
@@ -422,14 +420,6 @@ function renderBudgetCard() {
       </div>
     </div>`;
   body.appendChild(addForm);
-
-  // ── Summary bar ──
-  const total = upcoming.reduce((s, { item }) => s + item.amount, 0);
-  const bar = document.createElement('div');
-  bar.className = 'budget-summary-bar';
-  bar.innerHTML = `<span class="budget-summary-label">${esc(summaryTitle)}</span>
-                   <span class="budget-summary-amount">${fmt$(total)}</span>`;
-  body.appendChild(bar);
 
   // ── Bill rows ──
   upcoming.forEach(({ item, date }) => {
