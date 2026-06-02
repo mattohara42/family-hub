@@ -661,6 +661,87 @@ body.has-bg #budgetTotalCard {
   opacity: .9;
 }
 
+/* ── Multi-day event spanning ── */
+/* Start/mid/end bars bleed to cell edges (cell padding = 4px, so margin = -4px) */
+.cal-event-span-start,
+.cal-event-span-mid,
+.cal-event-span-end {
+  border-radius: 0;
+  margin-left: -4px;
+  margin-right: -4px;
+  margin-bottom: 2px;
+  min-height: 1.1em;
+}
+.cal-event-span-start {
+  border-radius: 3px 0 0 3px;
+  margin-left: 0;
+}
+.cal-event-span-end {
+  border-radius: 0 3px 3px 0;
+  margin-right: 0;
+}
+.cal-event-span-mid { opacity: .88; }
+
+/* ── Agenda View ── */
+#agendaView {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  padding: 2px 0;
+  -webkit-overflow-scrolling: touch;
+}
+.agenda-day-header {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  padding: 14px 6px 4px;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  flex-shrink: 0;
+}
+.agenda-day-header:first-child { padding-top: 4px; }
+.agenda-day-header.agenda-today { color: var(--accent); }
+.agenda-event {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 6px;
+  border-radius: 6px;
+  cursor: default;
+  flex-shrink: 0;
+  transition: background .12s;
+}
+.agenda-event.agenda-clickable { cursor: pointer; }
+.agenda-event.agenda-clickable:hover { background: var(--surface2); }
+.agenda-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.agenda-info { flex: 1; min-width: 0; }
+.agenda-time {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  margin-bottom: 1px;
+}
+.agenda-title {
+  font-size: var(--text-sm);
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.agenda-empty {
+  text-align: center;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  padding: 40px 0;
+}
+
 /* ── Weather ── */
 #weatherSetup { display: flex; gap: 8px; flex-wrap: wrap; }
 #weatherSetup input {

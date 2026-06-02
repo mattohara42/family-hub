@@ -58,9 +58,10 @@
         </div>
         <!-- Right: view tabs -->
         <div class="cal-view-tabs">
-          <button class="cal-view-tab" id="viewTab_month" onclick="switchCalView('month')">Month</button>
-          <button class="cal-view-tab" id="viewTab_week"  onclick="switchCalView('week')">Week</button>
-          <button class="cal-view-tab" id="viewTab_day"   onclick="switchCalView('day')">Day</button>
+          <button class="cal-view-tab" id="viewTab_month"  onclick="switchCalView('month')">Month</button>
+          <button class="cal-view-tab" id="viewTab_week"   onclick="switchCalView('week')">Week</button>
+          <button class="cal-view-tab" id="viewTab_day"    onclick="switchCalView('day')">Day</button>
+          <button class="cal-view-tab" id="viewTab_agenda" onclick="switchCalView('agenda')">Agenda</button>
         </div>
       </div>
       <div class="card-body">
@@ -68,8 +69,9 @@
           Sign in with Google to view your calendar events.
         </div>
         <div class="cal-grid" id="calGrid"></div>
-        <div id="weekView" style="display:none"></div>
-        <div id="dayView"  style="display:none"></div>
+        <div id="weekView"   style="display:none"></div>
+        <div id="dayView"    style="display:none"></div>
+        <div id="agendaView" style="display:none"></div>
       </div>
     </div>
 

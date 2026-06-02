@@ -579,6 +579,7 @@ window.addEventListener('load', () => {
   else if (weatherCity) { weatherLocations = [weatherCity]; showWeatherLocation(0); }
   switchCalView(calView);   // sets up tabs + renders the right view
   renderYearStrip();
+  setupCalSwipe();
   setupListeners();
   loadBgFromDb();
   populateTodoAssigneeDropdown();
@@ -700,6 +701,8 @@ function changeCalPeriod(delta) {
     calViewDate = new Date(calViewDate.getFullYear(), calViewDate.getMonth() + delta, 1);
   } else if (calView === 'week') {
     calViewDate = new Date(calViewDate.getTime() + delta * 7 * 86400000);
+  } else if (calView === 'agenda') {
+    calViewDate = new Date(calViewDate.getTime() + delta * 30 * 86400000);
   } else {
     calViewDate = new Date(calViewDate.getTime() + delta * 86400000);
   }
@@ -711,7 +714,7 @@ function changeCalPeriod(delta) {
 function switchCalView(view) {
   calView = view;
   localStorage.setItem('fh_calView', view);
-  ['month','week','day'].forEach(v => {
+  ['month','week','day','agenda'].forEach(v => {
     const btn = document.getElementById('viewTab_' + v);
     if (btn) btn.classList.toggle('active', v === view);
   });
@@ -720,13 +723,15 @@ function switchCalView(view) {
 }
 
 function renderCurrentView() {
-  document.getElementById('calGrid').style.display  = calView === 'month' ? ''     : 'none';
-  document.getElementById('weekView').style.display = calView === 'week'  ? 'flex' : 'none';
-  document.getElementById('dayView').style.display  = calView === 'day'   ? 'flex' : 'none';
-  if (calView === 'month') renderMonthGrid();
-  if (calView === 'week')  renderWeekGrid();
-  if (calView === 'day')   renderDayGrid();
-  renderBudgetCard(); // sync sidebar budget summary to current view/period
+  document.getElementById('calGrid').style.display      = calView === 'month'  ? ''     : 'none';
+  document.getElementById('weekView').style.display     = calView === 'week'   ? 'flex' : 'none';
+  document.getElementById('dayView').style.display      = calView === 'day'    ? 'flex' : 'none';
+  document.getElementById('agendaView').style.display   = calView === 'agenda' ? 'flex' : 'none';
+  if (calView === 'month')  renderMonthGrid();
+  if (calView === 'week')   renderWeekGrid();
+  if (calView === 'day')    renderDayGrid();
+  if (calView === 'agenda') renderAgendaView();
+  renderBudgetCard();
 }
 
 // ── Week View ─────────────────────────────────────────────────
@@ -1152,11 +1157,31 @@ function makeDayCell(year, month, day, otherMonth, isToday) {
   const evts = Object.entries(calEventCache)
     .filter(([calId]) => !disabledCals.has(calId))
     .flatMap(([, byDate]) => byDate[key] || []);
+  // Cell-level click opens new event editor
+  if (!otherMonth && googleToken) {
+    cell.style.cursor = 'pointer';
+    cell.onclick = () => openEventEditor(null, key);
+  }
+
   evts.slice(0, 3).forEach(ev => {
     const pill = document.createElement('div');
-    pill.className = 'cal-event' + (ev.holiday ? ' cal-event-holiday' : '');
+    const isMultiDay = ev.allDay && ev.startDate && ev.endDate && ev.endDate > ev.startDate;
+    let spanClass = '';
+    if (isMultiDay) {
+      // Last date in range is endDate - 1 day
+      const lastKey = new Date(new Date(ev.endDate + 'T00:00:00').getTime() - 86400000)
+        .toISOString().slice(0, 10);
+      if (key === ev.startDate && key === lastKey) spanClass = ''; // single-day fallback
+      else if (key === ev.startDate) spanClass = 'cal-event-span-start';
+      else if (key === lastKey)      spanClass = 'cal-event-span-end';
+      else                           spanClass = 'cal-event-span-mid';
+    }
+    pill.className = 'cal-event' + (ev.holiday ? ' cal-event-holiday' : '') + (spanClass ? ' ' + spanClass : '');
     pill.style.background = ev.color;
-    pill.textContent = (ev.holiday ? '🎉 ' : '') + ev.summary;
+    // Only show text on start day (or non-spanning events)
+    if (!isMultiDay || key === ev.startDate) {
+      pill.textContent = (ev.holiday ? '🎉 ' : '') + ev.summary;
+    }
     pill.title = ev.summary;
     if (!ev.holiday && ev.eventId) {
       pill.onclick = e => { e.stopPropagation(); openEventEditor(ev); };
@@ -1179,6 +1204,7 @@ function makeDayCell(year, month, day, otherMonth, isToday) {
     pill.style.color = '#e57373';
     pill.textContent = `💰 ${item.name} ${fmt$(item.amount)}`;
     pill.title = `${item.name} — ${fmt$(item.amount)} (${freqLabel(item)})`;
+    pill.onclick = e => e.stopPropagation();
     cell.appendChild(pill);
   });
 
@@ -1188,6 +1214,7 @@ function makeDayCell(year, month, day, otherMonth, isToday) {
     pill.className = 'cal-event-todo';
     pill.textContent = '✅ ' + todo.text + (todo.assignedTo ? ' · ' + todo.assignedTo : '');
     pill.title = todo.text + (todo.assignedTo ? ' — assigned to ' + todo.assignedTo : '');
+    pill.onclick = e => e.stopPropagation();
     cell.appendChild(pill);
   });
 
@@ -1209,6 +1236,10 @@ async function loadAllCalendars() {
     const d = calViewDate;
     timeMin = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0).toISOString();
     timeMax = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59).toISOString();
+  } else if (calView === 'agenda') {
+    const start = new Date(calViewDate); start.setHours(0, 0, 0, 0);
+    const end   = new Date(start.getTime() + 30 * 86400000); end.setHours(23, 59, 59);
+    timeMin = start.toISOString(); timeMax = end.toISOString();
   } else {
     const year = calViewDate.getFullYear(), month = calViewDate.getMonth();
     timeMin = new Date(year, month, 1).toISOString();
@@ -1221,21 +1252,32 @@ async function loadAllCalendars() {
   function cacheEvents(calId, items, color, holiday = false) {
     if (!calEventCache[calId]) calEventCache[calId] = {};
     items.forEach(ev => {
-      const dateStr = ev.start?.date || ev.start?.dateTime?.slice(0,10);
-      if (!dateStr) return;
-      if (!calEventCache[calId][dateStr]) calEventCache[calId][dateStr] = [];
-      calEventCache[calId][dateStr].push({
-        eventId: ev.id || null,
+      const startDate = ev.start?.date || ev.start?.dateTime?.slice(0,10);
+      if (!startDate) return;
+      const base = {
+        eventId:   ev.id || null,
         calId,
-        summary: ev.summary || (holiday ? '(Holiday)' : '(No title)'),
+        summary:   ev.summary || (holiday ? '(Holiday)' : '(No title)'),
         description: ev.description || '',
         color, holiday,
-        allDay:  !!ev.start?.date,
-        startDT: ev.start?.dateTime || null,
-        endDT:   ev.end?.dateTime   || null,
-        startDate: ev.start?.date   || null,
-        endDate:   ev.end?.date     || null,
-      });
+        allDay:    !!ev.start?.date,
+        startDT:   ev.start?.dateTime || null,
+        endDT:     ev.end?.dateTime   || null,
+        startDate: ev.start?.date     || null,
+        endDate:   ev.end?.date       || null,
+      };
+      // Multi-day all-day events: cache on every date in their range
+      if (base.allDay && base.startDate && base.endDate && base.endDate > base.startDate) {
+        const endD = new Date(base.endDate + 'T00:00:00');
+        for (let d = new Date(base.startDate + 'T00:00:00'); d < endD; d.setDate(d.getDate() + 1)) {
+          const key = d.toISOString().slice(0, 10);
+          if (!calEventCache[calId][key]) calEventCache[calId][key] = [];
+          calEventCache[calId][key].push(base);
+        }
+      } else {
+        if (!calEventCache[calId][startDate]) calEventCache[calId][startDate] = [];
+        calEventCache[calId][startDate].push(base);
+      }
     });
   }
 
@@ -1271,6 +1313,86 @@ async function loadAllCalendars() {
   renderCurrentView();
   renderYearStrip();
   document.getElementById('calendarStatus').textContent = '';
+}
+
+// ── Agenda View ──
+function renderAgendaView() {
+  const el = document.getElementById('agendaView');
+  if (!el) return;
+  el.innerHTML = '';
+
+  const start = new Date(calViewDate + 'T00:00:00');
+  const today = new Date(); today.setHours(0,0,0,0);
+  const days = 30;
+
+  let hasAny = false;
+  for (let i = 0; i < days; i++) {
+    const d = new Date(start); d.setDate(d.getDate() + i);
+    const key = d.toISOString().slice(0,10);
+    const isToday = d.getTime() === today.getTime();
+
+    const evts = Object.entries(calEventCache)
+      .filter(([calId]) => !disabledCals.has(calId))
+      .flatMap(([, byDate]) => byDate[key] || [])
+      .sort((a, b) => {
+        if (a.allDay && !b.allDay) return -1;
+        if (!a.allDay && b.allDay) return 1;
+        return (a.startDT || '') < (b.startDT || '') ? -1 : 1;
+      });
+
+    if (!evts.length) continue;
+    hasAny = true;
+
+    const hdr = document.createElement('div');
+    hdr.className = 'agenda-day-header' + (isToday ? ' agenda-today' : '');
+    hdr.textContent = d.toLocaleDateString(undefined, { weekday:'short', month:'short', day:'numeric' });
+    el.appendChild(hdr);
+
+    evts.forEach(ev => {
+      const row = document.createElement('div');
+      const clickable = !ev.holiday && ev.eventId;
+      row.className = 'agenda-event' + (clickable ? ' agenda-clickable' : '');
+      if (clickable) row.onclick = () => openEventEditor(ev);
+
+      const dot = document.createElement('div');
+      dot.className = 'agenda-dot';
+      dot.style.background = ev.color;
+
+      const info = document.createElement('div');
+      info.className = 'agenda-info';
+
+      const timeEl = document.createElement('div');
+      timeEl.className = 'agenda-time';
+      if (ev.allDay) {
+        timeEl.textContent = 'All day';
+      } else if (ev.startDT) {
+        timeEl.textContent = new Date(ev.startDT).toLocaleTimeString(undefined, { hour:'numeric', minute:'2-digit' });
+      }
+
+      const title = document.createElement('div');
+      title.className = 'agenda-title';
+      title.textContent = (ev.holiday ? '🎉 ' : '') + ev.summary;
+
+      info.appendChild(timeEl);
+      info.appendChild(title);
+      row.appendChild(dot);
+      row.appendChild(info);
+      el.appendChild(row);
+    });
+  }
+
+  if (!hasAny) {
+    const empty = document.createElement('div');
+    empty.className = 'agenda-empty';
+    empty.textContent = googleToken ? 'No events in the next 30 days' : 'Sign in to see your events';
+    el.appendChild(empty);
+  }
+
+  // Update header label
+  const endDate = new Date(start); endDate.setDate(endDate.getDate() + days - 1);
+  const lbl = document.getElementById('calMonthLabel');
+  if (lbl) lbl.textContent = start.toLocaleDateString(undefined, { month:'short', day:'numeric' })
+    + ' – ' + endDate.toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' });
 }
 
 function renderCalendarTabs() {
@@ -2104,6 +2226,23 @@ function changeCity() {
   renderWeatherNav();
   document.getElementById('cityInput').value = '';
   document.getElementById('cityInput').focus();
+}
+
+// ── Calendar Swipe ──
+function setupCalSwipe() {
+  let startX = 0, startY = 0;
+  const body = document.querySelector('.cal-card .card-body');
+  if (!body) return;
+  body.addEventListener('touchstart', e => {
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+  }, { passive: true });
+  body.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - startX;
+    const dy = e.changedTouches[0].clientY - startY;
+    if (Math.abs(dx) < 50 || Math.abs(dy) > Math.abs(dx)) return;
+    changeCalPeriod(dx < 0 ? 1 : -1);
+  }, { passive: true });
 }
 
 // ── Firestore Lists ─────────────────────────────────────────────
