@@ -3151,22 +3151,39 @@ async function generateMealSuggestions() {
 
   const existing    = mealPlan[_mealDate] || {};
   const existingStr = Object.entries(existing).map(([t,m]) => `${t}: ${m.name}`).join(', ');
-  const count       = _mealType === 'all' ? '1 breakfast, 1 lunch, and 3 dinner options' : `3 ${_mealType} options`;
   const dietStr     = mealDietPrefs.length ? mealDietPrefs.join(', ') : 'none specified';
 
+  // Per-meal-type count and variant instructions
+  let countStr, variantGuide;
+  if (_mealType === 'breakfast') {
+    countStr     = '3 breakfast options';
+    variantGuide = 'Make 2 solid everyday breakfast options (variant: "Standard") and 1 unique, creative, or unexpected breakfast (variant: "Creative").';
+  } else if (_mealType === 'lunch') {
+    countStr     = '3 lunch options';
+    variantGuide = 'Make 2 practical everyday lunch options (variant: "Standard") and 1 unique, creative, or unexpected lunch (variant: "Creative").';
+  } else if (_mealType === 'dinner') {
+    countStr     = '3 dinner options';
+    variantGuide = 'Make exactly: 1 creative or inventive dinner (variant: "Creative"), 1 quick dinner ready in 30 minutes or less (variant: "Quick"), and 1 simple easy weeknight dinner (variant: "Easy").';
+  } else {
+    countStr     = '1 breakfast, 1 lunch, and 3 dinner options';
+    variantGuide = 'For breakfast and lunch use variant: "Standard". For dinners make: 1 creative (variant: "Creative"), 1 quick under 30 min (variant: "Quick"), 1 easy weeknight (variant: "Easy").';
+  }
+
   const prompt =
-`Suggest ${count} for a family meal plan.
+`Suggest ${countStr} for a family meal plan.
 ${style       ? `Cuisine/style preference: ${style}` : ''}
 ${pantry      ? `On-hand ingredients to incorporate: ${pantry}` : ''}
 ${calContext  ? `Calendar events today (gauge busyness/time): ${calContext}` : ''}
 ${existingStr ? `Already planned today: ${existingStr}` : ''}
 Dietary preferences: ${dietStr}
+${variantGuide}
 Prioritise healthy, nutritious, well-balanced options.
 Choose the best matching recipe site from: allrecipes, seriouseats, nytcooking, epicurious, simplyrecipes, bonappetit.
 
 Return ONLY a valid JSON array — no markdown, no explanation. Each element:
 {
   "mealType": "${_mealType === 'all' ? 'breakfast|lunch|dinner' : _mealType}",
+  "variant": "Standard|Creative|Quick|Easy",
   "name": "Meal Name",
   "description": "1–2 sentence description",
   "cuisine": "cuisine type",
@@ -3223,17 +3240,25 @@ function renderMealSuggestions() {
   }
   const MEAL_TYPE_LABELS = { breakfast:'🌅 Breakfast', lunch:'☀️ Lunch', dinner:'🌙 Dinner' };
 
+  const VARIANT_STYLES = {
+    Creative: 'background:rgba(155,89,182,.2);color:#c39bd3',
+    Quick:    'background:rgba(52,152,219,.2);color:#7fb3d3',
+    Easy:     'background:rgba(39,174,96,.2);color:#82c99a',
+  };
+
   _mealSuggestions.forEach((s, i) => {
     const site       = RECIPE_SITES[s.recipeSite] || RECIPE_SITES.allrecipes;
     const recipeUrl  = site.url(s.recipeSearchQuery || s.name);
     const typeLabel  = _mealType === 'all' ? `<span style="font-size:.7rem;font-weight:600;color:var(--accent);margin-left:6px">${MEAL_TYPE_LABELS[s.mealType] || s.mealType}</span>` : '';
+    const vStyle     = s.variant && s.variant !== 'Standard' ? VARIANT_STYLES[s.variant] || '' : '';
+    const variantBadge = vStyle ? `<span style="font-size:.68rem;font-weight:700;padding:1px 7px;border-radius:20px;margin-left:7px;${vStyle}">${esc(s.variant)}</span>` : '';
     const ingList    = (s.ingredients || []).slice(0,7).join(', ') + ((s.ingredients||[]).length > 7 ? '…' : '');
 
     const card = document.createElement('div');
     card.className = 'meal-suggestion';
     card.id = `meal-s-${i}`;
     card.innerHTML = `
-      <div class="meal-s-name">${esc(s.name)}${typeLabel}</div>
+      <div class="meal-s-name">${esc(s.name)}${typeLabel}${variantBadge}</div>
       <div class="meal-s-meta">
         <span>⏱ ${esc(s.prepTime)} min</span>
         <span>🍜 ${esc(s.cuisine)}</span>
