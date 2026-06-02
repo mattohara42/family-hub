@@ -1321,7 +1321,7 @@ function renderAgendaView() {
   if (!el) return;
   el.innerHTML = '';
 
-  const start = new Date(calViewDate + 'T00:00:00');
+  const start = new Date(calViewDate); start.setHours(0,0,0,0);
   const today = new Date(); today.setHours(0,0,0,0);
   const days = 30;
 
