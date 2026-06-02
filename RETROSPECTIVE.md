@@ -178,10 +178,10 @@ All work done with **Claude Sonnet 4.6** (Claude Code / FleetView interface).
 
 | Issue | Workaround / Notes |
 |---|---|
-| Google OAuth blocks `file://` URLs | Serve via `python3 -m http.server 8080` |
+| Google OAuth blocks `file://` URLs | Serve via `python3 -m http.server 8080` or Netlify; add the origin to Google Cloud Console and Firebase Console |
 | Photos Picker URLs expire (session-based) | Re-open Picker to refresh; images stored in IndexedDB |
 | Gemini free tier has daily limits | Use AI Studio key in a billing-free project |
 | Budget items not shared via Firebase | By design — budget is personal; could be added in a future session |
-| No user authentication | Acceptable for local/family use; not suitable for public hosting |
+| No user authentication on the page itself | Acceptable for family use — the app is deployed on Netlify but Google sign-in gates all personal data (calendar, photos, Firebase lists) |
 | Weather forecast sometimes shows <5 days | OWM free tier returns up to 40 3-hour slots; fewer future days available late in the day |
 | Dictionary API occasionally unavailable | `WOTD_FALLBACKS` covers ~20 common words; rarer words show a retry button |

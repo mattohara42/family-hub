@@ -9,7 +9,7 @@ A living reference of every feature, its key functions, state variables, localSt
 ## Architecture
 
 - **Three files:** `family-hub.html` (structure), `family-hub.css` (all styles), `family-hub.js` (all logic)
-- **Served via:** `python3 -m http.server 8080` → `http://localhost:8080/family-hub.html`
+- **Served via:** Netlify (production) or `python3 -m http.server 8080` → `http://localhost:8080/family-hub.html` (local dev)
 - **Config block:** Top of `family-hub.js` — `FIREBASE_CONFIG`, `GOOGLE_CLIENT_ID`, pinned API constants
 - **State:** Mix of `let` globals + `localStorage` + IndexedDB (photos only)
 - **Shared state:** Firebase Firestore (shopping list, to-do list, budget)
@@ -92,7 +92,7 @@ let gsiReady = false;
 
 **Control card:** `#controlCard` in sidebar — contains `#userInfo`, sign-in/sign-out buttons, ⚙️ settings button.
 
-**Gotcha:** Must be served from `http://localhost:*`, not `file://`. Add the origin to Authorized JavaScript Origins in Google Cloud Console.
+**Gotcha:** Must be served from `http://localhost:*` or an HTTPS origin (e.g. Netlify), not `file://`. Any new origin must be added to Authorized JavaScript Origins in Google Cloud Console and to Authorized Domains in Firebase Console.
 
 ---
 

@@ -6,8 +6,8 @@
 
 ## What This Project Is
 
-A three-file family dashboard served locally.
-Served via: `python3 -m http.server 8080` → `http://localhost:8080/family-hub.html`
+A three-file family dashboard.
+Served via Netlify (production) or locally via `python3 -m http.server 8080` → `http://localhost:8080/family-hub.html`
 
 There is no build step, no npm, no framework. CDN scripts only.
 
@@ -137,7 +137,8 @@ body  (flex-column, height: 100dvh, overflow: hidden)
 - Token stored in `let googleToken = ''` (in-memory only, not localStorage)
 - Scopes: `calendar.events`, `calendar.readonly`, `userinfo.profile`, `userinfo.email`, `photospicker.mediaitems.readonly`
 - ⚠️ `generative-language` is NOT a valid OAuth scope — do not attempt it
-- ⚠️ Must serve from `http://localhost:*` — `file://` blocks OAuth popups
+- ⚠️ Must serve from `http://localhost:*` or an HTTPS origin — `file://` blocks OAuth popups
+- ⚠️ Any new serving origin (e.g. a Netlify domain) must be added to **Authorized JavaScript Origins** in Google Cloud Console and to **Authorized Domains** in Firebase Console
 
 ### Calendar event cache
 ```js
@@ -181,7 +182,8 @@ mealPlan['YYYY-MM-DD'] = {
 
 | Gotcha | Detail |
 |---|---|
-| `file://` blocks OAuth | Always use `http://localhost:8080` |
+| `file://` blocks OAuth | Always use `http://localhost:8080` or deploy to Netlify (HTTPS) |
+| New serving origin breaks OAuth | Add origin to Google Cloud Console → OAuth Client → Authorized JavaScript Origins AND Firebase Console → Authentication → Authorized Domains |
 | Photos Picker 403 | Must include `Authorization: Bearer` header when downloading images |
 | Gemini free tier disabled | Happens when GCP billing is enabled — use AI Studio key from a billing-free project |
 | Gemini model deprecated | Update `GEMINI_MODEL` constant; check for `404 NOT_FOUND` error |

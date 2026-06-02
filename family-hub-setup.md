@@ -1,8 +1,8 @@
 # Family Hub — Setup Guide
 
-*Last updated: 2026-06-01*
+*Last updated: 2026-06-02*
 
-Family Hub is a local web dashboard made of three files — `family-hub.html`, `family-hub.css`, and `family-hub.js` — that run together in your browser. No installation is required, but a handful of free cloud accounts are needed to unlock the full feature set. This guide walks through every account, every step, and every value you need to configure.
+Family Hub is a web dashboard made of three files — `family-hub.html`, `family-hub.css`, and `family-hub.js` — that run together in your browser. No installation is required, but a handful of free cloud accounts are needed to unlock the full feature set. This guide walks through every account, every step, and every value you need to configure.
 
 ---
 
@@ -17,11 +17,24 @@ Family Hub is a local web dashboard made of three files — `family-hub.html`, `
 
 ---
 
-## Before You Start — Run the Local Server
+## Before You Start — Choose How to Run Family Hub
 
-Google OAuth and the Photos Picker **will not work** when you open the HTML file directly from your filesystem (`file://`). You must serve it over a local HTTP server.
+Google OAuth and the Photos Picker **will not work** when you open the HTML file directly from your filesystem (`file://`). You need to serve it over HTTP or HTTPS. Two options:
 
-**One-time setup:**
+### Option A — Netlify (recommended, accessible from any device)
+
+Family Hub is deployed as a static site on Netlify. If the site is already set up at a Netlify URL, skip to Step 1 below. To deploy your own instance:
+
+1. Push the three files to a GitHub repository
+2. Go to [app.netlify.com](https://app.netlify.com) → **Add new site → Import an existing project**
+3. Connect GitHub → select the repo → set **Publish directory** to `.`, leave **Build command** blank
+4. Click **Deploy site** — note the assigned URL (e.g. `https://family-hub-xyz.netlify.app`)
+5. Complete Steps 1 and 2 below, then add the Netlify domain to:
+   - **Google Cloud Console → OAuth Client → Authorized JavaScript Origins**
+   - **Firebase Console → Authentication → Settings → Authorized Domains**
+
+### Option B — Local server (for development or offline use)
+
 1. Make sure Python 3 is installed (it comes pre-installed on Mac)
 2. Open Terminal
 3. `cd` to the folder containing `family-hub.html`, `family-hub.css`, and `family-hub.js`
@@ -31,9 +44,7 @@ Google OAuth and the Photos Picker **will not work** when you open the HTML file
    ```
 5. Open your browser to: `http://localhost:8080/family-hub.html`
 
-Leave that Terminal window open whenever you use Family Hub. You can bookmark `http://localhost:8080/family-hub.html`.
-
-> **Important:** All three files (`family-hub.html`, `family-hub.css`, `family-hub.js`) must be in the same folder. The HTML file loads the other two as siblings.
+Leave that Terminal window open whenever you use Family Hub locally.
 
 > **On Windows:** Python 3 may need to be installed from [python.org](https://www.python.org). The command is the same.
 
@@ -81,6 +92,7 @@ Click each one → **Enable**.
 3. Name: `Family Hub`
 4. Under **Authorized JavaScript origins**, click **Add URI** and add:
    - `http://localhost:8080`
+   - Your Netlify URL, e.g. `https://family-hub-xyz.netlify.app` (if using Netlify)
 5. Click **Create**
 6. Copy the **Client ID** — it looks like `123480809-abcdefg.apps.googleusercontent.com`
 
@@ -193,7 +205,7 @@ If you have an OpenAI API key with credits:
 
 ## Step 5 — First Launch Checklist
 
-Once all the above is done, open `http://localhost:8080/family-hub.html` and verify:
+Once all the above is done, open the app (your Netlify URL or `http://localhost:8080/family-hub.html`) and verify:
 
 - [ ] ⚙️ Settings → **Look & Feel**: Set your name and choose an appearance (Light, Dark, or Nautical)
 - [ ] Click **Sign in with Google** → sign in with your Google account
@@ -281,9 +293,15 @@ The funny loading messages shown while AI thinks are customizable:
 
 ## Sharing with Family Members
 
-Family Hub works best when every family member has the three files and serves them locally. There is no hosted version.
+Family Hub can be shared in two ways:
 
-**To share:**
+**Option A — Share via Netlify (easiest)**
+1. Send family members the Netlify URL
+2. Add each person's Google account as a Test User in Google Cloud Console (Step 1c)
+3. They open the URL, click **Sign in with Google**, and they're in
+4. The Shopping and To-Do lists sync automatically via Firebase
+
+**Option B — Each person runs it locally**
 1. Send each family member copies of `family-hub.html`, `family-hub.css`, and `family-hub.js`
 2. They put all three files in the same folder and run `python3 -m http.server 8080`
 3. Add their Google account as a Test User in Google Cloud Console (Step 1c)
@@ -311,7 +329,7 @@ Family Hub works best when every family member has the three files and serves th
 
 | Problem | Fix |
 |---|---|
-| Google sign-in does nothing | Make sure you're serving from `http://localhost:8080`, not `file://` |
+| Google sign-in does nothing | Must be served over HTTP/HTTPS — not `file://`. Use the Netlify URL or `http://localhost:8080`. Also ensure the origin is in Authorized JavaScript Origins in Google Cloud Console. |
 | "This app isn't verified" warning | Click **Advanced → Go to Family Hub (unsafe)** — this is normal for personal apps in test mode |
 | Weather shows nothing after saving key | New OWM keys take up to 2 hours to activate |
 | Weather only shows 1–2 forecast days | The free OWM tier returns up to 5 days of 3-hour slots — fewer may appear depending on time of day |
