@@ -1,0 +1,11 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# No secrets should be committed — API keys live only in family-hub.js (local copy)
+# If you ever extract keys to a separate config file, add it here:
+# config.local.js

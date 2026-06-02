@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Family Hub</title>
+  <!-- Content Security Policy — restricts script/connect sources to known origins -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self';
+                 script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com https://accounts.google.com;
+                 connect-src https:;
+                 img-src https: blob: data:;
+                 style-src 'self' 'unsafe-inline';
+                 font-src 'self' data:;
+                 frame-src 'none';" />
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+  <!-- Google API -->
+  <script src="https://apis.google.com/js/api.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer onload="onGsiLoad()"></script>
+
+  <link rel="stylesheet" href="family-hub.css" />
+</head>
+<body class="colors">
+
+<div id="bgPhoto"></div>
+
+<div id="configBanner">
+  ⚠️ <strong>First-time setup required.</strong>
+  Open <code>family-hub.js</code> in a text editor and fill in your
+  <code>FIREBASE_CONFIG</code> and <code>GOOGLE_CLIENT_ID</code> near the top.
+  See <code>family-hub-setup.md</code> for step-by-step instructions.
+</div>
+
+<div class="layout">
+
+  <!-- Left: calendar + 6-month strip stacked -->
+  <div class="cal-column">
+
+    <div class="card cal-card">
+      <div class="card-header cal-card-header">
+        <!-- Left: app title -->
+        <div class="cal-app-title">🏠 Family <span>Hub</span></div>
+        <!-- Centre: period navigator -->
+        <div class="cal-month-nav">
+          <button onclick="changeCalPeriod(-1)">&#8249;</button>
+          <span id="calMonthLabel"></span>
+          <span id="calendarStatus"></span>
+          <button onclick="changeCalPeriod(1)">&#8250;</button>
+        </div>
+        <!-- Right: view tabs -->
+        <div class="cal-view-tabs">
+          <button class="cal-view-tab" id="viewTab_month" onclick="switchCalView('month')">Month</button>
+          <button class="cal-view-tab" id="viewTab_week"  onclick="switchCalView('week')">Week</button>
+          <button class="cal-view-tab" id="viewTab_day"   onclick="switchCalView('day')">Day</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="calNotSignedIn" style="color:var(--muted);font-size:.9rem;margin-bottom:12px">
+          Sign in with Google to view your calendar events.
+        </div>
+        <div class="cal-grid" id="calGrid"></div>
+        <div id="weekView" style="display:none"></div>
+        <div id="dayView"  style="display:none"></div>
+      </div>
+    </div>
+
+    <div id="yearStrip">
+      <div class="strip-header">
+        <h2>📆 Upcoming Months</h2>
+        <span id="stripRangeLabel"></span>
+        <button class="strip-nav-btn" id="stripTodayBtn" onclick="resetStripToToday()"
+                title="Back to today" style="font-size:.7rem;width:auto;padding:0 8px;opacity:0;pointer-events:none">
+          Today
+        </button>
+        <button class="strip-nav-btn" onclick="changeStripMonth(-1)" title="Back one month">&#8249;</button>
+        <button class="strip-nav-btn" onclick="changeStripMonth(1)"  title="Forward one month">&#8250;</button>
+      </div>
+      <div class="mini-grid" id="miniGrid"></div>
+    </div>
+
+    <!-- Bottom widget strip (cards placed here when placement = bottom) -->
+    <div id="bottomStrip"></div>
+
+  </div><!-- /cal-column -->
+
+  <!-- Right: sidebar -->
+  <div class="sidebar">
+
+    <!-- Account / Settings control bar -->
+    <div class="card" id="controlCard">
+      <div id="controlCardInner">
+        <span id="userInfo"></span>
+        <div class="control-btns">
+          <button id="signInBtn"  class="btn btn-primary btn-sm" onclick="signIn()">Sign in with Google</button>
+          <button id="signOutBtn" class="btn btn-sm" style="display:none;background:var(--surface2);color:var(--muted)" onclick="signOut()">Sign out</button>
+          <button id="settingsBtn" title="Preferences" onclick="openSettings()">⚙️</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Budget total summary (month/week only) -->
+    <div id="budgetTotalCard" style="display:none">
+      <div id="budgetTotalInner"></div>
+    </div>
+
+    <!-- Calendars toggle -->
+    <div class="card" id="calendarCard" style="display:none">
+      <div class="card-header">
+        <h2>📅 Calendars</h2>
+      </div>
+      <div class="card-body" id="calendarTabs"></div>
+    </div>
+
+    <!-- Weather -->
+    <div class="card">
+      <div class="card-header">
+        <h2>🌤 Weather</h2>
+        <span id="weatherCity" style="font-size:var(--text-sm);color:var(--muted)"></span>
+      </div>
+      <div class="card-body">
+        <div id="weatherSetup">
+          <input id="cityInput" type="text" placeholder="Enter city name…"
+                 onkeydown="if(event.key==='Enter')fetchWeather()" />
+          <button class="btn btn-primary" onclick="fetchWeather()">Go</button>
+        </div>
+        <div id="weatherDisplay">
+          <div class="wx-current">
+            <div class="wx-icon" id="wIcon">☁️</div>
+            <div>
+              <div class="wx-temp" id="wTemp">--°</div>
+              <div class="wx-desc" id="wDesc"></div>
+            </div>
+          </div>
+          <div class="wx-today">
+            <span>↑ <strong id="wHigh">--</strong></span>
+            <span>↓ <strong id="wLow">--</strong></span>
+            <span>🌧 <strong id="wRain">--%</strong></span>
+            <span id="wRainTime" style="display:none">starts <strong id="wRainStart">--</strong></span>
+          </div>
+          <div class="wx-forecast" id="wForecast"></div>
+          <!-- Location navigation (visible only when >1 location) -->
+          <div id="wxLocNav" class="wx-loc-nav" style="display:none">
+            <button class="wx-loc-btn" onclick="prevWeatherLocation()" title="Previous location">&#8249;</button>
+            <div class="wx-loc-dots" id="wxLocDots"></div>
+            <button class="wx-loc-btn" onclick="nextWeatherLocation()" title="Next location">&#8250;</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Shopping List -->
+    <div class="card" id="shopCard">
+      <div class="card-header">
+        <h2>🛒 Shopping</h2>
+        <div style="display:flex;gap:4px;align-items:center">
+          <div class="sms-btn-wrap">
+            <button class="btn btn-sm" id="smsTriggerBtn"
+                    onclick="toggleSmsPopover(event)"
+                    style="background:var(--surface2);color:var(--text);padding:3px 7px">📱▾</button>
+            <div class="sms-popover" id="smsPopover"></div>
+          </div>
+          <button class="btn btn-sm" onclick="clearDoneShopping()" style="background:var(--surface2);color:var(--muted);padding:3px 7px" title="Clear completed items">✕ done</button>
+          <button class="btn btn-sm" onclick="clearAllShopping()" style="background:var(--surface2);color:var(--muted);padding:3px 7px" title="Clear all items">✕ all</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="list-input-row">
+          <input id="shopInput" type="text" placeholder="Add an item…" onkeydown="if(event.key==='Enter')addShop()" />
+          <button class="btn btn-primary btn-sm" onclick="addShop()">Add</button>
+        </div>
+        <ul id="shopList" class="list-items"></ul>
+        <div id="shopEmpty" class="list-empty" style="display:none">List is empty!</div>
+      </div>
+    </div>
+
+    <!-- To-Do List -->
+    <div class="card" id="todoCard">
+      <div class="card-header">
+        <h2>✅ To-Do</h2>
+        <div style="display:flex;gap:4px">
+          <button class="btn btn-sm" onclick="clearDoneTodo()" style="background:var(--surface2);color:var(--muted);padding:3px 7px" title="Clear completed tasks">✕ done</button>
+          <button class="btn btn-sm" onclick="clearAllTodo()" style="background:var(--surface2);color:var(--muted);padding:3px 7px" title="Clear all tasks">✕ all</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="list-input-row">
+          <input id="todoInput" type="text" placeholder="Add a task…" onkeydown="if(event.key==='Enter')addTodo()" />
+          <button class="btn btn-sm" onclick="toggleTodoExtra()" title="Due date / assign"
+                  style="background:var(--surface2);color:var(--muted);padding:0 9px">⋯</button>
+          <button class="btn btn-primary btn-sm" onclick="addTodo()">Add</button>
+        </div>
+        <div class="todo-extra" id="todoExtra">
+          <label>Due</label>
+          <input type="date" id="todoDueDate" />
+          <label>Assign</label>
+          <select id="todoAssignee">
+            <option value="">— anyone —</option>
+          </select>
+        </div>
+        <ul id="todoList" class="list-items"></ul>
+        <div id="todoEmpty" class="list-empty" style="display:none">Nothing here yet 🎉</div>
+      </div>
+    </div>
+
+    <!-- Budget -->
+    <div class="card" id="budgetCard">
+      <div class="card-header">
+        <div>
+          <h2>💰 Budget</h2>
+          <span id="budgetCardLabel" style="font-size:var(--text-xs);color:var(--muted);display:block;margin-top:1px"></span>
+        </div>
+        <button class="btn btn-sm btn-primary" onclick="openBudgetCardAdd()" id="budgetAddBtn"
+                style="padding:4px 10px">+ Add</button>
+      </div>
+      <div class="card-body" id="budgetCardBody">
+        <!-- populated by renderBudgetCard() -->
+      </div>
+    </div>
+
+    <!-- Year at a Glance -->
+    <div class="card" id="yearCard">
+      <div class="card-header">
+        <h2>📆 Year at a Glance</h2>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button onclick="changeYearCardMonth(-1)" class="strip-nav-btn" title="Back one month">&#8249;</button>
+          <button onclick="resetYearCard()" id="yearCardTodayBtn" class="strip-nav-btn" title="Back to today"
+                  style="font-size:.7rem;width:auto;padding:0 8px;display:none">Today</button>
+          <button onclick="changeYearCardMonth(1)"  class="strip-nav-btn" title="Forward one month">&#8250;</button>
+        </div>
+      </div>
+      <div class="card-body" id="yearCardBody"></div>
+    </div>
+
+    <!-- Word of the Day -->
+    <div class="card" id="wotdCard">
+      <div class="card-header">
+        <h2>📖 Word of the Day</h2>
+        <button onclick="refreshWotd()" title="New word" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem">↺</button>
+      </div>
+      <div class="card-body" id="wotdBody">
+        <div style="text-align:center;color:var(--muted);font-size:.85rem">Loading…</div>
+      </div>
+    </div>
+
+    <!-- Dad Joke of the Day -->
+    <div class="card" id="dadjokeCard">
+      <div class="card-header">
+        <h2>😄 Dad Joke</h2>
+        <button onclick="refreshDadJoke()" title="New joke" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem">↺</button>
+      </div>
+      <div class="card-body" id="dadjokeBody">
+        <div style="text-align:center;color:var(--muted);font-size:.85rem">Loading…</div>
+      </div>
+    </div>
+
+    <!-- Inspirational Quote -->
+    <div class="card" id="quoteCard">
+      <div class="card-header">
+        <h2>✨ Quote of the Day</h2>
+        <button onclick="refreshQuote()" title="New quote" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem">↺</button>
+      </div>
+      <div class="card-body" id="quoteBody">
+        <div style="text-align:center;color:var(--muted);font-size:.85rem">Loading…</div>
+      </div>
+    </div>
+
+    <!-- Family Assistant -->
+    <div class="card" id="assistantCard">
+      <div class="card-header">
+        <h2>🤖 Family Assistant</h2>
+        <button onclick="clearAssistantChat()" title="Clear chat" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.9rem">↺</button>
+      </div>
+      <div class="card-body assistant-card-body">
+        <div class="assistant-messages" id="assistantMessages">
+          <div class="assistant-welcome">Hi! Ask me about your schedule, lists, or budget — or say things like "add milk to shopping" or "what's on this week?"</div>
+        </div>
+        <div class="assistant-input-row">
+          <button class="assistant-mic" id="assistantMicBtn" onclick="toggleAssistantMic()" title="Speak" style="display:none">🎤</button>
+          <input type="text" id="assistantInput" class="assistant-input"
+                 placeholder="Ask anything…"
+                 onkeydown="if(event.key==='Enter')sendAssistantMessage()" />
+          <button class="assistant-send" onclick="sendAssistantMessage()" title="Send">↑</button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /sidebar -->
+
+</div><!-- /layout -->
+
+<!-- Settings Modal -->
+<div class="modal-overlay" id="settingsModal" onclick="if(event.target===this)closeSettings()">
+  <div class="modal">
+    <h2>⚙️ Settings</h2>
+
+    <!-- Tab bar -->
+    <div class="modal-tabs">
+      <button class="modal-tab active" data-tab="look"     onclick="switchSettingsTab('look')">🎨 Look &amp; Feel</button>
+      <button class="modal-tab"        data-tab="calendar" onclick="switchSettingsTab('calendar')">📅 Calendar</button>
+      <button class="modal-tab"        data-tab="weather"  onclick="switchSettingsTab('weather')">🌤 Weather</button>
+      <button class="modal-tab"        data-tab="shopping" onclick="switchSettingsTab('shopping')">🛒 Shopping</button>
+      <button class="modal-tab"        data-tab="todo"     onclick="switchSettingsTab('todo')">✅ To-Do</button>
+      <button class="modal-tab"        data-tab="meals"    onclick="switchSettingsTab('meals')">🍽 Meals</button>
+<button class="modal-tab"        data-tab="widgets"  onclick="switchSettingsTab('widgets')">🧩 Widgets</button>
+    </div>
+
+    <!-- Scrollable panel area -->
+    <div class="settings-panels">
+
+      <!-- ── Look & Feel ── -->
+      <div class="settings-panel active" data-panel="look">
+        <div class="field">
+          <label>Your name <span style="font-weight:400;color:var(--muted)">(shown on list items)</span></label>
+          <input type="text" id="settingName" placeholder="e.g. Matt" />
+        </div>
+        <div class="field">
+          <label>Appearance</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button id="modeLight" class="btn btn-sm"
+                    onclick="setAppMode('light')"
+                    style="flex:1;min-width:70px;display:flex;align-items:center;justify-content:center;gap:5px">
+              ☀️ Light
+            </button>
+            <button id="modeDark" class="btn btn-sm"
+                    onclick="setAppMode('dark')"
+                    style="flex:1;min-width:70px;display:flex;align-items:center;justify-content:center;gap:5px">
+              🌙 Dark
+            </button>
+            <button id="modeAmazing" class="btn btn-sm"
+                    onclick="setAppMode('nautical')"
+                    style="flex:1;min-width:70px;display:flex;align-items:center;justify-content:center;gap:5px">
+              ⚓ Nautical
+            </button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Background Images</label>
+          <button class="btn btn-primary" id="photosPickerBtn" onclick="openPhotosPicker()"
+                  style="width:100%;margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:8px">
+            <span style="font-size:1.1rem">📷</span> Choose from Google Photos
+          </button>
+          <div id="photosPickerNote" style="font-size:.78rem;color:var(--muted);margin:-6px 0 10px;text-align:center">
+            Requires Google sign-in · Enable the <strong>Photos Picker API</strong> in Google Cloud Console
+          </div>
+          <div class="bg-drop-zone" id="bgDropZone"
+               onclick="document.getElementById('bgFileInput').click()"
+               ondragover="event.preventDefault();this.classList.add('drag-over')"
+               ondragleave="this.classList.remove('drag-over')"
+               ondrop="handleBgDrop(event)">
+            <input type="file" id="bgFileInput" accept="image/*" multiple onchange="handleBgFiles(this.files)" />
+            🖼 Or click to upload local images / drag &amp; drop
+          </div>
+          <div class="bg-preview-strip" id="bgPreviewStrip"></div>
+          <div id="bgStatus"></div>
+          <div class="field-row" style="margin-top:10px">
+            <label>Rotate every</label>
+            <input type="number" id="settingSlideInterval" value="30" min="5" max="3600" />
+            <label>seconds</label>
+          </div>
+          <div style="margin-top:8px">
+            <button class="btn btn-sm" style="background:var(--surface2);color:var(--red)" onclick="clearBgImages()">Clear background images</button>
+          </div>
+        </div>
+      </div><!-- /look -->
+
+      <!-- ── Calendar ── -->
+      <div class="settings-panel" data-panel="calendar">
+        <div id="settingCalNotSignedIn" style="font-size:.82rem;color:var(--muted);padding:8px 0">
+          Sign in with Google to manage calendars.
+        </div>
+        <div id="settingCalSignedIn" style="display:none">
+          <div style="display:grid;grid-template-columns:28px 1fr 80px 24px;gap:8px;padding:0 0 4px;font-size:.72rem;color:var(--muted)">
+            <span>Color</span><span>Label</span><span>Calendar ID</span><span></span>
+          </div>
+          <ul id="settingCalList" style="list-style:none"></ul>
+          <div class="toggle-row" style="margin-top:10px;border-top:1px solid rgba(128,128,128,.12);padding-top:10px">
+            <label class="toggle-switch">
+              <input type="checkbox" id="holidaysToggle" onchange="toggleHolidays(this.checked)" />
+              <span class="toggle-track"></span>
+            </label>
+            <div>
+              <div class="toggle-label">National Holidays</div>
+              <div class="toggle-sub">Overlays US public holidays on the calendar</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <input id="calIdInput" type="text"
+              style="flex:1;background:var(--surface2);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:var(--text);padding:7px 12px;font-size:.85rem"
+              placeholder="Add calendar (email or calendar ID)…"
+              onkeydown="if(event.key==='Enter')addCalendar()" />
+            <button class="btn btn-primary btn-sm" onclick="addCalendar()">Add</button>
+          </div>
+        </div>
+      </div><!-- /calendar -->
+
+      <!-- ── Weather ── -->
+      <div class="settings-panel" data-panel="weather">
+        <div class="field">
+          <label>OpenWeatherMap API Key
+            <a href="https://openweathermap.org/api" target="_blank"
+               style="font-size:.75rem;color:var(--accent);margin-left:6px;font-weight:400">Get a free key ↗</a>
+          </label>
+          <input type="text" id="settingWeatherKey" placeholder="Paste your free API key…" />
+        </div>
+        <div class="field">
+          <label>Locations</label>
+          <div id="wxLocationsList" style="margin-bottom:8px"></div>
+          <div style="display:flex;gap:8px">
+            <input type="text" id="wxNewCity" placeholder="e.g. Boston, US"
+                   style="flex:1" onkeydown="if(event.key==='Enter')addWeatherLocation()" />
+            <button class="btn btn-primary btn-sm" onclick="addWeatherLocation()">Add</button>
+          </div>
+        </div>
+      </div><!-- /weather -->
+
+      <!-- ── Shopping ── -->
+      <div class="settings-panel" data-panel="shopping">
+        <div class="field">
+          <label>SMS Recipients</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr 28px;gap:8px;padding:0 0 5px;font-size:.72rem;color:var(--muted)">
+            <span>Nickname</span><span>Phone Number</span><span></span>
+          </div>
+          <div class="sms-contacts-list" id="smsContactsList"></div>
+          <div class="sms-add-row">
+            <input type="text" id="smsNewNick"  placeholder="Nickname (e.g. Mom)" />
+            <input type="tel"  id="smsNewPhone" placeholder="+1 555 123 4567"
+                   onkeydown="if(event.key==='Enter')addSmsContact()" />
+            <button class="btn btn-primary btn-sm" onclick="addSmsContact()">Add</button>
+          </div>
+        </div>
+        <p style="font-size:.79rem;color:var(--muted);margin-top:8px">
+          Tap <strong>📱 SMS ▾</strong> on the Shopping List and choose a recipient to send unchecked items.
+        </p>
+      </div><!-- /shopping -->
+
+      <!-- ── To-Do ── -->
+      <div class="settings-panel" data-panel="todo">
+        <div class="field">
+          <label>Family Members
+            <span style="font-weight:400;color:var(--muted)"> — for assigning to-do items</span>
+          </label>
+          <div id="familyMemberList" style="margin-bottom:8px"></div>
+          <div style="display:flex;gap:8px">
+            <input type="text" id="newFamilyMemberInput" placeholder="Name…"
+                   style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();addFamilyMember()}" />
+            <button class="btn btn-sm btn-primary" onclick="addFamilyMember()">+ Add</button>
+          </div>
+        </div>
+      </div><!-- /todo -->
+
+      <!-- ── Meal Planning ── -->
+      <div class="settings-panel" data-panel="meals">
+        <div class="field">
+          <label>Google Gemini API Key</label>
+          <input type="password" id="settingMealAiKey" placeholder="Paste your API key…" autocomplete="off" />
+        </div>
+        <div class="field">
+          <label>Dietary Preferences</label>
+          <div class="meal-diet-grid" id="mealDietGrid">
+            <!-- rendered by JS -->
+          </div>
+        </div>
+        <div class="field">
+          <label>Default Pantry / Freezer Staples
+            <span style="font-weight:400;color:var(--muted)"> — pre-fills the on-hand field</span>
+          </label>
+          <textarea id="settingMealPantry" rows="3"
+            style="width:100%;background:var(--surface2);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:var(--text);padding:9px 12px;font-size:.85rem;resize:vertical"
+            placeholder="e.g. olive oil, garlic, onions, canned tomatoes, rice, chicken breasts, frozen shrimp…"></textarea>
+        </div>
+        <div class="field">
+          <label>Loading Messages
+            <span style="font-weight:400;color:var(--muted)"> — shown while AI thinks</span>
+          </label>
+          <div id="loadingMsgList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>
+          <div style="display:flex;gap:8px">
+            <input type="text" id="newLoadingMsgInput" placeholder="Add a new message…"
+                   style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();addLoadingMsg()}" />
+            <button class="btn btn-sm" onclick="addLoadingMsg()" style="white-space:nowrap">+ Add</button>
+          </div>
+          <button class="btn btn-sm" onclick="resetLoadingMsgs()"
+                  style="margin-top:8px;font-size:.75rem;color:var(--muted);background:none;border:1px solid rgba(255,255,255,.15)">
+            ↺ Reset to defaults
+          </button>
+        </div>
+      </div><!-- /meals -->
+
+
+<!-- ── Widgets ── -->
+      <div class="settings-panel" data-panel="widgets">
+        <div class="field">
+          <label>Show or hide widgets, and choose where each appears</label>
+          <div class="widget-toggle-list">
+
+            <div class="widget-placement-header">
+              <span></span><span></span>
+              <span class="widget-placement-col-label">Sidebar</span>
+              <span class="widget-placement-col-label">Bottom</span>
+            </div>
+
+            <div class="widget-toggle-row">
+              <input type="checkbox" id="widget_shopping" />
+              <span>🛒 Shopping</span>
+              <label class="widget-placement-radio"><input type="radio" name="placement_shopping" value="sidebar" /><span>Sidebar</span></label>
+              <label class="widget-placement-radio"><input type="radio" name="placement_shopping" value="bottom"  /><span>Bottom</span></label>
+            </div>
+            <div class="widget-toggle-row">
+              <input type="checkbox" id="widget_todo" />
+              <span>✅ To-Do</span>
+              <label class="widget-placement-radio"><input type="radio" name="placement_todo" value="sidebar" /><span>Sidebar</span></label>
+              <label class="widget-placement-radio"><input type="radio" name="placement_todo" value="bottom"  /><span>Bottom</span></label>
+            </div>
+            <div class="widget-toggle-row">
+              <input type="checkbox" id="widget_budget" />
+              <span>💰 Budget</span>
+              <label class="widget-placement-radio"><input type="radio" name="placement_budget" value="sidebar" /><span>Sidebar</span></label>
+              <label class="widget-placement-radio"><input type="radio" name="placement_budget" value="bottom"  /><span>Bottom</span></label>
+            </div>
+            <div class="widget-toggle-row">
+              <input type="checkbox" id="widget_wotd" />
+              <span>📖 Word of the Day</span>
+              <label class="widget-placement-radio"><input type="radio" name="placement_wotd" value="sidebar" /><span>Sidebar</span></label>
+              <label class="widget-placement-radio"><input type="radio" name="placement_wotd" value="bottom"  /><span>Bottom</span></label>
+            </div>
+            <div class="widget-toggle-row">
+              <input type="checkbox" id="widget_quote" />
+              <span>✨ Quote</span>
+              <label class="widget-placement-radio"><input type="radio" name="placement_quote" value="sidebar" /><span>Sidebar</span></label>
+              <label class="widget-placement-radio"><input type="radio" name="placement_quote" value="bottom"  /><span>Bottom</span></label>
+            </div>
+            <div class="widget-toggle-row">
+              <input type="checkbox" id="widget_dadjoke" />
+              <span>😄 Dad Joke</span>
+              <label class="widget-placement-radio"><input type="radio" name="placement_dadjoke" value="sidebar" /><span>Sidebar</span></label>
+              <label class="widget-placement-radio"><input type="radio" name="placement_dadjoke" value="bottom"  /><span>Bottom</span></label>
+            </div>
+            <div class="widget-toggle-row">
+              <input type="checkbox" id="widget_yearstrip" />
+              <span>📆 Year at a Glance</span>
+              <label class="widget-placement-radio"><input type="radio" name="placement_yearstrip" value="sidebar" /><span>Sidebar</span></label>
+              <label class="widget-placement-radio"><input type="radio" name="placement_yearstrip" value="bottom"  /><span>Bottom</span></label>
+            </div>
+            <div class="widget-toggle-row">
+              <input type="checkbox" id="widget_assistant" />
+              <span>🤖 Family Assistant</span>
+              <label class="widget-placement-radio"><input type="radio" name="placement_assistant" value="sidebar" /><span>Sidebar</span></label>
+              <label class="widget-placement-radio"><input type="radio" name="placement_assistant" value="bottom"  /><span>Bottom</span></label>
+            </div>
+
+          </div>
+        </div>
+        <p style="font-size:var(--text-xs);color:var(--muted);margin-top:4px">
+          🤖 Family Assistant uses the Gemini key from ⚙️ Settings → 🍽 Meals.
+        </p>
+      </div><!-- /widgets -->
+
+    </div><!-- /settings-panels -->
+
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeSettings()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveSettings()">Save</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- Meal Planning Modal -->
+<div class="modal-overlay" id="mealModal" onclick="if(event.target===this)closeMealModal()">
+  <div class="modal meal-modal-inner">
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <h2 id="mealModalTitle">🍽 Meal Ideas</h2>
+      <button onclick="closeMealModal()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.3rem;line-height:1">✕</button>
+    </div>
+    <p id="mealModalSubtitle" style="font-size:.8rem;color:var(--muted);margin-bottom:16px"></p>
+
+    <!-- Inputs -->
+    <div class="field">
+      <label>Cuisine or style ideas <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+      <input type="text" id="mealStyleInput"
+             placeholder="e.g. Italian, quick Asian, comfort food, Mediterranean, 30-min…" />
+    </div>
+    <div class="field">
+      <label>What's on-hand or in the freezer <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+      <input type="text" id="mealPantryInput"
+             placeholder="e.g. chicken breasts, pasta, canned tomatoes, frozen shrimp…" />
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+      <input type="checkbox" id="mealUseCalendar" checked style="width:15px;height:15px;cursor:pointer;accent-color:var(--accent)" />
+      <label for="mealUseCalendar" style="font-size:.84rem;cursor:pointer;color:var(--text)">
+        Use today's calendar events to inform suggestions
+      </label>
+    </div>
+
+    <button class="btn btn-primary" id="mealGenerateBtn"
+            onclick="generateMealSuggestions()" style="width:100%;margin-bottom:18px">
+      ✨ Suggest Meals
+    </button>
+
+    <!-- Suggestion cards -->
+    <div id="mealSuggestionsWrap" style="max-height:400px;overflow-y:auto"></div>
+
+    <div class="modal-actions" style="margin-top:10px">
+      <button class="btn btn-secondary" onclick="closeMealModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Event Editor Modal -->
+<div class="modal-overlay" id="eventEditorModal" onclick="if(event.target===this)closeEventEditor()" style="display:none">
+  <div class="modal">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <h2 id="eventEditorTitle">📅 New Event</h2>
+      <button onclick="closeEventEditor()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.3rem;line-height:1">✕</button>
+    </div>
+
+    <div class="field">
+      <label>Event title</label>
+      <input type="text" id="evtEdTitle" placeholder="Event title…" />
+    </div>
+
+    <div class="field">
+      <label>Description <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+      <textarea id="evtEdDesc" rows="2" placeholder="Notes, location, etc…" style="resize:vertical"></textarea>
+    </div>
+
+    <div class="field">
+      <label>Date</label>
+      <input type="date" id="evtEdDate" />
+    </div>
+
+    <div class="evt-editor-allday-row">
+      <input type="checkbox" id="evtEdAllDay" onchange="toggleEvtEdAllDay()" />
+      <label for="evtEdAllDay" style="cursor:pointer;font-size:.9rem">All-day event</label>
+    </div>
+
+    <div id="evtEdTimeSection">
+      <div class="field">
+        <label>Start time</label>
+        <input type="time" id="evtEdStart" />
+      </div>
+      <div class="field">
+        <label>End time</label>
+        <input type="time" id="evtEdEnd" />
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Calendar</label>
+      <div class="evt-editor-cal-select" id="evtEdCalSelect"></div>
+    </div>
+
+    <div class="evt-editor-footer">
+      <button id="evtEdDeleteBtn" class="btn-danger" onclick="deleteCalEvent()" style="display:none">🗑 Delete event</button>
+      <div style="display:flex;gap:8px;margin-left:auto">
+        <button class="btn btn-secondary" onclick="closeEventEditor()">Cancel</button>
+        <button class="btn" onclick="saveCalEvent()">Save</button>
+      </div>
+    </div>
+
+    <div id="evtEdStatus" style="font-size:.8rem;color:var(--muted);text-align:center;margin-top:8px;display:none"></div>
+  </div>
+</div>
+
+<script src="family-hub.js"></script>
+</body>
+</html>
