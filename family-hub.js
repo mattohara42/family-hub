@@ -2665,9 +2665,17 @@ function openMealModal(dateKey, mealType) {
   const typeLabel = mealType === 'all' ? 'All Meals'
                   : mealType.charAt(0).toUpperCase() + mealType.slice(1);
 
+  const STYLE_PLACEHOLDERS = {
+    breakfast: 'e.g. egg-based, smoothie bowl, savory, high-protein, quick grab-and-go…',
+    lunch:     'e.g. light salad, warm soup, sandwich, grain bowl, low-carb…',
+    dinner:    'e.g. Italian, quick Asian, comfort food, Mediterranean, grilled…',
+    all:       'e.g. Italian, quick Asian, comfort food, Mediterranean, 30-min…',
+  };
+
   document.getElementById('mealModalTitle').textContent    = `🍽 ${typeLabel}`;
   document.getElementById('mealModalSubtitle').textContent = dateLabel;
   document.getElementById('mealStyleInput').value          = '';
+  document.getElementById('mealStyleInput').placeholder    = STYLE_PLACEHOLDERS[mealType] || STYLE_PLACEHOLDERS.all;
   document.getElementById('mealPantryInput').value         = mealPantryDef;
   document.getElementById('mealUseCalendar').checked       = true;
   document.getElementById('mealSuggestionsWrap').innerHTML = '';
