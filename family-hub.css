@@ -618,10 +618,10 @@ body.has-bg #budgetTotalCard {
 }
 .cal-dow {
   text-align: center;
-  font-size: var(--text-base);
+  font-size: var(--text-md);
   font-weight: var(--weight-bold);
   color: var(--text);
-  padding: 3px 0 5px;
+  padding: 1px 0 2px;
   letter-spacing: 0.03em;
   text-transform: uppercase;
   letter-spacing: .04em;
@@ -959,12 +959,12 @@ body.has-bg #budgetTotalCard {
 }
 .week-day-header {
   text-align: center;
-  padding: 7px 4px 5px;
+  padding: 3px 4px 2px;
   border-bottom: 1px solid rgba(128,128,128,.12);
   flex-shrink: 0;
 }
 .week-day-dow {
-  font-size: var(--text-sm); font-weight: var(--weight-bold);
+  font-size: var(--text-base); font-weight: var(--weight-bold);
   letter-spacing: .05em; text-transform: uppercase;
   color: var(--muted);
 }
