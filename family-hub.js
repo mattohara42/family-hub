@@ -2671,12 +2671,19 @@ function openMealModal(dateKey, mealType) {
     dinner:    'e.g. Italian, quick Asian, comfort food, Mediterranean, grilled…',
     all:       'e.g. Italian, quick Asian, comfort food, Mediterranean, 30-min…',
   };
+  const PANTRY_PLACEHOLDERS = {
+    breakfast: 'e.g. eggs, oats, Greek yogurt, berries, bananas, almond milk…',
+    lunch:     'e.g. deli turkey, canned tuna, lettuce, avocado, whole-grain bread…',
+    dinner:    'e.g. chicken breasts, pasta, canned tomatoes, frozen shrimp…',
+    all:       'e.g. chicken breasts, pasta, canned tomatoes, frozen shrimp…',
+  };
 
   document.getElementById('mealModalTitle').textContent    = `🍽 ${typeLabel}`;
   document.getElementById('mealModalSubtitle').textContent = dateLabel;
   document.getElementById('mealStyleInput').value          = '';
   document.getElementById('mealStyleInput').placeholder    = STYLE_PLACEHOLDERS[mealType] || STYLE_PLACEHOLDERS.all;
   document.getElementById('mealPantryInput').value         = mealPantryDef;
+  document.getElementById('mealPantryInput').placeholder   = PANTRY_PLACEHOLDERS[mealType] || PANTRY_PLACEHOLDERS.all;
   document.getElementById('mealUseCalendar').checked       = true;
   document.getElementById('mealSuggestionsWrap').innerHTML = '';
   document.getElementById('mealGenerateBtn').disabled      = false;
