@@ -2316,8 +2316,17 @@ function setupListeners() {
   }
 
   // Family members — real-time sync so every device shares the same list
-  db.collection('familyMembers').orderBy('name').onSnapshot(snap => {
-    familyMembers = snap.docs.map(doc => ({ id: doc.id, name: doc.data().name }));
+  db.collection('familyMembers').orderBy('order').onSnapshot(snap => {
+    familyMembers = snap.docs.map(doc => ({ id: doc.id, name: doc.data().name, order: doc.data().order ?? 0 }));
+    // Back-fill missing order fields (e.g. docs created before this field existed)
+    const needsOrder = familyMembers.filter(m => m.order === 0 && familyMembers.indexOf(m) > 0);
+    if (snap.docs.some(d => d.data().order == null)) {
+      const batch = db.batch();
+      snap.docs.forEach((d, i) => {
+        if (d.data().order == null) batch.update(d.ref, { order: i });
+      });
+      batch.commit();
+    }
     renderFamilyMemberList();
   });
 
@@ -2527,12 +2536,17 @@ function renderFamilyMemberList() {
   if (!familyMembers.length) {
     el.innerHTML = '<div style="font-size:.82rem;color:var(--muted);padding:4px 0">No members yet.</div>';
   } else {
+    const last = familyMembers.length - 1;
     familyMembers.forEach((m, i) => {
       const row = document.createElement('div');
-      row.style.cssText = 'display:flex;align-items:center;gap:8px;background:var(--surface2);border-radius:8px;padding:6px 10px;font-size:.84rem;margin-bottom:6px';
+      row.style.cssText = 'display:flex;align-items:center;gap:6px;background:var(--surface2);border-radius:8px;padding:6px 10px;font-size:.84rem;margin-bottom:6px';
       const removeArg = db ? `'${m.id}'` : i;
-      row.innerHTML = `<span style="flex:1">👤 ${esc(m.name)}</span>
-        <button onclick="removeFamilyMember(${removeArg})" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem;line-height:1;padding:0 2px">✕</button>`;
+      const btnStyle = 'background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem;line-height:1;padding:0 3px';
+      row.innerHTML = `
+        <span style="flex:1">👤 ${esc(m.name)}</span>
+        <button onclick="moveFamilyMember(${i},-1)" ${i === 0 ? 'disabled' : ''} style="${btnStyle};opacity:${i === 0 ? '.25' : '1'}" title="Move up">▲</button>
+        <button onclick="moveFamilyMember(${i}, 1)" ${i === last ? 'disabled' : ''} style="${btnStyle};opacity:${i === last ? '.25' : '1'}" title="Move down">▼</button>
+        <button onclick="removeFamilyMember(${removeArg})" style="${btnStyle};font-size:1rem" title="Remove">✕</button>`;
       el.appendChild(row);
     });
   }
@@ -2545,7 +2559,7 @@ async function addFamilyMember() {
   if (!name) return;
   input.value = '';
   if (db) {
-    await db.collection('familyMembers').add({ name });
+    await db.collection('familyMembers').add({ name, order: familyMembers.length });
     // onSnapshot updates familyMembers + renderFamilyMemberList
     return;
   }
@@ -2563,6 +2577,23 @@ async function removeFamilyMember(idOrIndex) {
   familyMembers.splice(idOrIndex, 1);
   localStorage.setItem('fh_familyMembers', JSON.stringify(familyMembers));
   renderFamilyMemberList();
+}
+
+async function moveFamilyMember(index, direction) {
+  const swap = index + direction;
+  if (swap < 0 || swap >= familyMembers.length) return;
+  [familyMembers[index], familyMembers[swap]] = [familyMembers[swap], familyMembers[index]];
+  if (db) {
+    const batch = db.batch();
+    familyMembers.forEach((m, i) => {
+      batch.update(db.collection('familyMembers').doc(m.id), { order: i });
+    });
+    await batch.commit();
+    // onSnapshot will re-render
+  } else {
+    localStorage.setItem('fh_familyMembers', JSON.stringify(familyMembers));
+    renderFamilyMemberList();
+  }
 }
 
 function populateTodoAssigneeDropdown() {
