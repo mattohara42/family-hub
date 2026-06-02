@@ -327,16 +327,30 @@ function renderBudgetCard() {
   });
   upcoming.sort((a, b) => a.date.localeCompare(b.date));
 
-  // ── Budget total sidebar card (month + week only) ──
+  // ── Budget total sidebar card — always show week + month ──
   const totalCard  = document.getElementById('budgetTotalCard');
   const totalInner = document.getElementById('budgetTotalInner');
   if (totalCard && totalInner) {
-    const showTotal = (calView === 'month' || calView === 'week') && upcoming.length > 0;
-    if (showTotal) {
-      const total = upcoming.reduce((s, { item }) => s + item.amount, 0);
-      totalInner.innerHTML = `
-        <span class="budget-total-label">${esc(summaryTitle)}</span>
-        <span class="budget-total-amount">${fmt$(total)}</span>`;
+    // Week range anchored to calViewDate
+    const ws = getWeekStart(calViewDate);
+    const we = new Date(ws.getTime() + 6 * 86400000);
+    const weekItems = [];
+    budgetItems.forEach(item => budgetDatesInRange(item, ws, we).forEach(d => weekItems.push(item)));
+    const weekTotal = weekItems.reduce((s, item) => s + item.amount, 0);
+
+    // Month range anchored to calViewDate
+    const yr = calViewDate.getFullYear(), mo = calViewDate.getMonth();
+    const ms = new Date(yr, mo, 1), me = new Date(yr, mo + 1, 0);
+    const monthItems = [];
+    budgetItems.forEach(item => budgetDatesInRange(item, ms, me).forEach(d => monthItems.push(item)));
+    const monthTotal = monthItems.reduce((s, item) => s + item.amount, 0);
+
+    if (budgetItems.length && (weekTotal > 0 || monthTotal > 0)) {
+      totalInner.innerHTML =
+        `<span class="budget-total-label">Total Bills this Week</span>
+         <span class="budget-total-amount">${fmt$(weekTotal)}</span>
+         <span class="budget-total-label" style="margin-top:6px">Total Bills this Month</span>
+         <span class="budget-total-amount">${fmt$(monthTotal)}</span>`;
       totalCard.style.display = '';
     } else {
       totalCard.style.display = 'none';
