@@ -2147,6 +2147,39 @@ function setupListeners() {
       console.log('[Budget] Migrated', legacy.length, 'item(s) from localStorage to Firestore.');
     });
   }
+
+  // Meal plan — real-time sync across all family devices
+  db.collection('mealPlan').onSnapshot(snap => {
+    mealPlan = {};
+    snap.docs.forEach(doc => {
+      const d = doc.data();
+      if (d.dateKey && d.mealType) {
+        if (!mealPlan[d.dateKey]) mealPlan[d.dateKey] = {};
+        const { dateKey: _dk, mealType: _mt, ...rest } = d;
+        mealPlan[d.dateKey][d.mealType] = rest;
+      }
+    });
+    renderCurrentView();
+  });
+
+  // One-time migration: push localStorage meal plan to Firestore
+  const legacyMeals = lsGet('fh_mealPlan', {});
+  const legacyMealEntries = [];
+  Object.entries(legacyMeals).forEach(([dateKey, meals]) => {
+    Object.entries(meals).forEach(([mealType, data]) => {
+      legacyMealEntries.push({ dateKey, mealType, ...data });
+    });
+  });
+  if (legacyMealEntries.length) {
+    const mealBatch = db.batch();
+    legacyMealEntries.forEach(entry => {
+      mealBatch.set(db.collection('mealPlan').doc(`${entry.dateKey}_${entry.mealType}`), entry);
+    });
+    mealBatch.commit().then(() => {
+      localStorage.removeItem('fh_mealPlan');
+      console.log('[MealPlan] Migrated', legacyMealEntries.length, 'meal(s) from localStorage to Firestore.');
+    });
+  }
 }
 
 function renderTodoList() {
@@ -2195,6 +2228,29 @@ async function addToFs(col, text, extra = {}) {
 async function clearDoneFs(col) {
   const snap = await db.collection(col).where('done','==',true).get();
   snap.forEach(doc => doc.ref.delete());
+}
+
+async function setMealInFs(dateKey, mealType, mealData) {
+  if (!db) {
+    if (!mealPlan[dateKey]) mealPlan[dateKey] = {};
+    mealPlan[dateKey][mealType] = mealData;
+    localStorage.setItem('fh_mealPlan', JSON.stringify(mealPlan));
+    renderCurrentView();
+    return;
+  }
+  await db.collection('mealPlan').doc(`${dateKey}_${mealType}`).set({ dateKey, mealType, ...mealData });
+}
+
+async function deleteMealFromFs(dateKey, mealType) {
+  if (!db) {
+    if (!mealPlan[dateKey]) return;
+    delete mealPlan[dateKey][mealType];
+    if (!Object.keys(mealPlan[dateKey]).length) delete mealPlan[dateKey];
+    localStorage.setItem('fh_mealPlan', JSON.stringify(mealPlan));
+    renderCurrentView();
+    return;
+  }
+  await db.collection('mealPlan').doc(`${dateKey}_${mealType}`).delete();
 }
 
 // ── Local storage fallback ─────────────────────────────────────
@@ -2445,10 +2501,6 @@ function clearDoneLocal(col) {
 }
 
 // ── Meal Planning ──────────────────────────────────────────────
-function saveMealPlan() {
-  localStorage.setItem('fh_mealPlan', JSON.stringify(mealPlan));
-}
-
 function openMealModal(dateKey, mealType) {
   _mealDate = dateKey;
   _mealType = mealType;
@@ -3048,28 +3100,24 @@ function renderMealSuggestions() {
   });
 }
 
-function acceptMeal(idx) {
+async function acceptMeal(idx) {
   const s        = _mealSuggestions[idx];
   const mealType = (_mealType === 'all') ? (s.mealType || 'dinner') : _mealType;
   const site     = RECIPE_SITES[s.recipeSite] || RECIPE_SITES.allrecipes;
   const recipeUrl = site.url(s.recipeSearchQuery || s.name);
 
-  if (!mealPlan[_mealDate]) mealPlan[_mealDate] = {};
-  mealPlan[_mealDate][mealType] = {
+  // Mark card accepted immediately for instant visual feedback
+  const card = document.getElementById(`meal-s-${idx}`);
+  if (card) card.classList.add('accepted');
+
+  await setMealInFs(_mealDate, mealType, {
     name: s.name, description: s.description,
     recipeUrl, recipeSite: s.recipeSite,
     ingredients: s.ingredients || [],
     healthyNotes: s.healthyNotes,
     prepTime: s.prepTime, cuisine: s.cuisine
-  };
-  saveMealPlan();
-
-  // Visual: mark card as accepted
-  const card = document.getElementById(`meal-s-${idx}`);
-  if (card) card.classList.add('accepted');
-
-  // Refresh calendar views
-  renderCurrentView();
+  });
+  // renderCurrentView() is triggered by onSnapshot (or by setMealInFs in the !db fallback)
 }
 
 function addMealIngredients(idx) {
@@ -3095,12 +3143,9 @@ function addMealIngredients(idx) {
   alert(`✓ Added ${added} ingredient(s) from "${s.name}" to the Shopping List.`);
 }
 
-function removeMeal(dateKey, mealType) {
-  if (!mealPlan[dateKey]) return;
-  delete mealPlan[dateKey][mealType];
-  if (!Object.keys(mealPlan[dateKey]).length) delete mealPlan[dateKey];
-  saveMealPlan();
-  renderCurrentView();
+async function removeMeal(dateKey, mealType) {
+  await deleteMealFromFs(dateKey, mealType);
+  // renderCurrentView() is triggered by onSnapshot (or by deleteMealFromFs in the !db fallback)
 }
 
 // ── Family Assistant ───────────────────────────────────────────────────────

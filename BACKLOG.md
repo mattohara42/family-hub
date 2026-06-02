@@ -24,15 +24,15 @@ Move sensitive API keys off the client by adding serverless proxy functions.
 
 ## Sharing & Sync
 
-### Shared budget items via Firebase
-**Priority: Low**
-Budget items are currently stored per-device in `localStorage`. Optionally allow opt-in sharing via a Firestore `budget` collection so all family members see the same bill list.
+### Shared family member list
+**Priority: Medium**
+The family members list (used for to-do assignment) is stored per-device. A single Firestore `config/familyMembers` document would mean set-it-once across all devices. Currently every device must add members manually in Settings → General.
 
-*Currently by design — personal. See RETROSPECTIVE.md.*
+### ~~Shared budget items via Firebase~~ ✅ Done
+Budget items are already in the Firestore `budget` collection and sync in real time.
 
-### Shared meal plans via Firebase
-**Priority: Low**
-Meal plans are stored per-device. A shared `mealPlan` Firestore collection would let one family member plan meals and everyone see them.
+### ~~Shared meal plans via Firebase~~ ✅ Done
+Meal plans are now stored in the Firestore `mealPlan` collection and sync in real time across all family devices.
 
 ---
 
