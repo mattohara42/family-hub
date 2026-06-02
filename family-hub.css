@@ -1105,6 +1105,24 @@ body.has-bg #budgetTotalCard {
 .day-meal-slot-link:hover { text-decoration: underline; }
 .day-meal-empty { font-size: var(--text-sm); color: var(--muted); }
 
+/* ── Day view inline meal chips (in timeline) ── */
+.day-meal-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: var(--surface2); border-radius: 6px;
+  padding: 3px 8px 3px 6px; margin-top: 2px;
+  cursor: pointer; border: 1px solid transparent;
+  font-size: var(--text-sm); transition: border-color .15s;
+  max-width: 100%;
+}
+.day-meal-chip:hover { border-color: var(--accent); }
+.day-meal-chip.has-meal { border-color: rgba(76,175,130,.4); }
+.day-meal-chip-icon { font-size: .9rem; flex-shrink: 0; }
+.day-meal-chip-text { font-weight: var(--weight-semi); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.day-meal-chip-label { color: var(--muted); }
+.day-meal-chip-add { color: var(--accent); font-size: .9rem; margin-left: 2px; }
+.day-meal-chip .meal-remove-btn { opacity: 0; margin-left: 2px; }
+.day-meal-chip:hover .meal-remove-btn { opacity: 1; }
+
 /* ── Meal Planning — Suggestion Modal ── */
 .meal-modal-inner { max-width: 640px; }
 .meal-suggestion {

@@ -953,45 +953,6 @@ function renderDayGrid() {
   allDayRow.appendChild(adPills);
   wrap.appendChild(allDayRow);
 
-  // ── Meal Planning section ──
-  const mealsSection = document.createElement('div');
-  mealsSection.className = 'day-meals-section';
-  const mealsHdr = document.createElement('div');
-  mealsHdr.className = 'day-meals-header';
-  mealsHdr.innerHTML = '<span>🍽 Meal Plan</span>';
-  const suggestAllBtn = document.createElement('button');
-  suggestAllBtn.className = 'btn btn-sm';
-  suggestAllBtn.style.cssText = 'background:var(--surface2);font-size:.74rem;padding:3px 10px';
-  suggestAllBtn.textContent = '✨ Suggest';
-  suggestAllBtn.onclick = () => openMealModal(dateKey, 'all');
-  mealsHdr.appendChild(suggestAllBtn);
-  mealsSection.appendChild(mealsHdr);
-  const mealsGrid = document.createElement('div');
-  mealsGrid.className = 'day-meals-grid';
-  const MEAL_ICONS = { breakfast:'🌅', lunch:'☀️', dinner:'🌙' };
-  const MEAL_LABELS = { breakfast:'Breakfast', lunch:'Lunch', dinner:'Dinner' };
-  ['breakfast','lunch','dinner'].forEach(type => {
-    const meal = (mealPlan[dateKey] || {})[type];
-    const slot = document.createElement('div');
-    slot.className = 'day-meal-slot' + (meal ? ' has-meal' : '');
-    slot.onclick = () => openMealModal(dateKey, type);
-    if (meal) {
-      const recipeLink = meal.recipeUrl
-        ? `<a class="day-meal-slot-link" href="${safeUrl(meal.recipeUrl)}" target="_blank" onclick="event.stopPropagation()">📖 Recipe ↗</a>`
-        : '';
-      slot.innerHTML = `
-        <button class="meal-remove-btn day-meal-remove-btn" title="Remove meal"
-                onclick="event.stopPropagation();removeMeal('${dateKey}','${type}')">×</button>
-        <div class="day-meal-slot-label">${MEAL_ICONS[type]} ${MEAL_LABELS[type]}</div>
-        <div class="day-meal-slot-name">${esc(meal.name)}</div>${recipeLink}`;
-    } else {
-      slot.innerHTML = `<div class="day-meal-slot-label">${MEAL_ICONS[type]} ${MEAL_LABELS[type]}</div>
-                        <div class="day-meal-empty">+ suggest</div>`;
-    }
-    mealsGrid.appendChild(slot);
-  });
-  mealsSection.appendChild(mealsGrid);
-  wrap.appendChild(mealsSection);
 
   // ── Budget section (day view) ──
   const budgetDayItems = budgetEventsForDate(dateKey);
@@ -1039,6 +1000,11 @@ function renderDayGrid() {
   }
 
   // ── Hourly timeline 6 AM – 10 PM ──
+  const MEAL_HOURS = { breakfast: 8, lunch: 12, dinner: 17 };
+  const MEAL_ICONS  = { breakfast: '🌅', lunch: '☀️', dinner: '🌙' };
+  const MEAL_LABELS = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner' };
+  const dayMealsObj = mealPlan[dateKey] || {};
+
   const hourBuckets = {};
   timedEvts.forEach(ev => {
     const h = new Date(ev.startDT).getHours();
@@ -1074,8 +1040,27 @@ function renderDayGrid() {
       slot.appendChild(pill);
     });
 
-    // Click on empty hour slot to create event
-    if (googleToken && !(hourBuckets[h] || []).length) {
+    // Meal plan chip at this hour
+    const mealType = Object.keys(MEAL_HOURS).find(t => MEAL_HOURS[t] === h);
+    if (mealType) {
+      const meal = dayMealsObj[mealType];
+      const chip = document.createElement('div');
+      chip.className = 'day-meal-chip' + (meal ? ' has-meal' : '');
+      chip.onclick = e => { e.stopPropagation(); openMealModal(dateKey, mealType); };
+      if (meal) {
+        chip.innerHTML = `<span class="day-meal-chip-icon">${MEAL_ICONS[mealType]}</span>`
+          + `<span class="day-meal-chip-text">${esc(meal.name)}</span>`
+          + `<button class="meal-remove-btn" title="Remove" onclick="event.stopPropagation();removeMeal('${dateKey}','${mealType}')">×</button>`;
+      } else {
+        chip.innerHTML = `<span class="day-meal-chip-icon">${MEAL_ICONS[mealType]}</span>`
+          + `<span class="day-meal-chip-label">${MEAL_LABELS[mealType]}</span>`
+          + `<span class="day-meal-chip-add">＋</span>`;
+      }
+      slot.appendChild(chip);
+    }
+
+    // Click on empty hour slot to create event (only when no meal chip and no events)
+    if (googleToken && !(hourBuckets[h] || []).length && !mealType) {
       slot.style.cursor = 'pointer';
       const hh = String(h).padStart(2,'0');
       slot.onclick = () => openEventEditor(null, dateKey, `${hh}:00`, `${String(h+1).padStart(2,'0')}:00`);
