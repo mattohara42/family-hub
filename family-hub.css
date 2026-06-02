@@ -1356,6 +1356,17 @@ body.light-mode .sms-contact-row:hover { background: rgba(0,0,0,.05); }
 #settingsModal .modal {
   min-height: 620px;
   display: flex; flex-direction: column;
+  /* Always fully opaque — no background-photo bleed-through */
+  background: #1a1d27;
+  box-shadow: 0 8px 48px rgba(0,0,0,.7), 0 2px 12px rgba(0,0,0,.5);
+}
+body.light-mode #settingsModal .modal {
+  background: #f5f6fa;
+  box-shadow: 0 8px 48px rgba(0,0,0,.18), 0 2px 12px rgba(0,0,0,.10);
+}
+body.nautical-mode #settingsModal .modal {
+  background: #0e1a3e;
+  box-shadow: 0 8px 48px rgba(0,0,0,.75), 0 2px 12px rgba(0,0,0,.55);
 }
 #settingsModal .settings-panels {
   flex: 1;
