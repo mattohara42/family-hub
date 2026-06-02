@@ -629,8 +629,9 @@ body.has-bg .day-hour-row {
   overflow: hidden;
 }
 .cal-day.other-month { opacity: .35; }
-.cal-day.current-week { background: rgba(255,255,255,.04); }
-body.light-mode .cal-day.current-week { background: rgba(0,0,0,.04); }
+.cal-day.current-week { background: rgba(255,255,255,.06); }
+body.light-mode .cal-day.current-week { background: rgba(0,0,0,.05); }
+body.nautical-mode .cal-day.current-week { background: rgba(200,169,110,.10); }
 .cal-day.today { border: 1px solid var(--accent); }
 .cal-day-num {
   font-size: var(--text-sm);
@@ -972,8 +973,9 @@ body.light-mode .cal-day.current-week { background: rgba(0,0,0,.04); }
   border-radius: 50%;
   margin: 3px auto 0;
 }
-.week-day-col.today { background: rgba(255,255,255,.04); }
-body.light-mode .week-day-col.today { background: rgba(0,0,0,.04); }
+.week-day-col.today { background: rgba(255,255,255,.06); }
+body.light-mode .week-day-col.today { background: rgba(0,0,0,.05); }
+body.nautical-mode .week-day-col.today { background: rgba(200,169,110,.10); }
 .week-day-col.today .week-day-dow { color: var(--accent); }
 .week-day-col.today .week-day-num { background: var(--accent); color: #fff; }
 .week-day-body {
@@ -1020,7 +1022,8 @@ body.light-mode .week-day-col.today { background: rgba(0,0,0,.04); }
   background: rgba(255,255,255,.05);
   border-left: 2px solid var(--accent);
 }
-body.light-mode .day-hour-row.current-hour { background: rgba(0,0,0,.04); }
+body.light-mode .day-hour-row.current-hour { background: rgba(0,0,0,.05); }
+body.nautical-mode .day-hour-row.current-hour { background: rgba(200,169,110,.10); }
 .day-hour-row.current-hour .day-hour-label { color: var(--accent); font-weight: var(--weight-bold); }
 .day-hour-label {
   font-size: var(--text-xs); color: var(--muted);
