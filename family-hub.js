@@ -1024,9 +1024,13 @@ function renderDayGrid() {
   const timeline = document.createElement('div');
   timeline.className = 'day-timeline';
 
+  const nowHour = new Date().getHours();
+  const isViewingToday = calViewDate.toDateString() === new Date().toDateString();
+
   for (let h = 6; h <= 22; h++) {
+    const isCurrentHour = isViewingToday && h === nowHour;
     const row   = document.createElement('div');
-    row.className = 'day-hour-row';
+    row.className = 'day-hour-row' + (isCurrentHour ? ' current-hour' : '');
 
     const lbl = document.createElement('div');
     lbl.className = 'day-hour-label';
@@ -1115,20 +1119,34 @@ function renderMonthGrid() {
   const daysInPrev  = new Date(year, month, 0).getDate();
   const today = new Date();
 
+  // Determine which column indices (0=Sun … 6=Sat) belong to the current week
+  const todayInThisMonth = today.getFullYear() === year && today.getMonth() === month;
+  const currentWeekStart = todayInThisMonth ? getWeekStart(today) : null;
+  const currentWeekEnd   = currentWeekStart ? new Date(currentWeekStart.getTime() + 6 * 86400000) : null;
+  const inCurrentWeek = d => currentWeekStart && d >= currentWeekStart && d <= currentWeekEnd;
+
   // Prev-month filler
   for (let i = firstDay - 1; i >= 0; i--) {
-    grid.appendChild(makeDayCell(year, month - 1, daysInPrev - i, true));
+    const d = new Date(year, month - 1, daysInPrev - i);
+    const cell = makeDayCell(year, month - 1, daysInPrev - i, true);
+    if (inCurrentWeek(d)) cell.classList.add('current-week');
+    grid.appendChild(cell);
   }
   // Current month
   for (let d = 1; d <= daysInMonth; d++) {
     const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === d;
-    grid.appendChild(makeDayCell(year, month, d, false, isToday));
+    const cell = makeDayCell(year, month, d, false, isToday);
+    if (inCurrentWeek(new Date(year, month, d))) cell.classList.add('current-week');
+    grid.appendChild(cell);
   }
   // Next-month filler
   const total = firstDay + daysInMonth;
   const trailing = total % 7 === 0 ? 0 : 7 - (total % 7);
   for (let d = 1; d <= trailing; d++) {
-    grid.appendChild(makeDayCell(year, month + 1, d, true));
+    const fd = new Date(year, month + 1, d);
+    const cell = makeDayCell(year, month + 1, d, true);
+    if (inCurrentWeek(fd)) cell.classList.add('current-week');
+    grid.appendChild(cell);
   }
 
 }
