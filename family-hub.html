@@ -47,14 +47,16 @@
 
     <div class="card cal-card">
       <div class="card-header cal-card-header">
-        <!-- Left: app title -->
-        <div class="cal-app-title">🏠 Family <span>Hub</span></div>
+        <!-- Left: app title + Refocus -->
+        <div class="cal-title-zone">
+          <div class="cal-app-title">🏠 Family <span>Hub</span></div>
+          <button id="backToTodayBtn" onclick="goToToday()" style="display:none">Refocus</button>
+        </div>
         <!-- Centre: period navigator -->
         <div class="cal-month-nav">
           <button onclick="changeCalPeriod(-1)">&#8249;</button>
           <span id="calMonthLabel"></span>
           <span id="calendarStatus"></span>
-          <button id="backToTodayBtn" onclick="goToToday()" style="display:none">Today</button>
           <button onclick="changeCalPeriod(1)">&#8250;</button>
         </div>
         <!-- Right: view tabs -->
