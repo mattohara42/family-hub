@@ -440,13 +440,19 @@ body.has-bg .day-hour-row {
 .sidebar > * { flex-shrink: 0; }
 
 /* ── Bottom widget strip (inside .cal-column, below #yearStrip) ── */
-/* auto-fit spreads cards evenly across all available width;
-   align-items: start keeps each card at its natural (compact) height */
+/* auto-fit spreads cards evenly; align-items: stretch makes all cards same height */
 #bottomStrip {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 14px;
-  align-items: start;
+  align-items: stretch;
+}
+#bottomStrip > .card {
+  display: flex;
+  flex-direction: column;
+}
+#bottomStrip > .card > .card-body {
+  flex: 1;
 }
 
 /* ── Responsive ── */
