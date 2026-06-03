@@ -70,9 +70,8 @@ Items are tagged with a category (Produce, Dairy, Frozen, etc.) when added and g
 
 ## Weather
 
-### Hourly forecast view
-**Priority: Low**
-The current weather widget shows a 5-day forecast. Add a toggle to switch to an hourly view for the next 24 hours. OWM free tier provides 3-hour slots, which is sufficient.
+### ~~Hourly forecast view~~ ✅ Done
+A 5-day / Hourly toggle sits above the forecast. Hourly shows the next 8 × 3-hour slots (24 h). Preference persists via fh_wxForecastMode.
 
 ---
 

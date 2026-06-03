@@ -146,6 +146,10 @@
             <span>🌧 <strong id="wRain">--%</strong></span>
             <span id="wRainTime" style="display:none">starts <strong id="wRainStart">--</strong></span>
           </div>
+          <div class="wx-forecast-toggle">
+            <button id="wxToggle5day" class="active" onclick="setWeatherForecastMode('5day')">5-day</button>
+            <button id="wxToggleHourly" onclick="setWeatherForecastMode('hourly')">Hourly</button>
+          </div>
           <div class="wx-forecast" id="wForecast"></div>
           <!-- Location navigation (visible only when >1 location) -->
           <div id="wxLocNav" class="wx-loc-nav" style="display:none">

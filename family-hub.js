@@ -100,6 +100,7 @@ let weatherLocations    = lsGet('fh_wlocations', []);
 let weatherLocIdx       = 0;                   // currently-displayed location index
 const weatherCache      = {};                  // { cityKey: { ts, data } }
 const WX_CACHE_TTL      = 30 * 60 * 1000;     // 30 minutes
+let weatherForecastMode = localStorage.getItem('fh_wxForecastMode') || '5day'; // '5day' | 'hourly'
 let userName        = localStorage.getItem('fh_name') || 'Someone';
 let familyMembers   = lsGet('fh_familyMembers', []);
 // each: { name: string }
@@ -2161,6 +2162,17 @@ async function loadWeatherByCity(city) {
       if (!d.icon || s.dt_txt.includes('12:00')) d.icon = s.weather[0].main;
     });
 
+    const now = Date.now();
+    const hours = forecastList
+      .filter(s => s.dt * 1000 >= now)
+      .slice(0, 8)
+      .map(s => ({
+        time: new Date(s.dt * 1000).toLocaleTimeString([], { hour: 'numeric' }),
+        icon: s.weather[0].main,
+        temp: Math.round(s.main.temp),
+        pop:  Math.round((s.pop || 0) * 100),
+      }));
+
     const data = {
       label:         cur.name + ', ' + cur.sys.country,
       icon:          cur.weather[0].main,
@@ -2170,7 +2182,8 @@ async function loadWeatherByCity(city) {
       lo:            Math.round(todayLo),
       rain:          todayRainPct,
       rainStartTime: (todayRainPct >= 30 && rainStartTime) ? rainStartTime : null,
-      days:          Object.entries(dayMap).sort(([a],[b]) => a < b ? -1 : 1).slice(0, 5)
+      days:          Object.entries(dayMap).sort(([a],[b]) => a < b ? -1 : 1).slice(0, 5),
+      hours,
     };
 
     weatherCache[city.toLowerCase().trim()] = { ts: Date.now(), data };
@@ -2198,30 +2211,73 @@ function renderWeatherData(data) {
     rainTimeEl.style.display = 'none';
   }
 
+  // Toggle button state
+  const btn5day   = document.getElementById('wxToggle5day');
+  const btnHourly = document.getElementById('wxToggleHourly');
+  if (btn5day)   btn5day.classList.toggle('active', weatherForecastMode === '5day');
+  if (btnHourly) btnHourly.classList.toggle('active', weatherForecastMode === 'hourly');
+
   const fcastEl = document.getElementById('wForecast');
   fcastEl.innerHTML = '';
-  const days = data.days;
-  const allHi  = days.map(([,d]) => d.hi);
-  const absMax = Math.max(...allHi);
-  const absMin = Math.min(...days.map(([,d]) => d.lo));
-  days.forEach(([date, d]) => {
-    const dayName = new Date(date + 'T12:00:00').toLocaleDateString([], { weekday: 'short' });
-    const barPct  = absMax > absMin ? Math.round(((d.hi - absMin) / (absMax - absMin)) * 100) : 50;
-    const row = document.createElement('div');
-    row.className = 'wx-day';
-    row.innerHTML = `
-      <span class="wx-day-name">${dayName}</span>
-      <span class="wx-day-icon">${WX_ICONS[d.icon] || '🌡'}</span>
-      <div class="wx-day-bar-wrap"><div class="wx-day-bar" style="width:${barPct}%"></div></div>
-      <span class="wx-day-lo">${Math.round(d.lo)}°</span>
-      <span class="wx-day-hi">${Math.round(d.hi)}°</span>
-      <span class="wx-day-rain">${d.pop > 0 ? d.pop + '%' : ''}</span>
-    `;
-    fcastEl.appendChild(row);
-  });
+
+  if (weatherForecastMode === 'hourly' && data.hours?.length) {
+    const strip = document.createElement('div');
+    strip.className = 'wx-hourly';
+    data.hours.forEach(h => {
+      const card = document.createElement('div');
+      card.className = 'wx-hour';
+      const timeEl = document.createElement('span');
+      timeEl.className = 'wx-hour-time';
+      timeEl.textContent = h.time;
+      const iconEl = document.createElement('span');
+      iconEl.className = 'wx-hour-icon';
+      iconEl.textContent = WX_ICONS[h.icon] || '🌡';
+      const tempEl = document.createElement('span');
+      tempEl.className = 'wx-hour-temp';
+      tempEl.textContent = h.temp + '°';
+      const rainEl = document.createElement('span');
+      rainEl.className = 'wx-hour-rain';
+      rainEl.textContent = h.pop > 0 ? h.pop + '%' : '';
+      card.appendChild(timeEl);
+      card.appendChild(iconEl);
+      card.appendChild(tempEl);
+      card.appendChild(rainEl);
+      strip.appendChild(card);
+    });
+    fcastEl.appendChild(strip);
+  } else {
+    const days = data.days;
+    const allHi  = days.map(([,d]) => d.hi);
+    const absMax = Math.max(...allHi);
+    const absMin = Math.min(...days.map(([,d]) => d.lo));
+    days.forEach(([date, d]) => {
+      const dayName = new Date(date + 'T12:00:00').toLocaleDateString([], { weekday: 'short' });
+      const barPct  = absMax > absMin ? Math.round(((d.hi - absMin) / (absMax - absMin)) * 100) : 50;
+      const row = document.createElement('div');
+      row.className = 'wx-day';
+      row.innerHTML = `
+        <span class="wx-day-name">${dayName}</span>
+        <span class="wx-day-icon">${WX_ICONS[d.icon] || '🌡'}</span>
+        <div class="wx-day-bar-wrap"><div class="wx-day-bar" style="width:${barPct}%"></div></div>
+        <span class="wx-day-lo">${Math.round(d.lo)}°</span>
+        <span class="wx-day-hi">${Math.round(d.hi)}°</span>
+        <span class="wx-day-rain">${d.pop > 0 ? d.pop + '%' : ''}</span>
+      `;
+      fcastEl.appendChild(row);
+    });
+  }
 
   document.getElementById('weatherSetup').style.display  = 'none';
   document.getElementById('weatherDisplay').style.display = 'block';
+}
+
+function setWeatherForecastMode(mode) {
+  weatherForecastMode = mode;
+  localStorage.setItem('fh_wxForecastMode', mode);
+  const city = weatherLocations[weatherLocIdx];
+  if (!city) return;
+  const cached = weatherCache[city.toLowerCase().trim()];
+  if (cached?.data) renderWeatherData(cached.data);
 }
 
 // Settings: render the location list
