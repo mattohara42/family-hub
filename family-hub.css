@@ -1432,9 +1432,7 @@ body.has-bg.light-mode .day-hour-row.current-hour { background: rgba(190,198,225
 .sms-btn-wrap { position: relative; }
 .sms-popover {
   display: none;
-  position: absolute;
-  top: calc(100% + 5px);
-  right: 0;
+  position: fixed;
   background: #1e2130;
   border: 1px solid rgba(128,128,128,.25);
   border-radius: 10px;

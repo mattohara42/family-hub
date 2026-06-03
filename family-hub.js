@@ -4195,6 +4195,16 @@ function toggleSmsPopover(event) {
     });
   }
 
+  // Position fixed popover below the trigger button, aligned to its right edge
+  const btn  = document.getElementById('smsTriggerBtn');
+  const rect = btn.getBoundingClientRect();
+  const popW = 210;
+  let left = rect.right - popW;
+  // Clamp so it never goes off the left edge
+  if (left < 8) left = 8;
+  pop.style.top  = (rect.bottom + 5) + 'px';
+  pop.style.left = left + 'px';
+  pop.style.right = '';
   pop.style.display = 'block';
 }
 
