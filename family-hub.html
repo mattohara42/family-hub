@@ -97,25 +97,31 @@
 
     <!-- Account / Settings control bar -->
     <div class="card" id="controlCard">
-      <div id="controlCardInner">
-        <span id="userInfo"></span>
-        <div class="control-btns">
-          <button id="signInBtn"  class="btn btn-primary btn-sm" onclick="signIn()">Sign in with Google</button>
-          <button id="signOutBtn" class="btn btn-sm" style="display:none;background:var(--surface2);color:var(--muted)" onclick="signOut()">Sign out</button>
-          <button id="settingsBtn" title="Preferences" onclick="openSettings()">⚙️</button>
+      <!-- Always-visible header row -->
+      <div class="ctrl-header" onclick="toggleControlCard()">
+        <span class="ctrl-chevron" id="ctrlChevron">▶</span>
+        <span id="statusPill" class="status-pill" onclick="handleStatusPillClick(event)"></span>
+        <button id="settingsBtn" title="Preferences" onclick="event.stopPropagation();openSettings()">⚙️</button>
+      </div>
+      <!-- Collapsible body -->
+      <div class="ctrl-body" id="ctrlBody" style="display:none">
+        <!-- Green: calendars + sign-out -->
+        <div id="ctrlConnectedView" style="display:none">
+          <div class="ctrl-section-label">📅 Calendars</div>
+          <div id="calendarTabs"></div>
+          <div class="ctrl-actions">
+            <button id="signOutBtn" class="btn btn-sm ctrl-signout-btn" onclick="signOut()">Sign out</button>
+          </div>
+        </div>
+        <!-- Red: per-service status rows -->
+        <div id="ctrlFixView" style="display:none">
+          <div id="ctrlStatusRows"></div>
+          <button id="signInBtn" class="btn btn-primary btn-sm" style="width:100%;margin-top:8px" onclick="signIn()">Sign in with Google</button>
         </div>
       </div>
     </div>
 
     <!-- Budget total summary (month/week only) -->
-
-    <!-- Calendars toggle -->
-    <div class="card" id="calendarCard" style="display:none">
-      <div class="card-header">
-        <h2>📅 Calendars</h2>
-      </div>
-      <div class="card-body" id="calendarTabs"></div>
-    </div>
 
     <!-- Weather -->
     <div class="card">

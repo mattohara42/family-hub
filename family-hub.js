@@ -595,6 +595,7 @@ window.addEventListener('load', () => {
   }
   applyAppMode(appMode);
   setMobileTab(mobileTab);
+  updateStatusPill();
   if (weatherLocations.length) showWeatherLocation(0);
   else if (weatherCity) { weatherLocations = [weatherCity]; showWeatherLocation(0); }
   switchCalView(calView);   // sets up tabs + renders the right view
@@ -677,32 +678,111 @@ function signIn() {
 
 function signOut() {
   if (googleToken) google.accounts.oauth2.revoke(googleToken);
-  firebase.auth().signOut().catch(() => {});  // sign out of Firebase Auth too
+  firebase.auth().signOut().catch(() => {});
   currentUser = null; googleToken = null;
   localStorage.removeItem('fh_user');
-  document.getElementById('signInBtn').style.display = '';
-  document.getElementById('signOutBtn').style.display = 'none';
-  document.getElementById('userInfo').textContent = '';
   document.getElementById('calNotSignedIn').style.display = '';
-  const calCard = document.getElementById('calendarCard');
-  if (calCard) calCard.style.display = 'none';
   document.getElementById('calendarTabs').innerHTML = '';
-  // Clear all events and reset visibility state
   calEventCache = {};
   disabledCals.clear();
+  updateStatusPill();
   renderCurrentView();
   renderYearStrip();
 }
 
 function onSignedIn() {
-  document.getElementById('signInBtn').style.display = 'none';
-  document.getElementById('signOutBtn').style.display = '';
-  document.getElementById('userInfo').textContent = currentUser.name;
   document.getElementById('calNotSignedIn').style.display = 'none';
   // Reveal calendar section in settings
   document.getElementById('settingCalNotSignedIn').style.display = 'none';
   document.getElementById('settingCalSignedIn').style.display = '';
   renderSettingCalList();
+  updateStatusPill();
+}
+
+// ── Control card (collapsible status + calendars) ──────────────
+let controlCardOpen = false;
+let controlCardMode = 'connected'; // 'connected' | 'fix'
+
+function updateStatusPill() {
+  const firebaseOk = isConfigured && db !== null;
+  const googleOk   = !!currentUser;
+  const calOk      = googleOk && (typeof calendarMeta !== 'undefined') && calendarMeta.length > 0;
+  const weatherOk  = !!(typeof weatherKey !== 'undefined' && weatherKey);
+  const allOk      = firebaseOk && googleOk && calOk && weatherOk;
+
+  const pill = document.getElementById('statusPill');
+  if (!pill) return;
+  if (allOk) {
+    pill.textContent = 'CONNECTED';
+    pill.className = 'status-pill status-connected';
+    controlCardMode = 'connected';
+  } else {
+    pill.textContent = 'CLICK TO FIX';
+    pill.className = 'status-pill status-fix';
+    controlCardMode = 'fix';
+  }
+  // Refresh body content if open
+  if (controlCardOpen) showControlCardView();
+}
+
+function toggleControlCard() {
+  controlCardOpen = !controlCardOpen;
+  const body    = document.getElementById('ctrlBody');
+  const chevron = document.getElementById('ctrlChevron');
+  if (!body || !chevron) return;
+  body.style.display    = controlCardOpen ? '' : 'none';
+  chevron.style.transform = controlCardOpen ? 'rotate(90deg)' : '';
+  if (controlCardOpen) showControlCardView();
+}
+
+function handleStatusPillClick(e) {
+  e.stopPropagation();
+  controlCardOpen = true;
+  const body    = document.getElementById('ctrlBody');
+  const chevron = document.getElementById('ctrlChevron');
+  if (body)    body.style.display = '';
+  if (chevron) chevron.style.transform = 'rotate(90deg)';
+  showControlCardView();
+}
+
+function showControlCardView() {
+  const connView = document.getElementById('ctrlConnectedView');
+  const fixView  = document.getElementById('ctrlFixView');
+  if (!connView || !fixView) return;
+  if (controlCardMode === 'connected') {
+    connView.style.display = '';
+    fixView.style.display  = 'none';
+    renderCalendarTabs();
+  } else {
+    connView.style.display = 'none';
+    fixView.style.display  = '';
+    renderCtrlFixView();
+  }
+}
+
+function renderCtrlFixView() {
+  const container = document.getElementById('ctrlStatusRows');
+  if (!container) return;
+  const firebaseOk = isConfigured && db !== null;
+  const googleOk   = !!currentUser;
+  const calOk      = googleOk && (typeof calendarMeta !== 'undefined') && calendarMeta.length > 0;
+  const weatherOk  = !!(typeof weatherKey !== 'undefined' && weatherKey);
+  const checks = [
+    { label: 'Firebase',        ok: firebaseOk, hint: 'Add your FIREBASE_CONFIG to family-hub.js' },
+    { label: 'Google Sign-in',  ok: googleOk,   hint: 'Click "Sign in with Google" below' },
+    { label: 'Calendar Access', ok: calOk,       hint: 'Sign in and grant Calendar permissions when prompted' },
+    { label: 'Weather API',     ok: weatherOk,  hint: 'Add your OpenWeatherMap key in ⚙️ Settings → Weather' },
+  ];
+  container.innerHTML = checks.map(c => `
+    <div class="ctrl-status-row" title="${c.hint}">
+      <span class="ctrl-status-dot ${c.ok ? 'ok' : 'fail'}"></span>
+      <span class="ctrl-status-label">${c.label}</span>
+      <span class="ctrl-status-hint-icon" title="${c.hint}">${c.ok ? '' : '?'}</span>
+    </div>
+  `).join('');
+  // Show/hide sign-in button
+  const btn = document.getElementById('signInBtn');
+  if (btn) btn.style.display = googleOk ? 'none' : '';
 }
 
 
@@ -1366,6 +1446,7 @@ async function loadAllCalendars() {
   await Promise.all(fetches);
 
   renderCalendarTabs();
+  updateStatusPill();
   renderCurrentView();
   renderYearStrip();
   document.getElementById('calendarStatus').textContent = '';
@@ -1453,8 +1534,7 @@ function renderAgendaView() {
 
 function renderCalendarTabs() {
   const tabs = document.getElementById('calendarTabs');
-  const card = document.getElementById('calendarCard');
-  if (!tabs || !card) return;
+  if (!tabs) return;
 
   tabs.innerHTML = '';
 
@@ -1462,13 +1542,11 @@ function renderCalendarTabs() {
   if (showHolidays) all.push({ id: HOLIDAYS_ID, label: 'Holidays', color: '#e8a838' });
 
   if (!all.length) {
-    card.style.display = '';
     tabs.innerHTML = `<div style="color:var(--muted);font-size:var(--text-xs);padding:6px 0;text-align:center">
       ${googleToken ? 'No calendars found' : 'Sign in to see your calendars'}
     </div>`;
     return;
   }
-  card.style.display = '';
 
   all.forEach(({ id, label, color }) => {
     const enabled = !disabledCals.has(id);
