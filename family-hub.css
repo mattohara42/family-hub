@@ -631,6 +631,7 @@ body.nautical-mode .card {
   justify-content: space-between;
   padding: 10px 14px 8px;
   border-bottom: 1px solid rgba(255,255,255,.06);
+  overflow: hidden;
 }
 .card-header h2 {
   font-size: var(--text-base);
@@ -638,6 +639,12 @@ body.nautical-mode .card {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0;
+}
+.card-header > div {
+  min-width: 0;
+  flex-shrink: 1;
+  flex-wrap: wrap;
 }
 .card-body { padding: 12px 14px; }
 
@@ -1491,9 +1498,11 @@ body.light-mode .sms-contact-row:hover { background: rgba(0,0,0,.05); }
 /* ── Lists (Todo + Shopping) ── */
 .list-input-row {
   display: flex; gap: 4px; margin-bottom: 5px;
+  min-width: 0;
 }
 .list-input-row input {
   flex: 1;
+  min-width: 0;
   background: var(--surface2);
   border: 1px solid rgba(255,255,255,.1);
   border-radius: 6px;
@@ -1736,6 +1745,16 @@ body.light-mode .shop-cat-header { border-bottom-color: rgba(0,0,0,.08); }
 /* Tighter card body for list widgets */
 #shopCard .card-body, #todoCard .card-body {
   padding: 6px 12px 8px;
+}
+/* Allow SMS popover to overflow the card header boundary */
+#shopCard .card-header {
+  overflow: visible;
+}
+/* Constrain shopping category select so it doesn't widen the input row */
+.shop-cat-select {
+  max-width: 90px;
+  min-width: 0;
+  flex-shrink: 1;
 }
 /* ToDo list scrolls when long */
 #todoCard .list-items {
