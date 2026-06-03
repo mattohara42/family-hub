@@ -125,6 +125,14 @@ let mealAiKey       = localStorage.getItem('fh_mealAiKey')                || '';
 let mealAiProvider  = localStorage.getItem('fh_mealAiProvider')           || 'gemini';
 let mealDietPrefs   = lsGet('fh_mealDietPrefs', []);
 let mealPantryDef   = localStorage.getItem('fh_mealPantry')               || '';
+// ── Shopping categories ───────────────────────────────────────────────────
+const SHOP_DEFAULT_CATEGORIES = ['Produce','Dairy','Meat & Seafood','Bakery','Frozen','Pantry','Beverages','Household','Other'];
+const SHOP_CATEGORY_ICONS = {
+  'Produce':'🥦','Dairy':'🧀','Meat & Seafood':'🥩','Bakery':'🍞',
+  'Frozen':'🧊','Pantry':'🥫','Beverages':'🧃','Household':'🧹','Other':'📦'
+};
+let shopCategories = lsGet('fh_shopCategories', SHOP_DEFAULT_CATEGORIES.slice());
+let shopCollapsed  = {};   // { categoryName: true } — true means collapsed
 // ── Family Assistant state ─────────────────────────────────────────────────
 let assistantHistory  = [];   // [{role:'user'|'model', parts:[{text}]}]
 let shopItemsCache    = [];   // in-memory mirror of shopping items for context
@@ -593,6 +601,7 @@ window.addEventListener('load', () => {
   setupListeners();
   loadBgFromDb();
   populateTodoAssigneeDropdown();
+  populateShopCategorySelect();
   applyWidgetPlacement();   // moves cards to sidebar/bottom, then calls applyWidgetVisibility
   renderBudgetCard();
   loadWotd();
@@ -2413,8 +2422,16 @@ function renderTodoList() {
 }
 
 function renderFsList(ulId, emptyId, docs, collection) {
-  // Shopping list only (todo now uses renderTodoList)
-  if (collection === 'shopping') shopItemsCache = docs.map(doc => doc.data());
+  if (collection === 'shopping') {
+    const entries = docs.map(doc => {
+      const d = doc.data();
+      return { text: d.text, done: d.done, by: d.by, category: d.category || 'Other',
+               onToggle: () => toggleFs(collection, doc.id, d.done),
+               onDelete: () => deleteFs(collection, doc.id) };
+    });
+    renderShopGrouped(entries);
+    return;
+  }
   const ul = document.getElementById(ulId);
   const empty = document.getElementById(emptyId);
   ul.innerHTML = '';
@@ -2471,10 +2488,19 @@ function getLocalList(col) { return lsGet(localKey(col), []); }
 function saveLocalList(col, items) { localStorage.setItem(localKey(col), JSON.stringify(items)); }
 
 function renderLocalList(col) {
+  if (col === 'shopping') {
+    const items = getLocalList('shopping');
+    const entries = items.map((item, i) => ({
+      text: item.text, done: item.done, by: item.by, category: item.category || 'Other',
+      onToggle: () => { items[i].done = !items[i].done; saveLocalList('shopping', items); renderLocalList('shopping'); },
+      onDelete: () => { items.splice(i, 1); saveLocalList('shopping', items); renderLocalList('shopping'); },
+    }));
+    renderShopGrouped(entries);
+    return;
+  }
   const ulId    = col === 'todo' ? 'todoList' : 'shopList';
   const emptyId = col === 'todo' ? 'todoEmpty' : 'shopEmpty';
   const items   = getLocalList(col);
-  if (col === 'shopping') shopItemsCache = items;
   const ul      = document.getElementById(ulId);
   const empty   = document.getElementById(emptyId);
   ul.innerHTML  = '';
@@ -2691,15 +2717,115 @@ function addTodo() {
   }
 }
 
+function renderShopGrouped(entries) {
+  const ul    = document.getElementById('shopList');
+  const empty = document.getElementById('shopEmpty');
+  if (!ul) return;
+  ul.innerHTML = '';
+  shopItemsCache = entries.map(({ text, done, by, category }) => ({ text, done, by, category }));
+  if (!entries.length) { empty.style.display = ''; return; }
+  empty.style.display = 'none';
+
+  // Ordered: known categories first, then any custom ones found in items
+  const usedCats = [...new Set(entries.map(e => e.category || 'Other'))];
+  const orderedCats = [
+    ...shopCategories.filter(c => usedCats.includes(c)),
+    ...usedCats.filter(c => !shopCategories.includes(c))
+  ];
+
+  orderedCats.forEach(cat => {
+    const items = entries.filter(e => (e.category || 'Other') === cat);
+    if (!items.length) return;
+    const icon        = SHOP_CATEGORY_ICONS[cat] || '📦';
+    const isCollapsed = !!shopCollapsed[cat];
+    const undone      = items.filter(i => !i.done).length;
+
+    const groupLi = document.createElement('li');
+    groupLi.className = 'shop-cat-group';
+
+    const header = document.createElement('div');
+    header.className = 'shop-cat-header' + (isCollapsed ? ' collapsed' : '');
+    header.innerHTML =
+      `<span class="shop-cat-name">${icon} ${cat}</span>` +
+      `<span class="shop-cat-count">${undone}</span>` +
+      `<span class="shop-cat-toggle">▾</span>`;
+
+    const itemsUl = document.createElement('ul');
+    itemsUl.className = 'shop-cat-items' + (isCollapsed ? ' hidden' : '');
+    items.forEach(item => itemsUl.appendChild(makeListItem(item.text, item.done, item.by, item.onToggle, item.onDelete)));
+
+    header.onclick = () => {
+      shopCollapsed[cat] = !shopCollapsed[cat];
+      header.classList.toggle('collapsed');
+      itemsUl.classList.toggle('hidden');
+    };
+
+    groupLi.appendChild(header);
+    groupLi.appendChild(itemsUl);
+    ul.appendChild(groupLi);
+  });
+}
+
+function populateShopCategorySelect() {
+  const sel = document.getElementById('shopCategorySelect');
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = shopCategories.map(c =>
+    `<option value="${c}">${SHOP_CATEGORY_ICONS[c] || '📦'} ${c}</option>`
+  ).join('');
+  if (prev && shopCategories.includes(prev)) sel.value = prev;
+}
+
+function renderShopCategorySettings() {
+  const list = document.getElementById('shopCategoryList');
+  if (!list) return;
+  list.innerHTML = '';
+  shopCategories.forEach((cat, i) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:3px 0;font-size:var(--text-sm)';
+    const icon = SHOP_CATEGORY_ICONS[cat] || '📦';
+    const nameSpan = document.createElement('span');
+    nameSpan.style.flex = '1';
+    nameSpan.textContent = `${icon} ${cat}`;
+    const delBtn = document.createElement('button');
+    delBtn.className = 'btn btn-sm';
+    delBtn.style.cssText = 'padding:1px 7px;background:var(--surface2);color:var(--red)';
+    delBtn.textContent = '✕';
+    delBtn.onclick = () => removeShopCategory(i);
+    row.appendChild(nameSpan);
+    row.appendChild(delBtn);
+    list.appendChild(row);
+  });
+}
+
+function addShopCategory() {
+  const input = document.getElementById('newShopCategoryInput');
+  const name  = input.value.trim();
+  if (!name || shopCategories.includes(name)) return;
+  input.value = '';
+  shopCategories.push(name);
+  localStorage.setItem('fh_shopCategories', JSON.stringify(shopCategories));
+  populateShopCategorySelect();
+  renderShopCategorySettings();
+}
+
+function removeShopCategory(idx) {
+  shopCategories.splice(idx, 1);
+  localStorage.setItem('fh_shopCategories', JSON.stringify(shopCategories));
+  populateShopCategorySelect();
+  renderShopCategorySettings();
+}
+
 function addShop() {
   const input = document.getElementById('shopInput');
   const text  = input.value.trim();
   if (!text) return;
+  const category = document.getElementById('shopCategorySelect')?.value || 'Other';
   input.value = '';
-  if (db) { addToFs('shopping', text); }
+  if (db) { addToFs('shopping', text, { category }); }
   else {
     const items = getLocalList('shopping');
-    items.push({ text, done: false, by: userName });
+    items.push({ text, done: false, by: userName, category });
     saveLocalList('shopping', items);
     renderLocalList('shopping');
   }
@@ -4026,6 +4152,7 @@ function openSettings() {
   document.getElementById('settingWeatherKey').value    = weatherKey;
   renderWeatherLocationsList();
   renderSmsContactsList();
+  renderShopCategorySettings();
   document.getElementById('settingSlideInterval').value = slideInterval;
   document.getElementById('settingMealAiKey').value     = mealAiKey;
   document.getElementById('settingMealPantry').value    = mealPantryDef;

@@ -175,6 +175,7 @@
       <div class="card-body">
         <div class="list-input-row">
           <input id="shopInput" type="text" placeholder="Add an item…" onkeydown="if(event.key==='Enter')addShop()" />
+          <select id="shopCategorySelect" class="shop-cat-select"></select>
           <button class="btn btn-primary btn-sm" onclick="addShop()">Add</button>
         </div>
         <ul id="shopList" class="list-items"></ul>
@@ -455,6 +456,17 @@
         <p style="font-size:.79rem;color:var(--muted);margin-top:8px">
           Tap <strong>📱 SMS ▾</strong> on the Shopping List and choose a recipient to send unchecked items.
         </p>
+        <hr style="border:none;border-top:1px solid rgba(255,255,255,.08);margin:14px 0"/>
+        <div class="field">
+          <label>Aisle Categories</label>
+          <p style="font-size:.78rem;color:var(--muted);margin-bottom:8px">Items are grouped by aisle in the shopping list.</p>
+          <div id="shopCategoryList" style="margin-bottom:8px"></div>
+          <div style="display:flex;gap:8px;margin-top:4px">
+            <input type="text" id="newShopCategoryInput" placeholder="New category…" style="flex:1"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();addShopCategory()}" />
+            <button class="btn btn-primary btn-sm" onclick="addShopCategory()">Add</button>
+          </div>
+        </div>
       </div><!-- /shopping -->
 
       <!-- ── To-Do ── -->

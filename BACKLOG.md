@@ -63,9 +63,8 @@ Allow a to-do item to have child items (sub-tasks). Collapsible in the list view
 
 ## Shopping List
 
-### Shopping list categories
-**Priority: Low**
-Allow items to be tagged with a category (Produce, Dairy, Frozen, etc.) and grouped by aisle in the list view. Makes in-store use faster.
+### ~~Shopping list categories~~ ✅ Done
+Items are tagged with a category (Produce, Dairy, Frozen, etc.) when added and grouped by aisle in the list view. Categories are collapsible and manageable in Settings → Shopping.
 
 ---
 
