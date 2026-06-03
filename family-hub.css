@@ -1403,30 +1403,44 @@ body.light-mode .sms-contact-row:hover { background: rgba(0,0,0,.05); }
   width: min(480px, 95vw);
   max-height: 90vh;
   overflow-y: auto;
-  /* Fully opaque, 3-D lift */
-  background: #1e2130;
+  /* 3-D card: gradient face + layered shadows + top-edge shine */
+  background: linear-gradient(160deg, #2a2f48 0%, #1a1e30 60%, #161929 100%);
+  border-top: 1px solid rgba(255,255,255,.18);
+  border-left: 1px solid rgba(255,255,255,.10);
   box-shadow:
-    0 2px 0 rgba(255,255,255,.06) inset,   /* top highlight edge */
-    0 24px 60px rgba(0,0,0,.80),            /* deep drop shadow */
-    0  8px 20px rgba(0,0,0,.55),            /* mid shadow */
-    0  0  0 1px rgba(255,255,255,.08);      /* subtle border ring */
-  transform: perspective(900px) rotateX(0.6deg);
+    0  1px 0  rgba(255,255,255,.14) inset,
+    0 50px 100px rgba(0,0,0,.90),
+    0 20px  40px rgba(0,0,0,.70),
+    0  6px  12px rgba(0,0,0,.50),
+    0  0    0   1px rgba(255,255,255,.07);
+  transform: perspective(800px) rotateX(2deg) translateY(-4px);
+  transform-origin: 50% 0%;
 }
 body.light-mode #eventEditorModal .modal {
-  background: #f5f6fa;
+  background: linear-gradient(160deg, #ffffff 0%, #f0f2f8 60%, #e8eaf4 100%);
+  border-top: 1px solid rgba(255,255,255,1);
+  border-left: 1px solid rgba(255,255,255,.8);
   box-shadow:
-    0 2px 0 rgba(255,255,255,.9) inset,
-    0 24px 60px rgba(0,0,0,.28),
-    0  8px 20px rgba(0,0,0,.16),
-    0  0  0 1px rgba(0,0,0,.10);
+    0  1px 0  rgba(255,255,255,1) inset,
+    0 50px 100px rgba(0,0,0,.30),
+    0 20px  40px rgba(0,0,0,.18),
+    0  6px  12px rgba(0,0,0,.12),
+    0  0    0   1px rgba(0,0,0,.08);
+  transform: perspective(800px) rotateX(2deg) translateY(-4px);
+  transform-origin: 50% 0%;
 }
 body.nautical-mode #eventEditorModal .modal {
-  background: #0e1a3e;
+  background: linear-gradient(160deg, #162050 0%, #0e1a3e 60%, #0a1530 100%);
+  border-top: 1px solid rgba(200,169,110,.35);
+  border-left: 1px solid rgba(200,169,110,.18);
   box-shadow:
-    0 2px 0 rgba(200,169,110,.12) inset,
-    0 24px 60px rgba(0,0,0,.85),
-    0  8px 20px rgba(0,0,0,.60),
-    0  0  0 1px rgba(200,169,110,.18);
+    0  1px 0  rgba(200,169,110,.20) inset,
+    0 50px 100px rgba(0,0,0,.95),
+    0 20px  40px rgba(0,0,0,.75),
+    0  6px  12px rgba(0,0,0,.55),
+    0  0    0   1px rgba(200,169,110,.20);
+  transform: perspective(800px) rotateX(2deg) translateY(-4px);
+  transform-origin: 50% 0%;
 }
 .evt-editor-close-btn {
   display: flex; align-items: center; justify-content: center;
