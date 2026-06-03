@@ -1435,10 +1435,10 @@ body.nautical-mode #eventEditorModal .modal {
   border-left: 1px solid rgba(200,169,110,.18);
   box-shadow:
     0  1px 0  rgba(200,169,110,.20) inset,
-    0 50px 100px rgba(0,0,0,.95),
-    0 20px  40px rgba(0,0,0,.75),
-    0  6px  12px rgba(0,0,0,.55),
-    0  0    0   1px rgba(200,169,110,.20);
+    0  0  80px rgba(200,169,110,.40),
+    0  0  40px rgba(200,169,110,.28),
+    0  0  16px rgba(200,169,110,.18),
+    0  0   0  1px rgba(200,169,110,.35);
   transform: perspective(800px) rotateX(2deg) translateY(-4px);
   transform-origin: 50% 0%;
 }
