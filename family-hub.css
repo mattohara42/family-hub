@@ -446,7 +446,6 @@ body.has-bg .day-hour-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 14px;
-  margin-top: 14px;
   align-items: start;
 }
 
@@ -1780,9 +1779,16 @@ body.nautical-mode #settingsModal .modal {
   background: var(--surface);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
+  border: 1px solid rgba(108,142,245,0.38);
   overflow: hidden;
   display: flex;
   align-items: stretch;
+}
+body.light-mode #yearStrip {
+  border-color: rgba(0,0,0,0.18);
+}
+body.nautical-mode #yearStrip {
+  border-color: rgba(200,169,110,0.48);
 }
 body.has-bg #yearStrip {
   background: var(--strip-bg-photo);
