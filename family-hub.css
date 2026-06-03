@@ -1771,7 +1771,7 @@ body.nautical-mode #settingsModal .modal {
 .cal-column {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 10px;
   min-width: 0;
 }
 
