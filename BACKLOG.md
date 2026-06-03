@@ -77,9 +77,8 @@ A 5-day / Hourly toggle sits above the forecast. Hourly shows the next 8 × 3-ho
 
 ## Appearance / UX
 
-### System theme auto-detection
-**Priority: Low**
-Respect `prefers-color-scheme: dark` as the default when no theme is saved in localStorage (instead of always defaulting to Dark mode). Nautical mode stays opt-in.
+### ~~System theme auto-detection~~ ✅ Done
+Defaults to `prefers-color-scheme` when no theme is saved in localStorage. Nautical mode stays opt-in. A live `matchMedia` listener also updates the theme if the OS setting changes while the app is open and no manual preference is saved.
 
 ### PWA service worker / offline support
 **Priority: Low**

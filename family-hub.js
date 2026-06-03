@@ -107,7 +107,8 @@ let familyMembers   = lsGet('fh_familyMembers', []);
 let todoItems       = []; // in-memory mirror of Firestore 'todo' collection for calendar use
 // Migrate old 'amazing' mode name to 'nautical'
 if (localStorage.getItem('fh_mode') === 'amazing') localStorage.setItem('fh_mode', 'nautical');
-let appMode         = localStorage.getItem('fh_mode') || 'dark';   // 'light' | 'dark' | 'nautical'
+const _savedMode    = localStorage.getItem('fh_mode');
+let appMode         = _savedMode || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');  // 'light' | 'dark' | 'nautical'
 let mobileTab       = localStorage.getItem('fh_mobileTab') || 'cal';  // 'cal' | 'widgets'
 let smsContacts     = lsGet('fh_smsContacts', []);
 // migrate legacy single-number setting
@@ -4194,6 +4195,10 @@ function applyAppMode(mode) {
   if (mode === 'light')   document.body.classList.add('light-mode');
   if (mode === 'nautical') document.body.classList.add('nautical-mode');
 }
+
+window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', e => {
+  if (!localStorage.getItem('fh_mode')) applyAppMode(e.matches ? 'light' : 'dark');
+});
 
 function setAppMode(mode) {
   applyAppMode(mode);
