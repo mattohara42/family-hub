@@ -721,6 +721,13 @@ function changeCalPeriod(delta) {
   if (googleToken) loadAllCalendars();
 }
 
+function goToToday() {
+  calViewDate = new Date();
+  renderCurrentView();
+  renderYearStrip();
+  if (googleToken) loadAllCalendars();
+}
+
 function switchCalView(view) {
   calView = view;
   localStorage.setItem('fh_calView', view);
@@ -741,6 +748,24 @@ function renderCurrentView() {
   if (calView === 'week')   renderWeekGrid();
   if (calView === 'day')    renderDayGrid();
   if (calView === 'agenda') renderAgendaView();
+
+  // Show "Today" button when the view has navigated away from the current period
+  const btn = document.getElementById('backToTodayBtn');
+  if (btn) {
+    const now = new Date();
+    let awayFromToday = false;
+    if (calView === 'month') {
+      awayFromToday = calViewDate.getFullYear() !== now.getFullYear() || calViewDate.getMonth() !== now.getMonth();
+    } else if (calView === 'week') {
+      const ws = getWeekStart(calViewDate);
+      const todayWs = getWeekStart(now);
+      awayFromToday = ws.toDateString() !== todayWs.toDateString();
+    } else if (calView === 'day') {
+      awayFromToday = calViewDate.toDateString() !== now.toDateString();
+    }
+    btn.style.display = awayFromToday ? '' : 'none';
+  }
+
   renderBudgetCard();
 }
 
