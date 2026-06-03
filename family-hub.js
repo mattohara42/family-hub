@@ -2745,10 +2745,18 @@ function renderShopGrouped(entries) {
 
     const header = document.createElement('div');
     header.className = 'shop-cat-header' + (isCollapsed ? ' collapsed' : '');
-    header.innerHTML =
-      `<span class="shop-cat-name">${icon} ${cat}</span>` +
-      `<span class="shop-cat-count">${undone}</span>` +
-      `<span class="shop-cat-toggle">▾</span>`;
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'shop-cat-name';
+    nameSpan.textContent = `${icon} ${cat}`;
+    const countSpan = document.createElement('span');
+    countSpan.className = 'shop-cat-count';
+    countSpan.textContent = undone;
+    const toggleSpan = document.createElement('span');
+    toggleSpan.className = 'shop-cat-toggle';
+    toggleSpan.textContent = '▾';
+    header.appendChild(nameSpan);
+    header.appendChild(countSpan);
+    header.appendChild(toggleSpan);
 
     const itemsUl = document.createElement('ul');
     itemsUl.className = 'shop-cat-items' + (isCollapsed ? ' hidden' : '');
@@ -2807,9 +2815,12 @@ function addShopCategory() {
   localStorage.setItem('fh_shopCategories', JSON.stringify(shopCategories));
   populateShopCategorySelect();
   renderShopCategorySettings();
+  renderLocalList('shopping');
 }
 
 function removeShopCategory(idx) {
+  const removed = shopCategories[idx];
+  delete shopCollapsed[removed];
   shopCategories.splice(idx, 1);
   localStorage.setItem('fh_shopCategories', JSON.stringify(shopCategories));
   populateShopCategorySelect();
@@ -3538,12 +3549,12 @@ function addMealIngredients(idx) {
 
   let added = 0;
   if (db) {
-    ingredients.forEach(ing => { addToFs('shopping', ing); added++; });
+    ingredients.forEach(ing => { addToFs('shopping', ing, { category: 'Other' }); added++; });
   } else {
     const items = getLocalList('shopping');
     ingredients.forEach(ing => {
       if (!items.some(i => i.text.toLowerCase() === ing.toLowerCase())) {
-        items.push({ text: ing, done: false, by: userName });
+        items.push({ text: ing, done: false, by: userName, category: 'Other' });
         added++;
       }
     });
@@ -3666,10 +3677,10 @@ function executeAssistantActions(actions) {
   const confirmMsgs = [];
   actions.forEach(({ type, value }) => {
     if (type === 'addShopping') {
-      if (db) { addToFs('shopping', value); }
+      if (db) { addToFs('shopping', value, { category: 'Other' }); }
       else {
         const items = getLocalList('shopping');
-        items.push({ text: value, done: false, by: userName });
+        items.push({ text: value, done: false, by: userName, category: 'Other' });
         saveLocalList('shopping', items);
         renderLocalList('shopping');
       }
