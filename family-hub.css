@@ -640,8 +640,8 @@ body.has-bg .day-hour-row {
   overflow: hidden;
 }
 .cal-day.other-month { opacity: .35; }
-.cal-day.current-week { background-image: linear-gradient(rgba(255,255,255,.10), rgba(255,255,255,.10)); }
-body.light-mode .cal-day.current-week { background-image: linear-gradient(rgba(0,0,0,.07), rgba(0,0,0,.07)); }
+.cal-day.current-week { background: rgba(75,85,128,0.52); }
+body.light-mode .cal-day.current-week { background: rgba(210,215,232,0.68); }
 body.nautical-mode .cal-day.current-week { background-image: linear-gradient(rgba(200,169,110,.18), rgba(200,169,110,.18)); }
 .cal-day.today { border: 1px solid var(--accent); }
 .cal-day-num {
@@ -984,8 +984,8 @@ body.nautical-mode .cal-day.current-week { background-image: linear-gradient(rgb
   border-radius: 50%;
   margin: 3px auto 0;
 }
-.week-day-col.today { background-image: linear-gradient(rgba(255,255,255,.10), rgba(255,255,255,.10)); }
-body.light-mode .week-day-col.today { background-image: linear-gradient(rgba(0,0,0,.07), rgba(0,0,0,.07)); }
+.week-day-col.today { background: rgba(75,85,128,0.52); }
+body.light-mode .week-day-col.today { background: rgba(210,215,232,0.68); }
 body.nautical-mode .week-day-col.today { background-image: linear-gradient(rgba(200,169,110,.18), rgba(200,169,110,.18)); }
 .week-day-col.today .week-day-dow { color: var(--accent); }
 .week-day-col.today .week-day-num { background: var(--accent); color: #fff; }
@@ -1030,10 +1030,10 @@ body.nautical-mode .week-day-col.today { background-image: linear-gradient(rgba(
   border-bottom: 1px solid rgba(128,128,128,.07);
 }
 .day-hour-row.current-hour {
-  background-image: linear-gradient(rgba(255,255,255,.10), rgba(255,255,255,.10));
+  background: rgba(75,85,128,0.52);
   border-left: 2px solid var(--accent);
 }
-body.light-mode .day-hour-row.current-hour { background-image: linear-gradient(rgba(0,0,0,.07), rgba(0,0,0,.07)); }
+body.light-mode .day-hour-row.current-hour { background: rgba(210,215,232,0.68); }
 body.nautical-mode .day-hour-row.current-hour { background-image: linear-gradient(rgba(200,169,110,.18), rgba(200,169,110,.18)); }
 .day-hour-row.current-hour .day-hour-label { color: var(--accent); font-weight: var(--weight-bold); }
 .day-hour-label {
