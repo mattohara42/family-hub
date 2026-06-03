@@ -77,17 +77,12 @@
     </div>
 
     <div id="yearStrip">
-      <div class="strip-header">
-        <h2>📆 Upcoming Months</h2>
-        <span id="stripRangeLabel"></span>
-        <button class="strip-nav-btn" id="stripTodayBtn" onclick="resetStripToToday()"
-                title="Back to today" style="font-size:.7rem;width:auto;padding:0 8px;opacity:0;pointer-events:none">
-          Today
-        </button>
-        <button class="strip-nav-btn" onclick="changeStripMonth(-1)" title="Back one month">&#8249;</button>
-        <button class="strip-nav-btn" onclick="changeStripMonth(1)"  title="Forward one month">&#8250;</button>
-      </div>
+      <!-- hidden elements kept for JS compatibility -->
+      <span id="stripRangeLabel" style="display:none"></span>
+      <button id="stripTodayBtn" onclick="resetStripToToday()" style="display:none">Today</button>
+      <button class="strip-side-nav" onclick="changeStripMonth(-1)" title="Back one month">&#8249;</button>
       <div class="mini-grid" id="miniGrid"></div>
+      <button class="strip-side-nav" onclick="changeStripMonth(1)"  title="Forward one month">&#8250;</button>
     </div>
 
     <!-- Bottom widget strip (cards placed here when placement = bottom) -->
