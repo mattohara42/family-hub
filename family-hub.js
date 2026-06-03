@@ -605,6 +605,13 @@ window.addEventListener('load', () => {
     if (pop && !pop.contains(e.target) && e.target.id !== 'smsTriggerBtn')
       pop.style.display = 'none';
   });
+  // Escape key closes event editor
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      const modal = document.getElementById('eventEditorModal');
+      if (modal && modal.style.display !== 'none') closeEventEditor();
+    }
+  });
 });
 
 function initGoogleAuth() {

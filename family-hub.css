@@ -1403,6 +1403,48 @@ body.light-mode .sms-contact-row:hover { background: rgba(0,0,0,.05); }
   width: min(480px, 95vw);
   max-height: 90vh;
   overflow-y: auto;
+  /* Fully opaque, 3-D lift */
+  background: #1e2130;
+  box-shadow:
+    0 2px 0 rgba(255,255,255,.06) inset,   /* top highlight edge */
+    0 24px 60px rgba(0,0,0,.80),            /* deep drop shadow */
+    0  8px 20px rgba(0,0,0,.55),            /* mid shadow */
+    0  0  0 1px rgba(255,255,255,.08);      /* subtle border ring */
+  transform: perspective(900px) rotateX(0.6deg);
+}
+body.light-mode #eventEditorModal .modal {
+  background: #f5f6fa;
+  box-shadow:
+    0 2px 0 rgba(255,255,255,.9) inset,
+    0 24px 60px rgba(0,0,0,.28),
+    0  8px 20px rgba(0,0,0,.16),
+    0  0  0 1px rgba(0,0,0,.10);
+}
+body.nautical-mode #eventEditorModal .modal {
+  background: #0e1a3e;
+  box-shadow:
+    0 2px 0 rgba(200,169,110,.12) inset,
+    0 24px 60px rgba(0,0,0,.85),
+    0  8px 20px rgba(0,0,0,.60),
+    0  0  0 1px rgba(200,169,110,.18);
+}
+.evt-editor-close-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: rgba(220,53,69,0.15);
+  border: 1.5px solid rgba(220,53,69,0.55);
+  color: #e05c6a;
+  font-size: 1.1rem; line-height: 1;
+  cursor: pointer;
+  transition: background .15s, border-color .15s, transform .1s;
+  flex-shrink: 0;
+}
+.evt-editor-close-btn:hover {
+  background: rgba(220,53,69,0.85);
+  border-color: #dc3545;
+  color: #fff;
+  transform: scale(1.08);
 }
 .evt-editor-cal-select {
   display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px;
