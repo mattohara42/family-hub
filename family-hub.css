@@ -576,7 +576,7 @@ body.nautical-mode .card {
   gap: 8px;
 }
 .cal-month-nav button {
-  background: var(--surface2);
+  background: rgba(80,110,200,0.35);
   border: none;
   color: var(--text);
   width: 26px; height: 26px;
@@ -584,8 +584,15 @@ body.nautical-mode .card {
   cursor: pointer;
   font-size: .9rem;
   display: flex; align-items: center; justify-content: center;
+  transition: background .15s;
 }
 .cal-month-nav button:hover { background: var(--accent); }
+body.light-mode .cal-month-nav button {
+  background: rgba(80,110,200,0.18);
+}
+body.nautical-mode .cal-month-nav button {
+  background: rgba(200,169,110,0.30);
+}
 .cal-title-zone {
   display: flex;
   align-items: center;
@@ -616,12 +623,18 @@ body.nautical-mode .card {
 /* ── Calendar card header: 3-zone layout ── */
 .cal-card-header {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 10px;
 }
+.cal-card-header .cal-title-zone {
+  justify-self: start;
+}
 .cal-card-header .cal-month-nav {
   justify-content: center;
+}
+.cal-card-header .cal-view-tabs {
+  justify-self: end;
 }
 
 .cal-grid {
