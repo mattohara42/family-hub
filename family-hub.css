@@ -1919,8 +1919,9 @@ body.light-mode .shop-cat-header { border-bottom-color: rgba(0,0,0,.08); }
 }
 #settingsModal .modal {
   max-width: min(92vw, 860px);
-  height: min(88vh, 620px);
+  max-height: min(88vh, 620px);
   display: flex; flex-direction: column;
+  overflow: hidden;
   /* Always fully opaque — no background-photo bleed-through */
   background: #1a1d27;
   box-shadow:
@@ -1962,7 +1963,7 @@ body.nautical-mode #settingsModal .modal {
   font-size: var(--text-base);
 }
 .field input:focus { outline: none; border-color: var(--accent); }
-.modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; flex-shrink: 0; }
 .btn-secondary { background: var(--surface2); color: var(--text); }
 .btn-mode-active { background: var(--accent) !important; color: #fff !important; }
 
