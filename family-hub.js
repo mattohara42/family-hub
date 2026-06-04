@@ -2212,6 +2212,19 @@ async function loadWeatherByCity(city) {
 
     if (cur.cod !== 200) { alert('Weather error: ' + cur.message); return; }
 
+    // Fetch air quality using lat/lon from current weather response
+    const { lat, lon } = cur.coord || {};
+    let aqi = null, aqiLabel = '';
+    if (lat != null && lon != null) {
+      try {
+        const aqiR = await fetch(`${OWM_API_BASE}/air_pollution?lat=${lat}&lon=${lon}&appid=${key}`);
+        const aqiD = await aqiR.json();
+        aqi = aqiD?.list?.[0]?.main?.aqi ?? null;
+        const aqiLabels = ['', 'Good', 'Fair', 'Moderate', 'Poor', 'Very Poor'];
+        aqiLabel = aqiLabels[aqi] || '';
+      } catch(e) { /* silent */ }
+    }
+
     // Build processed data object and cache it
     const todayStr = new Date().toISOString().slice(0, 10);
     const forecastList = fcast.list || [];
@@ -2252,6 +2265,7 @@ async function loadWeatherByCity(city) {
         pop:  Math.round((s.pop || 0) * 100),
       }));
 
+    const fmtTime = ts => new Date(ts * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     const data = {
       label:         cur.name + ', ' + cur.sys.country,
       icon:          cur.weather[0].main,
@@ -2263,6 +2277,11 @@ async function loadWeatherByCity(city) {
       rainStartTime: (todayRainPct >= 30 && rainStartTime) ? rainStartTime : null,
       days:          Object.entries(dayMap).sort(([a],[b]) => a < b ? -1 : 1).slice(0, 5),
       hours,
+      sunrise:       cur.sys?.sunrise ? fmtTime(cur.sys.sunrise) : null,
+      sunset:        cur.sys?.sunset  ? fmtTime(cur.sys.sunset)  : null,
+      aqi,
+      aqiLabel,
+      alerts:        cur.alerts || [],
     };
 
     weatherCache[city.toLowerCase().trim()] = { ts: Date.now(), data };
@@ -2346,8 +2365,53 @@ function renderWeatherData(data) {
     });
   }
 
+  // ── Weather ticker ──
+  renderWeatherTicker(data);
+
   document.getElementById('weatherSetup').style.display  = 'none';
   document.getElementById('weatherDisplay').style.display = 'block';
+}
+
+function renderWeatherTicker(data) {
+  const ticker = document.getElementById('wxTicker');
+  const track  = document.getElementById('wxTickerTrack');
+  if (!ticker || !track) return;
+
+  const aqiColors = ['', '#4caf82', '#a8d84e', '#f5c542', '#f5822a', '#e05c2a'];
+  const segments  = [];
+
+  // Weather alerts first (highest priority)
+  (data.alerts || []).forEach(a => {
+    segments.push(`⚠️ ${a.event}: ${a.description?.slice(0,120) || ''}…`);
+  });
+
+  // Precipitation start time
+  if (data.rainStartTime) {
+    segments.push(`🌧 Precipitation starts around ${data.rainStartTime}`);
+  }
+
+  // Sunrise / Sunset
+  if (data.sunrise) segments.push(`🌅 Sunrise ${data.sunrise}`);
+  if (data.sunset)  segments.push(`🌇 Sunset ${data.sunset}`);
+
+  // Air Quality
+  if (data.aqi != null) {
+    const color = aqiColors[data.aqi] || 'var(--muted)';
+    segments.push(`🌬 Air Quality: <span style="color:${color};font-weight:600">${data.aqiLabel || 'AQI ' + data.aqi}</span>`);
+  }
+
+  if (!segments.length) { ticker.style.display = 'none'; return; }
+
+  // Duplicate content so the scroll loops seamlessly
+  const sep    = ' &nbsp;&nbsp;·&nbsp;&nbsp; ';
+  const joined = segments.join(sep);
+  track.innerHTML = joined + sep + joined;
+
+  // Reset animation by toggling class
+  track.classList.remove('wx-ticker-anim');
+  void track.offsetWidth; // force reflow
+  track.classList.add('wx-ticker-anim');
+  ticker.style.display = 'block';
 }
 
 function setWeatherForecastMode(mode) {
