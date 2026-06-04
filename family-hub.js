@@ -2214,17 +2214,27 @@ async function loadWeatherByCity(city) {
 
     if (cur.cod !== 200) { alert('Weather error: ' + cur.message); return; }
 
-    // Fetch air quality using lat/lon from current weather response
+    // Fetch air quality + reverse geocode (state) using lat/lon
     const { lat, lon } = cur.coord || {};
-    let aqi = null, aqiLabel = '';
+    let aqi = null, aqiLabel = '', locationState = '';
     if (lat != null && lon != null) {
       try {
-        const aqiR = await fetch(`${OWM_API_BASE}/air_pollution?lat=${lat}&lon=${lon}&appid=${key}`);
+        const [aqiR, geoR] = await Promise.all([
+          fetch(`${OWM_API_BASE}/air_pollution?lat=${lat}&lon=${lon}&appid=${key}`),
+          fetch(`https://api.openweathermap.org/geo/1.0/reverse?lat=${lat}&lon=${lon}&limit=1&appid=${key}`)
+        ]);
         const aqiD = await aqiR.json();
         aqi = aqiD?.list?.[0]?.main?.aqi ?? null;
         const aqiLabels = ['', 'Good', 'Fair', 'Moderate', 'Poor', 'Very Poor'];
         aqiLabel = aqiLabels[aqi] || '';
-      } catch(e) { /* silent */ }
+
+        const geoD = await geoR.json();
+        const geo  = Array.isArray(geoD) ? geoD[0] : null;
+        // Use state for US; fall back to country code elsewhere
+        locationState = (geo?.country === 'US' && geo?.state) ? geo.state : (cur.sys?.country || '');
+      } catch(e) { locationState = cur.sys?.country || ''; }
+    } else {
+      locationState = cur.sys?.country || '';
     }
 
     // Build processed data object and cache it
@@ -2269,7 +2279,7 @@ async function loadWeatherByCity(city) {
 
     const fmtTime = ts => new Date(ts * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     const data = {
-      label:         cur.name + ', ' + cur.sys.country,
+      label:         cur.name + (locationState ? ', ' + locationState : ''),
       icon:          cur.weather[0].main,
       temp:          Math.round(cur.main.temp),
       desc:          cur.weather[0].description,
