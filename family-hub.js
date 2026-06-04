@@ -2296,6 +2296,7 @@ async function loadWeatherByCity(city) {
       rainStartTime: (todayRainPct >= 30 && rainStartTime) ? rainStartTime : null,
       humidity:      cur.main.humidity ?? null,
       windSpeed:     cur.wind?.speed != null ? Math.round(cur.wind.speed) : null,
+      windDeg,
       windDir,
       visibility:    cur.visibility != null ? Math.round(cur.visibility / 1609.34 * 10) / 10 : null, // metres → miles
       days:          Object.entries(dayMap).sort(([a],[b]) => a < b ? -1 : 1).slice(0, 5),
@@ -2332,13 +2333,45 @@ function renderWeatherData(data) {
   document.getElementById('wDesc').textContent  = data.desc;
   document.getElementById('weatherCity').textContent = '📍 ' + data.label;
 
-  // Detail pills: humidity, wind, visibility
+  // Detail pills: humidity, wind (with compass rose), visibility
   const detailsEl = document.getElementById('wDetails');
   const details = [];
   if (data.humidity  != null) details.push(`💧 ${data.humidity}%`);
-  if (data.windSpeed != null) details.push(`💨 ${data.windSpeed} mph ${data.windDir}`);
+  if (data.windSpeed != null) {
+    const rose = data.windDir ? `<span class="wx-compass" style="--deg:${data.windDeg ?? 0}deg">↑</span>` : '';
+    details.push(`💨 ${data.windSpeed} mph ${rose}${data.windDir}`);
+  }
   if (data.visibility != null) details.push(`👁 ${data.visibility} mi`);
   detailsEl.innerHTML = details.map(d => `<span class="wx-detail-pill">${d}</span>`).join('');
+
+  // Activity tags
+  const actEl = document.getElementById('wActivityTags');
+  const tags  = [];
+  const temp  = data.temp, rain = data.rain, wind = data.windSpeed ?? 0, icon = data.icon;
+  if (rain >= 60)                           tags.push({ e:'☂️',  label:'Bring umbrella' });
+  if (rain < 20 && temp >= 60 && temp < 85 && wind < 20) tags.push({ e:'🚴', label:'Great for a bike ride' });
+  if (rain < 30 && temp >= 55 && wind < 25) tags.push({ e:'🌳', label:'Good for outdoors' });
+  if (temp < 40)                            tags.push({ e:'🧥',  label:'Bundle up' });
+  if (temp >= 85)                           tags.push({ e:'🥵',  label:'Stay cool & hydrate' });
+  if (icon === 'Clear' && temp >= 65 && temp < 90) tags.push({ e:'😎', label:'Great beach/pool day' });
+  if (wind >= 20)                           tags.push({ e:'💨',  label:'Windy — hold onto your hat' });
+  if (icon === 'Snow')                      tags.push({ e:'⛄',  label:'Snow day!' });
+  if (icon === 'Thunderstorm')              tags.push({ e:'⚡',  label:'Stay indoors' });
+  actEl.innerHTML = tags.map(t =>
+    `<span class="wx-activity-tag" title="${t.label}">${t.e} ${t.label}</span>`
+  ).join('');
+
+  // Condition-based card tint
+  const cardEl = document.getElementById('weatherCard');
+  if (cardEl) {
+    const tints = {
+      Clear:'rgba(255,210,80,.06)', Rain:'rgba(80,140,255,.07)', Drizzle:'rgba(80,140,255,.05)',
+      Thunderstorm:'rgba(120,80,200,.09)', Snow:'rgba(200,230,255,.07)',
+      Clouds:'rgba(160,160,180,.05)', Mist:'rgba(160,160,180,.04)',
+      Fog:'rgba(160,160,180,.04)', Haze:'rgba(160,160,180,.04)',
+    };
+    cardEl.style.setProperty('--wx-tint', tints[data.icon] || 'transparent');
+  }
   document.getElementById('wHigh').textContent  = data.hi + '°';
   document.getElementById('wLow').textContent   = data.lo + '°';
   document.getElementById('wRain').textContent  = data.rain + '%';
@@ -2374,13 +2407,18 @@ function renderWeatherData(data) {
       const tempEl = document.createElement('span');
       tempEl.className = 'wx-hour-temp';
       tempEl.textContent = h.temp + '°';
-      const rainEl = document.createElement('span');
-      rainEl.className = 'wx-hour-rain';
-      rainEl.textContent = h.pop > 0 ? h.pop + '%' : '';
+      // Precip bar
+      const barWrap = document.createElement('div');
+      barWrap.className = 'wx-hour-bar-wrap';
+      barWrap.title = h.pop > 0 ? h.pop + '% chance of rain' : 'No precipitation';
+      const bar = document.createElement('div');
+      bar.className = 'wx-hour-bar';
+      bar.style.height = h.pop + '%';
+      barWrap.appendChild(bar);
       card.appendChild(timeEl);
       card.appendChild(iconEl);
       card.appendChild(tempEl);
-      card.appendChild(rainEl);
+      card.appendChild(barWrap);
       strip.appendChild(card);
     });
     fcastEl.appendChild(strip);

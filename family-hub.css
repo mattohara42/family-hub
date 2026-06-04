@@ -1017,6 +1017,50 @@ body.light-mode .wx-forecast-toggle { border-color: rgba(0,0,0,.12); }
   color: var(--text);
 }
 
+/* ── Condition-based card tint ── */
+#weatherCard {
+  --wx-tint: transparent;
+  background: var(--surface) !important;
+  position: relative;
+}
+#weatherCard::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--wx-tint);
+  border-radius: inherit;
+  pointer-events: none;
+  transition: background 1.2s ease;
+}
+body.has-bg #weatherCard::before { background: transparent; }
+
+/* ── Activity tags ── */
+.wx-activity-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 0 2px;
+}
+.wx-activity-tag {
+  font-size: var(--text-xs);
+  padding: 2px 8px;
+  border-radius: 20px;
+  background: rgba(108,142,245,.12);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* ── Compass rose arrow in wind pill ── */
+.wx-compass {
+  display: inline-block;
+  font-style: normal;
+  transform: rotate(var(--deg));
+  transform-origin: center;
+  margin-right: 2px;
+  font-size: .8em;
+  opacity: .8;
+}
+
 /* ── Hourly forecast strip ── */
 .wx-hourly {
   display: flex;
@@ -1041,6 +1085,20 @@ body.light-mode .wx-forecast-toggle { border-color: rgba(0,0,0,.12); }
 .wx-hour-icon { font-size: 1.1rem; line-height: 1.2; }
 .wx-hour-temp { font-size: var(--text-sm); font-weight: var(--weight-semi); }
 .wx-hour-rain { color: #61afef; font-size: .68rem; min-height: .9rem; }
+.wx-hour-bar-wrap {
+  width: 100%;
+  height: 24px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.wx-hour-bar {
+  width: 70%;
+  min-height: 2px;
+  background: linear-gradient(to top, #61afef, rgba(97,175,239,.3));
+  border-radius: 2px 2px 0 0;
+  transition: height .3s ease;
+}
 
 #weatherCity { font-size: var(--text-sm); color: var(--muted); }
 #weatherChange { font-size: var(--text-sm); cursor: pointer; text-decoration: underline; background: none; border: none; color: var(--accent); }
