@@ -1923,7 +1923,18 @@ body.light-mode .shop-cat-header { border-bottom-color: rgba(0,0,0,.08); }
   display: flex; flex-direction: column;
   /* Always fully opaque — no background-photo bleed-through */
   background: #1a1d27;
-  box-shadow: 0 8px 48px rgba(0,0,0,.7), 0 2px 12px rgba(0,0,0,.5);
+  box-shadow:
+    0 8px 48px rgba(0,0,0,.7),
+    0 2px 12px rgba(0,0,0,.5),
+    0 0 80px rgba(108,142,245,.18),
+    0 0 200px rgba(108,142,245,.10);
+}
+body.nautical-mode #settingsModal .modal {
+  box-shadow:
+    0 8px 48px rgba(0,0,0,.75),
+    0 2px 12px rgba(0,0,0,.55),
+    0 0 80px rgba(200,169,110,.20),
+    0 0 200px rgba(200,169,110,.10);
 }
 body.light-mode #settingsModal .modal {
   background: #f5f6fa;
