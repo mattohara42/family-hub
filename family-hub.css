@@ -1100,7 +1100,7 @@ body.has-bg #weatherCard::before { background: transparent; }
   transition: height .3s ease;
 }
 
-#weatherCity { font-size: var(--text-sm); color: var(--muted); }
+.wx-city-label { font-size: var(--text-sm); color: var(--muted); flex: 1; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #weatherChange { font-size: var(--text-sm); cursor: pointer; text-decoration: underline; background: none; border: none; color: var(--accent); }
 
 /* ── Weather ticker ── */
@@ -1129,14 +1129,13 @@ body.has-bg #weatherCard::before { background: transparent; }
 }
 body.nautical-mode .wx-ticker { background: rgba(200,169,110,.06); border-top-color: rgba(200,169,110,.15); }
 
-/* ── Multi-location weather nav ── */
-.wx-loc-nav {
+/* ── Location bar (city label + optional prev/next) ── */
+.wx-loc-bar {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 10px;
-  margin-top: 10px;
-  padding-top: 8px;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 6px;
   border-top: 1px solid rgba(255,255,255,.06);
 }
 .wx-loc-btn {

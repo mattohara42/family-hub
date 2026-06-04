@@ -2179,11 +2179,14 @@ async function showWeatherLocation(idx) {
 
 // Render the prev/next nav and dot indicators
 function renderWeatherNav() {
-  const nav = document.getElementById('wxLocNav');
   const dotsEl = document.getElementById('wxLocDots');
-  if (!nav || !dotsEl) return;
+  const prevBtn = document.getElementById('wxLocPrev');
+  const nextBtn = document.getElementById('wxLocNext');
+  if (!dotsEl) return;
   const n = weatherLocations.length;
-  nav.style.display = n > 1 ? 'flex' : 'none';
+  const multi = n > 1;
+  if (prevBtn) prevBtn.style.display = multi ? '' : 'none';
+  if (nextBtn) nextBtn.style.display = multi ? '' : 'none';
   dotsEl.innerHTML = '';
   for (let i = 0; i < n; i++) {
     const dot = document.createElement('button');
