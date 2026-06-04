@@ -2299,7 +2299,7 @@ async function loadWeatherByCity(city) {
     const windDir  = windDeg != null ? windDirs[Math.round(windDeg / 45) % 8] : '';
 
     const data = {
-      label:         cur.name + (locationState ? ', ' + locationState : ''),
+      label:         cur.name,
       icon:          cur.weather[0].main,
       temp:          Math.round(cur.main.temp),
       feels:         cur.main.feels_like != null ? Math.round(cur.main.feels_like) : null,
