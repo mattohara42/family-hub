@@ -1836,7 +1836,8 @@ body.light-mode .shop-cat-header { border-bottom-color: rgba(0,0,0,.08); }
   margin: auto;
 }
 #settingsModal .modal {
-  min-height: 620px;
+  max-width: min(92vw, 860px);
+  height: min(88vh, 620px);
   display: flex; flex-direction: column;
   /* Always fully opaque — no background-photo bleed-through */
   background: #1a1d27;
@@ -1852,8 +1853,10 @@ body.nautical-mode #settingsModal .modal {
 }
 #settingsModal .settings-panels {
   flex: 1;
+  min-height: 0;
 }
-.modal h2 { font-size: var(--text-lg); font-weight: var(--weight-semi); margin-bottom: 18px; }
+.modal h2 { font-size: var(--text-lg); font-weight: var(--weight-semi); margin-bottom: 14px; }
+#settingsModal .modal h2 { margin-bottom: 12px; }
 .field { margin-bottom: 14px; }
 .field label { display: block; font-size: var(--text-sm); color: var(--muted); margin-bottom: 5px; }
 .field input {
@@ -1873,12 +1876,14 @@ body.nautical-mode #settingsModal .modal {
 /* ── Settings tabs ── */
 .modal-tabs {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 3px;
   background: var(--surface2);
   border-radius: 9px;
   padding: 3px;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
+  flex-shrink: 0;
+  overflow-x: auto;
 }
 .modal-tab {
   flex: 1 1 auto;
@@ -1893,10 +1898,11 @@ body.nautical-mode #settingsModal .modal {
 .settings-panel { display: none; }
 .settings-panel.active { display: block; }
 .settings-panels {
-  max-height: 420px;
+  flex: 1;
   overflow-y: auto;
   padding-right: 4px;
   margin-bottom: 4px;
+  min-height: 0;
 }
 .panel-empty {
   text-align: center; padding: 32px 0;
@@ -2634,7 +2640,7 @@ a, button, input, select, textarea, label,
   .list-input-row input { padding: 11px 14px; font-size: 0.95rem; }
 
   /* Settings panels: allow full height on small screens */
-  .settings-panels { max-height: min(420px, 55svh); }
+  #settingsModal .settings-panels { max-height: unset; }
 
   /* SMS rows */
   .sms-contact-row { padding: 14px 16px; }
