@@ -137,9 +137,14 @@
         </div>
         <div id="weatherDisplay">
           <div class="wx-current">
-            <div class="wx-icon" id="wIcon">☁️</div>
+            <div class="wx-icon-wrap" id="wIconWrap">
+              <div class="wx-icon" id="wIcon">☁️</div>
+            </div>
             <div>
-              <div class="wx-temp" id="wTemp">--°</div>
+              <div class="wx-temp-row">
+                <span class="wx-temp" id="wTemp">--°</span>
+                <span class="wx-feels" id="wFeels"></span>
+              </div>
               <div class="wx-desc" id="wDesc"></div>
             </div>
           </div>
@@ -149,6 +154,7 @@
             <span>🌧 <strong id="wRain">--%</strong></span>
             <span id="wRainTime" style="display:none">starts <strong id="wRainStart">--</strong></span>
           </div>
+          <div class="wx-details" id="wDetails"></div>
           <div class="wx-forecast-toggle">
             <button id="wxToggle5day" class="active" onclick="setWeatherForecastMode('5day')">5-day</button>
             <button id="wxToggleHourly" onclick="setWeatherForecastMode('hourly')">Hourly</button>

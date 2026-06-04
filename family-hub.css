@@ -921,9 +921,35 @@ body.has-bg .cal-day.today {
   gap: 10px;
   margin-bottom: 8px;
 }
-.wx-icon { font-size: 2.8rem; line-height: 1; flex-shrink: 0; }
+.wx-icon-wrap { font-size: 2.8rem; line-height: 1; flex-shrink: 0; display: flex; }
+.wx-icon { display: inline-block; }
+/* Animated icon states */
+.wx-anim-sunny .wx-icon  { animation: wx-spin 8s linear infinite; transform-origin: center; }
+.wx-anim-rain .wx-icon   { animation: wx-bob 1.4s ease-in-out infinite; }
+.wx-anim-storm .wx-icon  { animation: wx-shake 0.8s ease-in-out infinite; }
+.wx-anim-snow .wx-icon   { animation: wx-bob 2.5s ease-in-out infinite; }
+.wx-anim-clouds .wx-icon { animation: wx-drift 4s ease-in-out infinite; }
+@keyframes wx-spin  { to { transform: rotate(360deg); } }
+@keyframes wx-bob   { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+@keyframes wx-shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
+@keyframes wx-drift { 0%,100% { transform: translateX(0); } 50% { transform: translateX(4px); } }
+
+.wx-temp-row { display: flex; align-items: baseline; gap: 8px; }
 .wx-temp { font-size: 2.2rem; font-weight: var(--weight-bold); line-height: 1; }
+.wx-feels { font-size: var(--text-sm); color: var(--muted); }
 .wx-desc { color: var(--muted); font-size: var(--text-sm); margin-top: 2px; text-transform: capitalize; }
+.wx-details {
+  display: flex; flex-wrap: wrap; gap: 5px;
+  padding: 6px 0 2px;
+}
+.wx-detail-pill {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  background: var(--surface2);
+  border-radius: 20px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
 
 .wx-today {
   display: flex;

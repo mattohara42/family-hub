@@ -2278,15 +2278,26 @@ async function loadWeatherByCity(city) {
       }));
 
     const fmtTime = ts => new Date(ts * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+    // Wind direction: degrees → compass label
+    const windDeg = cur.wind?.deg ?? null;
+    const windDirs = ['N','NE','E','SE','S','SW','W','NW'];
+    const windDir  = windDeg != null ? windDirs[Math.round(windDeg / 45) % 8] : '';
+
     const data = {
       label:         cur.name + (locationState ? ', ' + locationState : ''),
       icon:          cur.weather[0].main,
       temp:          Math.round(cur.main.temp),
+      feels:         cur.main.feels_like != null ? Math.round(cur.main.feels_like) : null,
       desc:          cur.weather[0].description,
       hi:            Math.round(todayHi),
       lo:            Math.round(todayLo),
       rain:          todayRainPct,
       rainStartTime: (todayRainPct >= 30 && rainStartTime) ? rainStartTime : null,
+      humidity:      cur.main.humidity ?? null,
+      windSpeed:     cur.wind?.speed != null ? Math.round(cur.wind.speed) : null,
+      windDir,
+      visibility:    cur.visibility != null ? Math.round(cur.visibility / 1609.34 * 10) / 10 : null, // metres → miles
       days:          Object.entries(dayMap).sort(([a],[b]) => a < b ? -1 : 1).slice(0, 5),
       hours,
       sunrise:       cur.sys?.sunrise ? fmtTime(cur.sys.sunrise) : null,
@@ -2306,10 +2317,28 @@ async function loadWeatherByCity(city) {
 }
 
 function renderWeatherData(data) {
-  document.getElementById('wIcon').textContent  = WX_ICONS[data.icon] || '🌡';
+  // Animated icon
+  const iconEl = document.getElementById('wIcon');
+  const wrapEl = document.getElementById('wIconWrap');
+  iconEl.textContent = WX_ICONS[data.icon] || '🌡';
+  const animClass = { Clear:'wx-anim-sunny', Rain:'wx-anim-rain', Drizzle:'wx-anim-rain',
+                      Thunderstorm:'wx-anim-storm', Snow:'wx-anim-snow', Clouds:'wx-anim-clouds',
+                      Mist:'wx-anim-clouds', Fog:'wx-anim-clouds', Haze:'wx-anim-clouds' };
+  wrapEl.className = 'wx-icon-wrap ' + (animClass[data.icon] || '');
+
   document.getElementById('wTemp').textContent  = data.temp + '°F';
+  const feelsEl = document.getElementById('wFeels');
+  feelsEl.textContent = data.feels != null ? `Feels ${data.feels}°` : '';
   document.getElementById('wDesc').textContent  = data.desc;
   document.getElementById('weatherCity').textContent = '📍 ' + data.label;
+
+  // Detail pills: humidity, wind, visibility
+  const detailsEl = document.getElementById('wDetails');
+  const details = [];
+  if (data.humidity  != null) details.push(`💧 ${data.humidity}%`);
+  if (data.windSpeed != null) details.push(`💨 ${data.windSpeed} mph ${data.windDir}`);
+  if (data.visibility != null) details.push(`👁 ${data.visibility} mi`);
+  detailsEl.innerHTML = details.map(d => `<span class="wx-detail-pill">${d}</span>`).join('');
   document.getElementById('wHigh').textContent  = data.hi + '°';
   document.getElementById('wLow').textContent   = data.lo + '°';
   document.getElementById('wRain').textContent  = data.rain + '%';
