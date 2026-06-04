@@ -838,6 +838,7 @@ function switchCalView(view) {
 }
 
 function renderCurrentView() {
+  injectLocalEvents();
   document.getElementById('calGrid').style.display      = calView === 'month'  ? ''     : 'none';
   document.getElementById('weekView').style.display     = calView === 'week'   ? 'flex' : 'none';
   document.getElementById('dayView').style.display      = calView === 'day'    ? 'flex' : 'none';
@@ -1542,6 +1543,16 @@ function renderCalendarTabs() {
 
   const all = [...calendarMeta];
   if (showHolidays) all.push({ id: HOLIDAYS_ID, label: 'Holidays', color: '#e8a838' });
+  // Local calendars that have data
+  LC_DEFS.forEach(lc => {
+    const hasData =
+      lc.id === LC_IDS.birthdays ? birthdays.length > 0 :
+      lc.id === LC_IDS.meds      ? medications.length > 0 :
+      lc.id === LC_IDS.school    ? schoolPeriods.length > 0 :
+      lc.id === LC_IDS.trash     ? trashPickups.length > 0 :
+      lc.id === LC_IDS.bills     ? showBillsOnCal && budgetItems.length > 0 : false;
+    if (hasData) all.push({ id: lc.id, label: lc.label, color: lc.color });
+  });
 
   if (!all.length) {
     tabs.innerHTML = `<div style="color:var(--muted);font-size:var(--text-xs);padding:6px 0;text-align:center">
@@ -4414,6 +4425,324 @@ function removeSmsContact(idx) {
   renderSmsContactsList();
 }
 
+// ── Local Calendars ────────────────────────────────────────────
+
+let birthdays    = lsGet('fh_birthdays',    []);
+let medications  = lsGet('fh_medications',  []);
+let schoolPeriods= lsGet('fh_school',       []);
+let trashPickups = lsGet('fh_trash',        []);
+let showBillsOnCal = lsGet('fh_bills_on_cal', false);
+
+const LC_IDS = {
+  birthdays: 'local_birthdays',
+  meds:      'local_meds',
+  school:    'local_school',
+  trash:     'local_trash',
+  bills:     'local_bills',
+};
+const LC_DEFS = [
+  { id: LC_IDS.birthdays, label: '🎂 Birthdays',        color: '#e91e8c' },
+  { id: LC_IDS.meds,      label: '💊 Medications',       color: '#4caf82' },
+  { id: LC_IDS.school,    label: '🏫 School',            color: '#61afef' },
+  { id: LC_IDS.trash,     label: '🗑 Trash & Recycling', color: '#8bc34a' },
+  { id: LC_IDS.bills,     label: '💰 Bills Due',         color: '#f5a623' },
+];
+
+function lcDateKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function lcAddToCache(calId, dateKey, ev) {
+  if (!calEventCache[calId]) calEventCache[calId] = {};
+  if (!calEventCache[calId][dateKey]) calEventCache[calId][dateKey] = [];
+  calEventCache[calId][dateKey].push({ calId, holiday: false, ...ev });
+}
+
+function lcGetRange() {
+  const d = calViewDate;
+  if (calView === 'week') {
+    const ws = getWeekStart(d);
+    return { start: ws, end: new Date(ws.getTime() + 6*86400000) };
+  }
+  if (calView === 'day') {
+    const s = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    return { start: s, end: s };
+  }
+  if (calView === 'agenda') {
+    const s = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    return { start: s, end: new Date(s.getTime() + 30*86400000) };
+  }
+  // month
+  return {
+    start: new Date(d.getFullYear(), d.getMonth(), 1),
+    end:   new Date(d.getFullYear(), d.getMonth()+1, 0),
+  };
+}
+
+function lcIterateDays({ start, end }, cb) {
+  const cur = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const e   = new Date(end.getFullYear(),   end.getMonth(),   end.getDate());
+  while (cur <= e) { cb(new Date(cur)); cur.setDate(cur.getDate() + 1); }
+}
+
+function injectLocalEvents() {
+  // Clear previous local events
+  LC_DEFS.forEach(c => { calEventCache[c.id] = {}; });
+  const range = lcGetRange();
+
+  // Birthdays
+  if (!disabledCals.has(LC_IDS.birthdays)) {
+    birthdays.forEach(b => {
+      for (let yr = range.start.getFullYear(); yr <= range.end.getFullYear(); yr++) {
+        const date = new Date(yr, b.month - 1, b.day);
+        if (date >= range.start && date <= range.end) {
+          const key = lcDateKey(date);
+          const age = b.year ? ` (turns ${yr - b.year})` : '';
+          lcAddToCache(LC_IDS.birthdays, key, {
+            eventId: `bday_${b.id}_${yr}`, summary: `🎂 ${b.name}'s Birthday${age}`,
+            color: '#e91e8c', allDay: true, startDate: key, endDate: key,
+          });
+        }
+      }
+    });
+  }
+
+  // Medications
+  if (!disabledCals.has(LC_IDS.meds)) {
+    medications.forEach(m => {
+      lcIterateDays(range, day => {
+        const dow = day.getDay(); // 0=Sun
+        const matches = m.days === 'daily'    ? true
+                      : m.days === 'weekdays' ? dow >= 1 && dow <= 5
+                      : m.days === 'weekends' ? dow === 0 || dow === 6
+                      : false;
+        if (!matches) return;
+        const key = lcDateKey(day);
+        const [hh, mm] = m.time.split(':').map(Number);
+        const startDT = new Date(day.getFullYear(), day.getMonth(), day.getDate(), hh, mm);
+        const endDT   = new Date(startDT.getTime() + 30*60000);
+        lcAddToCache(LC_IDS.meds, key, {
+          eventId: `med_${m.id}_${key}`, summary: `💊 ${m.name}${m.dosage ? ' · ' + m.dosage : ''}`,
+          color: '#4caf82', allDay: false, startDT, endDT, startDate: key, endDate: key,
+        });
+      });
+    });
+  }
+
+  // School schedule
+  if (!disabledCals.has(LC_IDS.school)) {
+    schoolPeriods.forEach(p => {
+      lcIterateDays(range, day => {
+        const dow = day.getDay();
+        if (!p.days.includes(dow)) return;
+        const key = lcDateKey(day);
+        const [sh, sm] = p.startTime.split(':').map(Number);
+        const [eh, em] = p.endTime.split(':').map(Number);
+        const startDT = new Date(day.getFullYear(), day.getMonth(), day.getDate(), sh, sm);
+        const endDT   = new Date(day.getFullYear(), day.getMonth(), day.getDate(), eh, em);
+        lcAddToCache(LC_IDS.school, key, {
+          eventId: `school_${p.id}_${key}`, summary: `🏫 ${p.name}`,
+          color: p.color, allDay: false, startDT, endDT, startDate: key, endDate: key,
+        });
+      });
+    });
+  }
+
+  // Trash & recycling
+  if (!disabledCals.has(LC_IDS.trash)) {
+    trashPickups.forEach(t => {
+      lcIterateDays(range, day => {
+        if (day.getDay() !== t.weekday) return;
+        const key = lcDateKey(day);
+        lcAddToCache(LC_IDS.trash, key, {
+          eventId: `trash_${t.id}_${key}`, summary: `${t.emoji} ${t.label}`,
+          color: t.color, allDay: true, startDate: key, endDate: key,
+        });
+      });
+    });
+  }
+
+  // Bills due (reuse budgetDatesInRange)
+  if (showBillsOnCal && !disabledCals.has(LC_IDS.bills)) {
+    budgetItems.forEach(item => {
+      budgetDatesInRange(item, range.start, range.end).forEach(d => {
+        const key = lcDateKey(d);
+        lcAddToCache(LC_IDS.bills, key, {
+          eventId: `bill_${item.id}_${key}`, summary: `💰 ${item.name} due`,
+          color: '#f5a623', allDay: true, startDate: key, endDate: key,
+        });
+      });
+    });
+  }
+}
+
+// Settings panel — populate lists
+function lcOpenSettings() {
+  // Birthday month/day selects
+  const mSel = document.getElementById('lcBdayMonth');
+  const dSel = document.getElementById('lcBdayDay');
+  if (mSel && !mSel.options.length) {
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    mSel.innerHTML = `<option value="">Month</option>` +
+      months.map((m,i) => `<option value="${i+1}">${m}</option>`).join('');
+  }
+  if (dSel && !dSel.options.length) {
+    dSel.innerHTML = `<option value="">Day</option>` +
+      Array.from({length:31},(_,i)=>`<option value="${i+1}">${i+1}</option>`).join('');
+  }
+  lcRenderBdayList();
+  lcRenderMedList();
+  lcRenderSchoolList();
+  lcRenderTrashList();
+  const billsEl = document.getElementById('lcBillsOnCal');
+  if (billsEl) billsEl.checked = showBillsOnCal;
+}
+
+function lcSaveSettings() {
+  const billsEl = document.getElementById('lcBillsOnCal');
+  if (billsEl) {
+    showBillsOnCal = billsEl.checked;
+    localStorage.setItem('fh_bills_on_cal', JSON.stringify(showBillsOnCal));
+  }
+  injectLocalEvents();
+  renderCurrentView();
+  renderCalendarTabs();
+}
+
+// ── Birthdays ──
+function lcRenderBdayList() {
+  const el = document.getElementById('lcBdayList');
+  if (!el) return;
+  if (!birthdays.length) { el.innerHTML = '<div class="lc-empty">No birthdays added yet.</div>'; return; }
+  el.innerHTML = birthdays.map(b => {
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const date   = `${months[b.month-1]} ${b.day}${b.year ? ', '+b.year : ''}`;
+    return `<div class="lc-item"><span class="lc-dot" style="background:#e91e8c"></span>
+      <span class="lc-item-label">${b.name}</span>
+      <span class="lc-item-meta">${date}</span>
+      <button class="lc-del" onclick="lcDelBirthday('${b.id}')">✕</button></div>`;
+  }).join('');
+}
+function lcAddBirthday() {
+  const name  = document.getElementById('lcBdayName').value.trim();
+  const month = parseInt(document.getElementById('lcBdayMonth').value);
+  const day   = parseInt(document.getElementById('lcBdayDay').value);
+  const year  = parseInt(document.getElementById('lcBdayYear').value) || null;
+  if (!name || !month || !day) { alert('Enter a name, month and day.'); return; }
+  birthdays.push({ id: String(Date.now()), name, month, day, year });
+  localStorage.setItem('fh_birthdays', JSON.stringify(birthdays));
+  document.getElementById('lcBdayName').value = '';
+  document.getElementById('lcBdayMonth').value = '';
+  document.getElementById('lcBdayDay').value = '';
+  document.getElementById('lcBdayYear').value = '';
+  lcRenderBdayList();
+  injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
+}
+function lcDelBirthday(id) {
+  birthdays = birthdays.filter(b => b.id !== id);
+  localStorage.setItem('fh_birthdays', JSON.stringify(birthdays));
+  lcRenderBdayList();
+  injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
+}
+
+// ── Medications ──
+function lcRenderMedList() {
+  const el = document.getElementById('lcMedList');
+  if (!el) return;
+  if (!medications.length) { el.innerHTML = '<div class="lc-empty">No medications added yet.</div>'; return; }
+  el.innerHTML = medications.map(m =>
+    `<div class="lc-item"><span class="lc-dot" style="background:#4caf82"></span>
+      <span class="lc-item-label">${m.name}${m.dosage ? ' · '+m.dosage : ''}</span>
+      <span class="lc-item-meta">${m.time} · ${m.days}</span>
+      <button class="lc-del" onclick="lcDelMedication('${m.id}')">✕</button></div>`
+  ).join('');
+}
+function lcAddMedication() {
+  const name   = document.getElementById('lcMedName').value.trim();
+  const dosage = document.getElementById('lcMedDosage').value.trim();
+  const time   = document.getElementById('lcMedTime').value;
+  const days   = document.getElementById('lcMedDays').value;
+  if (!name) { alert('Enter a medication name.'); return; }
+  medications.push({ id: String(Date.now()), name, dosage, time, days });
+  localStorage.setItem('fh_medications', JSON.stringify(medications));
+  document.getElementById('lcMedName').value = '';
+  document.getElementById('lcMedDosage').value = '';
+  lcRenderMedList();
+  injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
+}
+function lcDelMedication(id) {
+  medications = medications.filter(m => m.id !== id);
+  localStorage.setItem('fh_medications', JSON.stringify(medications));
+  lcRenderMedList();
+  injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
+}
+
+// ── School schedule ──
+function lcRenderSchoolList() {
+  const el = document.getElementById('lcSchoolList');
+  if (!el) return;
+  if (!schoolPeriods.length) { el.innerHTML = '<div class="lc-empty">No classes added yet.</div>'; return; }
+  const dayLabels = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  el.innerHTML = schoolPeriods.map(p =>
+    `<div class="lc-item"><span class="lc-dot" style="background:${p.color}"></span>
+      <span class="lc-item-label">${p.name}</span>
+      <span class="lc-item-meta">${p.startTime}–${p.endTime} · ${p.days.map(d=>dayLabels[d]).join(', ')}</span>
+      <button class="lc-del" onclick="lcDelSchool('${p.id}')">✕</button></div>`
+  ).join('');
+}
+function lcAddSchoolPeriod() {
+  const name  = document.getElementById('lcSchoolName').value.trim();
+  const start = document.getElementById('lcSchoolStart').value;
+  const end   = document.getElementById('lcSchoolEnd').value;
+  const color = document.getElementById('lcSchoolColor').value;
+  const days  = [...document.querySelectorAll('#lcSchoolDays input:checked')].map(i => parseInt(i.value));
+  if (!name)        { alert('Enter a class name.'); return; }
+  if (!days.length) { alert('Select at least one day.'); return; }
+  schoolPeriods.push({ id: String(Date.now()), name, startTime: start, endTime: end, color, days });
+  localStorage.setItem('fh_school', JSON.stringify(schoolPeriods));
+  document.getElementById('lcSchoolName').value = '';
+  lcRenderSchoolList();
+  injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
+}
+function lcDelSchool(id) {
+  schoolPeriods = schoolPeriods.filter(p => p.id !== id);
+  localStorage.setItem('fh_school', JSON.stringify(schoolPeriods));
+  lcRenderSchoolList();
+  injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
+}
+
+// ── Trash & Recycling ──
+function lcRenderTrashList() {
+  const el = document.getElementById('lcTrashList');
+  if (!el) return;
+  if (!trashPickups.length) { el.innerHTML = '<div class="lc-empty">No pickups added yet.</div>'; return; }
+  const dayLabels = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  el.innerHTML = trashPickups.map(t =>
+    `<div class="lc-item"><span class="lc-dot" style="background:${t.color}"></span>
+      <span class="lc-item-label">${t.emoji} ${t.label}</span>
+      <span class="lc-item-meta">${dayLabels[t.weekday]}</span>
+      <button class="lc-del" onclick="lcDelTrash('${t.id}')">✕</button></div>`
+  ).join('');
+}
+function lcAddTrash() {
+  const label   = document.getElementById('lcTrashLabel').value.trim();
+  const weekday = parseInt(document.getElementById('lcTrashDay').value);
+  const emoji   = document.getElementById('lcTrashEmoji').value;
+  const color   = document.getElementById('lcTrashColor').value;
+  if (!label) { alert('Enter a label.'); return; }
+  trashPickups.push({ id: String(Date.now()), label, weekday, emoji, color });
+  localStorage.setItem('fh_trash', JSON.stringify(trashPickups));
+  document.getElementById('lcTrashLabel').value = '';
+  lcRenderTrashList();
+  injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
+}
+function lcDelTrash(id) {
+  trashPickups = trashPickups.filter(t => t.id !== id);
+  localStorage.setItem('fh_trash', JSON.stringify(trashPickups));
+  lcRenderTrashList();
+  injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
+}
+
 // ── Appearance mode ────────────────────────────────────────────
 function setMobileTab(tab) {
   mobileTab = tab;
@@ -4505,6 +4834,7 @@ function openSettings() {
     const radio = document.querySelector(`input[name="placement_${key}"][value="${placement}"]`);
     if (radio) radio.checked = true;
   });
+  lcOpenSettings();
   document.getElementById('settingsModal').style.display = 'flex';
 }
 
@@ -4538,6 +4868,7 @@ function saveSettings() {
   localStorage.setItem('fh_widgets',          JSON.stringify(widgetVisibility));
   localStorage.setItem('fh_widget_placement', JSON.stringify(widgetPlacement));
   applyWidgetPlacement();
+  lcSaveSettings();
   closeSettings();
   if (weatherKey && weatherLocations.length) showWeatherLocation(weatherLocIdx);
   if (bgPhotos.length) startSlideshow(); // restart with updated interval

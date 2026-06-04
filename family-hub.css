@@ -1986,6 +1986,68 @@ body.nautical-mode #settingsModal .modal {
   margin-bottom: 4px;
   min-height: 0;
 }
+/* ── Local Calendars settings panel ── */
+.lc-section {
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+}
+.lc-section-title {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  color: var(--text);
+  margin-bottom: 8px;
+  letter-spacing: .02em;
+}
+.lc-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.lc-empty { font-size: var(--text-xs); color: var(--muted); padding: 4px 0; }
+.lc-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 8px; border-radius: 6px;
+  background: var(--surface2); font-size: var(--text-xs);
+}
+.lc-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.lc-item-label { flex: 1; font-weight: var(--weight-semi); }
+.lc-item-meta  { color: var(--muted); white-space: nowrap; }
+.lc-del {
+  background: none; border: none; color: var(--muted);
+  cursor: pointer; font-size: .85rem; padding: 0 2px; line-height: 1;
+  flex-shrink: 0;
+}
+.lc-del:hover { color: var(--red); }
+.lc-add-row {
+  display: flex; gap: 5px; align-items: center; flex-wrap: wrap;
+}
+.lc-input {
+  flex: 1; min-width: 80px;
+  background: var(--surface2);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 6px; color: var(--text);
+  padding: 5px 8px; font-size: var(--text-xs);
+}
+.lc-input-sm { flex: 0 0 auto; width: 90px; }
+.lc-input:focus { outline: none; border-color: var(--accent); }
+.lc-select {
+  background: var(--surface2);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 6px; color: var(--text);
+  padding: 5px 6px; font-size: var(--text-xs); cursor: pointer;
+}
+.lc-color {
+  width: 32px; height: 28px; border: none; border-radius: 6px;
+  padding: 0; cursor: pointer; background: none;
+}
+.lc-day-checks {
+  display: flex; gap: 6px; align-items: center;
+}
+.lc-day-checks label {
+  display: flex; align-items: center; gap: 3px;
+  font-size: var(--text-xs); color: var(--muted); cursor: pointer;
+  accent-color: var(--accent);
+}
+body.light-mode .lc-input,
+body.light-mode .lc-select  { border-color: rgba(0,0,0,.15); }
+body.light-mode .lc-section { border-color: rgba(0,0,0,.08); }
+
 .panel-empty {
   text-align: center; padding: 32px 0;
   color: var(--muted); font-size: var(--text-base);

@@ -344,7 +344,8 @@
       <button class="modal-tab"        data-tab="shopping" onclick="switchSettingsTab('shopping')">🛒 Shopping</button>
       <button class="modal-tab"        data-tab="todo"     onclick="switchSettingsTab('todo')">✅ To-Do</button>
       <button class="modal-tab"        data-tab="meals"    onclick="switchSettingsTab('meals')">🍽 Meals</button>
-<button class="modal-tab"        data-tab="widgets"  onclick="switchSettingsTab('widgets')">🧩 Widgets</button>
+      <button class="modal-tab"        data-tab="widgets"  onclick="switchSettingsTab('widgets')">🧩 Widgets</button>
+      <button class="modal-tab"        data-tab="home"     onclick="switchSettingsTab('home')">🏠 Home</button>
     </div>
 
     <!-- Scrollable panel area -->
@@ -607,6 +608,91 @@
           🤖 Family Assistant uses the Gemini key from ⚙️ Settings → 🍽 Meals.
         </p>
       </div><!-- /widgets -->
+
+      <!-- ── Home Calendars ── -->
+      <div class="settings-panel" data-panel="home">
+
+        <div class="lc-section">
+          <div class="lc-section-title">🎂 Birthdays</div>
+          <div id="lcBdayList" class="lc-list"></div>
+          <div class="lc-add-row">
+            <input id="lcBdayName" type="text" placeholder="Name" class="lc-input" />
+            <select id="lcBdayMonth" class="lc-select"></select>
+            <select id="lcBdayDay"   class="lc-select"></select>
+            <input id="lcBdayYear" type="number" placeholder="Birth year" class="lc-input lc-input-sm" min="1900" max="2099" />
+            <button class="btn btn-primary btn-sm" onclick="lcAddBirthday()">Add</button>
+          </div>
+        </div>
+
+        <div class="lc-section">
+          <div class="lc-section-title">💊 Medications</div>
+          <div id="lcMedList" class="lc-list"></div>
+          <div class="lc-add-row">
+            <input id="lcMedName"   type="text" placeholder="Medication" class="lc-input" />
+            <input id="lcMedDosage" type="text" placeholder="Dosage" class="lc-input lc-input-sm" />
+            <input id="lcMedTime"   type="time" class="lc-input lc-input-sm" value="08:00" />
+            <select id="lcMedDays" class="lc-select">
+              <option value="daily">Daily</option>
+              <option value="weekdays">Weekdays</option>
+              <option value="weekends">Weekends</option>
+            </select>
+            <button class="btn btn-primary btn-sm" onclick="lcAddMedication()">Add</button>
+          </div>
+        </div>
+
+        <div class="lc-section">
+          <div class="lc-section-title">🏫 School Schedule</div>
+          <div id="lcSchoolList" class="lc-list"></div>
+          <div class="lc-add-row" style="flex-wrap:wrap;gap:5px">
+            <input id="lcSchoolName"  type="text" placeholder="Class / Period" class="lc-input" />
+            <input id="lcSchoolStart" type="time" class="lc-input lc-input-sm" value="08:00" />
+            <input id="lcSchoolEnd"   type="time" class="lc-input lc-input-sm" value="08:50" />
+            <div class="lc-day-checks" id="lcSchoolDays">
+              <label><input type="checkbox" value="1" checked>M</label>
+              <label><input type="checkbox" value="2" checked>T</label>
+              <label><input type="checkbox" value="3" checked>W</label>
+              <label><input type="checkbox" value="4" checked>Th</label>
+              <label><input type="checkbox" value="5" checked>F</label>
+            </div>
+            <input id="lcSchoolColor" type="color" value="#61afef" class="lc-color" title="Color" />
+            <button class="btn btn-primary btn-sm" onclick="lcAddSchoolPeriod()">Add</button>
+          </div>
+        </div>
+
+        <div class="lc-section">
+          <div class="lc-section-title">🗑 Trash &amp; Recycling</div>
+          <div id="lcTrashList" class="lc-list"></div>
+          <div class="lc-add-row">
+            <input id="lcTrashLabel" type="text" placeholder="Label (e.g. Trash)" class="lc-input" />
+            <select id="lcTrashDay" class="lc-select">
+              <option value="0">Sunday</option><option value="1">Monday</option>
+              <option value="2">Tuesday</option><option value="3">Wednesday</option>
+              <option value="4">Thursday</option><option value="5">Friday</option>
+              <option value="6">Saturday</option>
+            </select>
+            <select id="lcTrashEmoji" class="lc-select">
+              <option value="🗑">🗑 Trash</option>
+              <option value="♻️">♻️ Recycling</option>
+              <option value="🌿">🌿 Compost</option>
+              <option value="📦">📦 Bulk Pickup</option>
+            </select>
+            <input id="lcTrashColor" type="color" value="#8bc34a" class="lc-color" title="Color" />
+            <button class="btn btn-primary btn-sm" onclick="lcAddTrash()">Add</button>
+          </div>
+        </div>
+
+        <div class="lc-section" style="border-bottom:none">
+          <div class="lc-section-title">💰 Bill Due Dates</div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:var(--text-sm);cursor:pointer">
+            <input type="checkbox" id="lcBillsOnCal" style="accent-color:var(--accent)" />
+            Show budget items as calendar events on their due dates
+          </label>
+          <p style="font-size:var(--text-xs);color:var(--muted);margin-top:6px;line-height:1.5">
+            Bills with a fixed day (monthly, weekly, yearly) will appear on the calendar automatically.
+          </p>
+        </div>
+
+      </div><!-- /home -->
 
     </div><!-- /settings-panels -->
 
