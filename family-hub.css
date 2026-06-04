@@ -760,6 +760,7 @@ body.nautical-mode .cal-month-nav button {
   line-height: 1;
 }
 .cal-day.can-add:hover::after { opacity: 0.55; }
+.cal-day.can-add:hover { background: rgba(255,255,255,.10); }
 .cal-day.other-month { opacity: .35; }
 .cal-day.current-week,
 .week-day-col.today,
@@ -1217,6 +1218,7 @@ body.nautical-mode .wx-ticker { background: rgba(200,169,110,.06); border-top-co
   line-height: 1;
 }
 .week-day-header.can-add:hover::after { opacity: 0.55; }
+.week-day-header.can-add:hover { background: rgba(255,255,255,.10); border-radius: 6px; }
 .week-day-dow {
   font-size: var(--text-base); font-weight: var(--weight-bold);
   letter-spacing: .05em; text-transform: uppercase;
