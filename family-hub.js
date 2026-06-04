@@ -4565,8 +4565,8 @@ function injectLocalEvents() {
   // Bills due (reuse budgetDatesInRange)
   if (showBillsOnCal && !disabledCals.has(LC_IDS.bills)) {
     budgetItems.forEach(item => {
-      budgetDatesInRange(item, range.start, range.end).forEach(d => {
-        const key = lcDateKey(d);
+      budgetDatesInRange(item, range.start, range.end).forEach(key => {
+        // budgetDatesInRange already returns YYYY-MM-DD strings
         lcAddToCache(LC_IDS.bills, key, {
           eventId: `bill_${item.id}_${key}`, summary: `💰 ${item.name} due`,
           color: '#f5a623', allDay: true, startDate: key, endDate: key,
