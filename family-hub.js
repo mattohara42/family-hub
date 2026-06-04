@@ -2447,6 +2447,8 @@ function renderWeatherData(data) {
   // ── Weather ticker ──
   renderWeatherTicker(data);
 
+  const fcastToggle = document.getElementById('wxForecastToggle');
+  if (fcastToggle) fcastToggle.style.display = '';
   document.getElementById('weatherSetup').style.display  = 'none';
   document.getElementById('weatherDisplay').style.display = 'block';
 }

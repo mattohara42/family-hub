@@ -127,7 +127,13 @@
     <div class="card" id="weatherCard">
       <div class="card-header">
         <h2>🌤 Weather</h2>
-        <span id="weatherCity" style="font-size:var(--text-sm);color:var(--muted)"></span>
+        <div style="display:flex;align-items:center;gap:8px;min-width:0">
+          <span id="weatherCity" style="font-size:var(--text-sm);color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+          <div class="wx-forecast-toggle" id="wxForecastToggle" style="display:none;flex-shrink:0">
+            <button id="wxToggle5day" class="active" onclick="setWeatherForecastMode('5day')">5-day</button>
+            <button id="wxToggleHourly" onclick="setWeatherForecastMode('hourly')">Hourly</button>
+          </div>
+        </div>
       </div>
       <div class="card-body">
         <div id="weatherSetup">
@@ -156,10 +162,6 @@
           </div>
           <div class="wx-details" id="wDetails"></div>
           <div class="wx-activity-tags" id="wActivityTags"></div>
-          <div class="wx-forecast-toggle">
-            <button id="wxToggle5day" class="active" onclick="setWeatherForecastMode('5day')">5-day</button>
-            <button id="wxToggleHourly" onclick="setWeatherForecastMode('hourly')">Hourly</button>
-          </div>
           <div class="wx-forecast" id="wForecast"></div>
           <!-- Scrolling info ticker -->
           <div class="wx-ticker" id="wxTicker" style="display:none">
