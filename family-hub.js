@@ -2336,16 +2336,9 @@ function renderWeatherData(data) {
   document.getElementById('wDesc').textContent  = data.desc;
   document.getElementById('weatherCity').textContent = '📍 ' + data.label;
 
-  // Detail pills: humidity, wind (with compass rose), visibility
+  // Detail pills: compass rose only (humidity/wind/visibility moved to ticker)
   const detailsEl = document.getElementById('wDetails');
-  const details = [];
-  if (data.humidity  != null) details.push(`💧 ${data.humidity}%`);
-  if (data.windSpeed != null) {
-    const rose = data.windDir ? `<span class="wx-compass" style="--deg:${data.windDeg ?? 0}deg">↑</span>` : '';
-    details.push(`💨 ${data.windSpeed} mph ${rose}${data.windDir}`);
-  }
-  if (data.visibility != null) details.push(`👁 ${data.visibility} mi`);
-  detailsEl.innerHTML = details.map(d => `<span class="wx-detail-pill">${d}</span>`).join('');
+  detailsEl.innerHTML = '';
 
   // Activity tags
   const actEl = document.getElementById('wActivityTags');
@@ -2473,6 +2466,11 @@ function renderWeatherTicker(data) {
   if (data.rainStartTime) {
     segments.push(`🌧 Precipitation starts around ${data.rainStartTime}`);
   }
+
+  // Humidity / Wind / Visibility
+  if (data.humidity  != null) segments.push(`💧 Humidity ${data.humidity}%`);
+  if (data.windSpeed != null) segments.push(`💨 Wind ${data.windSpeed} mph ${data.windDir}`);
+  if (data.visibility != null) segments.push(`👁 Visibility ${data.visibility} mi`);
 
   // Sunrise / Sunset
   if (data.sunrise) segments.push(`🌅 Sunrise ${data.sunrise}`);
