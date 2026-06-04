@@ -129,7 +129,7 @@ body.nautical-mode .card {
               inset 0 1px 0 rgba(200,169,110,0.18);  /* top-edge brass sheen */
 }
 body.nautical-mode .card.cal-card {
-  border-color: rgba(200, 169, 110, 0.16);
+  border-color: rgba(200, 169, 110, 0.48);
   background: rgba(8, 18, 50, 0.18);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
