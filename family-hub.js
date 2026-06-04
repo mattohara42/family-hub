@@ -908,6 +908,7 @@ function renderWeekGrid() {
     if (googleToken) {
       hdr.title = 'Click to add event';
       hdr.style.cursor = 'pointer';
+      hdr.classList.add('can-add');
       hdr.onclick = () => openEventEditor(null, dateKey);
     }
     col.appendChild(hdr);
@@ -1276,7 +1277,8 @@ function renderMonthGrid() {
 
 function makeDayCell(year, month, day, otherMonth, isToday) {
   const cell = document.createElement('div');
-  cell.className = 'cal-day' + (otherMonth ? ' other-month' : '') + (isToday ? ' today' : '');
+  const canAdd = !otherMonth && !!googleToken;
+  cell.className = 'cal-day' + (otherMonth ? ' other-month' : '') + (isToday ? ' today' : '') + (canAdd ? ' can-add' : '');
 
   const num = document.createElement('div');
   num.className = 'cal-day-num';

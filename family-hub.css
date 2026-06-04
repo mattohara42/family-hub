@@ -746,6 +746,20 @@ body.nautical-mode .cal-month-nav button {
   position: relative;
   overflow: hidden;
 }
+/* Subtle + hint on hoverable day cells (month view) */
+.cal-day.can-add::after {
+  content: '+';
+  position: absolute;
+  top: 3px; right: 5px;
+  font-size: .85rem;
+  font-weight: 300;
+  color: var(--accent);
+  opacity: 0;
+  transition: opacity .15s;
+  pointer-events: none;
+  line-height: 1;
+}
+.cal-day.can-add:hover::after { opacity: 0.55; }
 .cal-day.other-month { opacity: .35; }
 .cal-day.current-week,
 .week-day-col.today,
@@ -1187,7 +1201,22 @@ body.nautical-mode .wx-ticker { background: rgba(200,169,110,.06); border-top-co
   padding: 3px 4px 2px;
   border-bottom: 1px solid rgba(128,128,128,.12);
   flex-shrink: 0;
+  position: relative;
 }
+/* Subtle + hint on hoverable week headers */
+.week-day-header.can-add::after {
+  content: '+';
+  position: absolute;
+  top: 3px; right: 6px;
+  font-size: .85rem;
+  font-weight: 300;
+  color: var(--accent);
+  opacity: 0;
+  transition: opacity .15s;
+  pointer-events: none;
+  line-height: 1;
+}
+.week-day-header.can-add:hover::after { opacity: 0.55; }
 .week-day-dow {
   font-size: var(--text-base); font-weight: var(--weight-bold);
   letter-spacing: .05em; text-transform: uppercase;
