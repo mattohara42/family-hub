@@ -953,7 +953,7 @@ body.has-bg .cal-day.today {
 
 .wx-today {
   display: flex;
-  gap: 10px;
+  justify-content: space-evenly;
   flex-wrap: wrap;
   padding: 6px 0;
   border-top: 1px solid rgba(255,255,255,.06);
