@@ -4598,16 +4598,6 @@ function lcOpenSettings() {
   if (billsEl) billsEl.checked = showBillsOnCal;
 }
 
-function lcSaveSettings() {
-  const billsEl = document.getElementById('lcBillsOnCal');
-  if (billsEl) {
-    showBillsOnCal = billsEl.checked;
-    localStorage.setItem('fh_bills_on_cal', JSON.stringify(showBillsOnCal));
-  }
-  injectLocalEvents();
-  renderCurrentView();
-  renderCalendarTabs();
-}
 
 // ── Birthdays ──
 function lcRenderBdayList() {
@@ -4868,8 +4858,16 @@ function saveSettings() {
   localStorage.setItem('fh_widgets',          JSON.stringify(widgetVisibility));
   localStorage.setItem('fh_widget_placement', JSON.stringify(widgetPlacement));
   applyWidgetPlacement();
-  lcSaveSettings();
+  // Save bills-on-cal toggle
+  const billsEl = document.getElementById('lcBillsOnCal');
+  if (billsEl) {
+    showBillsOnCal = billsEl.checked;
+    localStorage.setItem('fh_bills_on_cal', JSON.stringify(showBillsOnCal));
+  }
   closeSettings();
+  injectLocalEvents();
+  renderCurrentView();
+  renderCalendarTabs();
   if (weatherKey && weatherLocations.length) showWeatherLocation(weatherLocIdx);
   if (bgPhotos.length) startSlideshow(); // restart with updated interval
 }
