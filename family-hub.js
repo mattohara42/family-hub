@@ -141,6 +141,16 @@ let assistantHistory  = [];   // [{role:'user'|'model', parts:[{text}]}]
 let shopItemsCache    = [];   // in-memory mirror of shopping items for context
 let assistantRecognition = null;  // SpeechRecognition instance
 let assistantListening   = false; // true while mic is open
+// Starter prompts shown as clickable chips in the empty chat state.
+// ⚠️ Keep this current: when a new assistant capability ships (see ASSISTANT_BACKLOG.md),
+// add a representative prompt here so users discover it.
+const ASSISTANT_QUICK_PROMPTS = [
+  "What's on this week?",
+  "What do I need at the store?",
+  "What's for dinner?",
+  "Any bills due soon?",
+  "Add milk to shopping",
+];
 // ── Widget visibility & placement ────────────────────────────────────────────
 const WIDGET_DEFAULTS = { shopping: true, todo: true, budget: true, wotd: true, quote: true, dadjoke: true, yearstrip: true, assistant: true };
 let widgetVisibility = { ...WIDGET_DEFAULTS, ...lsGet('fh_widgets', {}) };
@@ -612,6 +622,7 @@ window.addEventListener('load', () => {
   loadDadJoke();
   loadQuote();
   initAssistantVoice();
+  renderAssistantMessages();   // render empty-state welcome + quick-prompt chips
   // Close SMS popover on outside click
   document.addEventListener('click', e => {
     const pop = document.getElementById('smsPopover');
@@ -4062,7 +4073,12 @@ function renderAssistantMessages() {
   const container = document.getElementById('assistantMessages');
   if (!container) return;
   if (!assistantHistory.length) {
-    container.innerHTML = `<div class="assistant-welcome">Hi! Ask me about your schedule, lists, or budget — or say things like "add milk to shopping" or "what's on this week?"</div>`;
+    const chips = ASSISTANT_QUICK_PROMPTS
+      .map(p => `<button class="assistant-chip" onclick="useQuickPrompt(this.textContent)">${formatAssistantText(p)}</button>`)
+      .join('');
+    container.innerHTML =
+      `<div class="assistant-welcome">Hi! Ask me about your schedule, lists, or budget — or tap a prompt to start:</div>
+       <div class="assistant-chips">${chips}</div>`;
     return;
   }
   container.innerHTML = '';
@@ -4073,6 +4089,13 @@ function renderAssistantMessages() {
     container.appendChild(div);
   });
   container.scrollTop = container.scrollHeight;
+}
+
+/** Fill the input with a quick-prompt chip's text and send it. */
+function useQuickPrompt(text) {
+  const inp = document.getElementById('assistantInput');
+  if (inp) inp.value = text;
+  sendAssistantMessage();
 }
 
 /** Send the typed message to Gemini and render the reply. */

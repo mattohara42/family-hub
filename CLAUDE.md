@@ -91,4 +91,4 @@ When checking that a change worked in the browser, **default to `javascript_tool
 
 ## Project Files
 
-`family-hub.{html,css,js}` (the app) · `FEATURES.md` (detailed feature/reference map) · `family-hub-setup.md` (end-user setup) · `RETROSPECTIVE.md` (lessons learned) · `WEATHER_BACKLOG.md` (weather enhancement backlog) · `CLAUDE.md` (this file).
+`family-hub.{html,css,js}` (the app) · `FEATURES.md` (detailed feature/reference map) · `family-hub-setup.md` (end-user setup) · `RETROSPECTIVE.md` (lessons learned) · `WEATHER_BACKLOG.md` (weather enhancement backlog) · `ASSISTANT_BACKLOG.md` (Family Assistant enhancement backlog) · `CLAUDE.md` (this file).
