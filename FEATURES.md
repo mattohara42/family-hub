@@ -469,6 +469,28 @@ let budgetItems = []; // live from Firestore onSnapshot
 
 ---
 
+### 15. Family Assistant
+
+Gemini-powered chat (shares the Meals key `mealAiKey`) with live family-data context. See `ASSISTANT_BACKLOG.md` for the enhancement roadmap.
+
+**State:** `assistantHistory` (in-memory, not persisted), `shopItemsCache`, `ASSISTANT_QUICK_PROMPTS` (empty-state chips — keep current as capabilities grow).
+
+**Key functions:**
+- `buildAssistantContext()` — builds the system prompt (calendar 7d, to-dos, shopping, budget, weather location) + the ACTIONS spec
+- `sendAssistantMessage()` — calls Gemini, then `extractAssistantActions()` → `await executeAssistantActions()`
+- `extractAssistantActions(raw)` — pulls `[ACTION:type:value]` tags; multi-arg values use a `|` delimiter
+- `executeAssistantActions(actions)` *(async)* — dispatches to per-action `assistant*()` handlers; returns confirmation strings appended to the reply
+- `renderAssistantMessages()` — renders chat / empty-state chips; `useQuickPrompt(text)` sends a chip
+- `initAssistantVoice()` — Web Speech mic input
+
+**Action vocabulary** (`[ACTION:...]`): `addShopping` · `addTodo` · `completeTodo` · `checkShopping` · `addEvent:YYYY-MM-DD|HH:MM|Title` (Google Calendar `primary`; `allday` for no time) · `setMeal:YYYY-MM-DD|mealType|Name` · `addBudget:Name|Amount|frequency`. Handlers: `assistantAddShopping/AddTodo/CompleteTodo/CheckShopping/AddEvent/SetMeal/AddBudget`, plus `fuzzyTextMatch()`.
+
+**HTML anchors:** `#assistantCard`, `#assistantMessages`, `#assistantInput`, `#assistantMicBtn`, `.assistant-chip`
+
+**Requires:** Gemini key for chat; Google sign-in for `addEvent` (degrades gracefully otherwise).
+
+---
+
 ## localStorage Key Index
 
 | Key | Type | Feature | Notes |

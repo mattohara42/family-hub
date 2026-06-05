@@ -148,8 +148,9 @@ const ASSISTANT_QUICK_PROMPTS = [
   "What's on this week?",
   "What do I need at the store?",
   "What's for dinner?",
-  "Any bills due soon?",
   "Add milk to shopping",
+  "Plan pizza for Friday dinner",
+  "Add a $60 internet bill monthly",
 ];
 // ── Widget visibility & placement ────────────────────────────────────────────
 const WIDGET_DEFAULTS = { shopping: true, todo: true, budget: true, wotd: true, quote: true, dadjoke: true, yearstrip: true, assistant: true };
@@ -4163,13 +4164,17 @@ ${budgetLines.length ? budgetLines.join('\n') : '  (none set up)'}
 Current weather location: ${weatherCity}
 
 ACTIONS YOU CAN TAKE:
-If the user asks you to add something to the shopping list, append one tag per item at the very end of your response, after your text:
-[ACTION:addShopping:item name]
+When the user clearly asks you to add or change something, append one tag per action at the very END of your response (after your text). Tags are executed automatically and hidden from the display. Resolve relative dates ("tomorrow", "Friday") to YYYY-MM-DD using today's date above.
 
-If the user asks you to add a to-do task, append:
-[ACTION:addTodo:task description]
+- Add to shopping list:      [ACTION:addShopping:item name]
+- Add a to-do task:          [ACTION:addTodo:task description]
+- Mark a to-do as done:      [ACTION:completeTodo:task text or keywords]
+- Check off a shopping item: [ACTION:checkShopping:item text or keywords]
+- Add a calendar event:      [ACTION:addEvent:YYYY-MM-DD|HH:MM|Title]   (use "allday" in place of HH:MM if no specific time)
+- Plan a meal:               [ACTION:setMeal:YYYY-MM-DD|mealType|Meal name]   (mealType is breakfast, lunch, or dinner)
+- Add a recurring bill:      [ACTION:addBudget:Name|Amount|frequency]   (frequency is monthly, weekly, biweekly, or yearly)
 
-You may include multiple action tags. They are executed automatically and hidden from the display.
+You may include multiple tags. Only emit a tag when the user clearly requests that change — never for questions. Calendar events require Google sign-in; if it's unavailable the user will be told automatically.
 
 GUIDELINES:
 - Keep responses concise and friendly. 2–4 sentences is usually enough.
@@ -4201,29 +4206,139 @@ function extractAssistantActions(raw) {
   return { text, actions };
 }
 
-/** Execute parsed assistant actions (add to shopping / todo). */
-function executeAssistantActions(actions) {
+/** Loose text match for completing items by keyword. */
+function fuzzyTextMatch(stored, query) {
+  const a = (stored || '').toLowerCase().trim();
+  const b = (query  || '').toLowerCase().trim();
+  if (!a || !b) return false;
+  return a === b || a.includes(b) || b.includes(a);
+}
+
+// ── Assistant action handlers (each returns a confirmation string) ──
+function assistantAddShopping(item) {
+  if (db) { addToFs('shopping', item, { category: 'Other' }); }
+  else {
+    const items = getLocalList('shopping');
+    items.push({ text: item, done: false, by: userName, category: 'Other' });
+    saveLocalList('shopping', items);
+    renderLocalList('shopping');
+  }
+  return `✓ Added "${item}" to Shopping`;
+}
+
+function assistantAddTodo(task) {
+  if (db) { addToFs('todo', task); }
+  else {
+    todoItems.push({ id: String(Date.now() + Math.random()), text: task, done: false, by: userName });
+    saveLocalList('todo', todoItems);
+    renderTodoList();
+  }
+  return `✓ Added "${task}" to To-Do`;
+}
+
+async function assistantCompleteTodo(query) {
+  const t = todoItems.find(t => !t.done && fuzzyTextMatch(t.text, query));
+  if (!t) return `⚠️ Couldn't find a pending to-do matching "${query}"`;
+  if (db) { await toggleFs('todo', t.id, t.done); }
+  else { t.done = true; saveLocalList('todo', todoItems); renderTodoList(); renderCurrentView(); }
+  return `✓ Marked "${t.text}" done`;
+}
+
+async function assistantCheckShopping(query) {
+  if (db) {
+    const snap = await db.collection('shopping').where('done', '==', false).get();
+    let match = null;
+    snap.forEach(doc => { if (!match && fuzzyTextMatch(doc.data().text, query)) match = doc; });
+    if (!match) return `⚠️ Couldn't find a shopping item matching "${query}"`;
+    await match.ref.update({ done: true });
+    return `✓ Checked off "${match.data().text}"`;
+  }
+  const items = getLocalList('shopping');
+  const i = items.findIndex(it => !it.done && fuzzyTextMatch(it.text, query));
+  if (i < 0) return `⚠️ Couldn't find a shopping item matching "${query}"`;
+  items[i].done = true;
+  saveLocalList('shopping', items);
+  renderLocalList('shopping');
+  return `✓ Checked off "${items[i].text}"`;
+}
+
+async function assistantAddEvent(dateStr, timeStr, title) {
+  if (!title || !dateStr) return `⚠️ Couldn't add the event — missing a date or title`;
+  if (!googleToken)       return `⚠️ Sign in with Google to let me add calendar events`;
+  const allDay = !timeStr || /^all\s?day$/i.test(timeStr.trim());
+  let start, end;
+  if (allDay) {
+    start = { date: dateStr };
+    const next = new Date(dateStr + 'T00:00:00'); next.setDate(next.getDate() + 1);
+    end = { date: next.toISOString().slice(0, 10) };
+  } else {
+    const tz  = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const endD = new Date(`${dateStr}T${timeStr}:00`); endD.setHours(endD.getHours() + 1);
+    const endT = `${String(endD.getHours()).padStart(2,'0')}:${String(endD.getMinutes()).padStart(2,'0')}`;
+    start = { dateTime: `${dateStr}T${timeStr}:00`, timeZone: tz };
+    end   = { dateTime: `${dateStr}T${endT}:00`,    timeZone: tz };
+  }
+  try {
+    const r = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${googleToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ summary: title, start, end }),
+    });
+    if (!r.ok) { const e = await r.json().catch(() => ({})); return `⚠️ Calendar error: ${e.error?.message || r.status}`; }
+    await loadAllCalendars();
+    const when = allDay ? dateStr : `${dateStr} ${timeStr}`;
+    return `✓ Added "${title}" to your calendar (${when})`;
+  } catch (e) { return `⚠️ Couldn't add the event: ${e.message}`; }
+}
+
+async function assistantSetMeal(dateStr, mealType, name) {
+  const type = (mealType || '').toLowerCase().trim();
+  if (!['breakfast','lunch','dinner'].includes(type)) return `⚠️ Meal type must be breakfast, lunch, or dinner`;
+  if (!dateStr || !name) return `⚠️ Couldn't plan the meal — missing a date or name`;
+  await setMealInFs(dateStr, type, { name, description: '', ingredients: [] });
+  return `✓ Planned "${name}" for ${type} on ${dateStr}`;
+}
+
+async function assistantAddBudget(name, amountStr, freqRaw) {
+  const amount = parseFloat(String(amountStr).replace(/[^0-9.]/g, ''));
+  if (!name || isNaN(amount)) return `⚠️ Couldn't add the bill — need a name and amount`;
+  let freq = (freqRaw || 'monthly').toLowerCase().trim();
+  if (!['monthly','weekly','biweekly','yearly'].includes(freq)) freq = 'monthly';
+  const today = new Date();
+  const item = { name, amount, frequency: freq, color: BUDGET_COLOR };
+  if (freq === 'monthly')  item.dayOfMonth = today.getDate();
+  if (freq === 'weekly')   item.dayOfWeek  = today.getDay();
+  if (freq === 'biweekly') item.startDate  = today.toISOString().slice(0, 10);
+  if (freq === 'yearly')   { item.month = today.getMonth(); item.dayOfMonth = today.getDate(); }
+  if (db) {
+    item.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+    await db.collection('budget').add(item);
+  } else {
+    item.id = String(Date.now());
+    budgetItems.push(item);
+    localStorage.setItem('fh_budgetItems', JSON.stringify(budgetItems));
+    onBudgetChanged();
+  }
+  return `✓ Added bill "${name}" — ${fmt$(amount)} (${freq})`;
+}
+
+/** Execute parsed assistant actions; returns an array of confirmation strings. */
+async function executeAssistantActions(actions) {
   const confirmMsgs = [];
-  actions.forEach(({ type, value }) => {
-    if (type === 'addShopping') {
-      if (db) { addToFs('shopping', value, { category: 'Other' }); }
-      else {
-        const items = getLocalList('shopping');
-        items.push({ text: value, done: false, by: userName, category: 'Other' });
-        saveLocalList('shopping', items);
-        renderLocalList('shopping');
-      }
-      confirmMsgs.push(`✓ Added "${value}" to Shopping`);
-    } else if (type === 'addTodo') {
-      if (db) { addToFs('todo', value); }
-      else {
-        todoItems.push({ id: String(Date.now() + Math.random()), text: value, done: false, by: userName });
-        saveLocalList('todo', todoItems);
-        renderTodoList();
-      }
-      confirmMsgs.push(`✓ Added "${value}" to To-Do`);
+  for (const { type, value } of actions) {
+    const parts = value.split('|').map(p => p.trim());
+    try {
+      if      (type === 'addShopping')   confirmMsgs.push(assistantAddShopping(value));
+      else if (type === 'addTodo')       confirmMsgs.push(assistantAddTodo(value));
+      else if (type === 'completeTodo')  confirmMsgs.push(await assistantCompleteTodo(value));
+      else if (type === 'checkShopping') confirmMsgs.push(await assistantCheckShopping(value));
+      else if (type === 'addEvent')      confirmMsgs.push(await assistantAddEvent(parts[0], parts[1], parts.slice(2).join('|')));
+      else if (type === 'setMeal')       confirmMsgs.push(await assistantSetMeal(parts[0], parts[1], parts.slice(2).join('|')));
+      else if (type === 'addBudget')     confirmMsgs.push(await assistantAddBudget(parts[0], parts[1], parts[2]));
+    } catch (e) {
+      confirmMsgs.push(`⚠️ Action failed: ${e.message}`);
     }
-  });
+  }
   return confirmMsgs;
 }
 
@@ -4310,7 +4425,7 @@ async function sendAssistantMessage() {
     const data     = await resp.json();
     const rawReply = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "Sorry, I didn't get a response.";
     const { text: cleanText, actions } = extractAssistantActions(rawReply);
-    const confirms = executeAssistantActions(actions);
+    const confirms = await executeAssistantActions(actions);
 
     // Append confirmation note to reply if actions were taken
     const finalText = confirms.length
