@@ -83,6 +83,12 @@ When editing, use `Read` with `offset` + `limit` to read only the relevant secti
 
 ---
 
+## Verification — prefer DOM/JS inspection over screenshots
+
+When checking that a change worked in the browser, **default to `javascript_tool` (read `el.style.display`, `innerHTML`, computed values, state vars) rather than screenshots.** Screenshots cost ~1,000–1,500 tokens each; a DOM/state read costs a fraction of that. Reserve screenshots for genuinely *visual* questions (does this look right / is it aligned) — not for "did it toggle / render / update."
+
+---
+
 ## Project Files
 
 `family-hub.{html,css,js}` (the app) · `FEATURES.md` (detailed feature/reference map) · `family-hub-setup.md` (end-user setup) · `RETROSPECTIVE.md` (lessons learned) · `WEATHER_BACKLOG.md` (weather enhancement backlog) · `CLAUDE.md` (this file).
