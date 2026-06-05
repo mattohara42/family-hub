@@ -1444,6 +1444,7 @@ body.has-bg.light-mode .day-hour-row.current-hour { background: rgba(190,198,225
   border-top: 1px solid rgba(128,128,128,.12);
   padding: 4px 4px 5px;
   display: flex; flex-direction: column; gap: 2px;
+  flex-shrink: 0;   /* always holds its size at the bottom of the day card */
 }
 .week-meal-item {
   font-size: var(--text-xs); color: var(--text);
@@ -1475,6 +1476,8 @@ body.has-bg.light-mode .day-hour-row.current-hour { background: rgba(190,198,225
   background: none; border: 1px dashed rgba(108,142,245,.3);
   border-radius: 4px; cursor: pointer; padding: 3px 4px;
   width: 100%; text-align: center; transition: all .15s;
+  min-height: 56px;   /* ~3× the natural button height */
+  display: flex; align-items: center; justify-content: center;
 }
 .week-add-meal-btn:hover { background: rgba(108,142,245,.1); border-style: solid; }
 

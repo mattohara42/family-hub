@@ -926,6 +926,21 @@ function renderWeekGrid() {
     }
     col.appendChild(hdr);
 
+    // ── To-Do due on this day (always at TOP, just under header) ──
+    const weekTodos = todosDueOnDate(dateKey);
+    if (weekTodos.length) {
+      const todoStrip = document.createElement('div');
+      todoStrip.style.cssText = 'border-bottom:1px solid rgba(108,142,245,.2);padding:4px 5px 5px;background:rgba(108,142,245,.06);flex-shrink:0';
+      weekTodos.forEach(todo => {
+        const el = document.createElement('div');
+        el.style.cssText = 'font-size:.62rem;color:var(--accent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:1px 3px';
+        el.textContent = '✅ ' + todo.text + (todo.assignedTo ? ' · ' + todo.assignedTo : '');
+        el.title = todo.text;
+        todoStrip.appendChild(el);
+      });
+      col.appendChild(todoStrip);
+    }
+
     // Events
     const body = document.createElement('div');
     body.className = 'week-day-body';
@@ -968,7 +983,30 @@ function renderWeekGrid() {
 
     col.appendChild(body);
 
-    // ── Meal strip (footer) ──
+    // Budget strip
+    const budgetDayItems = budgetEventsForDate(dateKey);
+    if (budgetItems.length && budgetDayItems.length) {
+      const budgetStrip = document.createElement('div');
+      budgetStrip.className = 'week-budget-strip';
+      budgetDayItems.forEach(item => {
+        const el = document.createElement('div');
+        el.className = 'week-budget-item';
+        el.style.color = '#e57373';
+        el.textContent = `💰 ${item.name} ${fmt$(item.amount)}`;
+        el.title = `${item.name} — ${fmt$(item.amount)}`;
+        budgetStrip.appendChild(el);
+      });
+      const dayTotal = budgetDayItems.reduce((s, it) => s + it.amount, 0);
+      const tot = document.createElement('div');
+      tot.className = 'week-budget-total';
+      tot.textContent = fmt$(dayTotal);
+      budgetStrip.appendChild(tot);
+      budgetStrip.onclick = scrollToBudgetCard;
+      budgetStrip.style.cursor = 'pointer';
+      col.appendChild(budgetStrip);
+    }
+
+    // ── Meal strip (always at the BOTTOM of the day card) ──
     const mealsStrip = document.createElement('div');
     mealsStrip.className = 'week-meals-strip';
     const dayMeals = mealPlan[dateKey] || {};
@@ -1003,44 +1041,6 @@ function renderWeekGrid() {
       mealsStrip.appendChild(addBtn);
     }
     col.appendChild(mealsStrip);
-
-    // Budget strip
-    const budgetDayItems = budgetEventsForDate(dateKey);
-    if (budgetItems.length && budgetDayItems.length) {
-      const budgetStrip = document.createElement('div');
-      budgetStrip.className = 'week-budget-strip';
-      budgetDayItems.forEach(item => {
-        const el = document.createElement('div');
-        el.className = 'week-budget-item';
-        el.style.color = '#e57373';
-        el.textContent = `💰 ${item.name} ${fmt$(item.amount)}`;
-        el.title = `${item.name} — ${fmt$(item.amount)}`;
-        budgetStrip.appendChild(el);
-      });
-      const dayTotal = budgetDayItems.reduce((s, it) => s + it.amount, 0);
-      const tot = document.createElement('div');
-      tot.className = 'week-budget-total';
-      tot.textContent = fmt$(dayTotal);
-      budgetStrip.appendChild(tot);
-      budgetStrip.onclick = scrollToBudgetCard;
-      budgetStrip.style.cursor = 'pointer';
-      col.appendChild(budgetStrip);
-    }
-
-    // To-Do due on this day
-    const weekTodos = todosDueOnDate(dateKey);
-    if (weekTodos.length) {
-      const todoStrip = document.createElement('div');
-      todoStrip.style.cssText = 'border-top:1px solid rgba(108,142,245,.2);padding:4px 5px 5px;background:rgba(108,142,245,.06)';
-      weekTodos.forEach(todo => {
-        const el = document.createElement('div');
-        el.style.cssText = 'font-size:.62rem;color:var(--accent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:1px 3px';
-        el.textContent = '✅ ' + todo.text + (todo.assignedTo ? ' · ' + todo.assignedTo : '');
-        el.title = todo.text;
-        todoStrip.appendChild(el);
-      });
-      col.appendChild(todoStrip);
-    }
 
     grid.appendChild(col);
   }
