@@ -586,6 +586,11 @@ const RECIPE_SITES = {
 let _mealDate = '';   // YYYY-MM-DD
 let _mealType = 'dinner'; // 'breakfast'|'lunch'|'dinner'|'all'
 let _mealSuggestions = []; // current AI suggestions
+// Meal-detail modal state
+let _mealDetailDate = '';
+let _mealDetailType = '';
+const _mealImgCache = {};   // { lowercaseName: thumbUrl|null } — best-effort dish photos
+const MEAL_ADJUST_PRESETS = ['Vegetarian','Vegan','Lactose-free','Gluten-free','Lower-carb','Spicier','Kid-friendly','Quicker'];
 
 // ── Google Sign-In ─────────────────────────────────────────────
 let tokenClient;
@@ -1017,7 +1022,7 @@ function renderWeekGrid() {
         const item = document.createElement('div');
         item.className = 'week-meal-item';
         item.title = dayMeals[t].name;
-        item.onclick = () => openMealModal(dateKey, t);
+        item.onclick = () => openMealDetail(dateKey, t);
 
         const label = document.createElement('span');
         label.textContent = MEAL_ICONS[t] + ' ' + dayMeals[t].name;
@@ -1197,7 +1202,7 @@ function renderDayGrid() {
       const meal = dayMealsObj[mealType];
       const chip = document.createElement('div');
       chip.className = 'day-meal-chip' + (meal ? ' has-meal' : '');
-      chip.onclick = e => { e.stopPropagation(); openMealModal(dateKey, mealType); };
+      chip.onclick = e => { e.stopPropagation(); (meal ? openMealDetail : openMealModal)(dateKey, mealType); };
       if (meal) {
         chip.innerHTML = `<span class="day-meal-chip-icon">${MEAL_ICONS[mealType]}</span>`
           + `<span class="day-meal-chip-text">${esc(meal.name)}</span>`
@@ -3938,6 +3943,160 @@ function addMealIngredients(idx) {
 async function removeMeal(dateKey, mealType) {
   await deleteMealFromFs(dateKey, mealType);
   // renderCurrentView() is triggered by onSnapshot (or by deleteMealFromFs in the !db fallback)
+}
+
+// ── Meal Detail modal ─────────────────────────────────────────
+const MEAL_DETAIL_LABELS = { breakfast:'🌅 Breakfast', lunch:'☀️ Lunch', dinner:'🌙 Dinner' };
+const MEAL_DETAIL_EMOJI  = { breakfast:'🍳', lunch:'🥪', dinner:'🍽' };
+
+/** Best-effort dish photo from TheMealDB (free, keyless). Returns a thumb URL or null. */
+async function fetchMealImage(name) {
+  const key = (name || '').toLowerCase().trim();
+  if (!key) return null;
+  if (key in _mealImgCache) return _mealImgCache[key];
+  try {
+    const r = await fetch(`https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(name)}`);
+    const d = await r.json();
+    const thumb = d?.meals?.[0]?.strMealThumb || null;
+    _mealImgCache[key] = thumb;
+    return thumb;
+  } catch { _mealImgCache[key] = null; return null; }
+}
+
+/** Open the detail popup for an already-planned meal. Falls back to the planner if none exists. */
+function openMealDetail(dateKey, mealType) {
+  const meal = (mealPlan[dateKey] || {})[mealType];
+  if (!meal) { openMealModal(dateKey, mealType); return; }
+  _mealDetailDate = dateKey;
+  _mealDetailType = mealType;
+
+  const dt        = new Date(dateKey + 'T12:00:00');
+  const dateLabel = dt.toLocaleDateString([], { weekday:'long', month:'long', day:'numeric' });
+  document.getElementById('mealDetailTitle').textContent    = meal.name || 'Meal';
+  document.getElementById('mealDetailSubtitle').textContent = `${MEAL_DETAIL_LABELS[mealType] || mealType} · ${dateLabel}`;
+
+  const meta = [];
+  if (meal.prepTime) meta.push(`⏱ ${esc(String(meal.prepTime))} min`);
+  if (meal.cuisine)  meta.push(`🍜 ${esc(meal.cuisine)}`);
+  document.getElementById('mealDetailMeta').innerHTML = meta.map(m => `<span>${m}</span>`).join('');
+
+  document.getElementById('mealDetailDesc').textContent = meal.description || '';
+
+  const healthyEl = document.getElementById('mealDetailHealthy');
+  if (meal.healthyNotes) { healthyEl.textContent = '🥗 ' + meal.healthyNotes; healthyEl.style.display = ''; }
+  else healthyEl.style.display = 'none';
+
+  const ingEl = document.getElementById('mealDetailIngredients');
+  if (meal.ingredients && meal.ingredients.length) { ingEl.textContent = '🧅 ' + meal.ingredients.join(', '); ingEl.style.display = ''; }
+  else ingEl.style.display = 'none';
+
+  const recipeEl  = document.getElementById('mealDetailRecipe');
+  const recipeUrl = meal.recipeUrl
+    || (meal.recipeSite ? (RECIPE_SITES[meal.recipeSite] || RECIPE_SITES.allrecipes).url(meal.recipeSearchQuery || meal.name) : '');
+  if (recipeUrl) {
+    const site = RECIPE_SITES[meal.recipeSite];
+    recipeEl.href = safeUrl(recipeUrl);
+    recipeEl.textContent = `📖 ${site ? site.name : 'View recipe'} ↗`;
+    recipeEl.style.display = '';
+  } else recipeEl.style.display = 'none';
+
+  // Reset adjust UI
+  document.getElementById('mealAdjustSection').style.display = 'none';
+  document.getElementById('mealAdjustInput').value = '';
+  document.getElementById('mealAdjustStatus').innerHTML = '';
+  document.getElementById('mealAdjustChips').innerHTML = MEAL_ADJUST_PRESETS
+    .map(p => `<button class="meal-adjust-chip" onclick="addAdjustPreset(this.textContent)">${esc(p)}</button>`).join('');
+
+  // Image: emoji placeholder first, then best-effort dish photo
+  const img = document.getElementById('mealDetailImg');
+  const ph  = document.getElementById('mealDetailImgPlaceholder');
+  img.style.display = 'none';
+  img.removeAttribute('src');
+  ph.textContent = MEAL_DETAIL_EMOJI[mealType] || '🍽';
+  ph.style.display = '';
+  const token = dateKey + '|' + mealType;
+  const showImg = url => {
+    img.onload = () => { if (_mealDetailDate + '|' + _mealDetailType === token) { img.style.display = ''; ph.style.display = 'none'; } };
+    img.src = url;
+  };
+  if (meal.image) showImg(meal.image);
+  else fetchMealImage(meal.name).then(thumb => { if (thumb && _mealDetailDate + '|' + _mealDetailType === token) showImg(thumb); });
+
+  document.getElementById('mealDetailModal').style.display = 'flex';
+}
+
+function closeMealDetail() {
+  document.getElementById('mealDetailModal').style.display = 'none';
+}
+
+function toggleMealAdjust() {
+  const sec = document.getElementById('mealAdjustSection');
+  const show = sec.style.display === 'none';
+  sec.style.display = show ? 'block' : 'none';
+  if (show) document.getElementById('mealAdjustInput').focus();
+}
+
+/** Append a quick-adjust preset to the instruction input (comma-separated, de-duped). */
+function addAdjustPreset(label) {
+  const inp   = document.getElementById('mealAdjustInput');
+  const parts = inp.value.trim() ? inp.value.split(/,\s*/) : [];
+  if (!parts.some(p => p.toLowerCase() === label.toLowerCase())) parts.push(label);
+  inp.value = parts.join(', ');
+  inp.focus();
+}
+
+async function deleteMealFromDetail() {
+  await removeMeal(_mealDetailDate, _mealDetailType);
+  closeMealDetail();
+}
+
+/** Re-generate the current meal with the user's adjustment, then refresh the detail view. */
+async function adjustMeal() {
+  const instruction = document.getElementById('mealAdjustInput').value.trim();
+  const statusEl    = document.getElementById('mealAdjustStatus');
+  if (!instruction) { statusEl.innerHTML = '<span style="color:var(--muted);font-size:.8rem">Describe a change or tap a chip first.</span>'; return; }
+  if (!mealAiKey)   { statusEl.innerHTML = '<span style="color:var(--accent2);font-size:.8rem">⚙️ Add a Gemini API key in Settings → 🍽 Meals.</span>'; return; }
+
+  const meal = (mealPlan[_mealDetailDate] || {})[_mealDetailType];
+  if (!meal) { closeMealDetail(); return; }
+
+  const dietStr = mealDietPrefs.length ? mealDietPrefs.join(', ') : 'none specified';
+  const prompt =
+`Adjust this planned ${_mealDetailType} meal based on the request, keeping it appealing and family-friendly.
+Current meal: ${meal.name} — ${meal.description || ''}
+Cuisine: ${meal.cuisine || 'any'}. Current ingredients: ${(meal.ingredients || []).join(', ')}
+Adjustment request: ${instruction}
+Also respect these dietary preferences: ${dietStr}
+Choose the best matching recipe site from: allrecipes, seriouseats, nytcooking, epicurious, simplyrecipes, bonappetit.
+Return ONLY a valid JSON object (no markdown, no explanation):
+{ "name":"", "description":"1-2 sentences", "cuisine":"", "prepTime":30, "healthyNotes":"", "recipeSite":"allrecipes", "recipeSearchQuery":"exact recipe name to search", "ingredients":["",""] }`;
+
+  const btn = document.getElementById('mealAdjustBtn');
+  btn.disabled = true;
+  statusEl.innerHTML = '<span class="spinner"></span> <span style="color:var(--muted);font-size:.82rem">Reworking the meal…</span>';
+  try {
+    const raw = await callMealAI(prompt);
+    if (!raw) { statusEl.innerHTML = '<span style="color:var(--accent2);font-size:.8rem">⚠️ The AI service is rate-limited or unavailable right now. Try again shortly.</span>'; return; }
+    const m = raw.match(/\{[\s\S]*\}/);
+    if (!m) throw new Error('No JSON returned — try again.');
+    const s    = JSON.parse(m[0]);
+    const site = RECIPE_SITES[s.recipeSite] || RECIPE_SITES.allrecipes;
+    const newMeal = {
+      name: s.name, description: s.description,
+      recipeUrl: site.url(s.recipeSearchQuery || s.name), recipeSite: s.recipeSite,
+      ingredients: s.ingredients || [], healthyNotes: s.healthyNotes,
+      prepTime: s.prepTime, cuisine: s.cuisine,
+    };
+    await setMealInFs(_mealDetailDate, _mealDetailType, newMeal);
+    // Optimistic local update so the detail re-opens with fresh data regardless of the Firestore round-trip
+    if (!mealPlan[_mealDetailDate]) mealPlan[_mealDetailDate] = {};
+    mealPlan[_mealDetailDate][_mealDetailType] = newMeal;
+    openMealDetail(_mealDetailDate, _mealDetailType);
+  } catch (e) {
+    statusEl.innerHTML = `<span style="color:var(--red);font-size:.8rem">⚠️ ${esc(e.message)}</span>`;
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 // ── Family Assistant ───────────────────────────────────────────────────────

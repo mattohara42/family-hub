@@ -1558,6 +1558,40 @@ body.has-bg.light-mode .day-hour-row.current-hour { background: rgba(190,198,225
   font-size: var(--text-base); cursor: pointer;
 }
 
+/* ── Meal Planning — Detail Modal ── */
+.meal-detail-modal { max-width: 480px; }
+.meal-detail-img-wrap {
+  width: 100%; height: 200px;
+  border-radius: 12px; overflow: hidden;
+  background: var(--surface2);
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 14px;
+}
+.meal-detail-img-placeholder { font-size: 4rem; opacity: .5; }
+#mealDetailImg { width: 100%; height: 100%; object-fit: cover; display: block; }
+.meal-detail-meta {
+  display: flex; gap: 12px; flex-wrap: wrap;
+  font-size: var(--text-base); color: var(--muted); margin-bottom: 8px;
+}
+.meal-detail-desc { font-size: var(--text-base); line-height: var(--leading-loose); margin-bottom: 8px; }
+.meal-detail-healthy { font-size: var(--text-sm); color: var(--green); margin-bottom: 6px; }
+.meal-detail-ingredients { font-size: var(--text-sm); color: var(--muted); line-height: 1.5; }
+.meal-adjust-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.meal-adjust-chip {
+  background: var(--surface2);
+  border: 1px solid rgba(255,255,255,.10);
+  color: var(--text);
+  font-size: var(--text-xs);
+  padding: 5px 10px; border-radius: 14px;
+  cursor: pointer; line-height: 1.2;
+  transition: background .15s, border-color .15s, transform .1s;
+}
+.meal-adjust-chip:hover  { background: var(--accent); border-color: var(--accent); color: #fff; }
+.meal-adjust-chip:active { transform: scale(0.95); }
+body.light-mode    .meal-adjust-chip { border-color: rgba(0,0,0,.12); }
+body.nautical-mode .meal-adjust-chip { border-color: rgba(200,169,110,.32); }
+body.nautical-mode .meal-adjust-chip:hover { background: var(--accent2); border-color: var(--accent2); }
+
 /* ── Budget ── */
 .budget-pill {
   background: rgba(229,115,115,.18); color: var(--text);

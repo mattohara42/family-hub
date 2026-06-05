@@ -395,17 +395,29 @@ let mealDietPrefs  = lsGet('fh_mealDietPrefs', []);
 let mealPantryDef  = localStorage.getItem('fh_mealPantry')   || '';
 ```
 **Key functions:**
-- `openMealModal(dateKey, mealType)` — opens suggestion modal
+- `openMealModal(dateKey, mealType)` — opens the suggestion/planner modal (also the fallback when an empty slot is clicked)
 - `generateMealSuggestions()` — builds prompt, calls AI, renders results
 - `callMealAI(prompt)` — fetches from Gemini or OpenAI
 - `acceptMealSuggestion(i)` — saves to `mealPlan`, updates calendar views
 - `addIngredientsToShoppingList(i)` — pushes ingredients to Firestore shopping
 
+**Meal Detail modal** (opens when clicking an *already-planned* meal in Week/Day view):
+- `openMealDetail(dateKey, mealType)` — populates the detail popup; falls back to `openMealModal` if the slot is empty
+- `closeMealDetail()`
+- `fetchMealImage(name)` — best-effort dish photo from TheMealDB (free, keyless); returns a thumb URL or null. Cached in `_mealImgCache`. Falls back to an emoji placeholder when no match.
+- `toggleMealAdjust()` — reveals/hides the Adjust section
+- `addAdjustPreset(label)` — appends a quick-adjust chip's text to the instruction input (de-duped)
+- `adjustMeal()` — re-generates the current meal via `callMealAI` per the user's adjustment, replaces it via `setMealInFs` (optimistic local update), and re-opens the detail
+- `deleteMealFromDetail()` — `removeMeal()` + close
+- Actions: **Keep** (close, no change) · **Adjust** (vegetarian, lactose-free, swap ingredients, free-text…) · **Delete**
+
 **Meal remove buttons:**
 - Week view: each meal chip has a `✕` remove button (`.meal-remove-btn`) revealed on hover
 - Day view: each meal slot has an inline remove button (`.day-meal-remove-btn`)
 
-**HTML anchors:** `#mealModal`, `#mealSuggestionsWrap`, `#mealGenerateBtn`
+**HTML anchors:** `#mealModal`, `#mealSuggestionsWrap`, `#mealGenerateBtn`, `#mealDetailModal`, `#mealDetailImg`, `#mealDetailImgPlaceholder`, `#mealAdjustSection`, `#mealAdjustChips`, `#mealAdjustInput`
+
+**External:** TheMealDB `search.php?s=` (keyless) for dish photos — covered by CSP `connect-src https:` / `img-src https:`.
 
 **localStorage:** `fh_mealPlan`, `fh_mealAiKey`, `fh_mealAiProvider`, `fh_mealDietPrefs`, `fh_mealPantry`, `fh_mealLoadingMsgs`
 

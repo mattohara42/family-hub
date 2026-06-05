@@ -756,6 +756,48 @@
   </div>
 </div>
 
+<!-- Meal Detail Modal (shown when clicking an already-planned meal) -->
+<div class="modal-overlay" id="mealDetailModal" onclick="if(event.target===this)closeMealDetail()" style="display:none">
+  <div class="modal meal-detail-modal">
+
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:2px">
+      <h2 id="mealDetailTitle" style="line-height:1.2">🍽 Meal</h2>
+      <button onclick="closeMealDetail()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.3rem;line-height:1;flex-shrink:0">✕</button>
+    </div>
+    <p id="mealDetailSubtitle" style="font-size:.8rem;color:var(--muted);margin-bottom:14px"></p>
+
+    <div class="meal-detail-img-wrap" id="mealDetailImgWrap">
+      <div class="meal-detail-img-placeholder" id="mealDetailImgPlaceholder">🍽</div>
+      <img id="mealDetailImg" alt="" style="display:none" />
+    </div>
+
+    <div class="meal-detail-meta" id="mealDetailMeta"></div>
+    <p class="meal-detail-desc" id="mealDetailDesc"></p>
+    <div class="meal-detail-healthy" id="mealDetailHealthy"></div>
+    <div class="meal-detail-ingredients" id="mealDetailIngredients"></div>
+    <a id="mealDetailRecipe" href="#" target="_blank" rel="noopener"
+       class="btn btn-sm btn-secondary" style="text-decoration:none;display:none;margin-top:10px">📖 View recipe ↗</a>
+
+    <!-- Adjust section (revealed by the Adjust button) -->
+    <div id="mealAdjustSection" style="display:none;margin-top:16px;border-top:1px solid rgba(128,128,128,.18);padding-top:14px">
+      <label style="font-size:.82rem;font-weight:600;color:var(--text);display:block;margin-bottom:8px">Adjust this meal</label>
+      <div class="meal-adjust-chips" id="mealAdjustChips"></div>
+      <input type="text" id="mealAdjustInput"
+             placeholder="e.g. make it vegetarian, swap shrimp for chicken, lower carb…"
+             style="width:100%;margin-top:8px" />
+      <button class="btn btn-primary btn-sm" id="mealAdjustBtn" onclick="adjustMeal()"
+              style="width:100%;margin-top:10px">✨ Regenerate with changes</button>
+      <div id="mealAdjustStatus" style="margin-top:10px;min-height:1px"></div>
+    </div>
+
+    <div class="modal-actions" style="margin-top:18px;display:flex;gap:8px">
+      <button class="btn btn-secondary" onclick="closeMealDetail()">✓ Keep</button>
+      <button class="btn btn-primary"   onclick="toggleMealAdjust()" id="mealDetailAdjustToggle">✎ Adjust</button>
+      <button class="btn btn-danger"    onclick="deleteMealFromDetail()">🗑 Delete</button>
+    </div>
+  </div>
+</div>
+
 <!-- Event Editor Modal -->
 <div class="modal-overlay" id="eventEditorModal" onclick="if(event.target===this)closeEventEditor()" style="display:none">
   <div class="modal">
