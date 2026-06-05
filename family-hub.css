@@ -1447,9 +1447,10 @@ body.has-bg.light-mode .day-hour-row.current-hour { background: rgba(190,198,225
   flex-shrink: 0;   /* always holds its size at the bottom of the day card */
 }
 .week-meal-item {
-  font-size: var(--text-xs); color: var(--text);
+  font-size: var(--text-base); color: var(--text);
   display: flex; align-items: center; gap: 2px;
-  padding: 1px 3px; border-radius: 3px;
+  padding: 4px 6px; border-radius: 4px;
+  min-height: 56px;   /* match the "+ plan meal" button size */
   background: rgba(76,175,130,.18); cursor: pointer;
   overflow: hidden;
 }
@@ -1472,7 +1473,7 @@ body.has-bg.light-mode .day-hour-row.current-hour { background: rgba(190,198,225
 }
 .day-meal-slot:hover .day-meal-remove-btn { opacity: 1; }
 .week-add-meal-btn {
-  font-size: var(--text-xs); color: var(--accent);
+  font-size: var(--text-base); color: var(--accent);
   background: none; border: 1px dashed rgba(108,142,245,.3);
   border-radius: 4px; cursor: pointer; padding: 3px 4px;
   width: 100%; text-align: center; transition: all .15s;
