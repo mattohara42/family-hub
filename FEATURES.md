@@ -20,6 +20,89 @@ A living reference of every feature, its key functions, state variables, localSt
 
 ---
 
+## File Layout Maps
+
+*Detailed structure of each of the three files. (Moved here from CLAUDE.md to keep that file lean.)*
+
+```
+family-hub.html   (HTML only — no inline CSS or JS)
+├── <head>
+│   ├── CDN scripts  (Firebase, Google GIS/API)
+│   └── <link rel="stylesheet" href="family-hub.css">
+├── <body>
+│   ├── #bgPhoto, #configBanner
+│   ├── .layout
+│   │   ├── .cal-column
+│   │   │   ├── .cal-card  (#calGrid / #weekView / #dayView)
+│   │   │   ├── #yearStrip  (bottom-mode year widget — stays here always)
+│   │   │   └── #bottomStrip  (widgets placed at "bottom")
+│   │   └── .sidebar
+│   │       ├── #controlCard  (collapsible: status pill, sign-in/out, ⚙️, per-cal toggles)
+│   │       ├── #budgetTotalCard  (context-sensitive bill total pill)
+│   │       ├── Weather card  (#weatherCard, includes #wxSunArc)
+│   │       └── Widget cards (shopping, todo, budget, yearCard, wotd, dadjoke, quote)
+│   └── Modals  (#settingsModal, #budgetModal, #mealModal, #eventEditorModal)
+└── <script src="family-hub.js">
+
+family-hub.css    (stylesheet)
+├── :root                  CSS variables (dark defaults)
+├── body.nautical-mode     Nautical theme overrides + decorative elements
+├── body.light-mode        Light theme overrides
+├── Layout                 (.layout, .cal-column, .sidebar, #bottomStrip)
+├── Calendar               (.cal-grid, .week-*, .day-*, .cal-event-*, .cal-dow)
+├── Calendar card header   (.cal-card-header 3-zone grid)
+├── Sidebar cards          (.card, #controlCard, #budgetTotalCard)
+├── Weather                (.wx-*, .wx-sun-*, .wx-loc-nav, .wx-loc-dot)
+├── List widgets           (.list-items, .list-item, shopping, todo)
+├── Meal Planning          (.week-meals-strip, .day-meals-*, .meal-*)
+├── Budget                 (.budget-*, .cal-event-budget)
+├── Year at a Glance       (.mini-grid, .mini-cal-*, #yearCard, #yearStrip)
+├── Event Editor           (.evt-editor-*, .btn-danger)
+├── SMS popover            (.sms-*)
+├── Settings modal         (.modal-*, .settings-panel, .widget-toggle-row)
+└── Touch / responsive     (@media hover:none tap targets, @media breakpoints)
+
+family-hub.js     (all logic)
+├── ── CONFIGURATION BLOCK (top) ──
+│   FIREBASE_CONFIG, GOOGLE_CLIENT_ID, WEATHER_*, pinned API constants
+├── ── STATE VARIABLES ──
+├── ── FIREBASE INIT ──
+├── ── GOOGLE AUTH ──
+├── ── WIDGET PLACEMENT ──     applyWidgetPlacement, applyWidgetVisibility
+├── ── CALENDAR ──             switchCalView, render*Grid, makeDayCell, loadAllCalendars
+├── ── CALENDAR TABS ──        renderCalendarTabs
+├── ── CALENDAR EVENT EDITOR── openEventEditor, saveCalEvent, deleteCalEvent
+├── ── LOCAL CALENDARS ──      injectLocalEvents, lcAddBirthday/Medication/etc. (LC_IDS, LC_DEFS)
+├── ── BUDGET ──               renderBudgetCard (context-sensitive), budgetDatesInRange
+├── ── WEATHER ──              showWeatherLocation, loadWeatherByCity, renderWeatherData,
+│                              renderSunArc, renderWeatherTicker, prev/nextWeatherLocation,
+│                              add/removeWeatherLocation
+├── ── PHOTOS ──               openPhotosPicker, loadBgFromDb, startSlideshow
+├── ── SHOPPING ──             addShop, toggleShop, clearDoneShopping, clearAllShopping
+├── ── TODO ──                 addTodo, renderTodoList, clearDoneTodo, clearAllTodo
+├── ── SETTINGS ──             openSettings, saveSettings, switchSettingsTab
+├── ── APPEARANCE ──           applyAppMode, setAppMode
+├── ── YEAR STRIP ──           renderYearStrip, changeStripMonth (bottom mode)
+├── ── YEAR CARD ──            renderYearCard, changeYearCardMonth (sidebar mode)
+├── ── MEAL PLANNING ──        openMealModal, generateMealSuggestions, callMealAI
+├── ── WORD OF DAY ──          loadWotd, renderWotd, WOTD_FALLBACKS
+├── ── DAD JOKE ──             loadDadJoke, renderDadJoke
+└── window.addEventListener('load', ...) — app init
+```
+
+**Key data shapes:**
+```js
+// All three calendar views read from this; disabledCals (Set) holds toggled-off calIDs
+calEventCache = { calId: { 'YYYY-MM-DD': [{ eventId, calId, summary, description,
+                  color, holiday, allDay, startDT, endDT, startDate, endDate }] } }
+
+mealPlan['YYYY-MM-DD'] = { breakfast: { name, description, cuisine, prepTime,
+                  healthyNotes, recipeSite, recipeSearchQuery, recipeUrl, ingredients[] },
+                  lunch: {...}, dinner: {...} }
+```
+
+---
+
 ## Pinned API Constants (top of `family-hub.js`)
 
 ```js
