@@ -101,6 +101,7 @@ let weatherLocIdx       = 0;                   // currently-displayed location i
 const weatherCache      = {};                  // { cityKey: { ts, data } }
 const WX_CACHE_TTL      = 30 * 60 * 1000;     // 30 minutes
 let weatherForecastMode = localStorage.getItem('fh_wxForecastMode') || '5day'; // '5day' | 'hourly'
+let sunArcEnabled       = lsGet('fh_sunArc', true); // sun-path arc visibility
 let userName        = localStorage.getItem('fh_name') || 'Someone';
 let familyMembers   = lsGet('fh_familyMembers', []);
 // each: { name: string }
@@ -2471,6 +2472,7 @@ function renderWeatherData(data) {
 function renderSunArc(data) {
   const el = document.getElementById('wxSunArc');
   if (!el) return;
+  if (!sunArcEnabled) { el.style.display = 'none'; return; }
   const sr = data.sunriseTs, ss = data.sunsetTs;
   if (sr == null || ss == null || ss <= sr) { el.style.display = 'none'; return; }
   el.style.display = '';
@@ -4842,6 +4844,7 @@ function openSettings() {
   switchSettingsTab('look');   // always open on first tab
   document.getElementById('settingName').value          = userName;
   document.getElementById('settingWeatherKey').value    = weatherKey;
+  document.getElementById('sunArcToggle').checked       = sunArcEnabled;
   renderWeatherLocationsList();
   renderSmsContactsList();
   renderShopCategorySettings();
@@ -4900,6 +4903,8 @@ function closeSettings() {
 function saveSettings() {
   userName      = document.getElementById('settingName').value.trim() || 'Someone';
   weatherKey    = document.getElementById('settingWeatherKey').value.trim();
+  sunArcEnabled = document.getElementById('sunArcToggle').checked;
+  localStorage.setItem('fh_sunArc', JSON.stringify(sunArcEnabled));
   // smsContacts and familyMembers saved immediately on add/remove — nothing to save here
   slideInterval = parseInt(document.getElementById('settingSlideInterval').value) || 30;
   mealAiKey     = document.getElementById('settingMealAiKey').value.trim();

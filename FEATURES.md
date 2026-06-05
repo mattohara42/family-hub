@@ -108,12 +108,14 @@ let weatherLocations    = lsGet('fh_wlocations', []);  // array of city strings
 let weatherLocIdx       = 0;                           // currently-displayed index
 const weatherCache      = {};                          // { cityKey: { ts, data } } — in-memory
 const WX_CACHE_TTL      = 30 * 60 * 1000;             // 30-minute cache TTL
+let sunArcEnabled       = lsGet('fh_sunArc', true);   // sun-path arc on/off
 ```
 
 **Key functions:**
 - `showWeatherLocation(idx)` — loads (or restores from cache) weather for `weatherLocations[idx]`
 - `loadWeatherByCity(city)` — fetches current + forecast from OWM, builds data object, caches it
 - `renderWeatherData(data)` — populates all weather DOM elements from a data object
+- `renderSunArc(data)` — draws the optional sun-path arc (SVG): sun position between sunrise/sunset, daylight-remaining readout, golden-hour + day/night states. Gated by `sunArcEnabled`. Pure local compute (uses `sunriseTs`/`sunsetTs` epochs, no extra API call).
 - `renderWeatherNav()` — draws prev/next buttons and dot indicators in `#wxLocNav`
 - `prevWeatherLocation()` / `nextWeatherLocation()` — wrapping navigation
 - `fetchWeather()` — reads from `#cityInput` first-time setup form
@@ -121,9 +123,9 @@ const WX_CACHE_TTL      = 30 * 60 * 1000;             // 30-minute cache TTL
 - `renderWeatherLocationsList()` — renders location list in Settings → Weather
 - `saveWeatherLocations()` — persists to `fh_wlocations` and syncs legacy `fh_wcity`
 
-**HTML anchors:** `#weatherDisplay`, `#weatherSetup`, `#wTemp`, `#wDesc`, `#wIcon`, `#wHigh`, `#wLow`, `#wRain`, `#wForecast`, `#wxLocNav`, `#wxLocDots`, `#weatherCity`, `#wxLocationsList`
+**HTML anchors:** `#weatherDisplay`, `#weatherSetup`, `#wTemp`, `#wDesc`, `#wIcon`, `#wHigh`, `#wLow`, `#wRain`, `#wForecast`, `#wxSunArc`, `#wxLocNav`, `#wxLocDots`, `#weatherCity`, `#wxLocationsList`, `#sunArcToggle` (Settings → Weather)
 
-**localStorage:** `fh_wkey`, `fh_wlocations` (array), `fh_wcity` (legacy, kept in sync with first location)
+**localStorage:** `fh_wkey`, `fh_wlocations` (array), `fh_wcity` (legacy, kept in sync with first location), `fh_sunArc` (bool — sun-path arc visibility)
 
 **Migration:** On first run, any existing `fh_wcity` value is auto-migrated into `fh_wlocations[0]`.
 
@@ -384,6 +386,7 @@ let budgetItems = []; // live from Firestore onSnapshot
 | `fh_wkey` | string | Weather | OpenWeatherMap API key |
 | `fh_wlocations` | JSON array | Weather | Array of city strings e.g. `["Boston, US", "London, GB"]` |
 | `fh_wcity` | string | Weather | Legacy single city — kept in sync with `fh_wlocations[0]` |
+| `fh_sunArc` | bool | Weather | Sun-path arc visibility (default true) |
 | `fh_slideInterval` | string | Photos | Slideshow seconds |
 | `fh_widgets` | JSON object | Widgets | `{ shopping: bool, todo: bool, … }` |
 | `fh_widget_placement` | JSON object | Widgets | `{ shopping: 'sidebar'\|'bottom', … }` |
