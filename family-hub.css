@@ -969,6 +969,51 @@ body.has-bg .cal-day.today {
 .wx-today span { font-size: var(--text-sm); color: var(--muted); }
 .wx-today strong { color: var(--text); }
 
+/* ── Sun-path arc ── */
+.wx-sun-arc { margin: 2px 0 10px; }
+.wx-sun-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+}
+.wx-sun-track {
+  fill: none;
+  stroke: rgba(255,255,255,.14);
+  stroke-width: 2;
+  stroke-dasharray: 3 4;
+  stroke-linecap: round;
+}
+.wx-sun-progress {
+  fill: none;
+  stroke: rgba(255,210,74,.55);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+.wx-sun-glow {
+  opacity: .35;
+  filter: blur(3px);
+  animation: wxSunPulse 3s ease-in-out infinite;
+}
+@keyframes wxSunPulse {
+  0%, 100% { opacity: .25; }
+  50%      { opacity: .5; }
+}
+.wx-sun-end {
+  fill: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+.wx-sun-readout {
+  text-align: center;
+  font-size: var(--text-sm);
+  color: var(--muted);
+  margin-top: 2px;
+}
+body.light-mode    .wx-sun-track    { stroke: rgba(0,0,0,.16); }
+body.nautical-mode .wx-sun-track    { stroke: rgba(200,169,110,.32); }
+body.nautical-mode .wx-sun-progress { stroke: rgba(255,200,90,.60); }
+
 .wx-forecast {
   display: flex;
   flex-direction: column;

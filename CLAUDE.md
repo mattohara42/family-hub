@@ -244,6 +244,7 @@ Add to `saveSettings()` function.
 | `FEATURES.md` | Feature map — functions, state, HTML anchors, localStorage keys |
 | `CLAUDE.md` | This file — Claude session context |
 | `RETROSPECTIVE.md` | What worked, what didn't, lessons learned |
+| `WEATHER_BACKLOG.md` | Prioritized high-effort Weather widget enhancements (sun-path arc, NWS alerts, radar, etc.) |
 
 ---
 

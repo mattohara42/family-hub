@@ -2317,6 +2317,9 @@ async function loadWeatherByCity(city) {
       hours,
       sunrise:       cur.sys?.sunrise ? fmtTime(cur.sys.sunrise) : null,
       sunset:        cur.sys?.sunset  ? fmtTime(cur.sys.sunset)  : null,
+      sunriseTs:     cur.sys?.sunrise ?? null,   // raw epoch seconds (for sun-path arc)
+      sunsetTs:      cur.sys?.sunset  ?? null,
+      tzOffset:      cur.timezone ?? 0,          // location's UTC offset in seconds
       aqi,
       aqiLabel,
       alerts:        cur.alerts || [],
@@ -2451,6 +2454,9 @@ function renderWeatherData(data) {
     });
   }
 
+  // ── Sun-path arc ──
+  renderSunArc(data);
+
   // ── Weather ticker ──
   renderWeatherTicker(data);
 
@@ -2458,6 +2464,65 @@ function renderWeatherData(data) {
   if (fcastToggle) fcastToggle.style.display = '';
   document.getElementById('weatherSetup').style.display  = 'none';
   document.getElementById('weatherDisplay').style.display = 'block';
+}
+
+// Sun-path arc: shows the sun's position between sunrise & sunset, daylight
+// remaining, and a golden-hour tint. Pure local compute — no extra API call.
+function renderSunArc(data) {
+  const el = document.getElementById('wxSunArc');
+  if (!el) return;
+  const sr = data.sunriseTs, ss = data.sunsetTs;
+  if (sr == null || ss == null || ss <= sr) { el.style.display = 'none'; return; }
+  el.style.display = '';
+
+  const nowSec = Date.now() / 1000;
+  const frac   = (nowSec - sr) / (ss - sr);
+  const isDay  = frac >= 0 && frac <= 1;
+  const fC     = Math.max(0, Math.min(1, frac));
+
+  // Arc geometry — top half of an ellipse in a 0 0 300 96 viewBox
+  const cx = 150, cy = 84, rx = 138, ry = 70;
+  const theta = Math.PI * (1 - fC);            // fC 0→left, 1→right
+  const sunX  = cx + rx * Math.cos(theta);
+  const sunY  = cy - ry * Math.sin(theta);
+
+  const trackPath    = `M ${cx - rx} ${cy} A ${rx} ${ry} 0 0 1 ${cx + rx} ${cy}`;
+  const progressPath = `M ${cx - rx} ${cy} A ${rx} ${ry} 0 0 1 ${sunX.toFixed(1)} ${sunY.toFixed(1)}`;
+
+  const fmtDur = secs => {
+    secs = Math.max(0, Math.round(secs));
+    const h = Math.floor(secs / 3600), m = Math.round((secs % 3600) / 60);
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  };
+
+  let readout, emoji = '☀️', goldenHour = false;
+  if (isDay) {
+    goldenHour = (nowSec - sr) <= 3600 || (ss - nowSec) <= 3600;  // within 1h of sun events
+    readout = `${fmtDur(ss - nowSec)} of daylight left`;
+    emoji   = goldenHour ? '🌇' : '☀️';
+  } else if (frac < 0) {
+    readout = `Sunrise in ${fmtDur(sr - nowSec)}`;
+    emoji   = '🌙';
+  } else {
+    readout = `Sunset was ${fmtDur(nowSec - ss)} ago`;
+    emoji   = '🌙';
+  }
+
+  const sunColor = goldenHour ? '#ff9d3c' : '#ffd24a';
+
+  el.innerHTML = `
+    <svg viewBox="0 0 300 96" class="wx-sun-svg" preserveAspectRatio="xMidYMid meet">
+      <path class="wx-sun-track" d="${trackPath}" />
+      ${isDay ? `<path class="wx-sun-progress" d="${progressPath}" />` : ''}
+      ${isDay ? `
+        <circle class="wx-sun-glow" cx="${sunX.toFixed(1)}" cy="${sunY.toFixed(1)}" r="9" fill="${sunColor}" />
+        <circle class="wx-sun-dot"  cx="${sunX.toFixed(1)}" cy="${sunY.toFixed(1)}" r="5.5" fill="${sunColor}" />
+      ` : ''}
+      <text class="wx-sun-end" x="${cx - rx}" y="94" text-anchor="start">${data.sunrise || ''}</text>
+      <text class="wx-sun-end" x="${cx + rx}" y="94" text-anchor="end">${data.sunset || ''}</text>
+    </svg>
+    <div class="wx-sun-readout">${emoji} ${readout}</div>
+  `;
 }
 
 function renderWeatherTicker(data) {
