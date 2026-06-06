@@ -2298,16 +2298,27 @@ async function loadWeatherByCity(city) {
       if (!d.icon || s.dt_txt.includes('12:00')) d.icon = s.weather[0].main;
     });
 
-    const now = Date.now();
-    const hours = forecastList
-      .filter(s => s.dt * 1000 >= now)
-      .slice(0, 8)
-      .map(s => ({
+    // Hourly: first column is the CURRENT 3-hour block (anchored to the mark just
+    // before the next forecast slot, shown with live conditions), then the next 4
+    // forecast slots — e.g. 8·11·2·5·8 in the morning, 11·2·5·8·11 after noon.
+    const SLOT_SECS = 3 * 3600;
+    const futureSlots = forecastList.filter(s => s.dt * 1000 >= Date.now());
+    const hours = [];
+    if (futureSlots.length) {
+      const anchorDt = futureSlots[0].dt - SLOT_SECS;   // start of the in-progress block
+      hours.push({
+        time: new Date(anchorDt * 1000).toLocaleTimeString([], { hour: 'numeric' }),
+        icon: cur.weather[0].main,
+        temp: Math.round(cur.main.temp),
+        pop:  0,
+      });
+      futureSlots.slice(0, 4).forEach(s => hours.push({
         time: new Date(s.dt * 1000).toLocaleTimeString([], { hour: 'numeric' }),
         icon: s.weather[0].main,
         temp: Math.round(s.main.temp),
         pop:  Math.round((s.pop || 0) * 100),
       }));
+    }
 
     const fmtTime = ts => new Date(ts * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
