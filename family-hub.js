@@ -2708,6 +2708,32 @@ function renderTempCurve(slots) {
   return wrap;
 }
 
+/** Return moon phase emoji + name for a given Date (default: today).
+ *  Uses the standard synodic-month approximation (29.53059 days).
+ *  Known new moon anchor: 2000-01-06 18:14 UTC.
+ */
+function getMoonPhase(date = new Date()) {
+  const KNOWN_NEW = new Date('2000-01-06T18:14:00Z').getTime();
+  const SYNODIC   = 29.53059 * 24 * 3600 * 1000;
+  const age = ((date.getTime() - KNOWN_NEW) % SYNODIC + SYNODIC) % SYNODIC; // ms into cycle
+  const frac = age / SYNODIC; // 0–1
+
+  // 8-phase labels + emoji
+  const phases = [
+    { max: 0.033, emoji: '🌑', name: 'New Moon'        },
+    { max: 0.216, emoji: '🌒', name: 'Waxing Crescent'  },
+    { max: 0.283, emoji: '🌓', name: 'First Quarter'    },
+    { max: 0.466, emoji: '🌔', name: 'Waxing Gibbous'   },
+    { max: 0.533, emoji: '🌕', name: 'Full Moon'        },
+    { max: 0.716, emoji: '🌖', name: 'Waning Gibbous'   },
+    { max: 0.783, emoji: '🌗', name: 'Last Quarter'     },
+    { max: 0.966, emoji: '🌘', name: 'Waning Crescent'  },
+    { max: 1.000, emoji: '🌑', name: 'New Moon'         },
+  ];
+  const p = phases.find(p => frac < p.max) || phases[phases.length - 1];
+  return { emoji: p.emoji, name: p.name };
+}
+
 function renderWeatherTicker(data) {
   const ticker = document.getElementById('wxTicker');
   const track  = document.getElementById('wxTickerTrack');
@@ -2733,9 +2759,11 @@ function renderWeatherTicker(data) {
   if (data.windSpeed != null) segments.push(`💨 Wind ${data.windSpeed} mph ${data.windDir}`);
   if (data.visibility != null) segments.push(`👁 Visibility ${data.visibility} mi`);
 
-  // Sunrise / Sunset
+  // Sunrise / Sunset / Moon phase
   if (data.sunrise) segments.push(`🌅 Sunrise ${data.sunrise}`);
   if (data.sunset)  segments.push(`🌇 Sunset ${data.sunset}`);
+  const moon = getMoonPhase();
+  segments.push(`${moon.emoji} ${moon.name}`);
 
   // Air Quality
   if (data.aqi != null) {
