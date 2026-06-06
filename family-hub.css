@@ -1112,6 +1112,46 @@ body.has-bg #weatherCard::before { background: transparent; }
   opacity: .8;
 }
 
+/* ── Temperature curve ── */
+.wx-curve-wrap {
+  width: 100%;
+  padding: 2px 0 4px;
+}
+.wx-curve-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+}
+.wx-curve-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.wx-curve-dot {
+  fill: var(--accent);
+  stroke: var(--surface);
+  stroke-width: 1.5;
+}
+.wx-curve-label {
+  fill: var(--text);
+  font-size: 8px;
+  font-weight: 600;
+  text-anchor: middle;
+  dominant-baseline: auto;
+}
+.wx-curve-time {
+  fill: var(--muted);
+  font-size: 7.5px;
+  text-anchor: middle;
+  dominant-baseline: hanging;
+}
+body.light-mode .wx-curve-dot   { stroke: #fff; }
+body.nautical-mode .wx-curve-line { stroke: var(--accent2); }
+body.nautical-mode .wx-curve-dot  { fill: var(--accent2); }
+
 /* ── Hourly forecast strip ── */
 .wx-hourly {
   display: flex;

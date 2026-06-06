@@ -2343,6 +2343,18 @@ async function loadWeatherByCity(city) {
       }));
     }
 
+    // Curve: up to 16 slots (~48h), starting from the current in-progress block
+    const tempSlots = [];
+    if (futureSlots.length) {
+      const anchorDt = futureSlots[0].dt - SLOT_SECS;
+      tempSlots.push({ dt: anchorDt, temp: Math.round(cur.main.temp), pop: 0 });
+      futureSlots.slice(0, 15).forEach(s => tempSlots.push({
+        dt:   s.dt,
+        temp: Math.round(s.main.temp),
+        pop:  Math.round((s.pop || 0) * 100),
+      }));
+    }
+
     const fmtTime = ts => new Date(ts * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
     // Wind direction: degrees → compass label
@@ -2367,6 +2379,7 @@ async function loadWeatherByCity(city) {
       visibility:    cur.visibility != null ? Math.round(cur.visibility / 1609.34 * 10) / 10 : null, // metres → miles
       days:          Object.entries(dayMap).sort(([a],[b]) => a < b ? -1 : 1).slice(0, 5),
       hours,
+      tempSlots,
       sunrise:       cur.sys?.sunrise ? fmtTime(cur.sys.sunrise) : null,
       sunset:        cur.sys?.sunset  ? fmtTime(cur.sys.sunset)  : null,
       sunriseTs:     cur.sys?.sunrise ?? null,   // raw epoch seconds (for sun-path arc)
@@ -2448,13 +2461,17 @@ function renderWeatherData(data) {
   // Toggle button state
   const btn5day   = document.getElementById('wxToggle5day');
   const btnHourly = document.getElementById('wxToggleHourly');
+  const btnCurve  = document.getElementById('wxToggleCurve');
   if (btn5day)   btn5day.classList.toggle('active', weatherForecastMode === '5day');
   if (btnHourly) btnHourly.classList.toggle('active', weatherForecastMode === 'hourly');
+  if (btnCurve)  btnCurve.classList.toggle('active',  weatherForecastMode === 'curve');
 
   const fcastEl = document.getElementById('wForecast');
   fcastEl.innerHTML = '';
 
-  if (weatherForecastMode === 'hourly' && data.hours?.length) {
+  if (weatherForecastMode === 'curve' && data.tempSlots?.length) {
+    fcastEl.appendChild(renderTempCurve(data.tempSlots));
+  } else if (weatherForecastMode === 'hourly' && data.hours?.length) {
     const strip = document.createElement('div');
     strip.className = 'wx-hourly';
     data.hours.forEach(h => {
@@ -2576,6 +2593,119 @@ function renderSunArc(data) {
     </svg>
     <div class="wx-sun-readout">${emoji} ${readout}</div>
   `;
+}
+
+/** Build and return an SVG temperature curve element for the next ~48h.
+ *  @param {Array<{dt:number, temp:number, pop:number}>} slots — epoch-second timestamps
+ *  @returns {SVGElement}
+ */
+function renderTempCurve(slots) {
+  const W = 300, H = 110, PAD_L = 28, PAD_R = 8, PAD_T = 18, PAD_B = 24;
+  const iW = W - PAD_L - PAD_R, iH = H - PAD_T - PAD_B;
+
+  const temps = slots.map(s => s.temp);
+  const minT  = Math.min(...temps), maxT = Math.max(...temps);
+  const rangeT = Math.max(maxT - minT, 5); // avoid division by zero on flat days
+
+  const xOf = i => PAD_L + (i / (slots.length - 1)) * iW;
+  const yOf = t => PAD_T + iH - ((t - minT) / rangeT) * iH;
+
+  // Smooth polyline via cubic bezier control points
+  const pts = slots.map((s, i) => [xOf(i), yOf(s.temp)]);
+  let d = `M ${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}`;
+  for (let i = 1; i < pts.length; i++) {
+    const cp1x = (pts[i-1][0] + pts[i][0]) / 2;
+    const cp2x = cp1x;
+    d += ` C ${cp1x.toFixed(1)} ${pts[i-1][1].toFixed(1)}, ${cp2x.toFixed(1)} ${pts[i][1].toFixed(1)}, ${pts[i][0].toFixed(1)} ${pts[i][1].toFixed(1)}`;
+  }
+  // Fill path — close down and back
+  const fillD = `${d} L ${pts[pts.length-1][0].toFixed(1)} ${PAD_T + iH} L ${pts[0][0].toFixed(1)} ${PAD_T + iH} Z`;
+
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('class', 'wx-curve-svg');
+
+  // Gradient fill under curve
+  const defs   = document.createElementNS(ns, 'defs');
+  const grad   = document.createElementNS(ns, 'linearGradient');
+  grad.setAttribute('id', 'wxCurveGrad');
+  grad.setAttribute('x1', '0'); grad.setAttribute('y1', '0');
+  grad.setAttribute('x2', '0'); grad.setAttribute('y2', '1');
+  const stop1  = document.createElementNS(ns, 'stop');
+  stop1.setAttribute('offset', '0%');   stop1.setAttribute('stop-color', 'var(--accent)');  stop1.setAttribute('stop-opacity', '0.25');
+  const stop2  = document.createElementNS(ns, 'stop');
+  stop2.setAttribute('offset', '100%'); stop2.setAttribute('stop-color', 'var(--accent)');  stop2.setAttribute('stop-opacity', '0');
+  grad.appendChild(stop1); grad.appendChild(stop2); defs.appendChild(grad); svg.appendChild(defs);
+
+  // Fill
+  const fillEl = document.createElementNS(ns, 'path');
+  fillEl.setAttribute('d', fillD);
+  fillEl.setAttribute('fill', 'url(#wxCurveGrad)');
+  svg.appendChild(fillEl);
+
+  // Precip bars (behind line)
+  const BAR_MAX_H = iH * 0.3;
+  slots.forEach((s, i) => {
+    if (!s.pop) return;
+    const bx = xOf(i);
+    const bh = (s.pop / 100) * BAR_MAX_H;
+    const bar = document.createElementNS(ns, 'rect');
+    bar.setAttribute('x', (bx - 2).toFixed(1));
+    bar.setAttribute('y', (PAD_T + iH - bh).toFixed(1));
+    bar.setAttribute('width', '4');
+    bar.setAttribute('height', bh.toFixed(1));
+    bar.setAttribute('rx', '2');
+    bar.setAttribute('fill', '#61afef');
+    bar.setAttribute('opacity', '0.35');
+    svg.appendChild(bar);
+  });
+
+  // Curve line
+  const lineEl = document.createElementNS(ns, 'path');
+  lineEl.setAttribute('d', d);
+  lineEl.setAttribute('class', 'wx-curve-line');
+  svg.appendChild(lineEl);
+
+  // Dots + labels — only at 12h intervals + first + last
+  const labeledIdx = new Set([0, slots.length - 1]);
+  slots.forEach((s, i) => {
+    const date = new Date(s.dt * 1000);
+    if (date.getHours() === 12 || date.getHours() === 0) labeledIdx.add(i);
+  });
+
+  labeledIdx.forEach(i => {
+    const [px, py] = pts[i];
+    const s = slots[i];
+    // Dot
+    const circle = document.createElementNS(ns, 'circle');
+    circle.setAttribute('cx', px.toFixed(1));
+    circle.setAttribute('cy', py.toFixed(1));
+    circle.setAttribute('r', '3');
+    circle.setAttribute('class', 'wx-curve-dot');
+    svg.appendChild(circle);
+    // Temp label (above dot, but keep inside PAD_T)
+    const tempLabel = document.createElementNS(ns, 'text');
+    tempLabel.setAttribute('x', px.toFixed(1));
+    const ly = Math.max(PAD_T - 2, py - 6);
+    tempLabel.setAttribute('y', ly.toFixed(1));
+    tempLabel.setAttribute('class', 'wx-curve-label');
+    tempLabel.textContent = s.temp + '°';
+    svg.appendChild(tempLabel);
+    // Time label (below baseline)
+    const timeLabel = document.createElementNS(ns, 'text');
+    timeLabel.setAttribute('x', px.toFixed(1));
+    timeLabel.setAttribute('y', (PAD_T + iH + 10).toFixed(1));
+    timeLabel.setAttribute('class', 'wx-curve-time');
+    const d2 = new Date(s.dt * 1000);
+    timeLabel.textContent = d2.toLocaleTimeString([], { hour: 'numeric' });
+    svg.appendChild(timeLabel);
+  });
+
+  const wrap = document.createElement('div');
+  wrap.className = 'wx-curve-wrap';
+  wrap.appendChild(svg);
+  return wrap;
 }
 
 function renderWeatherTicker(data) {
