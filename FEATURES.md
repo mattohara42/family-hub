@@ -485,11 +485,13 @@ Gemini-powered chat (shares the Meals key `mealAiKey`) with live family-data con
 - `extractAssistantActions(raw)` — pulls `[ACTION:type:value]` tags; multi-arg values use a `|` delimiter
 - `executeAssistantActions(actions)` *(async)* — dispatches to per-action `assistant*()` handlers; returns confirmation strings appended to the reply
 - `renderAssistantMessages()` — renders chat / empty-state chips; `useQuickPrompt(text)` sends a chip
-- `initAssistantVoice()` — Web Speech mic input
+- `initAssistantVoice()` — Web Speech mic **input**
+- `speakAssistant(text)` / `toggleAssistantTTS()` / `updateAssistantTtsBtn()` — voice **output** (TTS). Reads replies aloud via `speechSynthesis` (strips markdown/emoji), gated by `assistantTTS` (`fh_assistantTTS`, default off), toggled by the header 🔇/🔊 button. Interruptible (cancels on new send / clear).
 
 **Action vocabulary** (`[ACTION:...]`): `addShopping` · `addTodo` · `completeTodo` · `checkShopping` · `addEvent:YYYY-MM-DD|HH:MM|Title` (Google Calendar `primary`; `allday` for no time) · `setMeal:YYYY-MM-DD|mealType|Name` · `addBudget:Name|Amount|frequency`. Handlers: `assistantAddShopping/AddTodo/CompleteTodo/CheckShopping/AddEvent/SetMeal/AddBudget`, plus `fuzzyTextMatch()`.
 
-**HTML anchors:** `#assistantCard`, `#assistantMessages`, `#assistantInput`, `#assistantMicBtn`, `.assistant-chip`
+**HTML anchors:** `#assistantCard`, `#assistantMessages`, `#assistantInput`, `#assistantMicBtn`, `#assistantTtsBtn`, `.assistant-chip`
+**localStorage:** `fh_assistantTTS` (bool — read replies aloud)
 
 **Requires:** Gemini key for chat; Google sign-in for `addEvent` (degrades gracefully otherwise).
 

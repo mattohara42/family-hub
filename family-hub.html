@@ -303,7 +303,10 @@
     <div class="card" id="assistantCard">
       <div class="card-header">
         <h2>🤖 Family Assistant</h2>
-        <button onclick="clearAssistantChat()" title="Clear chat" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.6rem;line-height:1">↺</button>
+        <div style="display:flex;align-items:center;gap:10px">
+          <button id="assistantTtsBtn" onclick="toggleAssistantTTS()" title="Read replies aloud" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.3rem;line-height:1">🔇</button>
+          <button onclick="clearAssistantChat()" title="Clear chat" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.6rem;line-height:1">↺</button>
+        </div>
       </div>
       <div class="card-body assistant-card-body">
         <div class="assistant-messages" id="assistantMessages">

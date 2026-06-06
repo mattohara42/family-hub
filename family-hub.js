@@ -141,6 +141,7 @@ let assistantHistory  = [];   // [{role:'user'|'model', parts:[{text}]}]
 let shopItemsCache    = [];   // in-memory mirror of shopping items for context
 let assistantRecognition = null;  // SpeechRecognition instance
 let assistantListening   = false; // true while mic is open
+let assistantTTS         = lsGet('fh_assistantTTS', false); // read replies aloud
 // Starter prompts shown as clickable chips in the empty chat state.
 // ⚠️ Keep this current: when a new assistant capability ships (see ASSISTANT_BACKLOG.md),
 // add a representative prompt here so users discover it.
@@ -628,6 +629,7 @@ window.addEventListener('load', () => {
   loadDadJoke();
   loadQuote();
   initAssistantVoice();
+  updateAssistantTtsBtn();      // set the 🔊/🔇 voice-output toggle state
   renderAssistantMessages();   // render empty-state welcome + quick-prompt chips
   // Close SMS popover on outside click
   document.addEventListener('click', e => {
@@ -4413,6 +4415,7 @@ async function sendAssistantMessage() {
   const input = document.getElementById('assistantInput');
   const text  = input.value.trim();
   if (!text) return;
+  if ('speechSynthesis' in window) speechSynthesis.cancel();  // stop reading any prior reply
   input.value = '';
 
   if (!mealAiKey) {
@@ -4470,6 +4473,7 @@ async function sendAssistantMessage() {
 
     assistantHistory.push({ role: 'model', parts: [{ text: finalText }] });
     renderAssistantMessages();
+    speakAssistant(finalText);   // read aloud if TTS is on
 
   } catch(e) {
     thinkEl.remove();
@@ -4481,8 +4485,44 @@ async function sendAssistantMessage() {
 
 /** Clear conversation history and reset to welcome state. */
 function clearAssistantChat() {
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
   assistantHistory = [];
   renderAssistantMessages();
+}
+
+// ── Assistant voice output (TTS) ───────────────────────────────
+/** Toggle reading replies aloud; persists to fh_assistantTTS. */
+function toggleAssistantTTS() {
+  assistantTTS = !assistantTTS;
+  localStorage.setItem('fh_assistantTTS', JSON.stringify(assistantTTS));
+  if (!assistantTTS && 'speechSynthesis' in window) speechSynthesis.cancel();
+  updateAssistantTtsBtn();
+}
+
+function updateAssistantTtsBtn() {
+  const btn = document.getElementById('assistantTtsBtn');
+  if (!btn) return;
+  const supported = 'speechSynthesis' in window;
+  btn.style.display = supported ? '' : 'none';
+  btn.textContent = assistantTTS ? '🔊' : '🔇';
+  btn.title = assistantTTS ? 'Reading replies aloud (click to mute)' : 'Read replies aloud';
+  btn.style.color = assistantTTS ? 'var(--accent)' : 'var(--muted)';
+}
+
+/** Speak an assistant reply, stripping markdown/emoji. Interruptible. */
+function speakAssistant(text) {
+  if (!assistantTTS || !('speechSynthesis' in window) || !text) return;
+  const clean = text
+    .replace(/\*\*(.+?)\*\*/g, '$1')                       // bold markers
+    .replace(/[⌀-➿☀-⛿️\u{1F000}-\u{1FAFF}]/gu, '') // emoji/symbols
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  if (!clean) return;
+  speechSynthesis.cancel();                                // interrupt any prior speech
+  const u = new SpeechSynthesisUtterance(clean);
+  u.lang = 'en-US';
+  u.rate = 1.0;
+  speechSynthesis.speak(u);
 }
 
 // ── Assistant voice ────────────────────────────────────────────
