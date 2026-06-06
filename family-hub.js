@@ -101,7 +101,9 @@ let weatherLocIdx       = 0;                   // currently-displayed location i
 const weatherCache      = {};                  // { cityKey: { ts, data } }
 const WX_CACHE_TTL      = 30 * 60 * 1000;     // 30 minutes
 let weatherForecastMode = localStorage.getItem('fh_wxForecastMode') || '5day'; // '5day' | 'hourly'
-let sunArcEnabled       = lsGet('fh_sunArc', true); // sun-path arc visibility
+let sunArcEnabled       = lsGet('fh_sunArc', true);        // sun-path arc visibility
+let wxTickerEnabled     = lsGet('fh_wxTicker', true);      // weather info ticker
+let wxActivityEnabled   = lsGet('fh_wxActivity', true);    // activity tags strip
 let userName        = localStorage.getItem('fh_name') || 'Someone';
 let familyMembers   = lsGet('fh_familyMembers', []);
 // each: { name: string }
@@ -2421,20 +2423,26 @@ function renderWeatherData(data) {
 
   // Activity tags
   const actEl = document.getElementById('wActivityTags');
-  const tags  = [];
-  const temp  = data.temp, rain = data.rain, wind = data.windSpeed ?? 0, icon = data.icon;
-  if (rain >= 60)                           tags.push({ e:'☂️',  label:'Bring umbrella' });
-  if (rain < 20 && temp >= 60 && temp < 85 && wind < 20) tags.push({ e:'🚴', label:'Great for a bike ride' });
-  if (rain < 30 && temp >= 55 && wind < 25) tags.push({ e:'🌳', label:'Good for outdoors' });
-  if (temp < 40)                            tags.push({ e:'🧥',  label:'Bundle up' });
-  if (temp >= 85)                           tags.push({ e:'🥵',  label:'Stay cool & hydrate' });
-  if (icon === 'Clear' && temp >= 65 && temp < 90) tags.push({ e:'😎', label:'Great beach/pool day' });
-  if (wind >= 20)                           tags.push({ e:'💨',  label:'Windy — hold onto your hat' });
-  if (icon === 'Snow')                      tags.push({ e:'⛄',  label:'Snow day!' });
-  if (icon === 'Thunderstorm')              tags.push({ e:'⚡',  label:'Stay indoors' });
-  actEl.innerHTML = tags.map(t =>
-    `<span class="wx-activity-tag" title="${t.label}">${t.e} ${t.label}</span>`
-  ).join('');
+  if (!wxActivityEnabled) {
+    actEl.innerHTML = '';
+    actEl.style.display = 'none';
+  } else {
+    actEl.style.display = '';
+    const tags  = [];
+    const temp  = data.temp, rain = data.rain, wind = data.windSpeed ?? 0, icon = data.icon;
+    if (rain >= 60)                           tags.push({ e:'☂️',  label:'Bring umbrella' });
+    if (rain < 20 && temp >= 60 && temp < 85 && wind < 20) tags.push({ e:'🚴', label:'Great for a bike ride' });
+    if (rain < 30 && temp >= 55 && wind < 25) tags.push({ e:'🌳', label:'Good for outdoors' });
+    if (temp < 40)                            tags.push({ e:'🧥',  label:'Bundle up' });
+    if (temp >= 85)                           tags.push({ e:'🥵',  label:'Stay cool & hydrate' });
+    if (icon === 'Clear' && temp >= 65 && temp < 90) tags.push({ e:'😎', label:'Great beach/pool day' });
+    if (wind >= 20)                           tags.push({ e:'💨',  label:'Windy — hold onto your hat' });
+    if (icon === 'Snow')                      tags.push({ e:'⛄',  label:'Snow day!' });
+    if (icon === 'Thunderstorm')              tags.push({ e:'⚡',  label:'Stay indoors' });
+    actEl.innerHTML = tags.map(t =>
+      `<span class="wx-activity-tag" title="${t.label}">${t.e} ${t.label}</span>`
+    ).join('');
+  }
 
   // Condition-based card tint
   const cardEl = document.getElementById('weatherCard');
@@ -2527,7 +2535,12 @@ function renderWeatherData(data) {
   renderSunArc(data);
 
   // ── Weather ticker ──
-  renderWeatherTicker(data);
+  if (wxTickerEnabled) {
+    renderWeatherTicker(data);
+  } else {
+    const ticker = document.getElementById('wxTicker');
+    if (ticker) ticker.style.display = 'none';
+  }
 
   const fcastToggle = document.getElementById('wxForecastToggle');
   if (fcastToggle) fcastToggle.style.display = '';
@@ -5427,7 +5440,9 @@ function openSettings() {
   switchSettingsTab('look');   // always open on first tab
   document.getElementById('settingName').value          = userName;
   document.getElementById('settingWeatherKey').value    = weatherKey;
-  document.getElementById('sunArcToggle').checked       = sunArcEnabled;
+  document.getElementById('sunArcToggle').checked        = sunArcEnabled;
+  document.getElementById('wxTickerToggle').checked     = wxTickerEnabled;
+  document.getElementById('wxActivityToggle').checked   = wxActivityEnabled;
   renderWeatherLocationsList();
   renderSmsContactsList();
   renderShopCategorySettings();
@@ -5486,8 +5501,12 @@ function closeSettings() {
 function saveSettings() {
   userName      = document.getElementById('settingName').value.trim() || 'Someone';
   weatherKey    = document.getElementById('settingWeatherKey').value.trim();
-  sunArcEnabled = document.getElementById('sunArcToggle').checked;
-  localStorage.setItem('fh_sunArc', JSON.stringify(sunArcEnabled));
+  sunArcEnabled     = document.getElementById('sunArcToggle').checked;
+  wxTickerEnabled   = document.getElementById('wxTickerToggle').checked;
+  wxActivityEnabled = document.getElementById('wxActivityToggle').checked;
+  localStorage.setItem('fh_sunArc',      JSON.stringify(sunArcEnabled));
+  localStorage.setItem('fh_wxTicker',    JSON.stringify(wxTickerEnabled));
+  localStorage.setItem('fh_wxActivity',  JSON.stringify(wxActivityEnabled));
   // smsContacts and familyMembers saved immediately on add/remove — nothing to save here
   slideInterval = parseInt(document.getElementById('settingSlideInterval').value) || 30;
   mealAiKey     = document.getElementById('settingMealAiKey').value.trim();
