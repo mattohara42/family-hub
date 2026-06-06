@@ -199,6 +199,8 @@ let sunArcEnabled       = lsGet('fh_sunArc', true);   // sun-path arc on/off
 - `loadWeatherByCity(city)` — fetches current + forecast from OWM, builds data object, caches it
 - `renderWeatherData(data)` — populates all weather DOM elements from a data object
 - `renderSunArc(data)` — draws the optional sun-path arc (SVG): sun position between sunrise/sunset, daylight-remaining readout, golden-hour + day/night states. Gated by `sunArcEnabled`. Pure local compute (uses `sunriseTs`/`sunsetTs` epochs, no extra API call).
+- `renderWeatherTicker(data)` — scrolling ticker; shows severe-weather **alerts first** (bold, severity-colored), then precip/humidity/wind/visibility/sunrise/sunset/AQI.
+- `fetchNwsAlerts(lat, lon)` — active severe-weather alerts from NWS `api.weather.gov` (free, keyless, **US-only**); returns `[{ event, headline, severity }]` sorted by severity; `[]` on failure/non-US. Stored as `data.alerts`.
 - `renderWeatherNav()` — draws prev/next buttons and dot indicators in `#wxLocNav`
 - `prevWeatherLocation()` / `nextWeatherLocation()` — wrapping navigation
 - `fetchWeather()` — reads from `#cityInput` first-time setup form
@@ -211,6 +213,8 @@ let sunArcEnabled       = lsGet('fh_sunArc', true);   // sun-path arc on/off
 **localStorage:** `fh_wkey`, `fh_wlocations` (array), `fh_wcity` (legacy, kept in sync with first location), `fh_sunArc` (bool — sun-path arc visibility)
 
 **Migration:** On first run, any existing `fh_wcity` value is auto-migrated into `fh_wlocations[0]`.
+
+**External:** NWS `api.weather.gov/alerts/active?point=` (keyless) for severe-weather alerts — covered by CSP `connect-src https:`. US-only; browsers can't set the `User-Agent` NWS requests, but calls still succeed with permissive CORS.
 
 **Gotcha:** New OWM API keys take up to 2 hours to activate.
 

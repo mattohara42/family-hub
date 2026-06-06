@@ -2226,6 +2226,25 @@ function renderWeatherNav() {
   }
 }
 
+/** Active severe-weather alerts from the U.S. National Weather Service (free, keyless,
+ *  US-only). Returns [{ event, headline, severity }]; [] on any failure or non-US point. */
+async function fetchNwsAlerts(lat, lon) {
+  try {
+    const r = await fetch(`https://api.weather.gov/alerts/active?point=${lat},${lon}`,
+      { headers: { Accept: 'application/geo+json' } });
+    if (!r.ok) return [];
+    const d = await r.json();
+    const order = { Extreme: 0, Severe: 1, Moderate: 2, Minor: 3, Unknown: 4 };
+    return (d.features || [])
+      .map(f => ({
+        event:    f.properties?.event    || 'Weather Alert',
+        headline: f.properties?.headline || '',
+        severity: f.properties?.severity || 'Unknown',
+      }))
+      .sort((a, b) => (order[a.severity] ?? 9) - (order[b.severity] ?? 9));
+  } catch { return []; }
+}
+
 async function loadWeatherByCity(city) {
   const key = weatherKey;
   if (!key) {
@@ -2246,10 +2265,11 @@ async function loadWeatherByCity(city) {
 
     if (cur.cod !== 200) { alert('Weather error: ' + cur.message); return; }
 
-    // Fetch air quality + reverse geocode (state) using lat/lon
+    // Fetch air quality + reverse geocode (state) + severe-weather alerts using lat/lon
     const { lat, lon } = cur.coord || {};
-    let aqi = null, aqiLabel = '', locationState = '';
+    let aqi = null, aqiLabel = '', locationState = '', weatherAlerts = [];
     if (lat != null && lon != null) {
+      const alertsP = fetchNwsAlerts(lat, lon);   // independent — never throws, [] on failure / non-US
       try {
         const [aqiR, geoR] = await Promise.all([
           fetch(`${OWM_API_BASE}/air_pollution?lat=${lat}&lon=${lon}&appid=${key}`),
@@ -2265,6 +2285,7 @@ async function loadWeatherByCity(city) {
         // Use state for US; fall back to country code elsewhere
         locationState = (geo?.country === 'US' && geo?.state) ? geo.state : (cur.sys?.country || '');
       } catch(e) { locationState = cur.sys?.country || ''; }
+      weatherAlerts = await alertsP;
     } else {
       locationState = cur.sys?.country || '';
     }
@@ -2351,7 +2372,7 @@ async function loadWeatherByCity(city) {
       tzOffset:      cur.timezone ?? 0,          // location's UTC offset in seconds
       aqi,
       aqiLabel,
-      alerts:        cur.alerts || [],
+      alerts:        weatherAlerts,   // real NWS severe-weather alerts (US); [] elsewhere
     };
 
     weatherCache[city.toLowerCase().trim()] = { ts: Date.now(), data };
@@ -2563,9 +2584,11 @@ function renderWeatherTicker(data) {
   const aqiColors = ['', '#4caf82', '#a8d84e', '#f5c542', '#f5822a', '#e05c2a'];
   const segments  = [];
 
-  // Weather alerts first (highest priority)
+  // Severe-weather alerts first (highest priority), colored by NWS severity
+  const sevColor = { Extreme: '#e53935', Severe: '#e53935', Moderate: '#f5822a', Minor: '#f5c542', Unknown: '#f5c542' };
   (data.alerts || []).forEach(a => {
-    segments.push(`⚠️ ${a.event}: ${a.description?.slice(0,120) || ''}…`);
+    const c = sevColor[a.severity] || '#f5c542';
+    segments.push(`<span style="color:${c};font-weight:700">⚠️ ${esc(a.headline || a.event)}</span>`);
   });
 
   // Precipitation start time
