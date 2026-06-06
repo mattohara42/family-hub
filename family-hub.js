@@ -4143,7 +4143,7 @@ function buildAssistantContext() {
   const today = new Date();
   const fmt = (d, opts) => d.toLocaleDateString('en-US', opts);
 
-  // ── Calendar: next 7 days ──
+  // ── Calendar: next 7 days (with event times) ──
   const calLines = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date(today);
@@ -4154,9 +4154,37 @@ function buildAssistantContext() {
     const evts = Object.values(calEventCache)
       .flatMap(calDays => calDays[dateStr] || [])
       .filter(e => !e.holiday)
-      .map(e => e.summary);
+      .sort((a, b) => {
+        if (a.allDay && !b.allDay) return -1;
+        if (!a.allDay && b.allDay) return 1;
+        return (a.startDT || '') < (b.startDT || '') ? -1 : 1;
+      })
+      .map(e => {
+        if (!e.allDay && e.startDT) {
+          const t = new Date(e.startDT).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+          return `${e.summary} at ${t}`;
+        }
+        return e.summary;
+      });
     if (evts.length) calLines.push(`  ${label}: ${evts.join(', ')}`);
   }
+
+  // ── Meal plan: next 7 days ──
+  const mealLines = [];
+  const MEAL_TYPES = ['breakfast', 'lunch', 'dinner'];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() + i);
+    const dateStr = d.toISOString().slice(0, 10);
+    const label = i === 0 ? 'Today' : i === 1 ? 'Tomorrow'
+                : fmt(d, { weekday: 'long', month: 'short', day: 'numeric' });
+    const dayMeals = mealPlan[dateStr] || {};
+    const parts = MEAL_TYPES.filter(t => dayMeals[t]).map(t => `${t}: ${dayMeals[t].name}`);
+    if (parts.length) mealLines.push(`  ${label}: ${parts.join(', ')}`);
+  }
+
+  // ── Family members ──
+  const memberNames = familyMembers.map(m => m.name);
 
   // ── To-Do (pending) ──
   const pendingTodos = todoItems
@@ -4177,16 +4205,39 @@ function buildAssistantContext() {
   const budgetLines = budgetItems
     .map(b => `  • ${b.name}: $${b.amount} (${b.frequency})`);
 
-  // ── Weather ──
+  // ── Weather (real conditions from cache) ──
   const weatherCity = weatherLocations[weatherLocIdx] || 'not set';
+  let weatherSummary = `Location: ${weatherCity}`;
+  const wxCached = weatherLocations[weatherLocIdx]
+    && weatherCache[weatherLocations[weatherLocIdx].toLowerCase().trim()];
+  if (wxCached) {
+    const wx = wxCached.data;
+    const parts = [`${wx.temp}°F`, wx.desc];
+    if (wx.feels != null) parts.push(`feels like ${wx.feels}°`);
+    if (wx.hi != null && wx.lo != null) parts.push(`hi ${wx.hi}° / lo ${wx.lo}°`);
+    if (wx.rain != null) parts.push(`${wx.rain}% precip`);
+    if (wx.windSpeed != null) parts.push(`wind ${wx.windSpeed} mph ${wx.windDir || ''}`.trim());
+    if (wx.aqi != null) parts.push(`AQI: ${wx.aqiLabel || wx.aqi}`);
+    if (wx.alerts && wx.alerts.length) {
+      parts.push(`⚠️ ${wx.alerts.map(a => a.event).join(', ')}`);
+    }
+    weatherSummary = `${weatherCity} — ${parts.join(', ')}`;
+  }
 
   const name = userName || 'the family';
   return `You are a helpful assistant built into a family dashboard. You are talking to ${name}. Today is ${fmt(today, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}.
 
 CURRENT FAMILY DATA (use this to answer questions):
 
+Family members: ${memberNames.length ? memberNames.join(', ') : '(none set up)'}
+
+Weather: ${weatherSummary}
+
 Calendar — next 7 days:
 ${calLines.length ? calLines.join('\n') : '  (no upcoming events)'}
+
+Meal plan — next 7 days:
+${mealLines.length ? mealLines.join('\n') : '  (no meals planned)'}
 
 To-Do list — ${pendingTodos.length} pending item(s):
 ${pendingTodos.length ? pendingTodos.join('\n') : '  (nothing pending)'}
@@ -4196,8 +4247,6 @@ ${pendingShop.length ? pendingShop.join('\n') : '  (list is empty)'}
 
 Budget / recurring bills:
 ${budgetLines.length ? budgetLines.join('\n') : '  (none set up)'}
-
-Current weather location: ${weatherCity}
 
 ACTIONS YOU CAN TAKE:
 When the user clearly asks you to add or change something, append one tag per action at the very END of your response (after your text). Tags are executed automatically and hidden from the display. Resolve relative dates ("tomorrow", "Friday") to YYYY-MM-DD using today's date above.
@@ -4215,8 +4264,11 @@ You may include multiple tags. Only emit a tag when the user clearly requests th
 GUIDELINES:
 - Keep responses concise and friendly. 2–4 sentences is usually enough.
 - Use bullet points (•) for lists.
-- When asked "what's going on this week?" or similar, summarise the calendar events.
+- When asked "what's going on this week?" or similar, summarise the calendar events including times.
 - When asked about free time or scheduling, look at the calendar gaps.
+- When asked about weather ("will it rain?", "is it going to be hot?"), use the real weather data above.
+- When asked "what's for dinner?" or "what's the meal plan?", use the meal plan data above.
+- When asked about family members or who is assigned to something, use the family members list.
 - Do not repeat raw data back verbatim — synthesise and be helpful.
 - If no data exists for a question (e.g. no calendar events), say so briefly.`;
 }
