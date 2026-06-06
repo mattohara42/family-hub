@@ -4350,9 +4350,11 @@ function renderAssistantMessages() {
     const chips = ASSISTANT_QUICK_PROMPTS
       .map(p => `<button class="assistant-chip" onclick="useQuickPrompt(this.textContent)">${formatAssistantText(p)}</button>`)
       .join('');
+    // Two identical groups so the marquee loops seamlessly at translateX(-50%)
+    const group = `<div class="assistant-ticker-group">${chips}</div>`;
     container.innerHTML =
       `<div class="assistant-welcome">Hi! Ask me about your schedule, lists, or budget — or tap a prompt to start:</div>
-       <div class="assistant-chips">${chips}</div>`;
+       <div class="assistant-ticker"><div class="assistant-ticker-track">${group}${group}</div></div>`;
     return;
   }
   container.innerHTML = '';

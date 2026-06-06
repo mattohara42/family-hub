@@ -2546,18 +2546,35 @@ body.has-bg .mini-card:hover {
   padding: 6px 4px;
   line-height: 1.55;
 }
-.assistant-chips {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 6px;
-  padding: 4px 2px 6px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
+/* Quick-prompt ticker — auto-scrolls like the weather ticker; pauses on hover/focus so chips stay clickable */
+.assistant-ticker {
+  overflow: hidden;
+  white-space: nowrap;
+  padding: 4px 0 6px;
 }
-.assistant-chips::-webkit-scrollbar { height: 5px; }
-.assistant-chips::-webkit-scrollbar-thumb { background: var(--surface2); border-radius: 3px; }
+.assistant-ticker-track {
+  display: flex;
+  width: max-content;
+  animation: assistant-ticker-scroll linear 24s infinite;
+}
+.assistant-ticker:hover .assistant-ticker-track,
+.assistant-ticker:focus-within .assistant-ticker-track {
+  animation-play-state: paused;
+}
+.assistant-ticker-group {
+  display: flex;
+  gap: 6px;
+  padding-right: 6px;   /* same as gap, so the loop seam is even */
+  flex-shrink: 0;
+}
+@keyframes assistant-ticker-scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .assistant-ticker { overflow-x: auto; }
+  .assistant-ticker-track { animation: none; }
+}
 .assistant-chip {
   background: var(--surface2);
   border: 1px solid rgba(255,255,255,.10);
