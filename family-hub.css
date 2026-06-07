@@ -1173,6 +1173,14 @@ body.light-mode .wx-radar-map .leaflet-control-attribution a { color: rgba(0,0,0
   text-anchor: middle;
   dominant-baseline: hanging;
 }
+.wx-curve-dot-now {
+  fill: var(--accent2);
+  stroke: var(--surface);
+}
+.wx-curve-label-now {
+  fill: var(--accent2);
+  font-weight: 700;
+}
 body.light-mode .wx-curve-dot   { stroke: #fff; }
 body.nautical-mode .wx-curve-line { stroke: var(--accent2); }
 body.nautical-mode .wx-curve-dot  { fill: var(--accent2); }

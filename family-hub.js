@@ -2767,37 +2767,43 @@ function renderTempCurve(slots) {
   svg.appendChild(lineEl);
 
   // Dots + labels — only at 12h intervals + first + last
-  const labeledIdx = new Set([0, slots.length - 1]);
+  // Label slot 0 (current), plus the 8 / 12 / 16 / 20 / 0 hour boundaries
+  const KEY_HOURS = new Set([0, 8, 12, 16, 20]);
+  const labeledIdx = new Set([0]);
   slots.forEach((s, i) => {
-    const date = new Date(s.dt * 1000);
-    if (date.getHours() === 12 || date.getHours() === 0) labeledIdx.add(i);
+    if (i === 0) return; // already included
+    const h = new Date(s.dt * 1000).getHours();
+    if (KEY_HOURS.has(h)) labeledIdx.add(i);
   });
 
   labeledIdx.forEach(i => {
     const [px, py] = pts[i];
     const s = slots[i];
-    // Dot
+    const isCurrent = i === 0;
+
+    // Dot — larger + accent2 fill for the current hour
     const circle = document.createElementNS(ns, 'circle');
     circle.setAttribute('cx', px.toFixed(1));
     circle.setAttribute('cy', py.toFixed(1));
-    circle.setAttribute('r', '3');
-    circle.setAttribute('class', 'wx-curve-dot');
+    circle.setAttribute('r', isCurrent ? '4.5' : '3');
+    circle.setAttribute('class', 'wx-curve-dot' + (isCurrent ? ' wx-curve-dot-now' : ''));
     svg.appendChild(circle);
+
     // Temp label (above dot, but keep inside PAD_T)
     const tempLabel = document.createElementNS(ns, 'text');
     tempLabel.setAttribute('x', px.toFixed(1));
-    const ly = Math.max(PAD_T - 2, py - 6);
+    const ly = Math.max(PAD_T - 2, py - (isCurrent ? 8 : 6));
     tempLabel.setAttribute('y', ly.toFixed(1));
-    tempLabel.setAttribute('class', 'wx-curve-label');
+    tempLabel.setAttribute('class', 'wx-curve-label' + (isCurrent ? ' wx-curve-label-now' : ''));
     tempLabel.textContent = s.temp + '°';
     svg.appendChild(tempLabel);
-    // Time label (below baseline)
+
+    // Time label (below baseline) — "Now" for slot 0
     const timeLabel = document.createElementNS(ns, 'text');
     timeLabel.setAttribute('x', px.toFixed(1));
     timeLabel.setAttribute('y', (PAD_T + iH + 10).toFixed(1));
-    timeLabel.setAttribute('class', 'wx-curve-time');
-    const d2 = new Date(s.dt * 1000);
-    timeLabel.textContent = d2.toLocaleTimeString([], { hour: 'numeric' });
+    timeLabel.setAttribute('class', 'wx-curve-time' + (isCurrent ? ' wx-curve-label-now' : ''));
+    timeLabel.textContent = isCurrent ? 'Now' : new Date(s.dt * 1000).toLocaleTimeString([], { hour: 'numeric' });
     svg.appendChild(timeLabel);
   });
 
