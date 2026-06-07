@@ -2483,6 +2483,10 @@ function renderWeatherData(data) {
   const fcastEl = document.getElementById('wForecast');
   fcastEl.innerHTML = '';
 
+  // Radar map lives in its own persistent container — show/hide it here
+  const radarEl = document.getElementById('wxRadarMap');
+  if (radarEl) radarEl.style.display = 'none';
+
   if (weatherForecastMode === 'radar') {
     renderRadarMap(data);
   } else if (weatherForecastMode === 'curve' && data.tempSlots?.length) {
@@ -2622,19 +2626,15 @@ let _radarLayer   = null;
 let _radarLat     = null;
 let _radarLon     = null;
 
-/** Show/update the Leaflet precipitation radar panel in #wForecast. */
+/** Show/update the Leaflet precipitation radar panel.
+ *  The container #wxRadarMap is a persistent div in the HTML (never recreated),
+ *  so Leaflet's internal state stays valid across mode switches.
+ */
 function renderRadarMap(data) {
-  const fcastEl = document.getElementById('wForecast');
-  if (!fcastEl) return;
+  const container = document.getElementById('wxRadarMap');
+  if (!container) return;
 
-  // Build or reuse the map container
-  let container = document.getElementById('wxRadarMap');
-  if (!container) {
-    container = document.createElement('div');
-    container.id = 'wxRadarMap';
-    container.className = 'wx-radar-map';
-  }
-  fcastEl.appendChild(container);
+  container.style.display = '';   // make visible
 
   const lat = data.lat, lon = data.lon;
   if (lat == null || lon == null) {
@@ -2642,17 +2642,16 @@ function renderRadarMap(data) {
     return;
   }
 
-  // If Leaflet not loaded yet, bail gracefully
   if (typeof L === 'undefined') {
     container.innerHTML = '<p style="color:var(--muted);font-size:.8rem;padding:8px">Map loading…</p>';
     return;
   }
 
   if (!_radarMap) {
-    // First init
+    // First init — container is already in the DOM and sized via CSS
     _radarMap = L.map(container, { zoomControl: true, attributionControl: false }).setView([lat, lon], 7);
 
-    // Minimal dark-friendly base layer (CartoDB Dark Matter — free, no key)
+    // Dark basemap (CartoDB Dark Matter — free, no key needed)
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
       maxZoom: 19,
     }).addTo(_radarMap);
@@ -2665,23 +2664,23 @@ function renderRadarMap(data) {
 
     _radarLat = lat; _radarLon = lon;
   } else {
-    // Already inited — re-center if location changed, refresh overlay if key changed
+    // Re-center if location changed
     if (lat !== _radarLat || lon !== _radarLon) {
       _radarMap.setView([lat, lon], 7);
       _radarLat = lat; _radarLon = lon;
     }
-    // Force Leaflet to recalculate size (panel may have been hidden before)
-    _radarMap.invalidateSize();
   }
 
-  // invalidateSize on next frame in case container just became visible
+  // Always invalidateSize — container may have been hidden (display:none) before
   requestAnimationFrame(() => _radarMap && _radarMap.invalidateSize());
 }
 
-/** Destroy the radar map (called when weather location changes or card resets). */
+/** Reset the radar map so it re-initializes on the next location. */
 function destroyRadarMap() {
   if (_radarMap) { _radarMap.remove(); _radarMap = null; _radarLayer = null; }
   _radarLat = null; _radarLon = null;
+  const el = document.getElementById('wxRadarMap');
+  if (el) el.style.display = 'none';
 }
 
 /** Build and return an SVG temperature curve element for the next ~48h.

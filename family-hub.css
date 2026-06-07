@@ -1042,22 +1042,25 @@ body.nautical-mode .wx-sun-progress { stroke: rgba(255,200,90,.60); }
 /* ── Forecast mode toggle ── */
 .wx-forecast-toggle {
   display: flex;
+  flex-wrap: nowrap;
   margin-bottom: 6px;
   border-radius: 6px;
   overflow: hidden;
   border: 1px solid rgba(255,255,255,.10);
   width: fit-content;
+  flex-shrink: 1;
 }
 body.light-mode .wx-forecast-toggle { border-color: rgba(0,0,0,.12); }
 .wx-forecast-toggle button {
   background: transparent;
   border: none;
   color: var(--muted);
-  padding: 2px 10px;
+  padding: 2px 7px;
   font-size: var(--text-xs);
   cursor: pointer;
   transition: background .15s, color .15s;
   line-height: 1.8;
+  white-space: nowrap;
 }
 .wx-forecast-toggle button.active {
   background: var(--accent);
