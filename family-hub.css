@@ -239,6 +239,264 @@ body.nautical-mode .card-header h2 { color: #e8d5b0; }
 body.nautical-mode .cal-app-title  { color: #e8d5b0; }
 body.nautical-mode .cal-app-title span { color: #c8a96e; }
 
+/* ═══════════════════════════════════════════════════════════════
+   ── Nautical Light theme ──
+   Lighter, airier take on Nautical: slate-blue hull, bright
+   yellow-gold accents, and more transparency throughout.
+   ═══════════════════════════════════════════════════════════════ */
+body.nautical-light-mode {
+  --bg:                 #1a2e52;          /* lighter navy hull */
+  --surface:            rgba(30, 50, 100, 0.60);   /* more transparent cards */
+  --surface2:           rgba(44, 68, 128, 0.55);
+  --accent:             #f0c040;          /* bright yellow-gold */
+  --accent2:            #ffe090;          /* pale yellow highlight */
+  --green:              #5bbf8e;
+  --red:                #e07070;
+  --text:               #f5f3ee;
+  --muted:              #a0b4d4;
+  --radius:             14px;
+  --shadow:             0 0 22px rgba(240,192,64,0.20), 0 4px 18px rgba(0,0,0,0.45);
+  --scrim:              rgba(10, 22, 56, 0.40);
+  --card-bg-photo:      rgba(20, 38, 80, 0.62);
+  --cal-card-bg-photo:  rgba(20, 38, 80, 0.38);
+  --cal-day-bg-photo:   rgba(30, 50, 100, 0.30);
+  --mini-card-bg-photo: rgba(30, 50, 100, 0.62);
+  --strip-bg-photo:     rgba(18, 34, 72, 0.60);
+
+  /* Lighter hull + subtle diagonal stripes */
+  background-color: #1a2e52;
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent              0px,
+    transparent              20px,
+    rgba(255,255,255,0.10)   20px,
+    rgba(255,255,255,0.10)   22px
+  );
+}
+
+/* ── Anchor watermark — slightly lighter opacity ── */
+body.nautical-light-mode::before {
+  content: '⚓';
+  position: fixed;
+  right: -2vw;
+  bottom: -3vh;
+  font-size: 36vmin;
+  line-height: 1;
+  opacity: 0.14;
+  z-index: 0;
+  pointer-events: none;
+  user-select: none;
+  color: #f0c040;
+  filter: none;
+}
+
+/* ── Animated wave banner ── */
+body.nautical-light-mode::after {
+  content: '';
+  position: fixed;
+  bottom: 0;
+  left: -10%;
+  width: 120%;
+  height: 56px;
+  background: rgba(240,192,64,0.07);
+  clip-path: polygon(
+    0%  55%, 2%  42%, 5%  55%, 8%  44%, 11% 57%, 14% 44%,
+    17% 57%, 20% 44%, 23% 57%, 26% 42%, 29% 55%, 32% 42%,
+    35% 55%, 38% 44%, 41% 57%, 44% 44%, 47% 57%, 50% 42%,
+    53% 55%, 56% 44%, 59% 57%, 62% 44%, 65% 57%, 68% 42%,
+    71% 55%, 74% 44%, 77% 57%, 80% 44%, 83% 57%, 86% 44%,
+    89% 57%, 92% 44%, 95% 57%, 98% 44%, 100% 55%,
+    100% 100%, 0% 100%
+  );
+  z-index: 0;
+  pointer-events: none;
+  animation: nauticalWave 7s ease-in-out infinite alternate;
+}
+
+/* ── Card yellow-gold border, high transparency ── */
+body.nautical-light-mode .card {
+  background: var(--surface);
+  border: 1px solid rgba(240,192,64,0.40);
+  box-shadow: 0 4px 28px rgba(0,0,0,0.35),
+              inset 0 1px 0 rgba(240,192,64,0.18);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+body.nautical-light-mode .card.cal-card {
+  border-color: rgba(240,192,64,0.38);
+  background: rgba(20, 38, 80, 0.14);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* ── Rope-style card header divider (yellow-gold) ── */
+body.nautical-light-mode .card-header {
+  position: relative;
+  background: linear-gradient(to bottom, rgba(240,192,64,0.10) 0%, transparent 100%);
+  border-bottom: none;
+}
+body.nautical-light-mode .card-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 3px;
+  background: repeating-linear-gradient(
+    90deg,
+    #f0c040          0px, #f0c040          3px,
+    rgba(140,100,0,.4) 3px, rgba(140,100,0,.4) 6px,
+    #c8a020          6px, #c8a020          9px,
+    rgba(140,100,0,.4) 9px, rgba(140,100,0,.4) 12px
+  );
+  opacity: 0.65;
+}
+
+/* ── Calendar compass rose glow ── */
+body.nautical-light-mode .cal-card .card-body {
+  background: radial-gradient(
+    ellipse 70% 60% at 50% 40%,
+    rgba(240,192,64,0.06) 0%,
+    transparent 70%
+  );
+}
+
+/* ── Calendar DOW: yellow-gold labels ── */
+body.nautical-light-mode .cal-dow {
+  color: #f0c040;
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* ── Calendar day cells ── */
+body.nautical-light-mode .cal-day {
+  background: rgba(30, 50, 100, 0.22);
+  border-color: rgba(240,192,64,0.08);
+}
+body.nautical-light-mode .cal-day.today .cal-day-num {
+  background: #f0c040;
+  color: #1a2e52;
+}
+body.nautical-light-mode .cal-day.current-week { background: rgba(240,192,64,0.18); }
+body.nautical-light-mode .cal-day.today {
+  background: rgba(240,192,64,0.30);
+  box-shadow: 0 0 0 1.5px rgba(240,192,64,0.80), 0 0 10px rgba(240,192,64,0.20);
+}
+
+/* ── Calendar events ── */
+body.nautical-light-mode .cal-event {
+  background: rgba(240,192,64,0.22);
+  color: var(--text);
+  border-left: 2px solid #f0c040;
+}
+
+/* ── Accent / primary buttons ── */
+body.nautical-light-mode .btn-primary {
+  background: linear-gradient(135deg, #f5d060 0%, #f0c040 50%, #d4a020 100%);
+  color: #1a2e52;
+  box-shadow: 0 2px 8px rgba(240,192,64,0.35);
+}
+body.nautical-light-mode .btn-primary:hover { opacity: .88; }
+
+/* ── Active view tab ── */
+body.nautical-light-mode .cal-view-tab.active {
+  background: linear-gradient(135deg, #f5d060 0%, #f0c040 100%);
+  color: #1a2e52;
+}
+
+/* ── Active mode button ── */
+body.nautical-light-mode .btn-mode-active {
+  color: #1a2e52 !important;
+  background: linear-gradient(135deg, #f5d060 0%, #f0c040 100%) !important;
+}
+
+/* ── Calendar month nav buttons ── */
+body.nautical-light-mode .cal-month-nav button {
+  background: rgba(240,192,64,0.24);
+}
+
+/* ── Budget summary pill ── */
+body.nautical-light-mode .budget-total-amount { color: #f0c040; }
+
+/* ── SMS popover ── */
+body.nautical-light-mode .sms-popover {
+  background: #1e3264;
+  border: 1px solid rgba(240,192,64,.28);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.55);
+}
+
+/* ── Checkboxes / radios ── */
+body.nautical-light-mode input[type=checkbox],
+body.nautical-light-mode input[type=radio] {
+  accent-color: #f0c040;
+}
+
+/* ── Sidebar scrollbar ── */
+body.nautical-light-mode .sidebar::-webkit-scrollbar { width: 5px; }
+body.nautical-light-mode .sidebar::-webkit-scrollbar-track { background: rgba(30,50,100,0.4); }
+body.nautical-light-mode .sidebar::-webkit-scrollbar-thumb {
+  background: rgba(240,192,64,0.40);
+  border-radius: 3px;
+}
+
+/* ── Card-header title text ── */
+body.nautical-light-mode .card-header h2 { color: #ffe090; }
+body.nautical-light-mode .cal-app-title  { color: #ffe090; }
+body.nautical-light-mode .cal-app-title span { color: #f0c040; }
+
+/* ── Year strip ── */
+body.nautical-light-mode #yearStrip { border-color: rgba(240,192,64,0.40); }
+
+/* ── Week / day view today highlight ── */
+body.nautical-light-mode .week-day-col.today { background: rgba(240,192,64,0.20); }
+body.nautical-light-mode .day-hour-row.current-hour { background: rgba(240,192,64,0.20); }
+
+/* ── Sun-path arc ── */
+body.nautical-light-mode .wx-sun-track    { stroke: rgba(240,192,64,.28); }
+body.nautical-light-mode .wx-sun-progress { stroke: rgba(255,210,60,.60); }
+
+/* ── Temp curve ── */
+body.nautical-light-mode .wx-curve-line { stroke: #f0c040; }
+body.nautical-light-mode .wx-curve-dot  { fill: #f0c040; }
+
+/* ── Weather ticker ── */
+body.nautical-light-mode .wx-ticker { background: rgba(240,192,64,.05); border-top-color: rgba(240,192,64,.14); }
+
+/* ── Meal & assistant chips ── */
+body.nautical-light-mode .meal-adjust-chip { border-color: rgba(240,192,64,.28); }
+body.nautical-light-mode .meal-adjust-chip:hover { background: #f0c040; border-color: #f0c040; color: #1a2e52; }
+body.nautical-light-mode .assistant-chip { border-color: rgba(240,192,64,.28); }
+body.nautical-light-mode .assistant-chip:hover { background: #f0c040; border-color: #f0c040; color: #1a2e52; }
+
+/* ── Event editor modal ── */
+body.nautical-light-mode #eventEditorModal .modal {
+  background: linear-gradient(160deg, #223468 0%, #1a2a58 60%, #141e48 100%);
+  border-top: 1px solid rgba(240,192,64,.30);
+  border-left: 1px solid rgba(240,192,64,.15);
+  box-shadow:
+    0  1px 0  rgba(240,192,64,.18) inset,
+    0  0  80px rgba(240,192,64,.30),
+    0  0  40px rgba(240,192,64,.20),
+    0  0  16px rgba(240,192,64,.12),
+    0  0   0  1px rgba(240,192,64,.30);
+  transform: perspective(800px) rotateX(2deg) translateY(-4px);
+  transform-origin: 50% 0%;
+}
+
+/* ── Settings modal ── */
+body.nautical-light-mode #settingsModal .modal {
+  background: #1a2a58;
+  box-shadow:
+    0 8px 48px rgba(0,0,0,.60),
+    0 2px 12px rgba(0,0,0,.40),
+    0 0 80px rgba(240,192,64,.18),
+    0 0 200px rgba(240,192,64,.08);
+}
+
+/* ── Assistant AI messages ── */
+body.nautical-light-mode .assistant-msg.ai {
+  background: rgba(44, 68, 128, 0.75);
+}
+
 /* ── Light mode overrides ── */
 body.light-mode {
   --bg: #f0f2f8;

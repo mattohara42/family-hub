@@ -5501,9 +5501,10 @@ function setMobileTab(tab) {
 
 function applyAppMode(mode) {
   appMode = mode;
-  document.body.classList.remove('light-mode', 'nautical-mode');
-  if (mode === 'light')   document.body.classList.add('light-mode');
-  if (mode === 'nautical') document.body.classList.add('nautical-mode');
+  document.body.classList.remove('light-mode', 'nautical-mode', 'nautical-light-mode');
+  if (mode === 'light')          document.body.classList.add('light-mode');
+  if (mode === 'nautical')       document.body.classList.add('nautical-mode');
+  if (mode === 'nautical-light') document.body.classList.add('nautical-light-mode');
 }
 
 window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', e => {
@@ -5513,9 +5514,10 @@ window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', e 
 function setAppMode(mode) {
   applyAppMode(mode);
   localStorage.setItem('fh_mode', mode);
-  document.getElementById('modeLight').className   = 'btn btn-sm' + (mode === 'light'    ? ' btn-mode-active' : '');
-  document.getElementById('modeDark').className    = 'btn btn-sm' + (mode === 'dark'     ? ' btn-mode-active' : '');
-  document.getElementById('modeAmazing').className = 'btn btn-sm' + (mode === 'nautical' ? ' btn-mode-active' : '');
+  document.getElementById('modeLight').className          = 'btn btn-sm' + (mode === 'light'          ? ' btn-mode-active' : '');
+  document.getElementById('modeDark').className           = 'btn btn-sm' + (mode === 'dark'           ? ' btn-mode-active' : '');
+  document.getElementById('modeAmazing').className        = 'btn btn-sm' + (mode === 'nautical'       ? ' btn-mode-active' : '');
+  document.getElementById('modeNauticalLight').className  = 'btn btn-sm' + (mode === 'nautical-light' ? ' btn-mode-active' : '');
 }
 
 // ── Settings modal ─────────────────────────────────────────────
@@ -5559,9 +5561,10 @@ function openSettings() {
     dietGrid.appendChild(label);
   });
   // Highlight active mode button
-  document.getElementById('modeLight').className   = 'btn btn-sm' + (appMode === 'light'   ? ' btn-mode-active' : '');
-  document.getElementById('modeDark').className    = 'btn btn-sm' + (appMode === 'dark'    ? ' btn-mode-active' : '');
-  document.getElementById('modeAmazing').className = 'btn btn-sm' + (appMode === 'nautical' ? ' btn-mode-active' : '');
+  document.getElementById('modeLight').className          = 'btn btn-sm' + (appMode === 'light'          ? ' btn-mode-active' : '');
+  document.getElementById('modeDark').className           = 'btn btn-sm' + (appMode === 'dark'           ? ' btn-mode-active' : '');
+  document.getElementById('modeAmazing').className        = 'btn btn-sm' + (appMode === 'nautical'       ? ' btn-mode-active' : '');
+  document.getElementById('modeNauticalLight').className  = 'btn btn-sm' + (appMode === 'nautical-light' ? ' btn-mode-active' : '');
   renderBgPreview();
   const statusEl = document.getElementById('bgStatus');
   if (statusEl && bgPhotos.length) statusEl.textContent = `✓ ${bgPhotos.length} image(s) loaded`;
