@@ -2627,52 +2627,63 @@ let _radarLat     = null;
 let _radarLon     = null;
 
 /** Show/update the Leaflet precipitation radar panel.
- *  The container #wxRadarMap is a persistent div in the HTML (never recreated),
- *  so Leaflet's internal state stays valid across mode switches.
+ *  #wxRadarMap is a persistent div in the HTML — never recreated — so Leaflet's
+ *  internal state stays valid across mode switches.
  */
 function renderRadarMap(data) {
   const container = document.getElementById('wxRadarMap');
   if (!container) return;
 
-  container.style.display = '';   // make visible
-
   const lat = data.lat, lon = data.lon;
   if (lat == null || lon == null) {
     container.innerHTML = '<p style="color:var(--muted);font-size:.8rem;padding:8px">Location coordinates unavailable</p>';
+    container.style.display = '';
     return;
   }
 
   if (typeof L === 'undefined') {
     container.innerHTML = '<p style="color:var(--muted);font-size:.8rem;padding:8px">Map loading…</p>';
+    container.style.display = '';
     return;
   }
 
-  if (!_radarMap) {
-    // First init — container is already in the DOM and sized via CSS
-    _radarMap = L.map(container, { zoomControl: true, attributionControl: false }).setView([lat, lon], 7);
+  // Make container visible FIRST, then wait one frame for the browser to lay it
+  // out before Leaflet measures its size — prevents the split-tile bug.
+  container.style.display = '';
 
-    // Dark basemap (CartoDB Dark Matter — free, no key needed)
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      maxZoom: 19,
-    }).addTo(_radarMap);
+  const doInit = () => {
+    if (!_radarMap) {
+      _radarMap = L.map(container, {
+        zoomControl: true,
+        attributionControl: true,
+      }).setView([lat, lon], 7);
 
-    // OWM precipitation overlay
-    _radarLayer = L.tileLayer(
-      `https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=${weatherKey}`,
-      { opacity: 0.7, maxZoom: 19 }
-    ).addTo(_radarMap);
+      // OpenStreetMap base layer (free, no key, universally available)
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      }).addTo(_radarMap);
 
-    _radarLat = lat; _radarLon = lon;
-  } else {
-    // Re-center if location changed
-    if (lat !== _radarLat || lon !== _radarLon) {
-      _radarMap.setView([lat, lon], 7);
+      // OWM precipitation overlay
+      _radarLayer = L.tileLayer(
+        `https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=${weatherKey}`,
+        { opacity: 0.65, maxZoom: 19 }
+      ).addTo(_radarMap);
+
       _radarLat = lat; _radarLon = lon;
+    } else {
+      // Re-center if location changed
+      if (lat !== _radarLat || lon !== _radarLon) {
+        _radarMap.setView([lat, lon], 7);
+        _radarLat = lat; _radarLon = lon;
+      }
+      _radarMap.invalidateSize();
     }
-  }
+  };
 
-  // Always invalidateSize — container may have been hidden (display:none) before
-  requestAnimationFrame(() => _radarMap && _radarMap.invalidateSize());
+  // Double rAF ensures the browser has painted the container at its CSS height
+  // before Leaflet reads offsetWidth/offsetHeight for tile calculations.
+  requestAnimationFrame(() => requestAnimationFrame(doInit));
 }
 
 /** Reset the radar map so it re-initializes on the next location. */
