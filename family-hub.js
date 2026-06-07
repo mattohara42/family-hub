@@ -2196,6 +2196,8 @@ async function showWeatherLocation(idx) {
   weatherLocIdx = Math.max(0, Math.min(idx, weatherLocations.length - 1));
   const city = weatherLocations[weatherLocIdx];
 
+  destroyRadarMap();   // reset map so it re-centers on the new location
+
   // Update nav dots
   renderWeatherNav();
 
@@ -2366,6 +2368,8 @@ async function loadWeatherByCity(city) {
 
     const data = {
       label:         cur.name,
+      lat:           cur.coord?.lat ?? null,
+      lon:           cur.coord?.lon ?? null,
       icon:          cur.weather[0].main,
       temp:          Math.round(cur.main.temp),
       feels:         cur.main.feels_like != null ? Math.round(cur.main.feels_like) : null,
@@ -2470,14 +2474,18 @@ function renderWeatherData(data) {
   const btn5day   = document.getElementById('wxToggle5day');
   const btnHourly = document.getElementById('wxToggleHourly');
   const btnCurve  = document.getElementById('wxToggleCurve');
+  const btnRadar  = document.getElementById('wxToggleRadar');
   if (btn5day)   btn5day.classList.toggle('active', weatherForecastMode === '5day');
   if (btnHourly) btnHourly.classList.toggle('active', weatherForecastMode === 'hourly');
   if (btnCurve)  btnCurve.classList.toggle('active',  weatherForecastMode === 'curve');
+  if (btnRadar)  btnRadar.classList.toggle('active',  weatherForecastMode === 'radar');
 
   const fcastEl = document.getElementById('wForecast');
   fcastEl.innerHTML = '';
 
-  if (weatherForecastMode === 'curve' && data.tempSlots?.length) {
+  if (weatherForecastMode === 'radar') {
+    renderRadarMap(data);
+  } else if (weatherForecastMode === 'curve' && data.tempSlots?.length) {
     fcastEl.appendChild(renderTempCurve(data.tempSlots));
   } else if (weatherForecastMode === 'hourly' && data.hours?.length) {
     const strip = document.createElement('div');
@@ -2606,6 +2614,74 @@ function renderSunArc(data) {
     </svg>
     <div class="wx-sun-readout">${emoji} ${readout}</div>
   `;
+}
+
+// Leaflet map instance + state (persisted across mode switches to avoid re-init)
+let _radarMap     = null;
+let _radarLayer   = null;
+let _radarLat     = null;
+let _radarLon     = null;
+
+/** Show/update the Leaflet precipitation radar panel in #wForecast. */
+function renderRadarMap(data) {
+  const fcastEl = document.getElementById('wForecast');
+  if (!fcastEl) return;
+
+  // Build or reuse the map container
+  let container = document.getElementById('wxRadarMap');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'wxRadarMap';
+    container.className = 'wx-radar-map';
+  }
+  fcastEl.appendChild(container);
+
+  const lat = data.lat, lon = data.lon;
+  if (lat == null || lon == null) {
+    container.innerHTML = '<p style="color:var(--muted);font-size:.8rem;padding:8px">Location coordinates unavailable</p>';
+    return;
+  }
+
+  // If Leaflet not loaded yet, bail gracefully
+  if (typeof L === 'undefined') {
+    container.innerHTML = '<p style="color:var(--muted);font-size:.8rem;padding:8px">Map loading…</p>';
+    return;
+  }
+
+  if (!_radarMap) {
+    // First init
+    _radarMap = L.map(container, { zoomControl: true, attributionControl: false }).setView([lat, lon], 7);
+
+    // Minimal dark-friendly base layer (CartoDB Dark Matter — free, no key)
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      maxZoom: 19,
+    }).addTo(_radarMap);
+
+    // OWM precipitation overlay
+    _radarLayer = L.tileLayer(
+      `https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=${weatherKey}`,
+      { opacity: 0.7, maxZoom: 19 }
+    ).addTo(_radarMap);
+
+    _radarLat = lat; _radarLon = lon;
+  } else {
+    // Already inited — re-center if location changed, refresh overlay if key changed
+    if (lat !== _radarLat || lon !== _radarLon) {
+      _radarMap.setView([lat, lon], 7);
+      _radarLat = lat; _radarLon = lon;
+    }
+    // Force Leaflet to recalculate size (panel may have been hidden before)
+    _radarMap.invalidateSize();
+  }
+
+  // invalidateSize on next frame in case container just became visible
+  requestAnimationFrame(() => _radarMap && _radarMap.invalidateSize());
+}
+
+/** Destroy the radar map (called when weather location changes or card resets). */
+function destroyRadarMap() {
+  if (_radarMap) { _radarMap.remove(); _radarMap = null; _radarLayer = null; }
+  _radarLat = null; _radarLon = null;
 }
 
 /** Build and return an SVG temperature curve element for the next ~48h.

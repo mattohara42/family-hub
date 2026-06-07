@@ -1112,6 +1112,28 @@ body.has-bg #weatherCard::before { background: transparent; }
   opacity: .8;
 }
 
+/* ── Precipitation radar map ── */
+.wx-radar-map {
+  width: 100%;
+  height: 220px;
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+/* Leaflet attribution — keep it visible but compact */
+.wx-radar-map .leaflet-control-attribution {
+  font-size: 9px;
+  background: rgba(0,0,0,.45);
+  color: rgba(255,255,255,.6);
+  padding: 1px 4px;
+}
+.wx-radar-map .leaflet-control-attribution a { color: rgba(255,255,255,.6); }
+body.light-mode .wx-radar-map .leaflet-control-attribution {
+  background: rgba(255,255,255,.7);
+  color: rgba(0,0,0,.5);
+}
+body.light-mode .wx-radar-map .leaflet-control-attribution a { color: rgba(0,0,0,.5); }
+
 /* ── Temperature curve ── */
 .wx-curve-wrap {
   width: 100%;

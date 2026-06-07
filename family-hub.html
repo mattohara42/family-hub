@@ -13,7 +13,7 @@
   <!-- Content Security Policy — restricts script/connect sources to known origins -->
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self';
-                 script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com https://accounts.google.com;
+                 script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com https://accounts.google.com https://unpkg.com;
                  connect-src https:;
                  img-src 'self' https: blob: data:;
                  style-src 'self' 'unsafe-inline';
@@ -28,6 +28,10 @@
   <!-- Google API -->
   <script src="https://apis.google.com/js/api.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer onload="onGsiLoad()"></script>
+
+  <!-- Leaflet (precipitation radar map) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <link rel="stylesheet" href="family-hub.css" />
 </head>
@@ -133,6 +137,7 @@
           <button id="wxToggle5day" class="active" onclick="setWeatherForecastMode('5day')">5-day</button>
           <button id="wxToggleHourly" onclick="setWeatherForecastMode('hourly')">Hourly</button>
           <button id="wxToggleCurve" onclick="setWeatherForecastMode('curve')">Curve</button>
+          <button id="wxToggleRadar" onclick="setWeatherForecastMode('radar')">Radar</button>
         </div>
       </div>
       <div class="card-body">
