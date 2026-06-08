@@ -446,3 +446,81 @@ Midway through the project, a family member saw the dashboard and asked if somet
 **Time to fork and set up:** ~20 minutes.
 
 This is the compounding value of a clean, documented codebase: the second project starts at a much higher baseline than the first.
+
+---
+
+## Honest Assessment — Weak Points
+
+### Architecture
+
+**1. One massive JS file with global state**
+`family-hub.js` is ~6,000 lines of `let` globals. Any function can mutate any variable. There's no isolation between features — a throwing widget can affect others. Works now, but reasoning about interactions gets harder as the codebase grows.
+
+**2. Zero automated tests**
+Every change is verified by eye. Regressions are only caught when noticed. The budget date bug (returning strings, not Date objects) lived undetected until the calendar broke visibly.
+
+**3. No offline support**
+No service worker. No caching strategy beyond in-memory weather. If the internet drops, most features break silently — a real gap for an always-on dashboard.
+
+**4. External free tier dependency risk**
+The app leans on: OWM, NWS, TheMealDB, Gemini, Firebase, Google Calendar, Google Photos. Any could change pricing or availability with no fallback strategy.
+
+**5. No data backup**
+Firestore is the source of truth for shopping, to-dos, budget, and meals. If the Firebase project were suspended or deleted, that data is gone permanently.
+
+**6. Remaining rough edges**
+- Radar map has fragile init timing (Leaflet sizing)
+- Meal photo hit rate is low (TheMealDB only matches ~300 known dishes)
+- Assistant history resets on every page reload
+
+---
+
+## Honest Assessment — Accessibility
+
+**Overall rating: ⚠️ Low** — built for sighted mouse/touch users in a known household. Not usable by someone relying on a screen reader or keyboard navigation.
+
+| Issue | Impact |
+|---|---|
+| No ARIA labels on custom controls | Screen readers can't identify buttons, tabs, calendar cells |
+| Focus not trapped in modals | Keyboard users tab behind open modals |
+| Color used alone for meaning | Calendar event types, NWS alert severity invisible to colorblind users |
+| `prefers-reduced-motion` partially respected | Nautical wave, sun-dot pulse, ticker scroll never stop |
+| Emoji used as icons with no text alternative | Screen reader announces "sun behind small cloud" not "weather" |
+| No semantic HTML (`<nav>`, `<main>`, `<section>`) | Screen readers can't jump between landmarks |
+| No skip navigation link | Keyboard users tab through entire sidebar on every page load |
+| Contrast unverified on Nautical themes | Muted text on dark navy may fail WCAG AA (4.5:1) |
+
+**For a private family TV:** acceptable risk.
+**For any public-facing use:** needs significant remediation before launch.
+
+---
+
+## Honest Assessment — Security
+
+**Overall rating: ⚠️ Medium** — low real-world risk for a private household app, but genuine issues that matter before any public deployment.
+
+| Issue | Severity | Notes |
+|---|---|---|
+| API keys in client-side JS | 🟡 Medium | OWM + Gemini keys visible in DevTools. Someone could exhaust your free quota. Fix: serverless proxy — but breaks the no-build-step constraint. |
+| Firestore rules — unverified | 🔴 High | Never confirmed the rules are set correctly. If still at default `allow all`, anyone with the project ID can read/write your family data. **Check this now.** |
+| `'unsafe-inline'` in CSP | 🟡 Medium | Required by inline `onclick` handlers. Undermines XSS protection the CSP is supposed to provide. |
+| XSS surface area | 🟡 Medium | `innerHTML` used extensively. The `esc()` helper is good but must be applied consistently — any missed call is a vector. |
+| OAuth token in global scope | 🟡 Medium | Correct that it's in-memory only (not localStorage). But `let googleToken` is accessible to any injected script. |
+| Dolce Dash order form — no rate limiting | 🔴 High (for launch) | Honeypot blocks dumb bots. A human or smart bot can still spam orders. Add reCAPTCHA before going live. |
+
+**Most urgent action:** Verify Firestore security rules before sharing the Dolce Dash order form with anyone.
+
+---
+
+## Summary Scorecard
+
+| Dimension | Rating | Biggest Issue |
+|---|---|---|
+| **Feature depth** | ✅ Excellent | 35+ features, 0 npm packages |
+| **Architecture** | ✅ Good | Global state in one file is the ceiling |
+| **Maintainability** | ✅ Good | CLAUDE.md + grep patterns work well |
+| **Visual design** | ✅ Excellent | 4 themes, all cohesive |
+| **Accessibility** | ⚠️ Low | No ARIA, no focus trapping, color-only meaning |
+| **Security** | ⚠️ Medium | API keys exposed, Firestore rules unverified |
+| **Reliability** | ✅ Good | Graceful degradation throughout |
+| **Extensibility** | ✅ Good | Dolce Dash fork proved it — 20 minutes |
