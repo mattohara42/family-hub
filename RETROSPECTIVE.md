@@ -1,187 +1,448 @@
 # Family Hub — Project Retrospective
+### A "How to Use Claude" Case Study
 
-*Last updated: 2026-06-01*
+*Last updated: 2026-06-07 · Built with Claude Sonnet 4.6 via Claude Code / FleetView*
 
 ---
 
-## What Was Built
+## What We Set Out to Build
 
-Family Hub is a three-file local web application (`family-hub.html` + `family-hub.css` + `family-hub.js`) that serves as a family dashboard.
+A family dashboard — one screen on the living room TV that shows the calendar, weather, shopping list, to-dos, meals, and more. No apps to open, no subscriptions. Always on.
 
-| Feature | Status |
+**Constraints we chose:**
+- No build step (no npm, no webpack, no framework)
+- Three files only (`family-hub.html`, `family-hub.css`, `family-hub.js`)
+- Free APIs only
+- Must run on a TV browser from a local server or Netlify
+
+**Time to first working version:** ~2 hours  
+**Time to current state:** ~8 sessions over 8 days
+
+---
+
+## The Visual Evolution
+
+### Stage 1 — The Starting Point (Session 1, Day 1)
+
+The first ask was simple: *"build a family dashboard."* Here's roughly what came out:
+
+```
+┌─────────────────────────────────────────────────┐
+│  🏠 Family Hub                      [⚙ Settings]│
+├─────────────────────────────────────────────────┤
+│                                                  │
+│  📍 Dallas, TX     72°F ⛅  Feels 69°           │
+│  Partly cloudy · High 78° · Low 61° · Rain 10%  │
+│                                                  │
+├─────────────────────────────────────────────────┤
+│                                                  │
+│   ◀  June 2026  ▶        Month  Week  Day  Agenda│
+│   Su  Mo  Tu  We  Th  Fr  Sa                    │
+│    1   2   3   4   5   6   7                    │
+│    8   9  10  11  12  13  14                    │
+│   15  16  17  18  19  20  21                    │
+│   22  23  24  25  26  27  28                    │
+│   29  30                                        │
+│                                                  │
+├──────────────────────┬──────────────────────────┤
+│  🛒 Shopping List    │  ✅ To-Do                │
+│  • Milk              │  • Call dentist           │
+│  • Eggs              │  • Pay electric bill      │
+│  • ✓ Bread           │  • ✓ Pick up dry cleaning │
+└──────────────────────┴──────────────────────────┘
+```
+
+**Stack at this point:** Single HTML file, inline CSS, inline JS. Firebase for the shopping/to-do lists. OpenWeatherMap for weather.
+
+---
+
+### Stage 2 — Layout Redesign (Session 2, Day 2)
+
+The prompt: *"This feels cramped. Can we redesign it so the calendar takes up the full screen and everything else is in a sidebar?"*
+
+Three files, full sidebar, scrollable widgets. The calendar now fills all remaining vertical space.
+
+```
+┌─────────┬───────────────────────────────────────┐
+│ SIDEBAR │  📅 Family Hub    ◀ June 2026 ▶        │
+│─────────│  M   W   D   Agenda                   │
+│🌤 Weather  Su  Mo  Tu  We  Th  Fr  Sa            │
+│ 72° ⛅ │   1   2   3   4   5   6   7            │
+│ H:78 L:61│  8   9  10 [11] 12  13  14            │
+│ 🚴 Ride? │  15  16  17  18  19  20  21            │
+│─────────│  22  23  24  25  26  27  28            │
+│🛒 Shopping  29  30                               │
+│ • Milk   │                                       │
+│ • Eggs   │                                       │
+│ ✓ Bread  │                                       │
+│─────────│                                       │
+│✅ To-Do  │                                       │
+│ • Dentist│                                       │
+│ • Bills  │                                       │
+│─────────│                                       │
+│💰 Budget │                                       │
+│$1,240/mo │                                       │
+└─────────┴───────────────────────────────────────┘
+```
+
+**What changed:**
+- Split into 3 files — CSS and JS now live independently
+- Full-height calendar with flex layout
+- Scrollable sidebar that doesn't affect calendar
+- Weather activity tags (🚴 Great for a bike ride, 🧥 Bundle up)
+- Budget tracker added
+- Three themes: Light, Dark, ⚓ Nautical
+
+**The Nautical theme** was an experiment. The prompt was literally: *"can we add a fun third theme that's naval / nautical themed?"* Claude designed the whole thing — navy background, brass-gold accents, diagonal stripe texture, animated wave footer, rope-pattern card dividers, ghosted anchor watermark.
+
+```
+╔═════════════════════════════════════════════════╗
+║  ⚓ Family Hub (Nautical theme)                  ║
+╠═════════════════════════════════════════════════╣
+║ ┊brass border┊   calendar in navy blue          ║
+║ ┊           ┊                                    ║
+║ ┊  🌤 72°  ┊    [11] today's cell glows gold    ║
+║ ┊          ┊                                     ║
+║ ┊ 🛒 Shop  ┊                                     ║
+╚═════════════════════════════════════════════════╝
+≋≋≋≋≋ animated wave footer ≋≋≋≋≋≋≋≋≋≋≋≋≋≋≋≋≋≋≋≋≋
+```
+
+---
+
+### Stage 3 — Meal Planning + Week View (Session 3)
+
+Prompt: *"Add meal planning to the calendar week view."*
+
+```
+WEEK VIEW — June 8–14
+┌──────┬──────┬──────┬──────┬──────┬──────┬──────┐
+│ Sun  │ Mon  │ Tue  │ Wed  │ Thu  │ Fri  │ Sat  │
+│  8   │  9   │ 10   │ 11   │ 12   │ 13   │ 14   │
+├──────┼──────┼──────┼──────┼──────┼──────┼──────┤
+│• Den-│• Pay │      │      │      │      │      │
+│  tist│  bill│      │      │      │      │      │
+├──────┼──────┼──────┼──────┼──────┼──────┼──────┤
+│🍽    │🍳    │      │🥗    │      │      │🍕    │
+│Pizza │Eggs  │      │Salad │      │      │Tacos │
+│+ Plan│+ Plan│+Plan │+Plan │+Plan │+Plan │+Plan │
+└──────┴──────┴──────┴──────┴──────┴──────┴──────┘
+```
+
+The AI meal suggestions used Gemini — you describe what's in your pantry, it suggests meals per slot. Click a suggestion to plan it. Click a planned meal to get:
+
+```
+┌─────────────────────────────────────────┐
+│  🍕 Margherita Pizza                    │
+│  ────────────────────────────────────── │
+│  [photo from TheMealDB]                 │
+│  Classic Italian · 45 min               │
+│                                         │
+│  Adjust: [Make it vegetarian]           │
+│           [Gluten free]                 │
+│           [Swap ingredients]            │
+│           [____________] → Apply        │
+│                                         │
+│  [Keep Plan]  [Adjust ✨]  [Delete 🗑] │
+└─────────────────────────────────────────┘
+```
+
+---
+
+### Stage 4 — Weather Deep Dive (Sessions 4–5)
+
+Multiple targeted weather improvements, each its own prompt:
+
+**Sun-path arc** (*"show where the sun is in the sky right now"*):
+```
+     ☀️ ← current position
+   ·   ·
+ ·       ·              ← golden arc from sunrise to now
+─────────────────────   ← horizon
+6:42 AM         8:14 PM
+☀️ 2h 14m of daylight left
+```
+
+**24-hour temperature curve** (*"add a temperature graph view"*):
+```
+  82°         78°
+      ·   ·       ·
+  ·               ·   · 74°
+────┬───┬───┬───┬───┬─────
+  Now  8   12   4   8   12
+       AM  PM  PM  PM  AM
+  ▓ = rain probability bars
+```
+
+**NWS severe weather alerts** (*"add real weather alerts"*) — colored ticker:
+```
+⚠ Flash Flood Warning · 💧 Humidity 78% · 💨 Wind 12 mph NW · 🌕 Full Moon · 🌅 Sunrise 6:42 AM ···
+```
+
+**Precipitation radar** (*"add a radar map"*):
+```
+┌─────────────────────────┐
+│  [OpenStreetMap tiles]  │  ← zoom 7, centered on location
+│  + OWM precip overlay   │  ← blue/green rain blobs
+│  5-day  Hourly  Curve  [Radar] │
+└─────────────────────────┘
+```
+
+---
+
+### Stage 5 — Family Assistant (Sessions 5–6)
+
+*"Add an AI assistant that knows our family data."*
+
+```
+┌─────────────────────────────────────┐
+│  🤖 Family Assistant           🔇🗑 │
+├─────────────────────────────────────┤
+│  ┌───────────────────────────────┐  │
+│  │ Hi! What's on this week?      │  │← user
+│  └───────────────────────────────┘  │
+│  ┌───────────────────────────────┐  │
+│  │ You've got soccer Tuesday at  │  │← AI (knows real calendar)
+│  │ 6pm, dentist Thursday, and    │  │
+│  │ pizza planned for Friday! 🍕  │  │
+│  └───────────────────────────────┘  │
+│                                     │
+│  [What's for dinner?] [Add milk] →  │  ← quick-prompt ticker
+│                                     │
+│  [🎤]  Type a message...     [Send] │
+└─────────────────────────────────────┘
+```
+
+The assistant can **take actions** — not just chat. It recognizes phrases like:
+- *"Add milk to the shopping list"* → writes to Firestore
+- *"Plan tacos for Friday dinner"* → updates meal plan
+- *"Remind me to call the dentist"* → adds to to-do
+- *"Add a $60 internet bill monthly"* → creates budget entry
+- *"Schedule soccer practice Tuesday at 6"* → creates Google Calendar event
+
+Voice input (mic → auto-send) and voice output (text-to-speech) both work. The assistant is truly hands-free.
+
+---
+
+### Stage 6 — Polish + New Theme (Session 7–8)
+
+*"Create a lighter version of the Nautical theme with yellow highlights."*
+
+```
+NAUTICAL (original)          NAUTICAL LIGHT (new)
+─────────────────────        ─────────────────────
+bg:      #0c1a3a (dark navy) bg:      #1a2e52 (slate)
+accent:  #c8a96e (brass)     accent:  #f0c040 (bright yellow)
+surface: 86% opacity         surface: 60% opacity (airier)
+stripes: 20% white           stripes: 10% white (subtler)
+anchor:  white @ 22%         anchor:  gold @ 14%
+```
+
+---
+
+## Full Feature Inventory (Current State)
+
+| Category | Feature |
 |---|---|
-| Monthly / Weekly / Daily calendar views | ✅ Working |
-| Google Calendar integration (OAuth2) | ✅ Working |
-| Custom calendar labels, colors, holiday overlay | ✅ Working |
-| Per-calendar sidebar toggle card | ✅ Working |
-| Weather widget — multi-location with nav arrows | ✅ Working |
-| Google Photos Picker background slideshow | ✅ Working |
-| Light / Dark / Nautical appearance themes | ✅ Working |
-| Responsive layout (mobile → desktop) | ✅ Working |
-| Full-viewport calendar stretch | ✅ Working |
-| Widget placement system (sidebar or bottom) | ✅ Working |
-| Firebase shared Shopping List | ✅ Working |
-| Firebase shared To-Do list | ✅ Working |
-| Clear Done + Clear All for Shopping and To-Do | ✅ Working |
-| SMS Shopping List (with multiple named contacts) | ✅ Working |
-| Tabbed Settings modal | ✅ Working |
-| Year at a Glance (sidebar: 2-month; bottom: 6-month strip) | ✅ Working |
-| Meal Planning (Gemini AI suggestions, recipe links) | ✅ Working |
-| Meal plan remove buttons (week + day views) | ✅ Working |
-| Meal plan on Weekly and Daily views | ✅ Working |
-| Add meal ingredients to Shopping List | ✅ Working |
-| Budget tracker (recurring bills, context-sensitive sidebar pill) | ✅ Working |
-| Word of the Day (dictionary API + built-in fallbacks) | ✅ Working |
-| Dad Joke of the Day | ✅ Working |
+| **Calendar** | Month / Week / Day / Agenda views |
+| | Google Calendar sync (OAuth) |
+| | Multi-calendar with color toggles |
+| | Holiday overlay |
+| | Bill and meal plan injected into calendar |
+| **Weather** | Multi-location with nav |
+| | Current conditions, hi/lo, feels-like, wind, humidity |
+| | Activity tags (🚴🧥⛄) |
+| | 5-day forecast |
+| | Hourly forecast |
+| | 48h temperature curve |
+| | Precipitation radar map (Leaflet + OWM) |
+| | Sun-path arc with golden-hour state |
+| | NWS severe-weather alerts |
+| | Moon phase |
+| | Scrolling info ticker |
+| | Toggleable ticker / activity strip (Settings) |
+| **Meals** | AI suggestions per meal slot (Gemini) |
+| | Week and day view strips |
+| | Meal detail popup (photo, adjust, delete) |
+| | AI-powered "adjust" (vegetarian, GF, swap, etc.) |
+| | Add ingredients to shopping list |
+| **Lists** | Firebase shopping list (shared, real-time) |
+| | Firebase to-do list (shared, real-time) |
+| | SMS shopping list to named contacts |
+| **Budget** | Recurring bill tracker |
+| | Context-sensitive sidebar pill (month / week / day) |
+| **Assistant** | Gemini-powered chat |
+| | Knows calendar, weather, meals, shopping, to-dos, budget |
+| | 7 write actions (shopping, todo, event, meal, budget, etc.) |
+| | Voice input (mic) + voice output (TTS) |
+| | Scrolling quick-prompt ticker |
+| **Appearance** | Dark / Light / Nautical / Nautical Light themes |
+| | Widget placement (sidebar or bottom strip) |
+| | Background photo slideshow (Google Photos) |
+| | Favicon |
+| **Other** | Word of the Day |
+| | Dad Joke of the Day |
+| | Year at a Glance |
 
 ---
 
-## Session 1 — Initial Build (2026-05-31)
+## How We Used Claude — The Patterns That Worked
 
-### What Worked Well
-
-**Single-file architecture (later split to three)**
-Keeping everything in one file during initial development made it easy to iterate. Claude could read, edit, and test changes without switching files. The eventual split to three files preserved this simplicity while making each file more targeted.
-
-**CSS variables for theming**
-Using CSS custom properties (`--text`, `--surface`, `--accent`, etc.) throughout made light/dark mode trivial to implement. Every new component inherited correct theming for free.
-
-**Firebase for real-time shared state**
-Firestore required zero backend code. Shopping and to-do lists sync across devices with no polling.
-
-**Free APIs with no key required**
-- Dad Joke (`icanhazdadjoke.com`) — zero setup
-- Dictionary API (`dictionaryapi.dev`) — zero setup, rich data
-
-### What Was Problematic
-
-**Google API surface area**
-- Photos Library API was deprecated — had to be replaced with Photos Picker API
-- OAuth scope `generative-language` doesn't exist — caused confusing `invalid_scope` errors
-- Photos Picker 403 — download URLs require `Authorization: Bearer` header, undocumented
-
-**Gemini model churn**
-`gemini-1.5-flash` → `gemini-2.0-flash` → `gemini-2.5-flash` all within one session. Three model name updates required.
-
-**Gemini billing / quota confusion**
-Three distinct "it's not working" states:
-1. Free quota exhausted
-2. Billing enabled → free tier disabled (no error makes this clear)
-3. `PERMISSION_DENIED` — API not enabled for the project
-4. `NOT_FOUND` — stale model name
-
-Each required different diagnosis and fix. Significant effort went into building diagnostic error UI.
-
-**Context window limits**
-The single-file architecture consumed context heavily. Late in the session, targeted `grep` + offset reads became necessary.
+This section is the seminar part.
 
 ---
 
-## Session 2 — UI Overhaul + New Features (2026-06-01)
+### Pattern 1: Start with a clear constraint
 
-### Major Changes
+> *"Build a family dashboard. No build step, no npm, three files only."*
 
-**Refactored from single-file to three-file architecture**
-`family-hub.html` was split into three sibling files. This was a prerequisite for the scale of UI work that followed — editing styles without touching HTML or JS became much cleaner.
+Giving Claude a tight constraint upfront avoids scope creep and produces a coherent architecture. Without the "three files" constraint, Claude would likely have reached for React or Next.js. The constraint was the right call — it kept the project maintainable.
 
-**Full layout redesign**
-- `<header>` removed entirely; app title moved into calendar card header
-- Calendar card header restructured as a 3-zone CSS grid (title | period nav | view tabs)
-- `#controlCard` (user info, sign-in/out, settings gear) added as a compact sidebar card
-- `#budgetTotalCard` added as a slim sidebar pill (red left border) for month/week bill totals
-- `#calendarCard` added as a sidebar card with checkbox-style calendar toggles
-- Full-viewport stretch: calendar fills all remaining height; sidebar scrolls independently
-
-**Widget placement system**
-Every widget can be assigned to sidebar or bottom via radio buttons in Settings → Widgets. The `WIDGET_ORDER` array ensures canonical ordering when widgets are moved. `#yearStrip` is a special case — it always stays inside `.cal-column`; only `#yearCard` moves.
-
-**Year at a Glance as a proper widget**
-- Sidebar mode: `#yearCard` shows 2 mini-months with ‹/› navigation
-- Bottom mode: `#yearStrip` shows 6-month horizontal strip (existing behavior)
-
-**Multi-location Weather widget**
-Replaced single `weatherCity` string with `weatherLocations[]` array. Added per-city in-memory cache (30-minute TTL). Added `#wxLocNav` (prev/next buttons + dot indicators) that appears only when >1 location. Settings panel replaced single city input with a managed location list. Auto-migration from legacy `fh_wcity` on first run.
-
-**Nautical appearance theme**
-Third theme option alongside Light and Dark. Navy blue `#0c1a3a` background with 20% diagonal white stripes. Beige-gold (`#c8a96e`) accent colour throughout. Decorative elements: large ⚓ watermark (22% opacity), animated CSS clip-path wave footer (`nauticalWave` keyframe), rope-style card header dividers, compass rose radial gradient on calendar, porthole glow on today's cell. Originally named "Amazing", renamed to "Nautical" in the same session. Auto-migration for users who had `'amazing'` saved.
-
-**Budget card context-sensitivity**
-`renderBudgetCard()` now reads `calView` + `calViewDate` to display the right period. Month → "Total Bills this Month". Week → "Total Bills this Week". Day → "Bills Today". Card hidden when no items fall in the current period.
-
-**Meal plan remove buttons**
-Week view: hover-revealed `✕` remove button on each meal chip. Day view: inline remove button on each meal slot.
-
-**Clear All for Shopping and To-Do**
-Added `clearAllShopping()` and `clearAllTodo()` (with `confirm()` dialogs) alongside the existing "clear done" buttons.
-
-**WOTD fallback dictionary**
-Added `WOTD_FALLBACKS` with built-in definitions for common words in the list. If the dictionary API fails, a built-in definition renders instead of a blank card.
-
-### Bugs Fixed
-
-| Bug | Root Cause | Fix |
-|---|---|---|
-| Touch tap-target rules applied globally | Section 4 of touch optimizations was outside `@media (hover: none)` — leaked to desktop | Wrapped entire section in the media query |
-| Sidebar cards compressing | `.sidebar > *` had `flex-shrink: 1` (default) — cards compressed instead of sidebar scrolling | Added `.sidebar > * { flex-shrink: 0 }` |
-| Calendar card cut off | Same root cause as sidebar compression | Fixed by above |
-| SMS popover transparent | Used `var(--surface)` which is semi-transparent; unreadable over background photos | Changed to solid opaque `#1e2130` / `#f5f6fa` per theme |
-| `calendarCard` always hidden | Hid itself when `calendarMeta` was empty; no placeholder for signed-out state | Now shows "Sign in to see your calendars" placeholder |
-| WOTD shows "Loading…" permanently | Some words not in dictionary API; error swallowed, stale empty cache served | Added `WOTD_FALLBACKS` + cache rejection when `definition` is empty |
-| DOW headers too small | `.cal-dow` used `text-xs` / muted color | Bumped to `text-sm`, bold weight, full text color |
-| Weather forecast only 2 days | `cnt=40` was borderline; `fcast.list` null-unsafe | Changed to `cnt=56`, added `fcast.list || []` guard, sorted `dayMap` by date |
-
-### Patterns That Worked
-
-**Context-sensitive rendering via a central dispatch function**
-`renderCurrentView()` is called after every navigation action. It shows/hides the correct view, calls `renderBudgetCard()`, and keeps everything in sync. Adding a new context-dependent element just requires adding a call here.
-
-**DOM node migration for widget placement**
-Using `appendChild` (which moves existing nodes) to distribute widgets between `.sidebar` and `#bottomStrip` in `WIDGET_ORDER` sequence is elegant — no cloning, no re-rendering, just re-parenting.
-
-**30-minute in-memory cache for weather**
-Navigating between locations is instant after first load without any localStorage complexity. Cache lives only for the page session, so data is never stale across days.
-
-**`WOTD_FALLBACKS` as a graceful degradation layer**
-Instead of showing an error when the free dictionary API is unavailable, the app falls back to a built-in definition. Users never see a broken widget.
-
-### Patterns That Didn't Work
-
-**CSS `columns` for bottom strip layout**
-Tried CSS multi-column layout for bottom widgets — it fills sequentially left-to-right, leaving right columns empty when there are few items. Replaced with CSS grid `auto-fit`.
-
-**`display: ''` to show flex containers**
-Setting `display: ''` (empty string) clears the inline style but the element defaults to `display: block`, not `display: flex`. Week and day views broke until JS was changed to explicitly set `display: 'flex'`.
+**Lesson:** Tell Claude what you *don't* want as clearly as what you do want.
 
 ---
 
-## Claude Version & Context Limits
+### Pattern 2: One feature per prompt
 
-### Model used
-All work done with **Claude Sonnet 4.6** (Claude Code / FleetView interface).
+Every feature in this project came from a single, focused prompt:
 
-### Context window observations
-- The three-file architecture helps — reading `family-hub.css` independently is much cheaper than reading a 5000-line combined file
-- Targeted `grep -n` + `Read` with `offset`/`limit` is essential for large files
-- `/compact` was used between sessions; `CLAUDE.md` and `FEATURES.md` proved critical for restoring context quickly
+> *"Add meal planning to the week view."*  
+> *"Show where the sun is in the sky right now."*  
+> *"Add a precipitation radar map."*  
+> *"Create a lighter Nautical theme with yellow highlights."*
 
-### How to work most effectively
+Multi-feature prompts produce muddier results. When we asked for several things at once, Claude sometimes missed one or handled them inconsistently.
 
-1. **Read `CLAUDE.md` at the start of every session** — it contains the architectural decisions that aren't obvious from the code
-2. **Use `grep -n` before editing** — find the exact line range before reading or editing
-3. **Update docs at the end of each session** — the documentation is the cheapest form of context preservation
-4. **One feature per session when possible** — each session starts cold; a focused goal produces cleaner work than a sprawling one
-5. **Compact proactively** — `/compact` before the context is full generates a better summary
+**Lesson:** Resist the urge to batch. One thing at a time gets better results.
 
 ---
 
-## Known Limitations and Open Issues
+### Pattern 3: Let Claude make aesthetic decisions
 
-| Issue | Workaround / Notes |
+The Nautical theme, the sun-path arc design, the temperature curve bezier smoothing, the rope-pattern card dividers — none of these were specified. The prompts were just:
+
+> *"Add a naval / nautical themed option."*  
+> *"Show the sun's position."*  
+> *"Add a temperature graph."*
+
+Claude made all the visual design choices. They were consistently good. The instinct to micromanage the design ("make it blue, use a 3px border, put the label on the left") often produces worse results than letting Claude decide and then reacting.
+
+**Lesson:** Give Claude the *what* and let it figure out the *how*. Iterate visually if needed.
+
+---
+
+### Pattern 4: React, don't pre-specify
+
+Rather than writing a detailed spec upfront, the workflow was:
+
+1. Prompt for a feature
+2. Look at what was built
+3. React: *"Make the meal items bigger."* / *"Move the to-dos to the top."* / *"The map is black and broken into two pieces."*
+
+This is faster than writing requirements. Claude is good at interpretation; let it build, then steer.
+
+**Lesson:** Treat Claude like a contractor who shows you a prototype. React to what you see.
+
+---
+
+### Pattern 5: Name things the same way every time
+
+The codebase has a consistent naming convention:
+- JS sections: `// ── Feature Name ──`
+- CSS sections: `/* ── Feature Name ── */`
+- localStorage keys: `fh_featureName`
+- State vars: `let featureName = lsGet('fh_featureName', default)`
+
+When Claude knows the pattern, it follows it automatically. Every new feature got correct naming without being asked.
+
+**Lesson:** Establish a convention early and document it in `CLAUDE.md`. Claude will follow it.
+
+---
+
+### Pattern 6: Document what Claude needs to remember
+
+The `CLAUDE.md` file is a ~100-line document that Claude reads at the start of every session. It captures:
+- Architecture constraints
+- Known gotchas (e.g. *"budgetDatesInRange() returns strings, not Date objects"*)
+- File structure
+- How to find things quickly
+
+Without this, every new session would require re-explaining everything. With it, Claude picks up exactly where the last session left off.
+
+**Lesson:** `CLAUDE.md` is not documentation for humans — it's memory for Claude. Write it that way.
+
+---
+
+### Pattern 7: Ask Claude to investigate before building
+
+For the precipitation radar map:
+> *"What's involved in adding a precipitation radar map?"*
+
+Claude gave a full breakdown — dependencies, CSP changes, layout challenges, timing issues — before writing a line of code. This prevented surprises.
+
+**Lesson:** For complex features, ask "what's involved?" first. It's a cheap way to surface hidden complexity.
+
+---
+
+### Pattern 8: Use Claude to debug Claude's own output
+
+When the radar map rendered black and split:
+> *"The map is broken into two pieces and it's black."*
+
+Claude diagnosed both bugs (CSP blocking Leaflet CSS; `invalidateSize()` timing issue) and fixed them in one pass. Claude knows its own common failure modes.
+
+**Lesson:** When something breaks, just describe what you see. Don't try to diagnose it yourself first.
+
+---
+
+## What Surprised Us
+
+**How far a "no build step" app can go.**
+The final app includes Firebase, Google OAuth, Leaflet maps, Gemini AI, Web Speech API, SVG graphics, real-time sync, and four visual themes — all without a single npm package or build command.
+
+**How well Claude handles visual design.**
+We expected to do a lot of visual tweaking. In practice, Claude's first attempt at the Nautical theme, the sun arc, and the temperature curve were all shipped nearly as-is.
+
+**How important the context file is.**
+Sessions without a good `CLAUDE.md` were noticeably worse. Sessions with a well-maintained one felt like talking to someone who had been working on the project for weeks.
+
+**How useful "what's involved?" is.**
+We didn't always ask this, and the sessions where we skipped it and jumped straight to building had more course-corrections.
+
+---
+
+## What Didn't Work
+
+**Multi-feature prompts.** When asked to do several things at once, Claude would sometimes skip one or do it partially. Breaking into separate prompts was always better.
+
+**Asking Claude to guess at external APIs.** Claude had confident-sounding but wrong information about the eHungry.com API (there isn't one) and the Google Photos Library API (deprecated). Anything involving a third-party API should be verified independently.
+
+**Screenshots for verification.** We learned to use DOM/JS inspection instead of screenshots for verifying code changes. Screenshots are ~1,000 tokens each; a DOM query is ~50.
+
+**Letting context get full before compacting.** A `/compact` with 20% context remaining produces a much better summary than one at 5%.
+
+---
+
+## Numbers
+
+| Metric | Value |
 |---|---|
-| Google OAuth blocks `file://` URLs | Serve via `python3 -m http.server 8080` or Netlify; add the origin to Google Cloud Console and Firebase Console |
-| Photos Picker URLs expire (session-based) | Re-open Picker to refresh; images stored in IndexedDB |
-| Gemini free tier has daily limits | Use AI Studio key in a billing-free project |
-| Budget items not shared via Firebase | By design — budget is personal; could be added in a future session |
-| No user authentication on the page itself | Acceptable for family use — the app is deployed on Netlify but Google sign-in gates all personal data (calendar, photos, Firebase lists) |
-| Weather forecast sometimes shows <5 days | OWM free tier returns up to 40 3-hour slots; fewer future days available late in the day |
-| Dictionary API occasionally unavailable | `WOTD_FALLBACKS` covers ~20 common words; rarer words show a retry button |
+| Sessions | ~8 |
+| Days | 8 |
+| Files | 3 (+ docs) |
+| Lines of code (approx) | ~6,000 JS · ~3,000 CSS · ~900 HTML |
+| External APIs | 6 (OWM, NWS, Firebase, Google Calendar, Gemini, TheMealDB) |
+| Themes | 4 |
+| Features shipped | 35+ |
+| npm packages | 0 |
+| Build step | None |
+
+---
+
+## The Spin-off
+
+Midway through the project, a family member saw the dashboard and asked if something similar could be built for her cupcake bakery. We forked the codebase in one session and started **Dolce Dash** — a bakery operations dashboard with a public order form, order queue, and ingredient calculator.
+
+**Time to fork and set up:** ~20 minutes.
+
+This is the compounding value of a clean, documented codebase: the second project starts at a much higher baseline than the first.
