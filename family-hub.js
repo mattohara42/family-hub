@@ -723,7 +723,6 @@ function onSignedIn() {
 
 // ── Control card (collapsible status + calendars) ──────────────
 let controlCardOpen = false;
-let controlCardMode = 'connected'; // 'connected' | 'fix'
 
 function updateStatusPill() {
   const firebaseOk = isConfigured && db !== null;
@@ -737,11 +736,9 @@ function updateStatusPill() {
   if (allOk) {
     pill.textContent = 'CONNECTED';
     pill.className = 'status-pill status-connected';
-    controlCardMode = 'connected';
   } else {
-    pill.textContent = 'CLICK TO FIX';
+    pill.textContent = 'STATUS';
     pill.className = 'status-pill status-fix';
-    controlCardMode = 'fix';
   }
   // Refresh body content if open
   if (controlCardOpen) showControlCardView();
@@ -768,43 +765,66 @@ function handleStatusPillClick(e) {
 }
 
 function showControlCardView() {
-  const connView = document.getElementById('ctrlConnectedView');
-  const fixView  = document.getElementById('ctrlFixView');
-  if (!connView || !fixView) return;
-  if (controlCardMode === 'connected') {
-    connView.style.display = '';
-    fixView.style.display  = 'none';
-    renderCalendarTabs();
-  } else {
-    connView.style.display = 'none';
-    fixView.style.display  = '';
-    renderCtrlFixView();
-  }
+  renderCtrlStatusView();
 }
 
-function renderCtrlFixView() {
+function renderCtrlStatusView() {
   const container = document.getElementById('ctrlStatusRows');
   if (!container) return;
+
   const firebaseOk = isConfigured && db !== null;
   const googleOk   = !!currentUser;
   const calOk      = googleOk && (typeof calendarMeta !== 'undefined') && calendarMeta.length > 0;
   const weatherOk  = !!(typeof weatherKey !== 'undefined' && weatherKey);
+  const aiOk       = !!(typeof mealAiKey !== 'undefined' && mealAiKey);
+
   const checks = [
-    { label: 'Firebase',        ok: firebaseOk, hint: 'Add your FIREBASE_CONFIG to family-hub.js' },
-    { label: 'Google Sign-in',  ok: googleOk,   hint: 'Click "Sign in with Google" below' },
-    { label: 'Calendar Access', ok: calOk,       hint: 'Sign in and grant Calendar permissions when prompted' },
-    { label: 'Weather API',     ok: weatherOk,  hint: 'Add your OpenWeatherMap key in ⚙️ Settings → Weather' },
+    {
+      label: 'Firebase',
+      desc:  firebaseOk ? 'Firestore connected — shared state is live' : 'Add FIREBASE_CONFIG to family-hub.js',
+      ok: firebaseOk
+    },
+    {
+      label: 'Google Sign-in',
+      desc:  googleOk
+        ? `Signed in as ${currentUser.name || currentUser.email}`
+        : 'Required for Calendar access and Google Photos',
+      ok: googleOk
+    },
+    {
+      label: 'Google Calendar',
+      desc:  calOk
+        ? `${calendarMeta.length} calendar${calendarMeta.length !== 1 ? 's' : ''} loaded — toggle visibility in ⚙️ Calendar`
+        : googleOk ? 'Sign in and grant Calendar permissions when prompted' : 'Requires Google sign-in',
+      ok: calOk
+    },
+    {
+      label: 'Weather API',
+      desc:  weatherOk ? 'OpenWeatherMap key active' : 'Add your free API key in ⚙️ Weather',
+      ok: weatherOk
+    },
+    {
+      label: 'Gemini AI',
+      desc:  aiOk ? 'AI Studio key active — meal planning enabled' : 'Add an AI Studio key in ⚙️ Meals to enable AI meal planning',
+      ok: aiOk
+    },
   ];
+
   container.innerHTML = checks.map(c => `
-    <div class="ctrl-status-row" title="${c.hint}">
+    <div class="ctrl-status-row">
       <span class="ctrl-status-dot ${c.ok ? 'ok' : 'fail'}"></span>
-      <span class="ctrl-status-label">${c.label}</span>
-      <span class="ctrl-status-hint-icon" title="${c.hint}">${c.ok ? '' : '?'}</span>
+      <div class="ctrl-status-text">
+        <span class="ctrl-status-label">${c.label}</span>
+        <span class="ctrl-status-desc">${c.desc}</span>
+      </div>
     </div>
   `).join('');
-  // Show/hide sign-in button
-  const btn = document.getElementById('signInBtn');
-  if (btn) btn.style.display = googleOk ? 'none' : '';
+
+  // Sign-in / sign-out button visibility
+  const signIn  = document.getElementById('signInBtn');
+  const signOut = document.getElementById('signOutBtn');
+  if (signIn)  signIn.style.display  = googleOk ? 'none' : '';
+  if (signOut) signOut.style.display = googleOk ? ''     : 'none';
 }
 
 

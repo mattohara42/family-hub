@@ -111,18 +111,11 @@
       </div>
       <!-- Collapsible body -->
       <div class="ctrl-body" id="ctrlBody" style="display:none">
-        <!-- Green: calendars + sign-out -->
-        <div id="ctrlConnectedView" style="display:none">
-          <div class="ctrl-section-label">📅 Calendars</div>
-          <div id="calendarTabs"></div>
-          <div class="ctrl-actions">
-            <button id="signOutBtn" class="btn btn-sm ctrl-signout-btn" onclick="signOut()">Sign out</button>
-          </div>
-        </div>
-        <!-- Red: per-service status rows -->
-        <div id="ctrlFixView" style="display:none">
-          <div id="ctrlStatusRows"></div>
-          <button id="signInBtn" class="btn btn-primary btn-sm" style="width:100%;margin-top:8px" onclick="signIn()">Sign in with Google</button>
+        <!-- Unified connection status view -->
+        <div id="ctrlStatusRows"></div>
+        <div class="ctrl-actions" style="margin-top:8px;display:flex;gap:6px;flex-direction:column">
+          <button id="signInBtn"  class="btn btn-primary btn-sm" style="width:100%;display:none" onclick="signIn()">Sign in with Google</button>
+          <button id="signOutBtn" class="btn btn-sm ctrl-signout-btn" style="display:none" onclick="signOut()">Sign out</button>
         </div>
       </div>
     </div>
@@ -432,7 +425,10 @@
           Sign in with Google to manage calendars.
         </div>
         <div id="settingCalSignedIn" style="display:none">
-          <div style="display:grid;grid-template-columns:28px 1fr 80px 24px;gap:8px;padding:0 0 4px;font-size:.72rem;color:var(--muted)">
+          <!-- Calendar visibility toggles -->
+          <div class="ctrl-section-label" style="margin-bottom:6px">📅 Visible Calendars</div>
+          <div id="calendarTabs" style="margin-bottom:12px"></div>
+          <div style="display:grid;grid-template-columns:28px 1fr 80px 24px;gap:8px;padding:8px 0 4px;border-top:1px solid rgba(128,128,128,.12);font-size:.72rem;color:var(--muted)">
             <span>Color</span><span>Label</span><span>Calendar ID</span><span></span>
           </div>
           <ul id="settingCalList" style="list-style:none"></ul>
