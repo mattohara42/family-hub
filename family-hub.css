@@ -2865,6 +2865,52 @@ body.has-bg .mini-card:hover {
   font-style: normal;
 }
 
+/* ── Daily Briefing Banner ── */
+.briefing-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, rgba(79,142,247,.12), rgba(126,87,194,.10));
+  border-bottom: 1px solid rgba(79,142,247,.18);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--text);
+  flex-shrink: 0;
+}
+.briefing-body { flex: 1; min-width: 0; }
+.briefing-dismiss {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: .85rem;
+  padding: 0 2px;
+  flex-shrink: 0;
+  line-height: 1;
+  opacity: .6;
+}
+.briefing-dismiss:hover { opacity: 1; }
+.briefing-loading {
+  justify-content: center;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  padding: 8px 12px;
+}
+.briefing-dots { letter-spacing: .15em; }
+
+/* Light theme */
+body.light-mode .briefing-banner {
+  background: linear-gradient(135deg, rgba(79,142,247,.08), rgba(126,87,194,.06));
+  border-bottom-color: rgba(79,142,247,.2);
+}
+/* Nautical themes */
+body.nautical-mode .briefing-banner,
+body.nautical-light-mode .briefing-banner {
+  background: linear-gradient(135deg, rgba(240,192,64,.10), rgba(0,80,120,.15));
+  border-bottom-color: rgba(240,192,64,.25);
+}
+
 /* ── Family Assistant ── */
 .assistant-card-body {
   padding: 0 !important;

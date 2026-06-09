@@ -640,6 +640,7 @@ window.addEventListener('load', () => {
   initAssistantVoice();
   updateAssistantTtsBtn();      // set the 🔊/🔇 voice-output toggle state
   renderAssistantMessages();   // render empty-state welcome + quick-prompt chips
+  setTimeout(loadDailyBriefing, 1500); // generate after page settles + weather/cal data loads
   // Close SMS popover on outside click
   document.addEventListener('click', e => {
     const pop = document.getElementById('smsPopover');
@@ -4926,6 +4927,95 @@ function clearAssistantChat() {
   assistantHistory = [];
   localStorage.removeItem(ASSISTANT_HISTORY_KEY);
   renderAssistantMessages();
+}
+
+// ── Daily Briefing ─────────────────────────────────────────────
+const BRIEFING_DATE_KEY = 'fh_briefingDate';
+const BRIEFING_TEXT_KEY = 'fh_briefingText';
+
+/** Show (or generate) the daily briefing banner above the chat. */
+async function loadDailyBriefing() {
+  const banner = document.getElementById('briefingBanner');
+  if (!banner || !mealAiKey) return;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const cachedDate = localStorage.getItem(BRIEFING_DATE_KEY);
+  const cachedText = localStorage.getItem(BRIEFING_TEXT_KEY);
+
+  if (cachedDate === today && cachedText) {
+    showBriefingBanner(cachedText);
+    return;
+  }
+
+  // Generate a fresh briefing
+  showBriefingBanner(null, true); // show loading state
+  try {
+    const context = buildAssistantContext();
+    const greeting = (() => {
+      const h = new Date().getHours();
+      if (h < 12) return 'Good morning';
+      if (h < 17) return 'Good afternoon';
+      return 'Good evening';
+    })();
+    const prompt = `${context}
+
+---
+Write a warm, concise daily briefing (3–5 sentences max). Open with "${greeting}!" then cover:
+1. Any calendar events or tasks due today
+2. Today's weather highlights (if available)
+3. Any bills due soon or a notable meal planned
+4. One encouraging closing line
+
+Be specific and personal. Use the family data above. Do NOT use bullet points or headers — write in flowing prose. Do not include action tags.`;
+
+    const resp = await fetch(
+      `${GEMINI_API_BASE}/${GEMINI_MODEL}:generateContent?key=${mealAiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.7, maxOutputTokens: 256 }
+        })
+      }
+    );
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? '';
+    if (text) {
+      localStorage.setItem(BRIEFING_DATE_KEY, today);
+      localStorage.setItem(BRIEFING_TEXT_KEY, text);
+      showBriefingBanner(text);
+    } else {
+      banner.style.display = 'none';
+    }
+  } catch {
+    banner.style.display = 'none';
+  }
+}
+
+/** Render the briefing banner. Pass null + loading=true for the skeleton state. */
+function showBriefingBanner(text, loading = false) {
+  const banner = document.getElementById('briefingBanner');
+  if (!banner) return;
+  if (loading) {
+    banner.style.display = '';
+    banner.className = 'briefing-banner briefing-loading';
+    banner.innerHTML = '<span class="briefing-dots">•••</span>';
+    return;
+  }
+  banner.style.display = '';
+  banner.className = 'briefing-banner';
+  banner.innerHTML = `
+    <div class="briefing-body">${formatAssistantText(text)}</div>
+    <button class="briefing-dismiss" onclick="dismissBriefing()" title="Dismiss">✕</button>
+  `;
+}
+
+/** Hide the banner for the rest of this session (doesn't clear the cache). */
+function dismissBriefing() {
+  const banner = document.getElementById('briefingBanner');
+  if (banner) banner.style.display = 'none';
 }
 
 // ── Assistant voice output (TTS) ───────────────────────────────
