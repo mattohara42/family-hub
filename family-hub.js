@@ -1879,7 +1879,7 @@ async function addIcsSub() {
   const sub = { id, url, label: label || url, color };
   const events = await fetchIcsSub(sub);
   if (!events) {
-    statusEl.textContent = '⚠️ Could not fetch that URL. Make sure it's a valid public ICS link.'; return;
+    statusEl.textContent = '⚠️ Could not fetch that URL. Make sure it is a valid public ICS link.'; return;
   }
   icsCache[id] = { fetchedAt: Date.now(), events };
   icsSubs.push(sub);
