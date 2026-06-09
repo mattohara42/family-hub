@@ -2293,7 +2293,7 @@ function openEmojiPicker(inputId, anchorEl, callback) {
   if (!picker) {
     picker = document.createElement('div');
     picker.id = 'emojiPickerPopup';
-    picker.style.cssText = 'position:fixed;z-index:9999;background:var(--surface);border:1px solid rgba(128,128,128,.25);border-radius:10px;padding:8px;display:flex;flex-wrap:wrap;gap:4px;max-width:230px;box-shadow:0 4px 20px rgba(0,0,0,.4)';
+    picker.style.cssText = 'position:fixed;z-index:9999;background:var(--bg);border:1px solid rgba(128,128,128,.3);border-radius:10px;padding:8px;display:flex;flex-wrap:wrap;gap:4px;max-width:230px;box-shadow:0 4px 20px rgba(0,0,0,.5)';
     document.body.appendChild(picker);
 
     document.addEventListener('mousedown', e => {
