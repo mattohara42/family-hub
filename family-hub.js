@@ -1669,7 +1669,7 @@ function renderSettingCalList() {
     const li = document.createElement('li');
     li.className = 'cal-row';
 
-    // Color swatch + hidden color input
+    // Color swatch / picker
     const colorWrap = document.createElement('div');
     colorWrap.className = 'cal-color-wrap';
     colorWrap.style.background = color;
@@ -1688,35 +1688,45 @@ function renderSettingCalList() {
     colorWrap.appendChild(swatch);
     colorWrap.appendChild(colorInput);
 
-    // Label input
+    // Label input (ID shown as tooltip)
     const labelInput = document.createElement('input');
     labelInput.type = 'text';
     labelInput.className = 'cal-label-input';
     labelInput.value = label;
     labelInput.placeholder = id === 'primary' ? 'My Calendar' : id.split('@')[0];
+    labelInput.title = id;
     labelInput.oninput = e => {
       calendarMeta[i].label = e.target.value;
       saveCalendarMeta();
       renderCalendarTabs();
     };
 
-    // ID display
-    const idSpan = document.createElement('span');
-    idSpan.className = 'cal-id-display';
-    idSpan.textContent = id === 'primary' ? 'primary' : id;
-    idSpan.title = id;
+    // Show / hide toggle
+    const enabled = !disabledCals.has(id);
+    const visToggle = document.createElement('input');
+    visToggle.type = 'checkbox';
+    visToggle.checked = enabled;
+    visToggle.className = 'cal-vis-toggle';
+    visToggle.title = enabled ? 'Visible — click to hide' : 'Hidden — click to show';
+    visToggle.onchange = () => {
+      if (visToggle.checked) disabledCals.delete(id);
+      else disabledCals.add(id);
+      renderCalendarTabs();
+      renderCurrentView();
+      renderYearStrip();
+    };
 
     // Remove button (hidden when only one calendar)
     const removeBtn = document.createElement('button');
     removeBtn.className = 'cal-remove-btn';
     removeBtn.textContent = '✕';
-    removeBtn.title = 'Remove';
+    removeBtn.title = 'Remove calendar';
     if (calendarMeta.length === 1) removeBtn.style.visibility = 'hidden';
     removeBtn.onclick = () => removeCalendar(id);
 
     li.appendChild(colorWrap);
     li.appendChild(labelInput);
-    li.appendChild(idSpan);
+    li.appendChild(visToggle);
     li.appendChild(removeBtn);
     ul.appendChild(li);
   });
@@ -1914,17 +1924,97 @@ function removeIcsSub(id) {
 function renderIcsSubList() {
   const el = document.getElementById('icsSubList');
   if (!el) return;
+  el.innerHTML = '';
+
   if (!icsSubs.length) {
     el.innerHTML = '<div style="color:var(--muted);font-size:.78rem;padding:4px 0">No subscriptions yet.</div>';
     return;
   }
-  el.innerHTML = icsSubs.map(sub => `
-    <div class="lc-item" style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(128,128,128,.1)">
-      <span style="width:12px;height:12px;border-radius:50%;background:${sub.color};flex-shrink:0;display:inline-block"></span>
-      <span style="flex:1;font-size:.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${sub.url}">${sub.label}</span>
-      <button onclick="removeIcsSub('${sub.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem" title="Remove">✕</button>
-    </div>
-  `).join('');
+
+  icsSubs.forEach((sub, i) => {
+    const row = document.createElement('div');
+    row.className = 'cal-row';
+
+    // Color picker
+    const colorWrap = document.createElement('div');
+    colorWrap.className = 'cal-color-wrap';
+    colorWrap.style.background = sub.color;
+    const swatch = document.createElement('div');
+    swatch.className = 'cal-color-swatch';
+    const colorInput = document.createElement('input');
+    colorInput.type = 'color';
+    colorInput.value = sub.color;
+    colorInput.oninput = e => {
+      icsSubs[i].color = e.target.value;
+      colorWrap.style.background = e.target.value;
+      localStorage.setItem('fh_icsSubs', JSON.stringify(icsSubs));
+      renderCalendarTabs();
+      renderCurrentView();
+    };
+    colorWrap.appendChild(swatch);
+    colorWrap.appendChild(colorInput);
+
+    // Label input (URL shown as tooltip)
+    const labelInput = document.createElement('input');
+    labelInput.type = 'text';
+    labelInput.className = 'cal-label-input';
+    labelInput.value = sub.label;
+    labelInput.title = sub.url;
+    labelInput.placeholder = 'Label';
+    labelInput.oninput = e => {
+      icsSubs[i].label = e.target.value;
+      localStorage.setItem('fh_icsSubs', JSON.stringify(icsSubs));
+      renderCalendarTabs();
+    };
+
+    // Weekdays-only toggle
+    const wdLabel = document.createElement('label');
+    wdLabel.className = 'ics-weekdays-label';
+    wdLabel.title = 'Count Mon–Fri only for countdowns';
+    const wdCheck = document.createElement('input');
+    wdCheck.type = 'checkbox';
+    wdCheck.checked = !!sub.weekdaysOnly;
+    wdCheck.style.accentColor = 'var(--accent)';
+    wdCheck.onchange = () => {
+      icsSubs[i].weekdaysOnly = wdCheck.checked;
+      localStorage.setItem('fh_icsSubs', JSON.stringify(icsSubs));
+      renderCountdownCard();
+    };
+    const wdText = document.createElement('span');
+    wdText.textContent = 'Wkdays';
+    wdText.style.cssText = 'font-size:.68rem;color:var(--muted);white-space:nowrap';
+    wdLabel.appendChild(wdCheck);
+    wdLabel.appendChild(wdText);
+
+    // Show / hide toggle
+    const enabled = !disabledCals.has(sub.id);
+    const visToggle = document.createElement('input');
+    visToggle.type = 'checkbox';
+    visToggle.checked = enabled;
+    visToggle.className = 'cal-vis-toggle';
+    visToggle.title = enabled ? 'Visible — click to hide' : 'Hidden — click to show';
+    visToggle.onchange = () => {
+      if (visToggle.checked) disabledCals.delete(sub.id);
+      else disabledCals.add(sub.id);
+      renderCalendarTabs();
+      renderCurrentView();
+      renderYearStrip();
+    };
+
+    // Remove button
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'cal-remove-btn';
+    removeBtn.textContent = '✕';
+    removeBtn.title = 'Remove subscription';
+    removeBtn.onclick = () => removeIcsSub(sub.id);
+
+    row.appendChild(colorWrap);
+    row.appendChild(labelInput);
+    row.appendChild(wdLabel);
+    row.appendChild(visToggle);
+    row.appendChild(removeBtn);
+    el.appendChild(row);
+  });
 }
 
 // ── Countdowns ─────────────────────────────────────────────────

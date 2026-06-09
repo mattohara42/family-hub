@@ -2698,9 +2698,9 @@ body.has-bg .mini-card:hover {
 
 /* ── Settings calendar list ── */
 #settingCalList { margin-bottom: 8px; }
+/* cal-row is used for both Google cals and ICS subs */
 .cal-row {
-  display: grid;
-  grid-template-columns: 28px 1fr 80px 24px;
+  display: flex;
   align-items: center;
   gap: 8px;
   padding: 7px 0;
@@ -2734,19 +2734,29 @@ body.has-bg .mini-card:hover {
   color: var(--text);
   padding: 5px 8px;
   font-size: .82rem;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
 }
 .cal-label-input:focus { outline: none; border-color: var(--accent); }
-.cal-id-display {
-  font-size: .72rem;
-  color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+/* Show/hide checkbox in cal rows */
+.cal-vis-toggle {
+  flex-shrink: 0;
+  accent-color: var(--accent);
+  width: 15px; height: 15px;
+  cursor: pointer;
+}
+/* Weekdays-only label for ICS rows */
+.ics-weekdays-label {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  cursor: pointer;
 }
 .cal-remove-btn {
   background: none; border: none; color: var(--muted);
   cursor: pointer; font-size: .9rem; padding: 2px;
+  flex-shrink: 0;
   opacity: 0; transition: opacity .15s;
 }
 .cal-row:hover .cal-remove-btn { opacity: 1; }

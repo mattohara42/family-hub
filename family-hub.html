@@ -431,41 +431,39 @@
 
       <!-- ── Calendar ── -->
       <div class="settings-panel" data-panel="calendar">
-        <div id="settingCalNotSignedIn" style="font-size:.82rem;color:var(--muted);padding:8px 0">
-          Sign in with Google to manage calendars.
-        </div>
-        <div id="settingCalSignedIn" style="display:none">
-          <!-- Calendar visibility toggles -->
-          <div class="ctrl-section-label" style="margin-bottom:6px">📅 Visible Calendars</div>
-          <div id="calendarTabs" style="margin-bottom:12px"></div>
-          <div style="display:grid;grid-template-columns:28px 1fr 80px 24px;gap:8px;padding:8px 0 4px;border-top:1px solid rgba(128,128,128,.12);font-size:.72rem;color:var(--muted)">
-            <span>Color</span><span>Label</span><span>Calendar ID</span><span></span>
+
+        <!-- Google Calendars (sign-in required) -->
+        <div class="lc-section">
+          <div class="lc-section-title">📅 Google Calendars</div>
+          <div id="settingCalNotSignedIn" style="font-size:.82rem;color:var(--muted);padding:4px 0 8px">
+            Sign in with Google to manage calendars.
           </div>
-          <ul id="settingCalList" style="list-style:none"></ul>
-          <div class="toggle-row" style="margin-top:10px;border-top:1px solid rgba(128,128,128,.12);padding-top:10px">
-            <label class="toggle-switch">
-              <input type="checkbox" id="holidaysToggle" onchange="toggleHolidays(this.checked)" />
-              <span class="toggle-track"></span>
-            </label>
-            <div>
-              <div class="toggle-label">National Holidays</div>
-              <div class="toggle-sub">Overlays US public holidays on the calendar</div>
+          <div id="settingCalSignedIn" style="display:none">
+            <ul id="settingCalList" style="list-style:none;margin:0 0 8px"></ul>
+            <div class="toggle-row" style="padding:6px 0;border-top:1px solid rgba(128,128,128,.1)">
+              <label class="toggle-switch">
+                <input type="checkbox" id="holidaysToggle" onchange="toggleHolidays(this.checked)" />
+                <span class="toggle-track"></span>
+              </label>
+              <div>
+                <div class="toggle-label">US National Holidays</div>
+              </div>
             </div>
-          </div>
-          <div style="display:flex;gap:8px;margin-top:12px">
-            <input id="calIdInput" type="text"
-              style="flex:1;background:var(--surface2);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:var(--text);padding:7px 12px;font-size:.85rem"
-              placeholder="Add calendar (email or calendar ID)…"
-              onkeydown="if(event.key==='Enter')addCalendar()" />
-            <button class="btn btn-primary btn-sm" onclick="addCalendar()">Add</button>
+            <div style="display:flex;gap:8px;margin-top:10px">
+              <input id="calIdInput" type="text"
+                style="flex:1;background:var(--surface2);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:var(--text);padding:7px 12px;font-size:.85rem"
+                placeholder="Add by email or calendar ID…"
+                onkeydown="if(event.key==='Enter')addCalendar()" />
+              <button class="btn btn-primary btn-sm" onclick="addCalendar()">Add</button>
+            </div>
           </div>
         </div>
 
         <!-- ICS Subscriptions -->
         <div class="lc-section">
-          <div class="lc-section-title">📡 Calendar Subscriptions (ICS)</div>
+          <div class="lc-section-title">📡 ICS Subscriptions</div>
           <div id="icsSubList" class="lc-list"></div>
-          <div class="lc-add-row" style="flex-wrap:wrap;gap:5px">
+          <div class="lc-add-row" style="flex-wrap:wrap;gap:5px;margin-top:6px">
             <input id="icsUrlInput" type="url" placeholder="Paste ICS URL…" class="lc-input" style="min-width:180px;flex:2" />
             <input id="icsLabelInput" type="text" placeholder="Label" class="lc-input" style="flex:1;min-width:80px" />
             <input id="icsColorInput" type="color" value="#61afef" class="lc-color" title="Color" />
