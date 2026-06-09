@@ -1824,7 +1824,7 @@ async function loadIcsSubs() {
       events = await fetchIcsSub(sub);
       if (events) {
         icsCache[sub.id] = { fetchedAt: now, events };
-        lsSet('fh_icsCache', icsCache);
+        localStorage.setItem('fh_icsCache', JSON.stringify(icsCache));
       } else {
         events = cached?.events || []; // fall back to stale cache
       }
@@ -1883,8 +1883,8 @@ async function addIcsSub() {
   }
   icsCache[id] = { fetchedAt: Date.now(), events };
   icsSubs.push(sub);
-  lsSet('fh_icsSubs', icsSubs);
-  lsSet('fh_icsCache', icsCache);
+  localStorage.setItem('fh_icsSubs', JSON.stringify(icsSubs));
+  localStorage.setItem('fh_icsCache', JSON.stringify(icsCache));
   document.getElementById('icsUrlInput').value   = '';
   document.getElementById('icsLabelInput').value = '';
   statusEl.textContent = `✓ Subscribed — ${events.length} event${events.length !== 1 ? 's' : ''} loaded.`;
@@ -1900,8 +1900,8 @@ function removeIcsSub(id) {
   icsSubs = icsSubs.filter(s => s.id !== id);
   delete icsCache[id];
   delete calEventCache[id];
-  lsSet('fh_icsSubs', icsSubs);
-  lsSet('fh_icsCache', icsCache);
+  localStorage.setItem('fh_icsSubs', JSON.stringify(icsSubs));
+  localStorage.setItem('fh_icsCache', JSON.stringify(icsCache));
   renderIcsSubList();
   renderCalendarTabs();
   renderCurrentView();
