@@ -1724,9 +1724,9 @@ function renderSettingCalList() {
     if (calendarMeta.length === 1) removeBtn.style.visibility = 'hidden';
     removeBtn.onclick = () => removeCalendar(id);
 
+    li.appendChild(visToggle);
     li.appendChild(colorWrap);
     li.appendChild(labelInput);
-    li.appendChild(visToggle);
     li.appendChild(removeBtn);
     ul.appendChild(li);
   });
@@ -1945,9 +1945,16 @@ function renderIcsSubList() {
     colorInput.type = 'color';
     colorInput.value = sub.color;
     colorInput.oninput = e => {
-      icsSubs[i].color = e.target.value;
-      colorWrap.style.background = e.target.value;
+      const newColor = e.target.value;
+      icsSubs[i].color = newColor;
+      colorWrap.style.background = newColor;
       localStorage.setItem('fh_icsSubs', JSON.stringify(icsSubs));
+      // Update color on already-cached events so the live calendar reflects immediately
+      if (calEventCache[sub.id]) {
+        Object.values(calEventCache[sub.id]).forEach(dayEvts =>
+          dayEvts.forEach(ev => { ev.color = newColor; })
+        );
+      }
       renderCalendarTabs();
       renderCurrentView();
     };
@@ -2008,10 +2015,10 @@ function renderIcsSubList() {
     removeBtn.title = 'Remove subscription';
     removeBtn.onclick = () => removeIcsSub(sub.id);
 
+    row.appendChild(visToggle);
     row.appendChild(colorWrap);
     row.appendChild(labelInput);
     row.appendChild(wdLabel);
-    row.appendChild(visToggle);
     row.appendChild(removeBtn);
     el.appendChild(row);
   });
