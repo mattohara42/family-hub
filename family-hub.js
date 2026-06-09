@@ -2196,6 +2196,59 @@ async function fetchWeather() {
   await showWeatherLocation(weatherLocIdx);
 }
 
+// Detect location via browser geolocation + OWM reverse geocode
+async function fetchWeatherByGeolocation() {
+  if (!navigator.geolocation) {
+    alert('Geolocation is not supported by your browser.');
+    return;
+  }
+  if (!weatherKey) {
+    alert('Add your OpenWeatherMap API key in ⚙️ Settings → Weather first.');
+    return;
+  }
+  const btn = document.getElementById('geoLocBtn');
+  if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+
+  const restore = () => { if (btn) { btn.textContent = '📍'; btn.disabled = false; } };
+
+  navigator.geolocation.getCurrentPosition(
+    async ({ coords: { latitude: lat, longitude: lon } }) => {
+      try {
+        const r = await fetch(
+          `https://api.openweathermap.org/geo/1.0/reverse?lat=${lat}&lon=${lon}&limit=1&appid=${weatherKey}`
+        );
+        const d = await r.json();
+        const place = d?.[0];
+        if (!place) { alert('Could not resolve your location to a city.'); restore(); return; }
+
+        // Build a readable city label: "City, State" (US) or "City, Country"
+        const city = place.name + (place.state ? `, ${place.state}` : place.country ? `, ${place.country}` : '');
+
+        if (!weatherLocations.includes(city)) {
+          weatherLocations.push(city);
+          saveWeatherLocations();
+        }
+        weatherLocIdx = weatherLocations.indexOf(city);
+        restore();
+        await showWeatherLocation(weatherLocIdx);
+      } catch (e) {
+        alert('Location lookup failed: ' + e.message);
+        restore();
+      }
+    },
+    err => {
+      const msgs = {
+        1: 'Location permission denied. Allow location access in your browser settings.',
+        2: 'Location unavailable.',
+        3: 'Location request timed out.',
+      };
+      alert(msgs[err.code] || 'Geolocation error.');
+      restore();
+    },
+    { timeout: 10000 }
+  );
+}
+
 // Navigate
 function prevWeatherLocation() {
   weatherLocIdx = (weatherLocIdx - 1 + weatherLocations.length) % weatherLocations.length;

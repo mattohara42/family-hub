@@ -138,6 +138,7 @@
           <input id="cityInput" type="text" placeholder="Enter city name…"
                  onkeydown="if(event.key==='Enter')fetchWeather()" />
           <button class="btn btn-primary" onclick="fetchWeather()">Go</button>
+          <button class="btn" id="geoLocBtn" title="Use my location" onclick="fetchWeatherByGeolocation()" style="padding:0 10px;font-size:1rem">📍</button>
         </div>
         <div id="weatherDisplay">
           <div class="wx-current">
