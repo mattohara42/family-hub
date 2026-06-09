@@ -84,6 +84,7 @@ function loadCalendarMeta() {
 }
 let calendarMeta  = loadCalendarMeta();
 let showHolidays  = localStorage.getItem('fh_holidays') === 'true';
+let holidaysColor = localStorage.getItem('fh_holidaysColor') || holidaysColor;
 const HOLIDAYS_ID = 'en.usa#holiday@group.v.calendar.google.com';
 // File-level constants win; localStorage is the fallback for values set via ⚙️ Settings
 let weatherKey      = WEATHER_API_KEY  || localStorage.getItem('fh_wkey')  || '';
@@ -1497,7 +1498,7 @@ async function loadAllCalendars() {
           + `&timeMin=${timeMin}&timeMax=${timeMax}`;
         const r    = await fetch(url, { headers: { Authorization: `Bearer ${googleToken}` } });
         const data = await r.json();
-        if (data.items) cacheEvents(HOLIDAYS_ID, data.items, '#e8a838', true);
+        if (data.items) cacheEvents(HOLIDAYS_ID, data.items, holidaysColor, true);
       } catch(e) { console.warn('Holidays error', e); }
     })());
   }
@@ -1602,7 +1603,7 @@ function renderCalendarTabs() {
   tabs.innerHTML = '';
 
   const all = [...calendarMeta];
-  if (showHolidays) all.push({ id: HOLIDAYS_ID, label: 'Holidays', color: '#e8a838' });
+  if (showHolidays) all.push({ id: HOLIDAYS_ID, label: 'Holidays', color: holidaysColor });
   // ICS subscriptions
   icsSubs.forEach(sub => all.push({ id: sub.id, label: sub.label, color: sub.color }));
   // Local calendars that have data
@@ -1731,9 +1732,54 @@ function renderSettingCalList() {
     ul.appendChild(li);
   });
 
-  // Sync holidays toggle
-  const toggle = document.getElementById('holidaysToggle');
-  if (toggle) toggle.checked = showHolidays;
+  // Holidays row (treated like a regular calendar)
+  {
+    const li = document.createElement('li');
+    li.className = 'cal-row';
+
+    const colorWrap = document.createElement('div');
+    colorWrap.className = 'cal-color-wrap';
+    colorWrap.style.background = holidaysColor;
+    const swatch = document.createElement('div');
+    swatch.className = 'cal-color-swatch';
+    const colorInput = document.createElement('input');
+    colorInput.type = 'color';
+    colorInput.value = holidaysColor;
+    colorInput.oninput = e => {
+      holidaysColor = e.target.value;
+      localStorage.setItem('fh_holidaysColor', holidaysColor);
+      colorWrap.style.background = holidaysColor;
+      // Update already-cached events in place
+      if (calEventCache[HOLIDAYS_ID]) {
+        Object.values(calEventCache[HOLIDAYS_ID]).forEach(dayEvts =>
+          dayEvts.forEach(ev => { ev.color = holidaysColor; })
+        );
+      }
+      renderCalendarTabs();
+      renderCurrentView();
+    };
+    colorWrap.appendChild(swatch);
+    colorWrap.appendChild(colorInput);
+
+    const labelInput = document.createElement('input');
+    labelInput.type = 'text';
+    labelInput.className = 'cal-label-input';
+    labelInput.value = 'US Holidays';
+    labelInput.disabled = true;
+    labelInput.title = HOLIDAYS_ID;
+
+    const visToggle = document.createElement('input');
+    visToggle.type = 'checkbox';
+    visToggle.checked = showHolidays;
+    visToggle.className = 'cal-vis-toggle';
+    visToggle.title = showHolidays ? 'Visible — click to hide' : 'Hidden — click to show';
+    visToggle.onchange = () => toggleHolidays(visToggle.checked);
+
+    li.appendChild(visToggle);
+    li.appendChild(colorWrap);
+    li.appendChild(labelInput);
+    ul.appendChild(li);
+  }
 }
 
 function saveCalendarMeta() {
