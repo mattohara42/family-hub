@@ -628,6 +628,10 @@ window.addEventListener('load', () => {
   switchCalView(calView);   // sets up tabs + renders the right view
   renderYearStrip();
   setupCalSwipe();
+  // Load ICS subs even without Google auth; loadAllCalendars also calls this for signed-in users
+  if (icsSubs.length && !googleToken) {
+    loadIcsSubs().then(() => { renderCalendarTabs(); renderCurrentView(); renderYearStrip(); });
+  }
   setupListeners();
   loadBgFromDb();
   populateTodoAssigneeDropdown();
@@ -1498,6 +1502,9 @@ async function loadAllCalendars() {
 
   await Promise.all(fetches);
 
+  // Inject ICS subscription events (uses its own cache; independent of Google auth)
+  await loadIcsSubs();
+
   renderCalendarTabs();
   updateStatusPill();
   renderCurrentView();
@@ -1593,6 +1600,8 @@ function renderCalendarTabs() {
 
   const all = [...calendarMeta];
   if (showHolidays) all.push({ id: HOLIDAYS_ID, label: 'Holidays', color: '#e8a838' });
+  // ICS subscriptions
+  icsSubs.forEach(sub => all.push({ id: sub.id, label: sub.label, color: sub.color }));
   // Local calendars that have data
   LC_DEFS.forEach(lc => {
     const hasData =
@@ -1743,6 +1752,176 @@ function addCalendar() {
   input.value = '';
   renderSettingCalList();
   loadAllCalendars();
+}
+
+// ── ICS Calendar Subscriptions ─────────────────────────────────
+let icsSubs      = lsGet('fh_icsSubs', []);    // [{id, url, label, color}]
+let icsCache     = lsGet('fh_icsCache', {});   // {id: {fetchedAt, events[]}}
+const ICS_TTL_MS = 4 * 60 * 60 * 1000;        // refresh every 4 hours
+
+/** Parse an ICS text string into a flat array of event objects compatible with cacheEvents(). */
+function parseIcs(text) {
+  const events = [];
+  const lines  = text.replace(/\r\n?/g, '\n').replace(/\n /g, '').split('\n');
+  let cur = null;
+
+  const val    = line => line.slice(line.indexOf(':') + 1).trim();
+  const dtPart = prop => { // returns {date, dateTime} compatible with GCal format
+    const raw = prop.replace(/;[^:]+/g, ''); // strip params like TZID=...
+    const v   = val(raw);
+    if (/^\d{8}$/.test(v)) { // all-day: 20250901
+      return { date: `${v.slice(0,4)}-${v.slice(4,6)}-${v.slice(6,8)}` };
+    }
+    // datetime: 20250901T120000Z or 20250901T120000
+    const y=v.slice(0,4),mo=v.slice(4,6),d=v.slice(6,8),h=v.slice(9,11),mi=v.slice(11,13),s=v.slice(13,15)||'00';
+    const iso = `${y}-${mo}-${d}T${h}:${mi}:${s}${v.endsWith('Z')?'Z':''}`;
+    return { dateTime: iso };
+  };
+
+  for (const line of lines) {
+    if (line === 'BEGIN:VEVENT') { cur = {}; continue; }
+    if (line === 'END:VEVENT' && cur) {
+      if (cur.start) events.push(cur);
+      cur = null; continue;
+    }
+    if (!cur) continue;
+    if (line.startsWith('SUMMARY'))     cur.summary     = val(line);
+    if (line.startsWith('DESCRIPTION')) cur.description = val(line).replace(/\\n/g, '\n').replace(/\\,/g, ',');
+    if (line.startsWith('DTSTART'))     cur.start       = dtPart(line);
+    if (line.startsWith('DTEND'))       cur.end         = dtPart(line);
+    if (line.startsWith('UID'))         cur.id          = val(line);
+  }
+  return events;
+}
+
+/** Fetch one ICS URL (via a CORS proxy if needed), parse, and cache it. */
+async function fetchIcsSub(sub) {
+  // Try direct fetch first; many ICS feeds are CORS-friendly
+  const CORS_PROXY = 'https://corsproxy.io/?';
+  let text = null;
+  try {
+    const r = await fetch(sub.url, { cache: 'no-store' });
+    if (r.ok) text = await r.text();
+  } catch {}
+  if (!text) {
+    try {
+      const r = await fetch(CORS_PROXY + encodeURIComponent(sub.url), { cache: 'no-store' });
+      if (r.ok) text = await r.text();
+    } catch {}
+  }
+  if (!text || !text.includes('BEGIN:VCALENDAR')) return null;
+  return parseIcs(text);
+}
+
+/** Load all ICS subscriptions, using cache when fresh; inject into calEventCache. */
+async function loadIcsSubs() {
+  if (!icsSubs.length) return;
+  const now = Date.now();
+  const fetches = icsSubs.map(async sub => {
+    const cached = icsCache[sub.id];
+    let events = cached && (now - cached.fetchedAt < ICS_TTL_MS) ? cached.events : null;
+    if (!events) {
+      events = await fetchIcsSub(sub);
+      if (events) {
+        icsCache[sub.id] = { fetchedAt: now, events };
+        lsSet('fh_icsCache', icsCache);
+      } else {
+        events = cached?.events || []; // fall back to stale cache
+      }
+    }
+    // Inject into calEventCache under the sub's id
+    if (!calEventCache[sub.id]) calEventCache[sub.id] = {};
+    events.forEach(ev => {
+      const startDate = ev.start?.date || ev.start?.dateTime?.slice(0,10);
+      if (!startDate) return;
+      const entry = {
+        eventId:     ev.id || null,
+        calId:       sub.id,
+        summary:     ev.summary || '(No title)',
+        description: ev.description || '',
+        color:       sub.color,
+        holiday:     false,
+        allDay:      !!ev.start?.date,
+        startDT:     ev.start?.dateTime || null,
+        endDT:       ev.end?.dateTime   || null,
+        startDate:   ev.start?.date     || null,
+        endDate:     ev.end?.date       || null,
+      };
+      // Multi-day all-day
+      if (entry.allDay && entry.startDate && entry.endDate && entry.endDate > entry.startDate) {
+        const endD = new Date(entry.endDate + 'T00:00:00');
+        for (let d = new Date(entry.startDate + 'T00:00:00'); d < endD; d.setDate(d.getDate() + 1)) {
+          const key = d.toISOString().slice(0, 10);
+          if (!calEventCache[sub.id][key]) calEventCache[sub.id][key] = [];
+          calEventCache[sub.id][key].push(entry);
+        }
+      } else {
+        if (!calEventCache[sub.id][startDate]) calEventCache[sub.id][startDate] = [];
+        calEventCache[sub.id][startDate].push(entry);
+      }
+    });
+  });
+  await Promise.all(fetches);
+}
+
+/** Add a new ICS subscription from the settings UI. */
+async function addIcsSub() {
+  const url   = document.getElementById('icsUrlInput').value.trim();
+  const label = document.getElementById('icsLabelInput').value.trim();
+  const color = document.getElementById('icsColorInput').value;
+  const statusEl = document.getElementById('icsSubStatus');
+  if (!url) return;
+  if (icsSubs.some(s => s.url === url)) {
+    statusEl.textContent = 'Already subscribed to that URL.'; return;
+  }
+  statusEl.textContent = 'Fetching…';
+  const id = 'ics_' + Date.now();
+  const sub = { id, url, label: label || url, color };
+  const events = await fetchIcsSub(sub);
+  if (!events) {
+    statusEl.textContent = '⚠️ Could not fetch that URL. Make sure it's a valid public ICS link.'; return;
+  }
+  icsCache[id] = { fetchedAt: Date.now(), events };
+  icsSubs.push(sub);
+  lsSet('fh_icsSubs', icsSubs);
+  lsSet('fh_icsCache', icsCache);
+  document.getElementById('icsUrlInput').value   = '';
+  document.getElementById('icsLabelInput').value = '';
+  statusEl.textContent = `✓ Subscribed — ${events.length} event${events.length !== 1 ? 's' : ''} loaded.`;
+  renderIcsSubList();
+  renderCalendarTabs();
+  // Inject into calEventCache and re-render
+  await loadIcsSubs();
+  renderCurrentView();
+  renderYearStrip();
+}
+
+function removeIcsSub(id) {
+  icsSubs = icsSubs.filter(s => s.id !== id);
+  delete icsCache[id];
+  delete calEventCache[id];
+  lsSet('fh_icsSubs', icsSubs);
+  lsSet('fh_icsCache', icsCache);
+  renderIcsSubList();
+  renderCalendarTabs();
+  renderCurrentView();
+  renderYearStrip();
+}
+
+function renderIcsSubList() {
+  const el = document.getElementById('icsSubList');
+  if (!el) return;
+  if (!icsSubs.length) {
+    el.innerHTML = '<div style="color:var(--muted);font-size:.78rem;padding:4px 0">No subscriptions yet.</div>';
+    return;
+  }
+  el.innerHTML = icsSubs.map(sub => `
+    <div class="lc-item" style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(128,128,128,.1)">
+      <span style="width:12px;height:12px;border-radius:50%;background:${sub.color};flex-shrink:0;display:inline-block"></span>
+      <span style="flex:1;font-size:.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${sub.url}">${sub.label}</span>
+      <button onclick="removeIcsSub('${sub.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem" title="Remove">✕</button>
+    </div>
+  `).join('');
 }
 
 // ── Calendar Event Editor ─────────────────────────────────────
@@ -5790,6 +5969,7 @@ function openSettings() {
     document.getElementById('settingCalNotSignedIn').style.display = '';
     document.getElementById('settingCalSignedIn').style.display = 'none';
   }
+  renderIcsSubList();
   // Widget visibility checkboxes + placement radios
   Object.keys(WIDGET_DEFAULTS).forEach(key => {
     const cb = document.getElementById('widget_' + key);

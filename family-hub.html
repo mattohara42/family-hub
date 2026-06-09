@@ -453,6 +453,19 @@
           </div>
         </div>
 
+        <!-- ICS Subscriptions -->
+        <div class="lc-section">
+          <div class="lc-section-title">📡 Calendar Subscriptions (ICS)</div>
+          <div id="icsSubList" class="lc-list"></div>
+          <div class="lc-add-row" style="flex-wrap:wrap;gap:5px">
+            <input id="icsUrlInput" type="url" placeholder="Paste ICS URL…" class="lc-input" style="min-width:180px;flex:2" />
+            <input id="icsLabelInput" type="text" placeholder="Label" class="lc-input" style="flex:1;min-width:80px" />
+            <input id="icsColorInput" type="color" value="#61afef" class="lc-color" title="Color" />
+            <button class="btn btn-primary btn-sm" onclick="addIcsSub()">Add</button>
+          </div>
+          <div id="icsSubStatus" style="font-size:.75rem;color:var(--muted);margin-top:4px"></div>
+        </div>
+
         <div class="lc-section">
           <div class="lc-section-title">🎂 Birthdays</div>
           <div id="lcBdayList" class="lc-list"></div>
