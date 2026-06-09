@@ -478,6 +478,11 @@
         <div class="lc-section">
           <div class="lc-section-title">⏳ Countdowns</div>
           <div id="countdownSettingList" class="lc-list"></div>
+          <!-- Weekdays toggle (shared by both add methods) -->
+          <label style="display:flex;align-items:center;gap:6px;font-size:.8rem;color:var(--muted);margin-top:6px;cursor:pointer">
+            <input type="checkbox" id="cdWeekdaysOnly" style="accent-color:var(--accent)" />
+            Count weekdays only (Mon–Fri)
+          </label>
           <!-- Manual date entry -->
           <div class="lc-add-row" style="flex-wrap:wrap;gap:5px;margin-top:6px">
             <input id="cdLabelInput" type="text" placeholder="Label" class="lc-input" style="flex:1;min-width:100px" />

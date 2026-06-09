@@ -1934,19 +1934,41 @@ function saveCountdowns() {
   localStorage.setItem('fh_countdowns', JSON.stringify(countdowns));
 }
 
-/** Days until a YYYY-MM-DD date string (negative if past). */
+/** Calendar days until a YYYY-MM-DD date string (negative if past). */
 function daysUntil(dateStr) {
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const target = new Date(dateStr + 'T00:00:00');
   return Math.round((target - today) / 86400000);
 }
 
+/** Weekdays (Mon–Fri) until a YYYY-MM-DD date string (negative if past). */
+function weekdaysUntil(dateStr) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const target = new Date(dateStr + 'T00:00:00');
+  if (target <= today) return Math.round((target - today) / 86400000); // keep negatives as calendar days
+  let count = 0;
+  const d = new Date(today);
+  d.setDate(d.getDate() + 1); // start counting from tomorrow
+  while (d <= target) {
+    const dow = d.getDay();
+    if (dow !== 0 && dow !== 6) count++;
+    d.setDate(d.getDate() + 1);
+  }
+  return count;
+}
+
+/** Return the appropriate day count for a countdown object. */
+function countdownDays(cd) {
+  return cd.weekdaysOnly ? weekdaysUntil(cd.targetDate) : daysUntil(cd.targetDate);
+}
+
 function addCountdown() {
-  const label = document.getElementById('cdLabelInput').value.trim();
-  const date  = document.getElementById('cdDateInput').value;
-  const emoji = document.getElementById('cdEmojiInput').value.trim() || '⏳';
+  const label       = document.getElementById('cdLabelInput').value.trim();
+  const date        = document.getElementById('cdDateInput').value;
+  const emoji       = document.getElementById('cdEmojiInput').value.trim() || '⏳';
+  const weekdaysOnly = document.getElementById('cdWeekdaysOnly').checked;
   if (!label || !date) return;
-  countdowns.push({ id: 'cd_' + Date.now(), label, emoji, targetDate: date });
+  countdowns.push({ id: 'cd_' + Date.now(), label, emoji, targetDate: date, weekdaysOnly });
   saveCountdowns();
   document.getElementById('cdLabelInput').value = '';
   document.getElementById('cdDateInput').value  = '';
@@ -1956,13 +1978,14 @@ function addCountdown() {
 }
 
 function addCountdownFromEvent() {
-  const picker = document.getElementById('cdEventPicker');
+  const picker      = document.getElementById('cdEventPicker');
+  const weekdaysOnly = document.getElementById('cdWeekdaysOnly').checked;
   const val = picker.value;
   if (!val) return;
   try {
     const { label, targetDate, emoji } = JSON.parse(val);
     if (!label || !targetDate) return;
-    countdowns.push({ id: 'cd_' + Date.now(), label, emoji: emoji || '📅', targetDate });
+    countdowns.push({ id: 'cd_' + Date.now(), label, emoji: emoji || '📅', targetDate, weekdaysOnly });
     saveCountdowns();
     picker.value = '';
     renderCountdownSettingList();
@@ -2033,11 +2056,12 @@ function renderCountdownSettingList() {
     return;
   }
   el.innerHTML = countdowns.map(cd => {
-    const days = daysUntil(cd.targetDate);
-    const dStr = days > 0 ? `${days}d` : days === 0 ? 'today' : `${Math.abs(days)}d ago`;
+    const days = countdownDays(cd);
+    const dStr = days > 0 ? `${days}${cd.weekdaysOnly ? ' wkdays' : 'd'}` : days === 0 ? 'today' : `${Math.abs(days)}d ago`;
+    const wdBadge = cd.weekdaysOnly ? ' <span style="font-size:.68rem;opacity:.6">(weekdays)</span>' : '';
     return `<div class="lc-item" style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(128,128,128,.1)">
       <span>${cd.emoji}</span>
-      <span style="flex:1;font-size:.82rem">${cd.label}</span>
+      <span style="flex:1;font-size:.82rem">${cd.label}${wdBadge}</span>
       <span style="font-size:.75rem;color:var(--muted)">${cd.targetDate} · ${dStr}</span>
       <button onclick="removeCountdown('${cd.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem" title="Remove">✕</button>
     </div>`;
@@ -2052,7 +2076,7 @@ function renderCountdownCard() {
   // Sort: soonest first; exclude past events older than 1 day
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const active = countdowns
-    .map(cd => ({ ...cd, days: daysUntil(cd.targetDate) }))
+    .map(cd => ({ ...cd, days: countdownDays(cd) }))
     .filter(cd => cd.days >= -1)
     .sort((a, b) => a.days - b.days);
 
@@ -2062,11 +2086,11 @@ function renderCountdownCard() {
   }
 
   el.innerHTML = active.map(cd => {
-    const daysLabel = cd.days > 1  ? `<strong>${cd.days}</strong> days`
-                    : cd.days === 1 ? `<strong>1</strong> day`
+    const unit = cd.weekdaysOnly ? 'weekday' : 'day';
+    const daysLabel = cd.days > 1  ? `<strong>${cd.days}</strong> ${unit}s`
+                    : cd.days === 1 ? `<strong>1</strong> ${unit}`
                     : cd.days === 0 ? `<strong>Today!</strong>`
                     :                 `<strong>Yesterday</strong>`;
-    const sub = cd.days > 0 ? `${cd.emoji} ${cd.targetDate}` : '';
     return `<div class="countdown-item">
       <div class="countdown-label">${cd.emoji} ${cd.label}</div>
       <div class="countdown-days">${daysLabel}</div>
