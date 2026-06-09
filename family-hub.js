@@ -139,7 +139,14 @@ const SHOP_CATEGORY_ICONS = {
 let shopCategories = lsGet('fh_shopCategories', SHOP_DEFAULT_CATEGORIES.slice());
 let shopCollapsed  = {};   // { categoryName: true } — true means collapsed
 // ── Family Assistant state ─────────────────────────────────────────────────
-let assistantHistory  = [];   // [{role:'user'|'model', parts:[{text}]}]
+const ASSISTANT_HISTORY_KEY = 'fh_assistantHistory';
+const ASSISTANT_HISTORY_MAX = 40; // store up to 40 half-turns (~20 exchanges)
+let assistantHistory = (()=>{
+  try {
+    const saved = JSON.parse(localStorage.getItem(ASSISTANT_HISTORY_KEY));
+    return Array.isArray(saved) ? saved : [];
+  } catch { return []; }
+})();   // [{role:'user'|'model', parts:[{text}]}]
 let shopItemsCache    = [];   // in-memory mirror of shopping items for context
 let assistantRecognition = null;  // SpeechRecognition instance
 let assistantListening   = false; // true while mic is open
@@ -4842,6 +4849,7 @@ async function sendAssistantMessage() {
       : cleanText;
 
     assistantHistory.push({ role: 'model', parts: [{ text: finalText }] });
+    saveAssistantHistory();
     renderAssistantMessages();
     speakAssistant(finalText);   // read aloud if TTS is on
 
@@ -4853,10 +4861,17 @@ async function sendAssistantMessage() {
   }
 }
 
+/** Persist assistantHistory to localStorage (capped to avoid bloat). */
+function saveAssistantHistory() {
+  const trimmed = assistantHistory.slice(-ASSISTANT_HISTORY_MAX);
+  try { localStorage.setItem(ASSISTANT_HISTORY_KEY, JSON.stringify(trimmed)); } catch {}
+}
+
 /** Clear conversation history and reset to welcome state. */
 function clearAssistantChat() {
   if ('speechSynthesis' in window) speechSynthesis.cancel();
   assistantHistory = [];
+  localStorage.removeItem(ASSISTANT_HISTORY_KEY);
   renderAssistantMessages();
 }
 
