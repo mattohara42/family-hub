@@ -476,7 +476,8 @@
           <div class="lc-add-row" style="flex-wrap:wrap;gap:5px;margin-top:6px">
             <input id="cdLabelInput" type="text" placeholder="Label" class="lc-input" style="flex:1;min-width:100px" />
             <input id="cdDateInput"  type="date"  class="lc-input lc-input-sm" />
-            <input id="cdEmojiInput" type="text"  placeholder="🎉" class="lc-input" style="width:42px;text-align:center" maxlength="2" />
+            <input id="cdEmojiInput" type="text"  placeholder="🎉" class="lc-input" style="width:42px;text-align:center" maxlength="8" />
+            <button type="button" class="btn btn-secondary btn-sm" onclick="openEmojiPicker('cdEmojiInput',this)" title="Pick emoji">😊</button>
             <button class="btn btn-primary btn-sm" onclick="addCountdown()">Add</button>
           </div>
           <!-- Event picker -->
@@ -484,7 +485,7 @@
             <select id="cdEventPicker" class="lc-select" style="flex:1;min-width:160px">
               <option value="">— or pick a calendar event —</option>
             </select>
-            <button class="btn btn-sm" style="background:var(--surface2)" onclick="addCountdownFromEvent()">Add from event</button>
+            <button class="btn btn-secondary btn-sm" onclick="addCountdownFromEvent()">Add from event</button>
           </div>
         </div>
 

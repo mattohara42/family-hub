@@ -2190,25 +2190,146 @@ function populateCountdownEventPicker() {
   });
 }
 
-/** Render the countdown list in settings. */
+/** Render the countdown list in settings — fully editable rows. */
 function renderCountdownSettingList() {
   const el = document.getElementById('countdownSettingList');
   if (!el) return;
+  el.innerHTML = '';
   if (!countdowns.length) {
     el.innerHTML = '<div style="color:var(--muted);font-size:.78rem;padding:4px 0">No countdowns yet.</div>';
     return;
   }
-  el.innerHTML = countdowns.map(cd => {
-    const days = countdownDays(cd);
-    const dStr = days > 0 ? `${days}${cd.weekdaysOnly ? ' wkdays' : 'd'}` : days === 0 ? 'today' : `${Math.abs(days)}d ago`;
-    const wdBadge = cd.weekdaysOnly ? ' <span style="font-size:.68rem;opacity:.6">(weekdays)</span>' : '';
-    return `<div class="lc-item" style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(128,128,128,.1)">
-      <span>${cd.emoji}</span>
-      <span style="flex:1;font-size:.82rem">${cd.label}${wdBadge}</span>
-      <span style="font-size:.75rem;color:var(--muted)">${cd.targetDate} · ${dStr}</span>
-      <button onclick="removeCountdown('${cd.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem" title="Remove">✕</button>
-    </div>`;
-  }).join('');
+
+  countdowns.forEach((cd, i) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:5px;padding:5px 0;border-bottom:1px solid rgba(128,128,128,.1);flex-wrap:wrap';
+
+    // Emoji button (opens picker)
+    const emojiBtn = document.createElement('button');
+    emojiBtn.type = 'button';
+    emojiBtn.textContent = cd.emoji || '⏳';
+    emojiBtn.title = 'Change emoji';
+    emojiBtn.style.cssText = 'background:none;border:1px solid rgba(128,128,128,.25);border-radius:5px;cursor:pointer;font-size:1rem;padding:2px 5px;color:var(--text)';
+    emojiBtn.onclick = () => openEmojiPicker(null, emojiBtn, v => {
+      countdowns[i].emoji = v;
+      emojiBtn.textContent = v;
+      saveCountdowns();
+      renderCountdownCard();
+    });
+
+    // Label input
+    const labelInput = document.createElement('input');
+    labelInput.type = 'text';
+    labelInput.className = 'lc-input';
+    labelInput.value = cd.label;
+    labelInput.placeholder = 'Label';
+    labelInput.style.flex = '1';
+    labelInput.style.minWidth = '80px';
+
+    // Date input
+    const dateInput = document.createElement('input');
+    dateInput.type = 'date';
+    dateInput.className = 'lc-input lc-input-sm';
+    dateInput.value = cd.targetDate;
+
+    // Weekdays checkbox
+    const wdLabel = document.createElement('label');
+    wdLabel.style.cssText = 'display:flex;align-items:center;gap:3px;font-size:.75rem;color:var(--muted);cursor:pointer;white-space:nowrap';
+    const wdChk = document.createElement('input');
+    wdChk.type = 'checkbox';
+    wdChk.checked = !!cd.weekdaysOnly;
+    wdChk.style.accentColor = 'var(--accent)';
+    wdLabel.appendChild(wdChk);
+    wdLabel.appendChild(document.createTextNode('Wkdays'));
+
+    // Save button
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'btn btn-primary btn-sm';
+    saveBtn.textContent = 'Save';
+    saveBtn.onclick = () => {
+      const newLabel = labelInput.value.trim();
+      const newDate  = dateInput.value;
+      if (!newLabel || !newDate) return;
+      countdowns[i] = { ...countdowns[i], label: newLabel, emoji: emojiBtn.textContent, targetDate: newDate, weekdaysOnly: wdChk.checked };
+      saveCountdowns();
+      renderCountdownCard();
+    };
+
+    // Remove button
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.style.cssText = 'background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem;padding:2px 4px';
+    removeBtn.title = 'Remove';
+    removeBtn.textContent = '✕';
+    removeBtn.onclick = () => removeCountdown(cd.id);
+
+    row.appendChild(emojiBtn);
+    row.appendChild(labelInput);
+    row.appendChild(dateInput);
+    row.appendChild(wdLabel);
+    row.appendChild(saveBtn);
+    row.appendChild(removeBtn);
+    el.appendChild(row);
+  });
+}
+
+// ── Emoji Picker ──
+const EMOJI_LIST = [
+  '🎉','🎂','🎁','🎈','🏖️','✈️','🏕️','⛷️','🎄','🎃','🎆','🎇',
+  '🏫','🎓','📚','🏆','⚽','🏀','🎾','🏊','🚴','🧘','🎵','🎬',
+  '❤️','🌟','🌈','🌺','🍕','🎮','🐶','🐱','🚀','🌍','💪','🥳',
+  '👨‍👩‍👧','👨‍👩‍👦','👩‍👧','👨‍👦','🏠','🚗','💼','📅','⏳','🔔','🎯','🌙',
+];
+
+let _emojiPickerCallback = null;
+let _emojiPickerInputId  = null;
+
+function openEmojiPicker(inputId, anchorEl, callback) {
+  _emojiPickerInputId = inputId;
+  _emojiPickerCallback = callback || null;
+
+  let picker = document.getElementById('emojiPickerPopup');
+  if (!picker) {
+    picker = document.createElement('div');
+    picker.id = 'emojiPickerPopup';
+    picker.style.cssText = 'position:fixed;z-index:9999;background:var(--surface);border:1px solid rgba(128,128,128,.25);border-radius:10px;padding:8px;display:flex;flex-wrap:wrap;gap:4px;max-width:230px;box-shadow:0 4px 20px rgba(0,0,0,.4)';
+    document.body.appendChild(picker);
+
+    document.addEventListener('mousedown', e => {
+      if (!document.getElementById('emojiPickerPopup')?.contains(e.target) &&
+          !e.target.closest('[data-emoji-anchor]')) {
+        const p = document.getElementById('emojiPickerPopup');
+        if (p) p.style.display = 'none';
+      }
+    });
+  }
+
+  picker.innerHTML = '';
+  EMOJI_LIST.forEach(em => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = em;
+    btn.style.cssText = 'background:none;border:none;font-size:1.3rem;cursor:pointer;padding:2px;border-radius:4px;line-height:1';
+    btn.onmouseenter = () => btn.style.background = 'rgba(128,128,128,.2)';
+    btn.onmouseleave = () => btn.style.background = 'none';
+    btn.onclick = () => {
+      if (_emojiPickerCallback) {
+        _emojiPickerCallback(em);
+      } else if (_emojiPickerInputId) {
+        const inp = document.getElementById(_emojiPickerInputId);
+        if (inp) inp.value = em;
+      }
+      picker.style.display = 'none';
+    };
+    picker.appendChild(btn);
+  });
+
+  // Position near anchor
+  const rect = anchorEl.getBoundingClientRect();
+  picker.style.display = 'flex';
+  picker.style.left = Math.min(rect.left, window.innerWidth - 240) + 'px';
+  picker.style.top  = (rect.bottom + 4) + 'px';
 }
 
 /** Render the countdown card on the dashboard. */
