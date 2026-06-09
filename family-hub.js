@@ -4269,18 +4269,45 @@ async function removeMeal(dateKey, mealType) {
 const MEAL_DETAIL_LABELS = { breakfast:'🌅 Breakfast', lunch:'☀️ Lunch', dinner:'🌙 Dinner' };
 const MEAL_DETAIL_EMOJI  = { breakfast:'🍳', lunch:'🥪', dinner:'🍽' };
 
-/** Best-effort dish photo from TheMealDB (free, keyless). Returns a thumb URL or null. */
+/** Best-effort dish photo from TheMealDB (free, keyless). Returns a thumb URL or null.
+ *  Tries the exact name first, then a simplified name (stripped adjectives / cooking methods). */
 async function fetchMealImage(name) {
   const key = (name || '').toLowerCase().trim();
   if (!key) return null;
   if (key in _mealImgCache) return _mealImgCache[key];
-  try {
-    const r = await fetch(`https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(name)}`);
-    const d = await r.json();
-    const thumb = d?.meals?.[0]?.strMealThumb || null;
-    _mealImgCache[key] = thumb;
-    return thumb;
-  } catch { _mealImgCache[key] = null; return null; }
+
+  // Helper: one TheMealDB lookup
+  const dbLookup = async q => {
+    try {
+      const r = await fetch(`https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(q)}`);
+      const d = await r.json();
+      return d?.meals?.[0]?.strMealThumb || null;
+    } catch { return null; }
+  };
+
+  // Pass 1: exact name
+  let thumb = await dbLookup(name);
+
+  // Pass 2: simplified name — strip leading adjectives / cooking methods iteratively and retry
+  if (!thumb) {
+    const STRIP_WORD = /^(creamy|spicy|crispy|crunchy|smoky|tangy|zesty|savory|sweet|sticky|juicy|tender|baked|grilled|roasted|pan[-\s]?fried|fried|braised|slow[-\s]?cooked|air[-\s]?fried|sautéed|steamed|poached|smoked|stuffed|glazed|marinated|easy|simple|classic|homemade|quick|healthy|hearty|loaded|one[-\s]?pan|one[-\s]?pot|sheet[-\s]?pan|garlic|herb|lemon|butter|[a-z]+-style)\s+/i;
+    let simplified = name, prev;
+    do { prev = simplified; simplified = simplified.replace(STRIP_WORD, ''); } while (simplified !== prev);
+    simplified = simplified.trim();
+    if (simplified && simplified.toLowerCase() !== key) {
+      thumb = await dbLookup(simplified);
+    }
+  }
+
+  _mealImgCache[key] = thumb;
+  return thumb;
+}
+
+/** Persist a found image URL onto the meal in Firestore so future opens are instant. */
+async function persistMealImage(dateKey, mealType, imageUrl) {
+  const meal = (mealPlan[dateKey] || {})[mealType];
+  if (!meal || meal.image === imageUrl) return; // already stored
+  await setMealInFs(dateKey, mealType, { ...meal, image: imageUrl });
 }
 
 /** Open the detail popup for an already-planned meal. Falls back to the planner if none exists. */
@@ -4339,8 +4366,16 @@ function openMealDetail(dateKey, mealType) {
     img.onload = () => { if (_mealDetailDate + '|' + _mealDetailType === token) { img.style.display = ''; ph.style.display = 'none'; } };
     img.src = url;
   };
-  if (meal.image) showImg(meal.image);
-  else fetchMealImage(meal.name).then(thumb => { if (thumb && _mealDetailDate + '|' + _mealDetailType === token) showImg(thumb); });
+  if (meal.image) {
+    showImg(meal.image);
+  } else {
+    fetchMealImage(meal.name).then(thumb => {
+      if (thumb && _mealDetailDate + '|' + _mealDetailType === token) {
+        showImg(thumb);
+        persistMealImage(dateKey, mealType, thumb); // cache to Firestore for future opens
+      }
+    });
+  }
 
   document.getElementById('mealDetailModal').style.display = 'flex';
 }
