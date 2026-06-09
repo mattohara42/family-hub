@@ -2865,6 +2865,32 @@ body.has-bg .mini-card:hover {
   font-style: normal;
 }
 
+/* ── Countdowns ── */
+.countdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 0;
+  border-bottom: 1px solid rgba(128,128,128,.1);
+  gap: 10px;
+}
+.countdown-item:last-child { border-bottom: none; }
+.countdown-label {
+  font-size: var(--text-sm);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.countdown-days {
+  font-size: var(--text-sm);
+  color: var(--accent);
+  flex-shrink: 0;
+  text-align: right;
+}
+.countdown-days strong { font-size: 1.15em; }
+
 /* ── Daily Briefing Banner ── */
 .briefing-banner {
   display: flex;

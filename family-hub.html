@@ -301,6 +301,14 @@
       </div>
     </div>
 
+    <!-- Countdowns -->
+    <div class="card" id="countdownCard">
+      <div class="card-header">
+        <h2>⏳ Countdowns</h2>
+      </div>
+      <div class="card-body" id="countdownBody" style="padding:10px 14px"></div>
+    </div>
+
     <!-- Family Assistant -->
     <div class="card" id="assistantCard">
       <div class="card-header">
@@ -464,6 +472,26 @@
             <button class="btn btn-primary btn-sm" onclick="addIcsSub()">Add</button>
           </div>
           <div id="icsSubStatus" style="font-size:.75rem;color:var(--muted);margin-top:4px"></div>
+        </div>
+
+        <!-- Countdowns -->
+        <div class="lc-section">
+          <div class="lc-section-title">⏳ Countdowns</div>
+          <div id="countdownSettingList" class="lc-list"></div>
+          <!-- Manual date entry -->
+          <div class="lc-add-row" style="flex-wrap:wrap;gap:5px;margin-top:6px">
+            <input id="cdLabelInput" type="text" placeholder="Label" class="lc-input" style="flex:1;min-width:100px" />
+            <input id="cdDateInput"  type="date"  class="lc-input lc-input-sm" />
+            <input id="cdEmojiInput" type="text"  placeholder="🎉" class="lc-input" style="width:42px;text-align:center" maxlength="2" />
+            <button class="btn btn-primary btn-sm" onclick="addCountdown()">Add</button>
+          </div>
+          <!-- Event picker -->
+          <div style="margin-top:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <select id="cdEventPicker" class="lc-select" style="flex:1;min-width:160px">
+              <option value="">— or pick a calendar event —</option>
+            </select>
+            <button class="btn btn-sm" style="background:var(--surface2)" onclick="addCountdownFromEvent()">Add from event</button>
+          </div>
         </div>
 
         <div class="lc-section">
@@ -741,6 +769,12 @@
               <span>🤖 Family Assistant</span>
               <label class="widget-placement-radio"><input type="radio" name="placement_assistant" value="bottom"  /><span>Bottom</span></label>
               <label class="widget-placement-radio"><input type="radio" name="placement_assistant" value="sidebar" /><span>Sidebar</span></label>
+            </div>
+            <div class="widget-toggle-row">
+              <input type="checkbox" id="widget_countdown" />
+              <span>⏳ Countdowns</span>
+              <label class="widget-placement-radio"><input type="radio" name="placement_countdown" value="bottom"  /><span>Bottom</span></label>
+              <label class="widget-placement-radio"><input type="radio" name="placement_countdown" value="sidebar" /><span>Sidebar</span></label>
             </div>
 
           </div>

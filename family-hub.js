@@ -163,14 +163,14 @@ const ASSISTANT_QUICK_PROMPTS = [
   "Add a $60 internet bill monthly",
 ];
 // ── Widget visibility & placement ────────────────────────────────────────────
-const WIDGET_DEFAULTS = { shopping: true, todo: true, budget: true, wotd: true, quote: true, dadjoke: true, yearstrip: true, assistant: true };
+const WIDGET_DEFAULTS = { shopping: true, todo: true, budget: true, wotd: true, quote: true, dadjoke: true, yearstrip: true, assistant: true, countdown: true };
 let widgetVisibility = { ...WIDGET_DEFAULTS, ...lsGet('fh_widgets', {}) };
 
 // Placement: 'sidebar' (right column) or 'bottom' (full-width strip below layout)
 const WIDGET_PLACEMENT_DEFAULTS = {
   shopping: 'sidebar', todo: 'sidebar', budget: 'sidebar',
   wotd: 'sidebar', quote: 'sidebar', dadjoke: 'sidebar',
-  yearstrip: 'bottom', assistant: 'sidebar'
+  yearstrip: 'bottom', assistant: 'sidebar', countdown: 'sidebar'
 };
 let widgetPlacement = { ...WIDGET_PLACEMENT_DEFAULTS, ...lsGet('fh_widget_placement', {}) };
 
@@ -184,6 +184,7 @@ const WIDGET_ORDER = [
   { key: 'dadjoke',   id: 'dadjokeCard'    },
   { key: 'quote',     id: 'quoteCard'      },
   { key: 'assistant', id: 'assistantCard'  },
+  { key: 'countdown', id: 'countdownCard' },
 ];
 
 /** Move widget cards between sidebar and #bottomStrip, then enforce visibility */
@@ -644,7 +645,8 @@ window.addEventListener('load', () => {
   initAssistantVoice();
   updateAssistantTtsBtn();      // set the 🔊/🔇 voice-output toggle state
   renderAssistantMessages();   // render empty-state welcome + quick-prompt chips
-  setTimeout(loadDailyBriefing, 1500); // generate after page settles + weather/cal data loads
+  setTimeout(loadDailyBriefing, 1500);
+  renderCountdownCard(); // generate after page settles + weather/cal data loads
   // Close SMS popover on outside click
   document.addEventListener('click', e => {
     const pop = document.getElementById('smsPopover');
@@ -1509,6 +1511,7 @@ async function loadAllCalendars() {
   updateStatusPill();
   renderCurrentView();
   renderYearStrip();
+  renderCountdownCard();
   document.getElementById('calendarStatus').textContent = '';
 }
 
@@ -1922,6 +1925,153 @@ function renderIcsSubList() {
       <button onclick="removeIcsSub('${sub.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem" title="Remove">✕</button>
     </div>
   `).join('');
+}
+
+// ── Countdowns ─────────────────────────────────────────────────
+let countdowns = lsGet('fh_countdowns', []); // [{id, label, emoji, targetDate}]
+
+function saveCountdowns() {
+  localStorage.setItem('fh_countdowns', JSON.stringify(countdowns));
+}
+
+/** Days until a YYYY-MM-DD date string (negative if past). */
+function daysUntil(dateStr) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const target = new Date(dateStr + 'T00:00:00');
+  return Math.round((target - today) / 86400000);
+}
+
+function addCountdown() {
+  const label = document.getElementById('cdLabelInput').value.trim();
+  const date  = document.getElementById('cdDateInput').value;
+  const emoji = document.getElementById('cdEmojiInput').value.trim() || '⏳';
+  if (!label || !date) return;
+  countdowns.push({ id: 'cd_' + Date.now(), label, emoji, targetDate: date });
+  saveCountdowns();
+  document.getElementById('cdLabelInput').value = '';
+  document.getElementById('cdDateInput').value  = '';
+  document.getElementById('cdEmojiInput').value = '';
+  renderCountdownSettingList();
+  renderCountdownCard();
+}
+
+function addCountdownFromEvent() {
+  const picker = document.getElementById('cdEventPicker');
+  const val = picker.value;
+  if (!val) return;
+  try {
+    const { label, targetDate, emoji } = JSON.parse(val);
+    if (!label || !targetDate) return;
+    countdowns.push({ id: 'cd_' + Date.now(), label, emoji: emoji || '📅', targetDate });
+    saveCountdowns();
+    picker.value = '';
+    renderCountdownSettingList();
+    renderCountdownCard();
+  } catch {}
+}
+
+function removeCountdown(id) {
+  countdowns = countdowns.filter(c => c.id !== id);
+  saveCountdowns();
+  renderCountdownSettingList();
+  renderCountdownCard();
+}
+
+/** Populate the event picker with upcoming events from calEventCache. */
+function populateCountdownEventPicker() {
+  const picker = document.getElementById('cdEventPicker');
+  if (!picker) return;
+
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const cutoff = new Date(today.getTime() + 366 * 86400000);
+  const seen = new Set();
+  const options = [];
+
+  // Collect all events across all calendars in the next year
+  Object.entries(calEventCache).forEach(([calId, byDate]) => {
+    Object.entries(byDate).forEach(([dateStr, evts]) => {
+      const d = new Date(dateStr + 'T00:00:00');
+      if (d < today || d > cutoff) return;
+      evts.forEach(ev => {
+        const key = dateStr + '|' + (ev.summary || '');
+        if (seen.has(key)) return;
+        seen.add(key);
+        // Get label from matching cal/ICS
+        const calLabel = (() => {
+          const ics = icsSubs.find(s => s.id === calId);
+          if (ics) return ics.label;
+          const meta = calendarMeta.find(c => c.id === calId);
+          if (meta) return meta.label || calId.split('@')[0];
+          return calId;
+        })();
+        options.push({ dateStr, summary: ev.summary || '(No title)', calLabel, color: ev.color });
+      });
+    });
+  });
+
+  // Sort by date
+  options.sort((a, b) => a.dateStr.localeCompare(b.dateStr));
+
+  // Rebuild picker
+  picker.innerHTML = '<option value="">— or pick a calendar event —</option>';
+  options.forEach(({ dateStr, summary, calLabel }) => {
+    const d = new Date(dateStr + 'T00:00:00');
+    const dateLabel = d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+    const opt = document.createElement('option');
+    opt.value = JSON.stringify({ label: summary, targetDate: dateStr, emoji: '📅' });
+    opt.textContent = `${dateLabel} — ${summary} (${calLabel})`;
+    picker.appendChild(opt);
+  });
+}
+
+/** Render the countdown list in settings. */
+function renderCountdownSettingList() {
+  const el = document.getElementById('countdownSettingList');
+  if (!el) return;
+  if (!countdowns.length) {
+    el.innerHTML = '<div style="color:var(--muted);font-size:.78rem;padding:4px 0">No countdowns yet.</div>';
+    return;
+  }
+  el.innerHTML = countdowns.map(cd => {
+    const days = daysUntil(cd.targetDate);
+    const dStr = days > 0 ? `${days}d` : days === 0 ? 'today' : `${Math.abs(days)}d ago`;
+    return `<div class="lc-item" style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(128,128,128,.1)">
+      <span>${cd.emoji}</span>
+      <span style="flex:1;font-size:.82rem">${cd.label}</span>
+      <span style="font-size:.75rem;color:var(--muted)">${cd.targetDate} · ${dStr}</span>
+      <button onclick="removeCountdown('${cd.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem" title="Remove">✕</button>
+    </div>`;
+  }).join('');
+}
+
+/** Render the countdown card on the dashboard. */
+function renderCountdownCard() {
+  const el = document.getElementById('countdownBody');
+  if (!el) return;
+
+  // Sort: soonest first; exclude past events older than 1 day
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const active = countdowns
+    .map(cd => ({ ...cd, days: daysUntil(cd.targetDate) }))
+    .filter(cd => cd.days >= -1)
+    .sort((a, b) => a.days - b.days);
+
+  if (!active.length) {
+    el.innerHTML = '<div style="color:var(--muted);font-size:.82rem;text-align:center;padding:10px 0">No countdowns. Add some in ⚙️ Settings → Calendar.</div>';
+    return;
+  }
+
+  el.innerHTML = active.map(cd => {
+    const daysLabel = cd.days > 1  ? `<strong>${cd.days}</strong> days`
+                    : cd.days === 1 ? `<strong>1</strong> day`
+                    : cd.days === 0 ? `<strong>Today!</strong>`
+                    :                 `<strong>Yesterday</strong>`;
+    const sub = cd.days > 0 ? `${cd.emoji} ${cd.targetDate}` : '';
+    return `<div class="countdown-item">
+      <div class="countdown-label">${cd.emoji} ${cd.label}</div>
+      <div class="countdown-days">${daysLabel}</div>
+    </div>`;
+  }).join('');
 }
 
 // ── Calendar Event Editor ─────────────────────────────────────
@@ -5970,6 +6120,8 @@ function openSettings() {
     document.getElementById('settingCalSignedIn').style.display = 'none';
   }
   renderIcsSubList();
+  renderCountdownSettingList();
+  populateCountdownEventPicker();
   // Widget visibility checkboxes + placement radios
   Object.keys(WIDGET_DEFAULTS).forEach(key => {
     const cb = document.getElementById('widget_' + key);
