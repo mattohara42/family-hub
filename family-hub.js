@@ -84,7 +84,7 @@ function loadCalendarMeta() {
 }
 let calendarMeta  = loadCalendarMeta();
 let showHolidays  = localStorage.getItem('fh_holidays') === 'true';
-let holidaysColor = localStorage.getItem('fh_holidaysColor') || holidaysColor;
+let holidaysColor = localStorage.getItem('fh_holidaysColor') || '#e8a838';
 const HOLIDAYS_ID = 'en.usa#holiday@group.v.calendar.google.com';
 // File-level constants win; localStorage is the fallback for values set via ⚙️ Settings
 let weatherKey      = WEATHER_API_KEY  || localStorage.getItem('fh_wkey')  || '';
