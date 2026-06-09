@@ -187,12 +187,11 @@
         <h2>🛒 Shopping</h2>
         <div style="display:flex;gap:4px;align-items:center">
           <div class="sms-btn-wrap">
-            <button class="btn btn-sm" id="smsTriggerBtn"
-                    onclick="toggleSmsPopover(event)"
-                    style="background:var(--surface2);color:var(--text);padding:3px 7px">📱▾</button>
+            <button class="btn btn-secondary btn-sm" id="smsTriggerBtn"
+                    onclick="toggleSmsPopover(event)">📱 SMS ▾</button>
             <div class="sms-popover" id="smsPopover"></div>
           </div>
-          <button class="btn btn-sm" onclick="clearDoneShopping()" style="background:var(--surface2);color:var(--muted);padding:3px 7px" title="Clear completed items">✕ done</button>
+          <button class="btn btn-secondary btn-sm" onclick="clearDoneShopping()" title="Clear completed items">✕ done</button>
           <button class="btn btn-sm" onclick="clearAllShopping()" style="background:var(--surface2);color:var(--muted);padding:3px 7px" title="Clear all items">✕ all</button>
         </div>
       </div>
