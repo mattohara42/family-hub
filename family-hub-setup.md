@@ -29,7 +29,8 @@ Family Hub is deployed as a static site on Netlify. If the site is already set u
 2. Go to [app.netlify.com](https://app.netlify.com) → **Add new site → Import an existing project**
 3. Connect GitHub → select the repo → set **Publish directory** to `.`, leave **Build command** blank
 4. Click **Deploy site** — note the assigned URL (e.g. `https://family-hub-xyz.netlify.app`)
-5. Complete Steps 1 and 2 below, then add the Netlify domain to:
+5. Add your API keys as Netlify environment variables (see Step 4b below) and redeploy
+6. Complete Steps 1 and 2 below, then add the Netlify domain to:
    - **Google Cloud Console → OAuth Client → Authorized JavaScript Origins**
    - **Firebase Console → Authentication → Settings → Authorized Domains**
 
@@ -172,29 +173,49 @@ Open `family-hub.js` and find the `FIREBASE_CONFIG` constant near the very top. 
 
 ---
 
-## Step 4 — Google AI Studio (Meal Planning AI)
+## Step 4 — Google AI Studio (Meal Planning AI, Assistant & Daily Briefing)
 
-This powers the Meal Planning feature — it suggests meals, incorporates your pantry, dietary preferences, and what's on your calendar.
+This powers the Meal Planning AI, the Family Assistant chat, and the daily briefing banner.
 
 ### 4a. Create an API key (free, no credit card required)
 
-1. Go to [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
-2. Click **Create API key**
-3. In the project dropdown, either:
+1. Go to [aistudio.google.com](https://aistudio.google.com)
+2. Click your profile / account icon in the top-right corner → **Get API key**
+3. Click **Create API key**
+4. In the project dropdown, either:
    - Select **Create a new project** (recommended — keeps it on the free tier)
    - Or select an existing Google Cloud project that does **not** have billing enabled
-4. Copy the API key
+5. Copy the API key — it looks like `AIzaSy_...`
+6. When prompted, choose to mark it as a **Secret** (recommended — prevents it from showing in logs)
 
-> ⚠️ **Important:** If the project you choose has Google Cloud billing enabled, the free tier is disabled. You'll get a quota error immediately. Use a project without billing, or be prepared to pay (costs are very small — roughly $0.001 per suggestion batch with Gemini 2.5 Flash).
+> ⚠️ **Important:** If the project you choose has Google Cloud billing enabled, the free tier is disabled and you'll get a quota error immediately. Use a project without billing, or be prepared to pay (costs are very small — roughly $0.001 per request with Gemini 2.5 Flash).
 
-### 4b. Enter it in the app
+### 4b. Where to enter it depends on how you run Family Hub
+
+**If using Netlify (recommended):**
+
+The API key is stored as a server-side secret in Netlify — you never paste it into the app itself.
+
+1. Go to [app.netlify.com](https://app.netlify.com) → select your Family Hub site
+2. Click **Project Configuration** in the left sidebar
+3. Click **Environment variables → Add a variable**
+4. Add:
+   - Key: `GEMINI_KEY` — Value: your Gemini API key — check **Secret**
+   - Key: `OWM_KEY` — Value: your OpenWeatherMap API key — check **Secret**
+5. Click **Save**, then trigger a new deploy (Deploys → **Trigger deploy → Deploy site**)
+
+After deploying, leave the `WEATHER_API_KEY` and AI key fields in `family-hub.js` blank — the app will automatically call the Netlify proxy functions instead.
+
+**If running locally:**
 
 1. Open Family Hub → click ⚙️ **Settings → 🍽 Meals**
 2. Select **Google Gemini** as the provider
 3. Paste your API key
 4. Click **Save**
 
-### 4c. Optional: Use OpenAI instead
+You can also paste your OpenWeatherMap key in **Settings → 🌤 Weather** for local use.
+
+### 4c. Optional: Use OpenAI instead (local only)
 
 If you have an OpenAI API key with credits:
 1. In **Settings → 🍽 Meals**, select **OpenAI**
@@ -339,4 +360,6 @@ Family Hub can be shared in two ways:
 | Calendar shows no events | Check that your Google account is a Test User in Cloud Console |
 | Calendars card shows nothing | The card shows a placeholder until you sign in — click **Sign in with Google** |
 | Lists don't sync | Verify Firebase config values are correct and Firestore is in test mode |
+| Weather or AI not working on Netlify | Go to **Project Configuration → Environment variables** and confirm `OWM_KEY` and `GEMINI_KEY` are set, then trigger a new deploy |
+| AI key not found on Netlify | Keys must be added before deploying — Netlify functions read env vars at runtime, but a fresh deploy is required after adding them |
 | Word of the Day shows "Loading…" | The dictionary API may be temporarily unavailable — click the ↺ refresh button |
