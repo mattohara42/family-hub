@@ -27,6 +27,41 @@ const OWM_API_BASE          = 'https://api.openweathermap.org/data/2.5'; // v2.5
 const DICT_API_BASE         = 'https://api.dictionaryapi.dev/api/v2/entries/en';
 const DADJOKE_API_BASE      = 'https://icanhazdadjoke.com';
 
+// ── Netlify proxy helpers ──────────────────────────────────────
+// When a client-side API key is blank (production Netlify deploy), requests
+// are routed through /.netlify/functions/* which holds the key server-side.
+// When the key is set in the config block above (local dev), calls go direct.
+
+const OWM_ENDPOINTS = {
+  weather:       `${OWM_API_BASE}/weather`,
+  forecast:      `${OWM_API_BASE}/forecast`,
+  air_pollution: `${OWM_API_BASE}/air_pollution`,
+  reverse:       'https://api.openweathermap.org/geo/1.0/reverse',
+};
+
+function owmFetch(endpoint, params) {
+  if (weatherKey) {
+    const url = new URL(OWM_ENDPOINTS[endpoint]);
+    Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+    url.searchParams.set('appid', weatherKey);
+    return fetch(url.toString());
+  }
+  const qs = new URLSearchParams({ endpoint, ...params });
+  return fetch(`/.netlify/functions/weather?${qs}`);
+}
+
+function geminiFetch(body) {
+  if (mealAiKey) {
+    return fetch(`${GEMINI_API_BASE}/${GEMINI_MODEL}:generateContent?key=${mealAiKey}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+  }
+  return fetch('/.netlify/functions/ai', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: GEMINI_MODEL, ...body }),
+  });
+}
+
 // ════════════════════════════════════════════════════════════════
 
 // ── Security: HTML-escape helper (prevents XSS in innerHTML) ──
@@ -2832,9 +2867,7 @@ async function fetchWeatherByGeolocation() {
   navigator.geolocation.getCurrentPosition(
     async ({ coords: { latitude: lat, longitude: lon } }) => {
       try {
-        const r = await fetch(
-          `https://api.openweathermap.org/geo/1.0/reverse?lat=${lat}&lon=${lon}&limit=1&appid=${weatherKey}`
-        );
+        const r = await owmFetch('reverse', { lat, lon, limit: 1 });
         const d = await r.json();
         const place = d?.[0];
         if (!place) { alert('Could not resolve your location to a city.'); restore(); return; }
@@ -2950,8 +2983,7 @@ async function fetchNwsAlerts(lat, lon) {
 }
 
 async function loadWeatherByCity(city) {
-  const key = weatherKey;
-  if (!key) {
+  if (!weatherKey && !window.location.hostname.includes('netlify')) {
     document.getElementById('weatherSetup').style.display = '';
     document.getElementById('weatherDisplay').style.display = 'none';
     document.getElementById('cityInput').value = city;
@@ -2961,8 +2993,8 @@ async function loadWeatherByCity(city) {
 
   try {
     const [curR, fcastR] = await Promise.all([
-      fetch(`${OWM_API_BASE}/weather?q=${encodeURIComponent(city)}&appid=${key}&units=imperial`),
-      fetch(`${OWM_API_BASE}/forecast?q=${encodeURIComponent(city)}&appid=${key}&units=imperial&cnt=56`)
+      owmFetch('weather',  { q: city, units: 'imperial' }),
+      owmFetch('forecast', { q: city, units: 'imperial', cnt: 56 }),
     ]);
     const cur   = await curR.json();
     const fcast = await fcastR.json();
@@ -2976,8 +3008,8 @@ async function loadWeatherByCity(city) {
       const alertsP = fetchNwsAlerts(lat, lon);   // independent — never throws, [] on failure / non-US
       try {
         const [aqiR, geoR] = await Promise.all([
-          fetch(`${OWM_API_BASE}/air_pollution?lat=${lat}&lon=${lon}&appid=${key}`),
-          fetch(`https://api.openweathermap.org/geo/1.0/reverse?lat=${lat}&lon=${lon}&limit=1&appid=${key}`)
+          owmFetch('air_pollution', { lat, lon }),
+          owmFetch('reverse',       { lat, lon, limit: 1 }),
         ]);
         const aqiD = await aqiR.json();
         aqi = aqiD?.list?.[0]?.main?.aqi ?? null;
@@ -4307,17 +4339,10 @@ async function callMealAI(prompt) {
 
   if (mealAiProvider === 'gemini') {
     // ── Google Gemini ──────────────────────────────────────────
-    const resp = await fetch(
-      `${GEMINI_API_BASE}/${GEMINI_MODEL}:generateContent?key=${key}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.85, maxOutputTokens: 8192 }
-        })
-      }
-    );
+    const resp = await geminiFetch({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.85, maxOutputTokens: 8192 },
+    });
     if (!resp.ok) {
       const err    = await resp.json().catch(() => ({}));
       const status = err.error?.status  || '';
@@ -5486,18 +5511,11 @@ async function sendAssistantMessage() {
 
   try {
     const systemPrompt = buildAssistantContext();
-    const resp = await fetch(
-      `${GEMINI_API_BASE}/${GEMINI_MODEL}:generateContent?key=${mealAiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: systemPrompt }] },
-          contents: assistantHistory,
-          generationConfig: { temperature: 0.7, maxOutputTokens: 1024 }
-        })
-      }
-    );
+    const resp = await geminiFetch({
+      systemInstruction: { parts: [{ text: systemPrompt }] },
+      contents: assistantHistory,
+      generationConfig: { temperature: 0.7, maxOutputTokens: 1024 },
+    });
     thinkEl.remove();
 
     if (!resp.ok) {
@@ -5585,17 +5603,10 @@ Write a warm, concise daily briefing (3–5 sentences max). Open with "${greetin
 
 Be specific and personal. Use the family data above. Do NOT use bullet points or headers — write in flowing prose. Do not include action tags.`;
 
-    const resp = await fetch(
-      `${GEMINI_API_BASE}/${GEMINI_MODEL}:generateContent?key=${mealAiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+    const resp = await geminiFetch({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 256 }
-        })
-      }
-    );
+          generationConfig: { temperature: 0.7, maxOutputTokens: 256 },
+    });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? '';
