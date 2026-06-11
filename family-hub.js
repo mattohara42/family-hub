@@ -149,6 +149,7 @@ if (localStorage.getItem('fh_mode') === 'amazing') localStorage.setItem('fh_mode
 const _savedMode    = localStorage.getItem('fh_mode');
 let appMode         = _savedMode || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');  // 'light' | 'dark' | 'nautical'
 let mobileTab       = localStorage.getItem('fh_mobileTab') || 'cal';  // 'cal' | 'widgets'
+let layoutMode      = localStorage.getItem('fh_layoutMode') || 'auto'; // 'auto' | 'portrait' | 'landscape'
 let smsContacts     = lsGet('fh_smsContacts', []);
 // migrate legacy single-number setting
 (function(){
@@ -741,6 +742,7 @@ window.addEventListener('load', () => {
     initGoogleAuth();
   }
   applyAppMode(appMode);
+  applyLayoutMode();
   setMobileTab(mobileTab);
   updateStatusPill();
   if (weatherLocations.length) showWeatherLocation(0);
@@ -6693,6 +6695,24 @@ window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', e 
   if (!localStorage.getItem('fh_mode')) applyAppMode(e.matches ? 'light' : 'dark');
 });
 
+function applyLayoutMode(mode) {
+  if (mode !== undefined) layoutMode = mode;
+  document.body.classList.remove('portrait-mode', 'force-landscape', 'auto-portrait');
+  if (layoutMode === 'portrait')  document.body.classList.add('portrait-mode');
+  if (layoutMode === 'landscape') document.body.classList.add('force-landscape');
+  // 'auto' = class toggled by orientation media query listener
+  if (layoutMode === 'auto') {
+    if (window.matchMedia('(orientation: portrait)').matches) {
+      document.body.classList.add('auto-portrait');
+    }
+  }
+}
+
+// Keep auto-portrait in sync with device orientation changes
+window.matchMedia('(orientation: portrait)').addEventListener('change', () => {
+  if (layoutMode === 'auto') applyLayoutMode();
+});
+
 function setAppMode(mode) {
   applyAppMode(mode);
   localStorage.setItem('fh_mode', mode);
@@ -6714,6 +6734,8 @@ function switchSettingsTab(tab) {
 
 function openSettings() {
   switchSettingsTab('look');   // always open on first tab
+  const lmEl = document.getElementById('settingLayoutMode');
+  if (lmEl) lmEl.value = layoutMode;
   document.getElementById('settingName').value          = userName;
   document.getElementById('settingWeatherKey').value    = weatherKey;
   document.getElementById('sunArcToggle').checked        = sunArcEnabled;
@@ -6818,6 +6840,9 @@ function saveSettings() {
   if (hncEl) { newsHeadlineCount = parseInt(hncEl.value) || 5; saveNewsFeeds(); }
   if (widgetVisibility.news)  loadNewsFeeds();
   if (widgetVisibility.stock) loadStockQuotes();
+  // Save layout orientation mode
+  const lmSaveEl = document.getElementById('settingLayoutMode');
+  if (lmSaveEl) { layoutMode = lmSaveEl.value; localStorage.setItem('fh_layoutMode', layoutMode); applyLayoutMode(); }
   // Save bills-on-cal toggle
   const billsEl = document.getElementById('lcBillsOnCal');
   if (billsEl) {

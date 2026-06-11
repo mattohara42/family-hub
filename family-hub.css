@@ -807,6 +807,33 @@ body.has-bg .day-hour-row {
   #bottomStrip { grid-template-columns: 1fr; }
 }
 
+/* ── Portrait / Landscape orientation layout ── */
+/* Applied by JS (applyLayoutMode) via body.portrait-mode for forced portrait,
+   or auto-detected from @media (orientation: portrait) when layoutMode === 'auto' */
+body.portrait-mode .layout,
+body:not(.force-landscape).auto-portrait .layout {
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+body.portrait-mode .sidebar,
+body:not(.force-landscape).auto-portrait .sidebar {
+  flex-direction: row;
+  flex-wrap: wrap;
+  overflow-y: visible;
+}
+body.portrait-mode .sidebar > .card,
+body:not(.force-landscape).auto-portrait .sidebar > .card {
+  flex: 1 1 260px;
+}
+body.portrait-mode .mini-grid,
+body:not(.force-landscape).auto-portrait .mini-grid {
+  grid-template-columns: repeat(3, 1fr);
+}
+body.portrait-mode #bottomStrip,
+body:not(.force-landscape).auto-portrait #bottomStrip {
+  grid-template-columns: 1fr;
+}
+
 /* Large mobile */
 @media (max-width: 640px) {
   body { padding: 12px 10px; }
