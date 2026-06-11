@@ -199,7 +199,7 @@ const ASSISTANT_QUICK_PROMPTS = [
   "Add a $60 internet bill monthly",
 ];
 // ── Widget visibility & placement ────────────────────────────────────────────
-const WIDGET_DEFAULTS = { shopping: true, todo: true, budget: true, wotd: true, quote: true, dadjoke: true, yearstrip: true, assistant: true, countdown: true, news: true, stock: false };
+const WIDGET_DEFAULTS = { shopping: true, todo: true, budget: true, wotd: true, quote: true, dadjoke: true, yearstrip: true, assistant: true, countdown: true, news: false, stock: false };
 let widgetVisibility = { ...WIDGET_DEFAULTS, ...lsGet('fh_widgets', {}) };
 
 // Placement: 'sidebar' (right column) or 'bottom' (full-width strip below layout)
@@ -339,6 +339,10 @@ function applyWidgetVisibility() {
     wotd:     'wotdCard',
     quote:    'quoteCard',
     dadjoke:  'dadjokeCard',
+    assistant:'assistantCard',
+    countdown:'countdownCard',
+    news:     'newsCard',
+    stock:    'stockCard',
   };
   Object.entries(MAP).forEach(([key, id]) => {
     const el = document.getElementById(id);
