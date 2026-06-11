@@ -1496,8 +1496,21 @@ function renderMultidayOverlay() {
   const MAX_LANES = 3;
   const BAR_H    = 18;
   const BAR_GAP  = 2;
-  // rowLanes[rowIdx][lane] = eventId or null
-  const rowLanes = rows.map(() => new Array(MAX_LANES).fill(null));
+
+  // Per-cell lane tracking: cellLanes[dateKey][lane] = eventId or null.
+  // Two non-overlapping events in the same week row can share lane 0 without conflict.
+  const cellLanes = {};
+  Object.keys(cellMap).forEach(dk => { cellLanes[dk] = new Array(MAX_LANES).fill(null); });
+
+  // Helper: iterate all dates in a segment range
+  const segDates = (startDate, endDate) => {
+    const out = [];
+    const d = new Date(startDate + 'T00:00:00');
+    const end = new Date(endDate + 'T00:00:00');
+    while (d <= end) { out.push(d.toISOString().slice(0, 10)); d.setDate(d.getDate() + 1); }
+    return out;
+  };
+
   const segments = [];
 
   mdEvents.forEach(ev => {
@@ -1509,38 +1522,35 @@ function renderMultidayOverlay() {
     });
     if (!evSegments.length) return;
 
-    // Find lowest lane free in ALL rows this event touches
+    // Find the lowest lane free in every cell this event covers
     let lane = -1;
     outer: for (let l = 0; l < MAX_LANES; l++) {
-      for (const { rowIdx } of evSegments) {
-        if (rowLanes[rowIdx][l] !== null) continue outer;
+      for (const { startDate, endDate } of evSegments) {
+        for (const dk of segDates(startDate, endDate)) {
+          if (cellLanes[dk] && cellLanes[dk][l] !== null) continue outer;
+        }
       }
       lane = l; break;
     }
-    if (lane === -1) return; // > MAX_LANES overlapping events; skip
+    if (lane === -1) return; // too many overlapping events
 
-    evSegments.forEach(({ rowIdx }) => { rowLanes[rowIdx][lane] = ev.eventId; });
+    // Mark each covered cell as occupied in this lane
+    evSegments.forEach(({ startDate, endDate }) => {
+      segDates(startDate, endDate).forEach(dk => {
+        if (cellLanes[dk]) cellLanes[dk][lane] = ev.eventId;
+      });
+    });
+
     evSegments.forEach(seg => segments.push({ ev, ...seg, lane }));
   });
 
   if (!segments.length) return;
 
-  // Update spacers per-cell: only cells that actually have bars through them get height.
-  // A cell with no bars should have spacer=0 so single-day events sit at the top.
-  const cellHighestLane = {}; // dateKey → highest lane index covering that cell
-  segments.forEach(({ startDate, endDate, lane }) => {
-    // Iterate every date in this segment (startDate..endDate inclusive)
-    const d = new Date(startDate + 'T00:00:00');
-    const end = new Date(endDate + 'T00:00:00');
-    while (d <= end) {
-      const dk = d.toISOString().slice(0, 10);
-      if (cellMap[dk]) cellHighestLane[dk] = Math.max(cellHighestLane[dk] ?? -1, lane);
-      d.setDate(d.getDate() + 1);
-    }
-  });
-  Object.entries(cellHighestLane).forEach(([date, highestLane]) => {
-    const sp = cellMap[date]?.el.querySelector('.cal-md-spacer');
-    if (sp) sp.style.height = ((highestLane + 1) * (BAR_H + BAR_GAP)) + 'px';
+  // Spacers: per-cell height = (highest occupied lane + 1) × bar stride
+  Object.entries(cellLanes).forEach(([dk, lanes]) => {
+    const highest = lanes.reduce((max, v, i) => v !== null ? i : max, -1);
+    const sp = cellMap[dk]?.el.querySelector('.cal-md-spacer');
+    if (sp) sp.style.height = highest >= 0 ? ((highest + 1) * (BAR_H + BAR_GAP)) + 'px' : '0';
   });
 
   // Build overlay
