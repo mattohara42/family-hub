@@ -2728,7 +2728,7 @@ body.has-bg .mini-card:hover {
   background: var(--accent);
   color: #fff;
   font-weight: 700;
-  border-radius: 50%;
+  border-radius: 4px;
 }
 /* dot row under day number for events */
 .mini-dots {
@@ -2766,9 +2766,26 @@ body.has-bg .mini-card:hover {
 }
 
 .year-card-cal-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.year-card-dow-row,
+.year-card-week-row {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 1px;
+}
+
+.year-card-week-row.today-week {
+  background: rgba(108,142,245,0.13);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+body.colorblind-mode .year-card-week-row.today-week {
+  background: rgba(86,180,233,0.15);
 }
 
 .year-card-day {
@@ -2785,7 +2802,7 @@ body.has-bg .mini-card:hover {
   background: var(--accent);
   color: #fff;
   font-weight: var(--weight-bold);
-  border-radius: 50%;
+  border-radius: 4px;
 }
 
 /* ── Settings calendar list ── */

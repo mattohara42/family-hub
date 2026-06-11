@@ -3015,28 +3015,37 @@ function renderYearCard() {
 
     // Mini grid
     const mg = document.createElement('div');
-    mg.className = 'mini-cal-grid year-card-cal-grid';
+    mg.className = 'year-card-cal-grid';
 
+    // DOW header row
+    const dowRow = document.createElement('div');
+    dowRow.className = 'year-card-dow-row';
     ['S','M','T','W','T','F','S'].forEach(d => {
       const dh = document.createElement('div');
       dh.className = 'mini-dow';
       dh.textContent = d;
-      mg.appendChild(dh);
+      dowRow.appendChild(dh);
     });
+    mg.appendChild(dowRow);
 
     const firstDay    = new Date(year, m, 1).getDay();
     const daysInMonth = new Date(year, m + 1, 0).getDate();
     const daysInPrev  = new Date(year, m, 0).getDate();
+    const todayGridPos = isCurrentMonth ? firstDay + today.getDate() - 1 : -1;
+    const todayWeekRow = todayGridPos >= 0 ? Math.floor(todayGridPos / 7) : -1;
+
+    // Build flat list of all day cells/wraps
+    const cells = [];
 
     for (let i = firstDay - 1; i >= 0; i--) {
       const cell = document.createElement('div');
       cell.className = 'mini-day year-card-day';
       cell.textContent = daysInPrev - i;
-      mg.appendChild(cell);
+      cells.push(cell);
     }
 
     for (let d = 1; d <= daysInMonth; d++) {
-      const isToday = year === today.getFullYear() && m === today.getMonth() && d === today.getDate();
+      const isToday = isCurrentMonth && d === today.getDate();
       const dateKey = `${year}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
       const dots    = getEventDotsForDate(dateKey);
 
@@ -3060,7 +3069,7 @@ function renderYearCard() {
         wrap.appendChild(dotRow);
       }
 
-      mg.appendChild(wrap);
+      cells.push(wrap);
     }
 
     const total    = firstDay + daysInMonth;
@@ -3069,7 +3078,18 @@ function renderYearCard() {
       const cell = document.createElement('div');
       cell.className = 'mini-day year-card-day';
       cell.textContent = d;
-      mg.appendChild(cell);
+      cells.push(cell);
+    }
+
+    // Group cells into week rows
+    for (let r = 0; r < cells.length; r += 7) {
+      const weekRow = document.createElement('div');
+      const isTodayWeek = todayWeekRow >= 0 && r / 7 === todayWeekRow;
+      weekRow.className = 'year-card-week-row' + (isTodayWeek ? ' today-week' : '');
+      for (let c = r; c < r + 7 && c < cells.length; c++) {
+        weekRow.appendChild(cells[c]);
+      }
+      mg.appendChild(weekRow);
     }
 
     card.appendChild(mg);
