@@ -1876,6 +1876,8 @@ async function loadAllCalendars() {
   // Inject ICS subscription events (uses its own cache; independent of Google auth)
   await loadIcsSubs();
 
+  applyMemberColors();
+
   renderCalendarTabs();
   updateStatusPill();
   renderCurrentView();
@@ -4165,7 +4167,7 @@ function setupListeners() {
 
   // Family members — real-time sync so every device shares the same list
   db.collection('familyMembers').orderBy('order').onSnapshot(snap => {
-    familyMembers = snap.docs.map(doc => ({ id: doc.id, name: doc.data().name, order: doc.data().order ?? 0, gender: doc.data().gender || 'neutral' }));
+    familyMembers = snap.docs.map(doc => ({ id: doc.id, name: doc.data().name, order: doc.data().order ?? 0, gender: doc.data().gender || 'neutral', color: doc.data().color || null }));
     // Back-fill missing order fields (e.g. docs created before this field existed)
     const needsOrder = familyMembers.filter(m => m.order === 0 && familyMembers.indexOf(m) > 0);
     if (snap.docs.some(d => d.data().order == null)) {
@@ -4394,6 +4396,38 @@ function makeTodoItem(item, onToggle, onDelete) {
 }
 
 // ── Family Members ─────────────────────────────────────────────
+
+// Post-fetch pass: override ev.color for events whose title contains a member name.
+// Longer names matched first to avoid "Jack" stealing "Jackson's" events.
+function applyMemberColors() {
+  const colored = familyMembers.filter(m => m.color).sort((a, b) => b.name.length - a.name.length);
+  if (!colored.length) return;
+  Object.values(calEventCache).forEach(byDate => {
+    Object.values(byDate).forEach(evts => {
+      evts.forEach(ev => {
+        if (ev.holiday) return;
+        const title = (ev.summary || '').toLowerCase();
+        const match = colored.find(m => title.includes(m.name.toLowerCase()));
+        if (match) ev.color = match.color;
+      });
+    });
+  });
+}
+
+async function setFamilyMemberColor(idOrIndex, color) {
+  const m = typeof idOrIndex === 'string'
+    ? familyMembers.find(m => m.id === idOrIndex)
+    : familyMembers[idOrIndex];
+  if (!m) return;
+  m.color = color || null;
+  if (db) {
+    await db.collection('familyMembers').doc(m.id).update({ color: color || null });
+  } else {
+    localStorage.setItem('fh_familyMembers', JSON.stringify(familyMembers));
+  }
+  if (googleToken) loadAllCalendars();
+}
+
 function renderFamilyMemberList() {
   const el = document.getElementById('familyMemberList');
   if (!el) return;
@@ -4407,9 +4441,15 @@ function renderFamilyMemberList() {
       row.style.cssText = 'display:flex;align-items:center;gap:6px;background:var(--surface2);border-radius:8px;padding:6px 10px;font-size:.84rem;margin-bottom:6px';
       const removeArg = db ? `'${m.id}'` : i;
       const genderArg = db ? `'${m.id}'` : i;
+      const colorArg  = db ? `'${m.id}'` : i;
       const btnStyle = 'background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem;line-height:1;padding:0 3px';
       row.innerHTML = `
         <span style="flex:1">👤 ${esc(m.name)}</span>
+        <input type="color" value="${m.color || '#6c8ef5'}"
+               title="Calendar event color for ${esc(m.name)}"
+               onchange="setFamilyMemberColor(${colorArg},this.value)"
+               style="width:24px;height:24px;border:none;border-radius:4px;cursor:pointer;padding:0;background:none;flex-shrink:0;opacity:${m.color ? '1' : '0.4'}"
+               oninput="this.style.opacity='1'">
         <select onchange="setFamilyMemberGender(${genderArg},this.value)"
                 style="font-size:.75rem;padding:2px 4px;border-radius:5px;background:var(--surface);border:1px solid rgba(255,255,255,.15);color:var(--text);cursor:pointer"
                 title="Pronouns used by the assistant">
@@ -4447,7 +4487,7 @@ async function addFamilyMember() {
   if (!name) return;
   input.value = '';
   if (db) {
-    await db.collection('familyMembers').add({ name, order: familyMembers.length, gender: 'neutral' });
+    await db.collection('familyMembers').add({ name, order: familyMembers.length, gender: 'neutral', color: null });
     // onSnapshot updates familyMembers + renderFamilyMemberList
     return;
   }
