@@ -300,6 +300,28 @@
       </div>
     </div>
 
+    <!-- News Feed -->
+    <div class="card" id="newsCard">
+      <div class="card-header">
+        <h2>📰 News</h2>
+        <button onclick="loadNewsFeeds(true)" title="Refresh" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.6rem;line-height:1">↺</button>
+      </div>
+      <div class="card-body" id="newsBody" style="padding:10px 14px">
+        <div style="text-align:center;color:var(--muted);font-size:.85rem">Loading…</div>
+      </div>
+    </div>
+
+    <!-- Stock Ticker -->
+    <div class="card" id="stockCard">
+      <div class="card-header">
+        <h2>📈 Stocks</h2>
+        <button onclick="loadStockQuotes(true)" title="Refresh" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.6rem;line-height:1">↺</button>
+      </div>
+      <div class="card-body" id="stockBody" style="padding:10px 14px">
+        <div style="text-align:center;color:var(--muted);font-size:.85rem">Add tickers in ⚙️ Settings.</div>
+      </div>
+    </div>
+
     <!-- Countdowns -->
     <div class="card" id="countdownCard">
       <div class="card-header">
@@ -362,6 +384,7 @@
       <button class="modal-tab"        data-tab="todo"     onclick="switchSettingsTab('todo')">✅ To-Do</button>
       <button class="modal-tab"        data-tab="meals"    onclick="switchSettingsTab('meals')">🍽 Meals</button>
       <button class="modal-tab"        data-tab="widgets"  onclick="switchSettingsTab('widgets')">🧩 Widgets</button>
+      <button class="modal-tab"        data-tab="feeds"    onclick="switchSettingsTab('feeds')">📊 Feeds</button>
     </div>
 
     <!-- Scrollable panel area -->
@@ -770,6 +793,18 @@
               <label class="widget-placement-radio"><input type="radio" name="placement_countdown" value="bottom"  /><span>Bottom</span></label>
               <label class="widget-placement-radio"><input type="radio" name="placement_countdown" value="sidebar" /><span>Sidebar</span></label>
             </div>
+            <div class="widget-toggle-row">
+              <input type="checkbox" id="widget_news" />
+              <span>📰 News</span>
+              <label class="widget-placement-radio"><input type="radio" name="placement_news" value="bottom"  /><span>Bottom</span></label>
+              <label class="widget-placement-radio"><input type="radio" name="placement_news" value="sidebar" /><span>Sidebar</span></label>
+            </div>
+            <div class="widget-toggle-row">
+              <input type="checkbox" id="widget_stock" />
+              <span>📈 Stocks</span>
+              <label class="widget-placement-radio"><input type="radio" name="placement_stock" value="bottom"  /><span>Bottom</span></label>
+              <label class="widget-placement-radio"><input type="radio" name="placement_stock" value="sidebar" /><span>Sidebar</span></label>
+            </div>
 
           </div>
         </div>
@@ -777,6 +812,39 @@
           🤖 Family Assistant uses the Gemini key from ⚙️ Settings → 🍽 Meals.
         </p>
       </div><!-- /widgets -->
+
+      <!-- ── Feeds ── -->
+      <div class="settings-panel" data-panel="feeds">
+
+        <div class="lc-section">
+          <div class="lc-section-title">📰 News Feeds</div>
+          <div id="newsFeedList" class="lc-list"></div>
+          <div class="lc-add-row" style="margin-top:6px">
+            <input id="newsFeedLabel" type="text" placeholder="Label (e.g. BBC)" class="lc-input" style="flex:0 0 90px" />
+            <input id="newsFeedUrl"   type="url"  placeholder="RSS feed URL" class="lc-input" />
+            <button class="btn btn-primary btn-sm" onclick="addNewsFeed()">Add</button>
+          </div>
+          <div style="margin-top:8px;display:flex;align-items:center;gap:8px">
+            <label style="font-size:.8rem;color:var(--muted)">Headlines per feed:</label>
+            <input id="newsHeadlineCount" type="number" min="1" max="10" value="5"
+              class="lc-input" style="width:54px;flex:none" />
+          </div>
+        </div>
+
+        <div class="lc-section">
+          <div class="lc-section-title">📈 Stock Tickers</div>
+          <div id="stockTickerList" class="lc-list"></div>
+          <div class="lc-add-row" style="margin-top:6px">
+            <input id="stockTickerInput" type="text" placeholder="Symbol (e.g. AAPL)" class="lc-input"
+              style="text-transform:uppercase" onkeydown="if(event.key==='Enter')addStockTicker()" />
+            <button class="btn btn-primary btn-sm" onclick="addStockTicker()">Add</button>
+          </div>
+          <p style="font-size:.75rem;color:var(--muted);margin-top:6px">
+            Uses Yahoo Finance — no API key required. Quotes may be delayed 15 min.
+          </p>
+        </div>
+
+      </div><!-- /feeds -->
 
       <!-- ── Home Calendars ── -->
     </div><!-- /settings-panels -->

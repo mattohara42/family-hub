@@ -199,14 +199,15 @@ const ASSISTANT_QUICK_PROMPTS = [
   "Add a $60 internet bill monthly",
 ];
 // ── Widget visibility & placement ────────────────────────────────────────────
-const WIDGET_DEFAULTS = { shopping: true, todo: true, budget: true, wotd: true, quote: true, dadjoke: true, yearstrip: true, assistant: true, countdown: true };
+const WIDGET_DEFAULTS = { shopping: true, todo: true, budget: true, wotd: true, quote: true, dadjoke: true, yearstrip: true, assistant: true, countdown: true, news: true, stock: false };
 let widgetVisibility = { ...WIDGET_DEFAULTS, ...lsGet('fh_widgets', {}) };
 
 // Placement: 'sidebar' (right column) or 'bottom' (full-width strip below layout)
 const WIDGET_PLACEMENT_DEFAULTS = {
   shopping: 'sidebar', todo: 'sidebar', budget: 'sidebar',
   wotd: 'sidebar', quote: 'sidebar', dadjoke: 'sidebar',
-  yearstrip: 'bottom', assistant: 'sidebar', countdown: 'sidebar'
+  yearstrip: 'bottom', assistant: 'sidebar', countdown: 'sidebar',
+  news: 'sidebar', stock: 'sidebar',
 };
 let widgetPlacement = { ...WIDGET_PLACEMENT_DEFAULTS, ...lsGet('fh_widget_placement', {}) };
 
@@ -221,6 +222,8 @@ const WIDGET_ORDER = [
   { key: 'quote',     id: 'quoteCard'      },
   { key: 'assistant', id: 'assistantCard'  },
   { key: 'countdown', id: 'countdownCard' },
+  { key: 'news',      id: 'newsCard'      },
+  { key: 'stock',     id: 'stockCard'     },
 ];
 
 // User-defined widget order (keys only). Persisted in fh_widget_order.
@@ -750,6 +753,8 @@ window.addEventListener('load', () => {
   loadWotd();
   loadDadJoke();
   loadQuote();
+  loadNewsFeeds();
+  loadStockQuotes();
   initAssistantVoice();
   updateAssistantTtsBtn();      // set the 🔊/🔇 voice-output toggle state
   renderAssistantMessages();   // render empty-state welcome + quick-prompt chips
@@ -4502,6 +4507,252 @@ function showAIQuotaError(provider, rawMsg = '') {
   document.getElementById('mealGenerateBtn').disabled = false;
 }
 
+// ── News Feed ────────────────────────────────────────────────────────────────
+
+const CORS_PROXY_NEWS = 'https://corsproxy.io/?';
+const NEWS_CACHE_TTL  = 30 * 60 * 1000; // 30 min
+
+let newsFeeds        = lsGet('fh_newsFeeds', [
+  { id: 'nf_bbc',  label: 'BBC News', url: 'https://feeds.bbci.co.uk/news/rss.xml' },
+  { id: 'nf_ap',   label: 'AP News',  url: 'https://feeds.apnews.com/rss/apf-topnews' },
+]);
+let newsHeadlineCount = lsGet('fh_newsHeadlineCount', 5);
+
+function saveNewsFeeds() {
+  localStorage.setItem('fh_newsFeeds',         JSON.stringify(newsFeeds));
+  localStorage.setItem('fh_newsHeadlineCount', JSON.stringify(newsHeadlineCount));
+}
+
+async function fetchFeed(url) {
+  // Try direct first, fall back to CORS proxy
+  try {
+    const r = await fetch(url, { cache: 'no-store' });
+    if (r.ok) return await r.text();
+  } catch {}
+  const r = await fetch(CORS_PROXY_NEWS + encodeURIComponent(url), { cache: 'no-store' });
+  return r.ok ? r.text() : '';
+}
+
+function parseRssItems(xmlText, label, count) {
+  try {
+    const doc   = new DOMParser().parseFromString(xmlText, 'application/xml');
+    const items = [...doc.querySelectorAll('item, entry')].slice(0, count);
+    return items.map(item => ({
+      title: item.querySelector('title')?.textContent?.trim() || '',
+      link:  item.querySelector('link')?.textContent?.trim() ||
+             item.querySelector('link')?.getAttribute('href') || '#',
+      pub:   item.querySelector('pubDate, published, updated')?.textContent?.trim() || '',
+      source: label,
+    }));
+  } catch { return []; }
+}
+
+async function loadNewsFeeds(force = false) {
+  const el = document.getElementById('newsBody');
+  if (!el) return;
+  if (!newsFeeds.length) {
+    el.innerHTML = '<div style="color:var(--muted);font-size:.82rem;text-align:center;padding:8px 0">No feeds configured. Add some in ⚙️ Settings → 📊 Feeds.</div>';
+    return;
+  }
+
+  const cacheKey  = 'fh_newsCache';
+  const cacheTime = 'fh_newsCacheTime';
+  const now       = Date.now();
+  const cached    = lsGet(cacheKey, null);
+  const cachedAt  = parseInt(localStorage.getItem(cacheTime) || '0');
+
+  if (!force && cached && (now - cachedAt) < NEWS_CACHE_TTL) {
+    renderNewsCard(cached);
+    return;
+  }
+
+  el.innerHTML = '<div style="color:var(--muted);font-size:.82rem;text-align:center;padding:8px 0">Loading…</div>';
+
+  try {
+    const results = await Promise.all(
+      newsFeeds.map(async f => {
+        try {
+          const xml = await fetchFeed(f.url);
+          return parseRssItems(xml, f.label, newsHeadlineCount);
+        } catch { return []; }
+      })
+    );
+    // Interleave: one headline per feed, round-robin, up to newsHeadlineCount * feeds
+    const interleaved = [];
+    const maxPerFeed  = newsHeadlineCount;
+    for (let i = 0; i < maxPerFeed; i++) {
+      results.forEach(feedItems => { if (feedItems[i]) interleaved.push(feedItems[i]); });
+    }
+    localStorage.setItem(cacheKey,  JSON.stringify(interleaved));
+    localStorage.setItem(cacheTime, String(now));
+    renderNewsCard(interleaved);
+  } catch (e) {
+    el.innerHTML = `<div style="color:var(--muted);font-size:.82rem;text-align:center;padding:8px 0">Could not load feeds.</div>`;
+  }
+}
+
+function renderNewsCard(items) {
+  const el = document.getElementById('newsBody');
+  if (!el) return;
+  if (!items?.length) {
+    el.innerHTML = '<div style="color:var(--muted);font-size:.82rem;text-align:center;padding:8px 0">No headlines found.</div>';
+    return;
+  }
+  el.innerHTML = items.map(item => `
+    <div class="news-item">
+      <span class="news-source">${esc(item.source)}</span>
+      <a class="news-headline" href="${safeUrl(item.link)}" target="_blank" rel="noopener">${esc(item.title)}</a>
+    </div>`).join('');
+}
+
+function renderNewsFeedList() {
+  const el = document.getElementById('newsFeedList');
+  if (!el) return;
+  el.innerHTML = '';
+  if (!newsFeeds.length) {
+    el.innerHTML = '<div style="color:var(--muted);font-size:.78rem;padding:4px 0">No feeds yet.</div>';
+    return;
+  }
+  newsFeeds.forEach((f, i) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid rgba(128,128,128,.1)';
+    row.innerHTML = `
+      <span style="flex:0 0 70px;font-size:.8rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(f.url)}">${esc(f.label)}</span>
+      <span style="flex:1;font-size:.75rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.url)}</span>
+      <button style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem" onclick="removeNewsFeed(${i})">✕</button>`;
+    el.appendChild(row);
+  });
+}
+
+function addNewsFeed() {
+  const label = document.getElementById('newsFeedLabel').value.trim();
+  const url   = document.getElementById('newsFeedUrl').value.trim();
+  if (!label || !url) return;
+  newsFeeds.push({ id: 'nf_' + Date.now(), label, url });
+  saveNewsFeeds();
+  document.getElementById('newsFeedLabel').value = '';
+  document.getElementById('newsFeedUrl').value   = '';
+  renderNewsFeedList();
+  loadNewsFeeds(true);
+}
+
+function removeNewsFeed(i) {
+  newsFeeds.splice(i, 1);
+  saveNewsFeeds();
+  renderNewsFeedList();
+  loadNewsFeeds(true);
+}
+
+// ── Stock Ticker ──────────────────────────────────────────────────────────────
+
+const STOCK_CACHE_TTL  = 5 * 60 * 1000; // 5 min
+const YAHOO_QUOTE_URL  = 'https://query1.finance.yahoo.com/v7/finance/quote?symbols=';
+
+let stockTickers = lsGet('fh_stockTickers', []);
+
+function saveStockTickers() {
+  localStorage.setItem('fh_stockTickers', JSON.stringify(stockTickers));
+}
+
+async function loadStockQuotes(force = false) {
+  const el = document.getElementById('stockBody');
+  if (!el) return;
+  if (!stockTickers.length) {
+    el.innerHTML = '<div style="color:var(--muted);font-size:.82rem;text-align:center;padding:8px 0">Add tickers in ⚙️ Settings → 📊 Feeds.</div>';
+    return;
+  }
+
+  const cacheKey  = 'fh_stockCache';
+  const cacheTime = 'fh_stockCacheTime';
+  const now       = Date.now();
+  const cached    = lsGet(cacheKey, null);
+  const cachedAt  = parseInt(localStorage.getItem(cacheTime) || '0');
+
+  if (!force && cached && (now - cachedAt) < STOCK_CACHE_TTL) {
+    renderStockCard(cached);
+    return;
+  }
+
+  el.innerHTML = '<div style="color:var(--muted);font-size:.82rem;text-align:center;padding:8px 0">Loading…</div>';
+
+  const symbols = stockTickers.join(',');
+  try {
+    let data = null;
+    // Try direct (Yahoo sometimes allows CORS), fall back to proxy
+    try {
+      const r = await fetch(YAHOO_QUOTE_URL + encodeURIComponent(symbols));
+      if (r.ok) data = await r.json();
+    } catch {}
+    if (!data) {
+      const r = await fetch(CORS_PROXY_NEWS + encodeURIComponent(YAHOO_QUOTE_URL + symbols));
+      if (r.ok) data = await r.json();
+    }
+    const quotes = data?.quoteResponse?.result || [];
+    localStorage.setItem(cacheKey,  JSON.stringify(quotes));
+    localStorage.setItem(cacheTime, String(now));
+    renderStockCard(quotes);
+  } catch {
+    el.innerHTML = '<div style="color:var(--muted);font-size:.82rem;text-align:center;padding:8px 0">Could not load quotes.</div>';
+  }
+}
+
+function renderStockCard(quotes) {
+  const el = document.getElementById('stockBody');
+  if (!el) return;
+  if (!quotes?.length) {
+    el.innerHTML = '<div style="color:var(--muted);font-size:.82rem;text-align:center;padding:8px 0">No data.</div>';
+    return;
+  }
+  el.innerHTML = quotes.map(q => {
+    const price  = q.regularMarketPrice?.toFixed(2) ?? '—';
+    const change = q.regularMarketChangePercent;
+    const chgStr = change != null ? (change >= 0 ? '+' : '') + change.toFixed(2) + '%' : '';
+    const color  = change == null ? 'var(--muted)' : change >= 0 ? 'var(--green, #4caf82)' : 'var(--red, #e06c75)';
+    return `<div class="stock-row">
+      <span class="stock-symbol">${esc(q.symbol)}</span>
+      <span class="stock-name">${esc(q.shortName || q.longName || '')}</span>
+      <span class="stock-price">$${esc(price)}</span>
+      <span class="stock-change" style="color:${color}">${esc(chgStr)}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderStockTickerList() {
+  const el = document.getElementById('stockTickerList');
+  if (!el) return;
+  el.innerHTML = '';
+  if (!stockTickers.length) {
+    el.innerHTML = '<div style="color:var(--muted);font-size:.78rem;padding:4px 0">No tickers yet.</div>';
+    return;
+  }
+  stockTickers.forEach((sym, i) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid rgba(128,128,128,.1)';
+    row.innerHTML = `
+      <span style="flex:1;font-size:.85rem;font-weight:600">${esc(sym)}</span>
+      <button style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem" onclick="removeStockTicker(${i})">✕</button>`;
+    el.appendChild(row);
+  });
+}
+
+function addStockTicker() {
+  const inp = document.getElementById('stockTickerInput');
+  const sym = inp.value.trim().toUpperCase();
+  if (!sym || stockTickers.includes(sym)) { inp.value = ''; return; }
+  stockTickers.push(sym);
+  saveStockTickers();
+  inp.value = '';
+  renderStockTickerList();
+  loadStockQuotes(true);
+}
+
+function removeStockTicker(i) {
+  stockTickers.splice(i, 1);
+  saveStockTickers();
+  renderStockTickerList();
+  loadStockQuotes(true);
+}
+
 // ── Word of the Day ──────────────────────────────────────────────────────────
 
 // Curated seed list — one word picked per calendar day, definition fetched from free API
@@ -6466,6 +6717,10 @@ function openSettings() {
   document.getElementById('settingMealAiKey').value     = mealAiKey;
   document.getElementById('settingMealPantry').value    = mealPantryDef;
   // provider is always gemini — no UI to update
+  renderNewsFeedList();
+  renderStockTickerList();
+  const hnc = document.getElementById('newsHeadlineCount');
+  if (hnc) hnc.value = newsHeadlineCount;
   renderLoadingMsgList();
   renderFamilyMemberList();
   // Render diet checkboxes
@@ -6550,6 +6805,10 @@ function saveSettings() {
   localStorage.setItem('fh_widgets',          JSON.stringify(widgetVisibility));
   localStorage.setItem('fh_widget_placement', JSON.stringify(widgetPlacement));
   applyWidgetPlacement();
+  const hncEl = document.getElementById('newsHeadlineCount');
+  if (hncEl) { newsHeadlineCount = parseInt(hncEl.value) || 5; saveNewsFeeds(); }
+  if (widgetVisibility.news)  loadNewsFeeds();
+  if (widgetVisibility.stock) loadStockQuotes();
   // Save bills-on-cal toggle
   const billsEl = document.getElementById('lcBillsOnCal');
   if (billsEl) {

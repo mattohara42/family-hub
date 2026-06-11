@@ -2875,6 +2875,45 @@ body.has-bg .mini-card:hover {
   font-style: normal;
 }
 
+/* ── News Feed ── */
+.news-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(128,128,128,.1);
+}
+.news-item:last-child { border-bottom: none; }
+.news-source {
+  font-size: .68rem;
+  font-weight: var(--weight-semi);
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.news-headline {
+  font-size: .82rem;
+  color: var(--text);
+  text-decoration: none;
+  line-height: 1.35;
+}
+.news-headline:hover { text-decoration: underline; color: var(--accent); }
+
+/* ── Stock Ticker ── */
+.stock-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(128,128,128,.1);
+  font-size: .85rem;
+}
+.stock-row:last-child { border-bottom: none; }
+.stock-symbol { font-weight: var(--weight-bold); min-width: 48px; }
+.stock-name   { flex: 1; color: var(--muted); font-size: .75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stock-price  { font-weight: var(--weight-semi); min-width: 54px; text-align: right; }
+.stock-change { min-width: 54px; text-align: right; font-size: .78rem; font-weight: var(--weight-semi); }
+
 /* ── Countdowns ── */
 .countdown-item {
   display: flex;
