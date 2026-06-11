@@ -1140,6 +1140,16 @@ body.has-bg .cal-day.today {
 }
 .cal-event-span-mid { opacity: .88; }
 
+/* ── Calendar drag-and-drop rescheduling ── */
+.cal-event[draggable="true"] { cursor: grab; }
+.cal-event[draggable="true"]:active { cursor: grabbing; }
+.cal-event.cal-dnd-dragging { opacity: 0.3; pointer-events: none; }
+.cal-day.cal-dnd-over {
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+  background: rgba(100,160,255,.08);
+}
+
 /* ── Agenda View ── */
 #agendaView {
   display: flex;

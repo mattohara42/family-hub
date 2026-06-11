@@ -1530,6 +1530,18 @@ function makeDayCell(year, month, day, otherMonth, isToday) {
     pill.title = ev.summary;
     if (!ev.holiday && ev.eventId) {
       pill.onclick = e => { e.stopPropagation(); openEventEditor(ev); };
+      // Drag to reschedule (month view only)
+      pill.draggable = true;
+      pill.addEventListener('dragstart', e => {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', JSON.stringify({
+          eventId: ev.eventId, calId: ev.calId, allDay: ev.allDay,
+          startDT: ev.startDT, endDT: ev.endDT,
+          startDate: ev.startDate, endDate: ev.endDate,
+        }));
+        setTimeout(() => pill.classList.add('cal-dnd-dragging'), 0);
+      });
+      pill.addEventListener('dragend', () => pill.classList.remove('cal-dnd-dragging'));
     }
     cell.appendChild(pill);
   });
@@ -1538,6 +1550,20 @@ function makeDayCell(year, month, day, otherMonth, isToday) {
     more.style.cssText = 'font-size:.65rem;color:var(--muted);padding-left:4px';
     more.textContent = `+${evts.length - 3} more`;
     cell.appendChild(more);
+  }
+
+  // Drop zone for drag-and-drop rescheduling
+  if (googleToken) {
+    cell.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; cell.classList.add('cal-dnd-over'); });
+    cell.addEventListener('dragleave', e => { if (!cell.contains(e.relatedTarget)) cell.classList.remove('cal-dnd-over'); });
+    cell.addEventListener('drop', e => {
+      e.preventDefault();
+      cell.classList.remove('cal-dnd-over');
+      try {
+        const ev = JSON.parse(e.dataTransfer.getData('text/plain'));
+        rescheduleEvent(ev, key);
+      } catch(_) {}
+    });
   }
 
   // Budget events
@@ -2671,6 +2697,57 @@ async function deleteCalEvent() {
     loadAllCalendars();
   } catch(e) {
     evtEdStatus('⚠️ ' + e.message, true);
+  }
+}
+
+// ── Calendar drag-and-drop rescheduling ──────────────────────
+async function rescheduleEvent(ev, newDateKey) {
+  if (!googleToken || !ev.eventId) return;
+  const oldDateKey = ev.startDate || ev.startDT?.slice(0, 10);
+  if (!oldDateKey || oldDateKey === newDateKey) return;
+
+  const deltaDays = Math.round(
+    (new Date(newDateKey + 'T00:00:00') - new Date(oldDateKey + 'T00:00:00')) / 86400000
+  );
+  const shiftDateStr = (str, delta) => {
+    const d = new Date(str + 'T00:00:00');
+    d.setDate(d.getDate() + delta);
+    return d.toISOString().slice(0, 10);
+  };
+  const shiftDT = (isoStr, delta) => {
+    const d = new Date(isoStr);
+    d.setDate(d.getDate() + delta);
+    return d.toISOString();
+  };
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  let start, end;
+  if (ev.allDay) {
+    start = { date: shiftDateStr(ev.startDate, deltaDays) };
+    // Google Calendar all-day end is exclusive (startDate + 1 for single-day events)
+    const srcEnd = ev.endDate && ev.endDate !== ev.startDate
+      ? ev.endDate
+      : shiftDateStr(ev.startDate, 1);
+    end = { date: shiftDateStr(srcEnd, deltaDays) };
+  } else {
+    start = { dateTime: shiftDT(ev.startDT, deltaDays), timeZone: tz };
+    end   = { dateTime: shiftDT(ev.endDT,   deltaDays), timeZone: tz };
+  }
+
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(ev.calId)}/events/${encodeURIComponent(ev.eventId)}`;
+  try {
+    const r = await fetch(url, {
+      method: 'PATCH',
+      headers: { 'Authorization': `Bearer ${googleToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ start, end }),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.error?.message || r.statusText);
+    }
+    loadAllCalendars();
+  } catch(e) {
+    alert('Could not reschedule: ' + e.message);
   }
 }
 
