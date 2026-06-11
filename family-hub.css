@@ -1025,7 +1025,35 @@ body.nautical-mode .cal-month-nav button {
   flex: 1;              /* grow to fill card body */
   min-height: 0;
   align-content: stretch;
+  position: relative;   /* anchor for .cal-multiday-overlay */
 }
+
+/* ── Multi-day spanning event overlay ── */
+.cal-multiday-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none; /* bars opt back in individually */
+  z-index: 2;
+}
+.cal-multiday-bar {
+  position: absolute;
+  border-radius: 3px;
+  color: #fff;
+  font-size: .68rem;
+  font-weight: 500;
+  line-height: 18px;
+  padding: 0 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: auto;
+  cursor: pointer;
+  box-sizing: border-box;
+  box-shadow: 0 1px 2px rgba(0,0,0,.25);
+}
+.cal-multiday-bar:hover { filter: brightness(1.12); }
+.cal-multiday-bar.cal-dnd-dragging { opacity: 0.3; pointer-events: none; }
+.cal-md-spacer { flex-shrink: 0; }
 .cal-dow {
   text-align: center;
   font-size: var(--text-md);
@@ -1119,26 +1147,6 @@ body.has-bg .cal-day.today {
   opacity: .9;
 }
 
-/* ── Multi-day event spanning ── */
-/* Start/mid/end bars bleed to cell edges (cell padding = 4px, so margin = -4px) */
-.cal-event-span-start,
-.cal-event-span-mid,
-.cal-event-span-end {
-  border-radius: 0;
-  margin-left: -4px;
-  margin-right: -4px;
-  margin-bottom: 2px;
-  min-height: 1.1em;
-}
-.cal-event-span-start {
-  border-radius: 3px 0 0 3px;
-  margin-left: 0;
-}
-.cal-event-span-end {
-  border-radius: 0 3px 3px 0;
-  margin-right: 0;
-}
-.cal-event-span-mid { opacity: .88; }
 
 /* ── Calendar drag-and-drop rescheduling ── */
 .cal-event[draggable="true"] { cursor: grab; }

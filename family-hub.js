@@ -1427,6 +1427,152 @@ function renderDayGrid() {
   setTimeout(() => { timeline.scrollTop = scrollTo * 54; }, 30);
 }
 
+function renderMultidayOverlay() {
+  if (calView !== 'month') return;
+  const grid = document.getElementById('calGrid');
+  if (!grid) return;
+
+  // Remove previous overlay
+  grid.querySelector('.cal-multiday-overlay')?.remove();
+  // Reset all spacers
+  grid.querySelectorAll('.cal-md-spacer').forEach(s => { s.style.height = '0'; });
+
+  // Build cell position map keyed by date string
+  const cellEls = Array.from(grid.querySelectorAll('[data-date]'));
+  if (!cellEls.length) return;
+  const gridRect = grid.getBoundingClientRect();
+  const cellMap = {};
+  cellEls.forEach(el => {
+    const r = el.getBoundingClientRect();
+    cellMap[el.dataset.date] = {
+      el,
+      left:  r.left  - gridRect.left,
+      top:   r.top   - gridRect.top,
+      right: r.right - gridRect.left,
+    };
+  });
+
+  // Collect unique true multi-day events (allDay, endDate > startDate, non-holiday)
+  const seen = new Set();
+  const mdEvents = [];
+  Object.entries(calEventCache)
+    .filter(([calId]) => !disabledCals.has(calId))
+    .flatMap(([, byDate]) => Object.values(byDate).flat())
+    .forEach(ev => {
+      if (!ev.allDay || ev.holiday || !ev.eventId) return;
+      if (!ev.endDate || ev.endDate <= ev.startDate) return;
+      if (seen.has(ev.eventId)) return;
+      seen.add(ev.eventId);
+      mdEvents.push(ev);
+    });
+  if (!mdEvents.length) return;
+
+  // Sort: earlier start first; longer duration first within same start
+  mdEvents.sort((a, b) => {
+    if (a.startDate < b.startDate) return -1;
+    if (a.startDate > b.startDate) return 1;
+    const aDur = (new Date(a.endDate) - new Date(a.startDate));
+    const bDur = (new Date(b.endDate) - new Date(b.startDate));
+    return bDur - aDur;
+  });
+
+  // Group cells into week rows by Y position
+  const rowByTop = {};
+  cellEls.forEach(el => {
+    const topKey = Math.round(cellMap[el.dataset.date].top);
+    if (!rowByTop[topKey]) rowByTop[topKey] = [];
+    rowByTop[topKey].push(el.dataset.date);
+  });
+  const rows = Object.entries(rowByTop)
+    .sort(([a], [b]) => Number(a) - Number(b))
+    .map(([top, dates]) => ({ top: Number(top), dates: dates.sort() }));
+
+  const MAX_LANES = 3;
+  const BAR_H    = 18;
+  const BAR_GAP  = 2;
+  const DAY_NUM_H = 24; // px reserved for the day-number circle
+  // rowLanes[rowIdx][lane] = eventId or null
+  const rowLanes = rows.map(() => new Array(MAX_LANES).fill(null));
+  const segments = [];
+
+  mdEvents.forEach(ev => {
+    const evSegments = [];
+    rows.forEach((row, rowIdx) => {
+      const visible = row.dates.filter(d => d >= ev.startDate && d < ev.endDate);
+      if (!visible.length) return;
+      evSegments.push({ rowIdx, startDate: visible[0], endDate: visible[visible.length - 1] });
+    });
+    if (!evSegments.length) return;
+
+    // Find lowest lane free in ALL rows this event touches
+    let lane = -1;
+    outer: for (let l = 0; l < MAX_LANES; l++) {
+      for (const { rowIdx } of evSegments) {
+        if (rowLanes[rowIdx][l] !== null) continue outer;
+      }
+      lane = l; break;
+    }
+    if (lane === -1) return; // > MAX_LANES overlapping events; skip
+
+    evSegments.forEach(({ rowIdx }) => { rowLanes[rowIdx][lane] = ev.eventId; });
+    evSegments.forEach(seg => segments.push({ ev, ...seg, lane }));
+  });
+
+  if (!segments.length) return;
+
+  // Update spacers so single-day pills render below the overlay bars
+  rows.forEach((row, rowIdx) => {
+    const highestLane = rowLanes[rowIdx].reduce((max, v, i) => v !== null ? i : max, -1);
+    if (highestLane < 0) return;
+    const spacerH = (highestLane + 1) * (BAR_H + BAR_GAP);
+    row.dates.forEach(date => {
+      const sp = cellMap[date]?.el.querySelector('.cal-md-spacer');
+      if (sp) sp.style.height = spacerH + 'px';
+    });
+  });
+
+  // Build overlay
+  const overlay = document.createElement('div');
+  overlay.className = 'cal-multiday-overlay';
+
+  segments.forEach(({ ev, startDate, endDate, lane }) => {
+    const sc = cellMap[startDate];
+    const ec = cellMap[endDate];
+    if (!sc || !ec) return;
+
+    const bar = document.createElement('div');
+    bar.className = 'cal-multiday-bar';
+    bar.textContent = ev.summary;
+    bar.title = ev.summary;
+    bar.style.cssText =
+      `left:${sc.left}px;` +
+      `top:${sc.top + DAY_NUM_H + lane * (BAR_H + BAR_GAP)}px;` +
+      `width:${ec.right - sc.left}px;` +
+      `height:${BAR_H}px;` +
+      `background:${ev.color};`;
+
+    bar.addEventListener('click', e => { e.stopPropagation(); openEventEditor(ev); });
+    bar.draggable = true;
+    bar.addEventListener('dragstart', e => {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', JSON.stringify({
+        eventId: ev.eventId, calId: ev.calId, allDay: ev.allDay,
+        startDT: ev.startDT, endDT: ev.endDT,
+        startDate: ev.startDate, endDate: ev.endDate,
+      }));
+      setTimeout(() => bar.classList.add('cal-dnd-dragging'), 0);
+    });
+    bar.addEventListener('dragend', () => bar.classList.remove('cal-dnd-dragging'));
+
+    overlay.appendChild(bar);
+  });
+
+  grid.appendChild(overlay);
+}
+
+// Re-render overlay on window resize (BoundingClientRect values change)
+window.addEventListener('resize', () => { if (calView === 'month') renderMultidayOverlay(); });
+
 function renderMonthGrid() {
   const year  = calViewDate.getFullYear();
   const month = calViewDate.getMonth();
@@ -1480,6 +1626,8 @@ function renderMonthGrid() {
     grid.appendChild(cell);
   }
 
+  // Multi-day spanning events are rendered in an overlay layer after layout
+  requestAnimationFrame(() => renderMultidayOverlay());
 }
 
 function makeDayCell(year, month, day, otherMonth, isToday) {
@@ -1499,6 +1647,7 @@ function makeDayCell(year, month, day, otherMonth, isToday) {
 
   // Merge visible events from all enabled calendars
   const key  = `${year}-${String(new Date(year, month, day).getMonth() + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+  cell.dataset.date = key; // used by overlay renderer and DnD drop
   const evts = Object.entries(calEventCache)
     .filter(([calId]) => !disabledCals.has(calId))
     .flatMap(([, byDate]) => byDate[key] || []);
@@ -1508,29 +1657,24 @@ function makeDayCell(year, month, day, otherMonth, isToday) {
     cell.onclick = () => openEventEditor(null, key);
   }
 
-  evts.slice(0, 3).forEach(ev => {
+  // Spacer placeholder — height set by renderMultidayOverlay() so single-day pills
+  // appear below any overlay bars that pass through this cell
+  const mdSpacer = document.createElement('div');
+  mdSpacer.className = 'cal-md-spacer';
+  cell.appendChild(mdSpacer);
+
+  // Split: multi-day all-day events go to overlay; everything else renders inline
+  const isMultiDay = ev => ev.allDay && !ev.holiday && ev.startDate && ev.endDate && ev.endDate > ev.startDate;
+  const sdEvts = evts.filter(ev => !isMultiDay(ev));
+
+  sdEvts.slice(0, 3).forEach(ev => {
     const pill = document.createElement('div');
-    const isMultiDay = ev.allDay && ev.startDate && ev.endDate && ev.endDate > ev.startDate;
-    let spanClass = '';
-    if (isMultiDay) {
-      // Last date in range is endDate - 1 day
-      const lastKey = new Date(new Date(ev.endDate + 'T00:00:00').getTime() - 86400000)
-        .toISOString().slice(0, 10);
-      if (key === ev.startDate && key === lastKey) spanClass = ''; // single-day fallback
-      else if (key === ev.startDate) spanClass = 'cal-event-span-start';
-      else if (key === lastKey)      spanClass = 'cal-event-span-end';
-      else                           spanClass = 'cal-event-span-mid';
-    }
-    pill.className = 'cal-event' + (ev.holiday ? ' cal-event-holiday' : '') + (spanClass ? ' ' + spanClass : '');
+    pill.className = 'cal-event' + (ev.holiday ? ' cal-event-holiday' : '');
     pill.style.background = ev.color;
-    // Only show text on start day (or non-spanning events)
-    if (!isMultiDay || key === ev.startDate) {
-      pill.textContent = (ev.holiday ? '🎉 ' : '') + ev.summary;
-    }
+    pill.textContent = (ev.holiday ? '🎉 ' : '') + ev.summary;
     pill.title = ev.summary;
     if (!ev.holiday && ev.eventId) {
       pill.onclick = e => { e.stopPropagation(); openEventEditor(ev); };
-      // Drag to reschedule (month view only)
       pill.draggable = true;
       pill.addEventListener('dragstart', e => {
         e.dataTransfer.effectAllowed = 'move';
@@ -1545,10 +1689,10 @@ function makeDayCell(year, month, day, otherMonth, isToday) {
     }
     cell.appendChild(pill);
   });
-  if (evts.length > 3) {
+  if (sdEvts.length > 3) {
     const more = document.createElement('div');
     more.style.cssText = 'font-size:.65rem;color:var(--muted);padding-left:4px';
-    more.textContent = `+${evts.length - 3} more`;
+    more.textContent = `+${sdEvts.length - 3} more`;
     cell.appendChild(more);
   }
 
