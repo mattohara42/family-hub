@@ -1655,7 +1655,6 @@ function renderMonthGrid() {
     const d = new Date(year, month - 1, daysInPrev - i);
     const cell = makeDayCell(year, month - 1, daysInPrev - i, true);
     if (inCurrentWeek(d)) cell.classList.add('current-week');
-    if (d.getDay() === todayDow) cell.classList.add('current-dow');
     grid.appendChild(cell);
   }
   // Current month
@@ -1664,7 +1663,6 @@ function renderMonthGrid() {
     const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === d;
     const cell = makeDayCell(year, month, d, false, isToday);
     if (inCurrentWeek(dateObj)) cell.classList.add('current-week');
-    if (dateObj.getDay() === todayDow) cell.classList.add('current-dow');
     grid.appendChild(cell);
   }
   // Next-month filler
@@ -1674,7 +1672,6 @@ function renderMonthGrid() {
     const fd = new Date(year, month + 1, d);
     const cell = makeDayCell(year, month + 1, d, true);
     if (inCurrentWeek(fd)) cell.classList.add('current-week');
-    if (fd.getDay() === todayDow) cell.classList.add('current-dow');
     grid.appendChild(cell);
   }
 
