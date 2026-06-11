@@ -728,6 +728,11 @@ function onGsiLoad() {
   initGoogleAuth();
 }
 
+// Register service worker for offline support / PWA
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+
 window.addEventListener('load', () => {
   if (!isConfigured) return;
   // GSI may already be ready (cached) or will call onGsiLoad when it loads
