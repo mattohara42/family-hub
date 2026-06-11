@@ -3183,6 +3183,27 @@ body.nautical-mode .assistant-msg.ai {
   background: rgba(24, 40, 88, 0.9);
 }
 
+/* ── Widget drag-and-drop ── */
+.widget-drag-handle {
+  cursor: grab;
+  color: var(--muted);
+  font-size: 1rem;
+  padding: 0 6px 0 0;
+  user-select: none;
+  opacity: 0;
+  transition: opacity .15s;
+  flex-shrink: 0;
+}
+.card-header:hover .widget-drag-handle { opacity: 0.5; }
+.widget-drag-handle:hover { opacity: 1 !important; cursor: grab; }
+.widget-dragging { opacity: 0.35; }
+.widget-drop-target {
+  outline: 2px dashed var(--accent);
+  outline-offset: 3px;
+  border-radius: 12px;
+}
+@media (hover: none) { .widget-drag-handle { opacity: 0.4; } }
+
 /* ── Widget visibility toggles (Settings → Widgets) ── */
 .widget-toggle-list {
   display: flex;

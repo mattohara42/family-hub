@@ -223,22 +223,33 @@ const WIDGET_ORDER = [
   { key: 'countdown', id: 'countdownCard' },
 ];
 
+// User-defined widget order (keys only). Persisted in fh_widget_order.
+// New widgets not in saved order are appended at the end.
+let widgetOrder = lsGet('fh_widget_order', null);
+
+function resolvedWidgetOrder() {
+  const base = WIDGET_ORDER.map(w => w.key);
+  if (!widgetOrder) return [...base];
+  const saved   = widgetOrder.filter(k => base.includes(k));
+  const newKeys = base.filter(k => !saved.includes(k));
+  return [...saved, ...newKeys];
+}
+
 /** Move widget cards between sidebar and #bottomStrip, then enforce visibility */
 function applyWidgetPlacement() {
   const sidebar     = document.querySelector('.sidebar');
   const bottomStrip = document.getElementById('bottomStrip');
   if (!sidebar || !bottomStrip) return;
 
-  // Distribute each widget card to the right container (maintains canonical order within each)
-  WIDGET_ORDER.forEach(({ key, id }) => {
-    const card = document.getElementById(id);
+  // Distribute each widget card to the right container in user-defined order
+  resolvedWidgetOrder().forEach(key => {
+    const entry = WIDGET_ORDER.find(w => w.key === key);
+    if (!entry) return;
+    const card = document.getElementById(entry.id);
     if (!card) return;
     const dest = widgetPlacement[key] === 'bottom' ? bottomStrip : sidebar;
     dest.appendChild(card);
   });
-
-  // #yearStrip always lives in .cal-column (in HTML); #bottomStrip also lives there.
-  // yearstrip placement controls whether #yearStrip or #yearCard is shown — handled by applyWidgetVisibility.
 
   // Enforce show/hide
   applyWidgetVisibility();
@@ -247,6 +258,66 @@ function applyWidgetPlacement() {
   const hasBottom = bottomStrip.children.length > 0 &&
     [...bottomStrip.children].some(c => c.style.display !== 'none');
   bottomStrip.style.display = hasBottom ? '' : 'none';
+}
+
+// ── Widget drag-and-drop ──
+let _dndSrcKey = null;
+
+function initWidgetDragDrop() {
+  WIDGET_ORDER.forEach(({ key, id }) => {
+    const card = document.getElementById(id);
+    if (!card) return;
+    card.dataset.widgetKey = key;
+
+    // Inject grip handle into card-header (skip if already added)
+    const header = card.querySelector('.card-header');
+    if (header && !header.querySelector('.widget-drag-handle')) {
+      const handle = document.createElement('span');
+      handle.className = 'widget-drag-handle';
+      handle.textContent = '⠿';
+      handle.title = 'Drag to reorder';
+      handle.addEventListener('mousedown', () => { card.draggable = true; });
+      header.prepend(handle);
+    }
+
+    card.addEventListener('dragstart', e => {
+      _dndSrcKey = key;
+      e.dataTransfer.effectAllowed = 'move';
+      setTimeout(() => card.classList.add('widget-dragging'), 0);
+    });
+    card.addEventListener('dragend', () => {
+      card.draggable = false;
+      card.classList.remove('widget-dragging');
+      document.querySelectorAll('.widget-drop-target').forEach(el => el.classList.remove('widget-drop-target'));
+      _dndSrcKey = null;
+    });
+    card.addEventListener('dragover', e => {
+      if (!_dndSrcKey || _dndSrcKey === key) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      document.querySelectorAll('.widget-drop-target').forEach(el => el.classList.remove('widget-drop-target'));
+      card.classList.add('widget-drop-target');
+    });
+    card.addEventListener('dragleave', e => {
+      if (!e.relatedTarget || !card.contains(e.relatedTarget)) {
+        card.classList.remove('widget-drop-target');
+      }
+    });
+    card.addEventListener('drop', e => {
+      e.preventDefault();
+      if (!_dndSrcKey || _dndSrcKey === key) return;
+      card.classList.remove('widget-drop-target');
+      const order   = resolvedWidgetOrder();
+      const srcIdx  = order.indexOf(_dndSrcKey);
+      const tgtIdx  = order.indexOf(key);
+      if (srcIdx === -1 || tgtIdx === -1) return;
+      order.splice(srcIdx, 1);
+      order.splice(tgtIdx, 0, _dndSrcKey);
+      widgetOrder = order;
+      localStorage.setItem('fh_widget_order', JSON.stringify(widgetOrder));
+      applyWidgetPlacement();
+    });
+  });
 }
 
 function applyWidgetVisibility() {
@@ -674,6 +745,7 @@ window.addEventListener('load', () => {
   populateTodoAssigneeDropdown();
   populateShopCategorySelect();
   applyWidgetPlacement();   // moves cards to sidebar/bottom, then calls applyWidgetVisibility
+  initWidgetDragDrop();
   renderBudgetCard();
   loadWotd();
   loadDadJoke();
