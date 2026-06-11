@@ -1263,6 +1263,16 @@ function renderWeekGrid() {
   }
   container.appendChild(grid);
 
+  // Bulk "add all week's ingredients to shopping list" button
+  const bulkBar = document.createElement('div');
+  bulkBar.style.cssText = 'display:flex;justify-content:flex-end;padding:6px 2px 2px';
+  const bulkBtn = document.createElement('button');
+  bulkBtn.className = 'btn btn-sm';
+  bulkBtn.textContent = '🛒 Add week\'s ingredients to shopping';
+  bulkBtn.style.cssText = 'font-size:.75rem;padding:4px 10px';
+  bulkBtn.onclick = exportWeekMealsToShopping;
+  bulkBar.appendChild(bulkBtn);
+  container.appendChild(bulkBar);
 }
 
 // ── Day View ──────────────────────────────────────────────────
@@ -5659,6 +5669,57 @@ function addMealIngredients(idx) {
 async function removeMeal(dateKey, mealType) {
   await deleteMealFromFs(dateKey, mealType);
   // renderCurrentView() is triggered by onSnapshot (or by deleteMealFromFs in the !db fallback)
+}
+
+// ── Meal export to shopping list ──────────────────────────────
+function exportWeekMealsToShopping() {
+  const weekStart = getWeekStart(calViewDate);
+  const toAdd = [];   // unique ingredient strings not already in shopping list
+  const existingLower = shopItemsCache.map(i => i.text.toLowerCase());
+  let mealCount = 0;
+
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekStart.getTime() + i * 86400000);
+    const dk = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    ['breakfast','lunch','dinner'].forEach(type => {
+      const meal = (mealPlan[dk] || {})[type];
+      if (!meal || !meal.ingredients || !meal.ingredients.length) return;
+      mealCount++;
+      meal.ingredients.forEach(ing => {
+        const lower = ing.toLowerCase();
+        if (!toAdd.some(x => x.toLowerCase() === lower) && !existingLower.includes(lower)) {
+          toAdd.push(ing);
+        }
+      });
+    });
+  }
+
+  if (!mealCount) {
+    alert('No meals with ingredients found this week. Plan meals using the AI assistant to generate ingredient lists.');
+    return;
+  }
+  if (!toAdd.length) {
+    alert('All ingredients from this week\'s meals are already in your shopping list.');
+    return;
+  }
+
+  if (db) {
+    toAdd.forEach(ing => addToFs('shopping', ing, { category: 'Other' }));
+  } else {
+    const items = getLocalList('shopping');
+    toAdd.forEach(ing => items.push({ text: ing, done: false, by: userName, category: 'Other' }));
+    saveLocalList('shopping', items);
+    renderLocalList('shopping');
+  }
+
+  // Brief toast
+  const t = document.createElement('div');
+  t.textContent = `✓ Added ${toAdd.length} ingredient${toAdd.length !== 1 ? 's' : ''} from ${mealCount} meal${mealCount !== 1 ? 's' : ''} to shopping list`;
+  Object.assign(t.style, { position:'fixed', bottom:'24px', left:'50%', transform:'translateX(-50%)',
+    background:'var(--accent)', color:'#fff', padding:'8px 18px', borderRadius:'8px',
+    fontSize:'0.88rem', zIndex:'9999', pointerEvents:'none', whiteSpace:'nowrap' });
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
 }
 
 // ── Meal Plan Templates ───────────────────────────────────────
