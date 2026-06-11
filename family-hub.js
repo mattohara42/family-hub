@@ -1171,12 +1171,34 @@ function renderWeekGrid() {
         pill.appendChild(s);
         if (!ev.holiday && ev.eventId) {
           pill.onclick = e => { e.stopPropagation(); openEventEditor(ev); };
+          pill.draggable = true;
+          pill.addEventListener('dragstart', e => {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', JSON.stringify({
+              eventId: ev.eventId, calId: ev.calId, allDay: ev.allDay,
+              startDT: ev.startDT, endDT: ev.endDT,
+              startDate: ev.startDate, endDate: ev.endDate,
+            }));
+            setTimeout(() => pill.classList.add('cal-dnd-dragging'), 0);
+          });
+          pill.addEventListener('dragend', () => pill.classList.remove('cal-dnd-dragging'));
         }
         body.appendChild(pill);
       });
     }
 
     col.appendChild(body);
+
+    // Drop zone: the whole day column accepts dragged events
+    if (googleToken) {
+      col.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; col.classList.add('cal-dnd-over'); });
+      col.addEventListener('dragleave', e => { if (!col.contains(e.relatedTarget)) col.classList.remove('cal-dnd-over'); });
+      col.addEventListener('drop', e => {
+        e.preventDefault();
+        col.classList.remove('cal-dnd-over');
+        try { rescheduleEvent(JSON.parse(e.dataTransfer.getData('text/plain')), dateKey); } catch(_) {}
+      });
+    }
 
     // Budget strip
     const budgetDayItems = budgetEventsForDate(dateKey);
