@@ -6343,7 +6343,7 @@ Be specific and personal. Use the family data above, including the correct prono
 
     const resp = await geminiFetch({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 256 },
+          generationConfig: { temperature: 0.7, maxOutputTokens: 512 },
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
