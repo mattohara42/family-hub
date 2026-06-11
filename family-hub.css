@@ -1046,13 +1046,12 @@ body.nautical-mode .cal-month-nav button {
 .cal-md-spacer { flex-shrink: 0; }
 .cal-dow {
   text-align: center;
-  font-size: var(--text-md);
+  font-size: var(--text-sm);
   font-weight: var(--weight-bold);
-  color: var(--text);
+  color: var(--muted);
   padding: 1px 0 2px;
-  letter-spacing: 0.03em;
+  letter-spacing: .05em;
   text-transform: uppercase;
-  letter-spacing: .04em;
   display: flex; align-items: center; justify-content: center;
 }
 .cal-day {
@@ -1736,7 +1735,7 @@ body.nautical-mode .wx-ticker { background: rgba(200,169,110,.06); border-top-co
 .week-day-header.can-add:hover::after { opacity: 0.55; }
 .week-day-header.can-add:hover { background: rgba(255,255,255,.10); border-radius: 6px; }
 .week-day-dow {
-  font-size: var(--text-base); font-weight: var(--weight-bold);
+  font-size: var(--text-sm); font-weight: var(--weight-bold);
   letter-spacing: .05em; text-transform: uppercase;
   color: var(--muted);
 }
