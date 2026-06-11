@@ -1437,18 +1437,23 @@ function renderMultidayOverlay() {
   // Reset all spacers
   grid.querySelectorAll('.cal-md-spacer').forEach(s => { s.style.height = '0'; });
 
-  // Build cell position map keyed by date string
+  // Build cell position map keyed by date string.
+  // Measure spacer top while height=0 so we know exactly where bars should start
+  // (right below the day-number circle, regardless of font size or cell padding).
   const cellEls = Array.from(grid.querySelectorAll('[data-date]'));
   if (!cellEls.length) return;
   const gridRect = grid.getBoundingClientRect();
   const cellMap = {};
   cellEls.forEach(el => {
     const r = el.getBoundingClientRect();
+    const spacerEl = el.querySelector('.cal-md-spacer');
+    const sr = spacerEl ? spacerEl.getBoundingClientRect() : null;
     cellMap[el.dataset.date] = {
       el,
-      left:  r.left  - gridRect.left,
-      top:   r.top   - gridRect.top,
-      right: r.right - gridRect.left,
+      left:      r.left  - gridRect.left,
+      top:       r.top   - gridRect.top,
+      right:     r.right - gridRect.left,
+      spacerTop: sr ? sr.top - gridRect.top : (r.top - gridRect.top + 26),
     };
   });
 
@@ -1490,7 +1495,6 @@ function renderMultidayOverlay() {
   const MAX_LANES = 3;
   const BAR_H    = 18;
   const BAR_GAP  = 2;
-  const DAY_NUM_H = 24; // px reserved for the day-number circle
   // rowLanes[rowIdx][lane] = eventId or null
   const rowLanes = rows.map(() => new Array(MAX_LANES).fill(null));
   const segments = [];
@@ -1546,7 +1550,7 @@ function renderMultidayOverlay() {
     bar.title = ev.summary;
     bar.style.cssText =
       `left:${sc.left}px;` +
-      `top:${sc.top + DAY_NUM_H + lane * (BAR_H + BAR_GAP)}px;` +
+      `top:${sc.spacerTop + lane * (BAR_H + BAR_GAP)}px;` +
       `width:${ec.right - sc.left}px;` +
       `height:${BAR_H}px;` +
       `background:${ev.color};`;
