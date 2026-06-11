@@ -1126,7 +1126,7 @@ body.has-bg .cal-day.today {
   font-size: var(--text-xs);
   padding: 1px 4px;
   border-radius: 3px;
-  margin-bottom: 2px;
+  margin: 0 -4px 2px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2027,6 +2027,7 @@ body.nautical-mode .meal-adjust-chip:hover { background: var(--accent2); border-
 .budget-item-del:hover { color: var(--red); }
 .cal-event-budget {
   font-size: var(--text-xs); border-radius: 3px; padding: 1px 4px;
+  margin: 0 -4px 2px;
   background: rgba(229,115,115,.2); color: #e57373;
   font-weight: var(--weight-semi); white-space: nowrap; overflow: hidden;
   text-overflow: ellipsis; cursor: default;
@@ -2176,6 +2177,7 @@ body.light-mode .sms-contact-row:hover { background: rgba(0,0,0,.05); }
 /* Calendar todo events */
 .cal-event-todo {
   font-size: .65rem; border-radius: 3px; padding: 1px 4px;
+  margin: 0 -4px 2px;
   background: rgba(108,142,245,.2); color: var(--accent);
   font-weight: 600; white-space: nowrap; overflow: hidden;
   text-overflow: ellipsis; cursor: default;
