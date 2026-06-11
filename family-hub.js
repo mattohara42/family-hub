@@ -4121,7 +4121,7 @@ function setupListeners() {
 
   // Family members — real-time sync so every device shares the same list
   db.collection('familyMembers').orderBy('order').onSnapshot(snap => {
-    familyMembers = snap.docs.map(doc => ({ id: doc.id, name: doc.data().name, order: doc.data().order ?? 0 }));
+    familyMembers = snap.docs.map(doc => ({ id: doc.id, name: doc.data().name, order: doc.data().order ?? 0, gender: doc.data().gender || 'neutral' }));
     // Back-fill missing order fields (e.g. docs created before this field existed)
     const needsOrder = familyMembers.filter(m => m.order === 0 && familyMembers.indexOf(m) > 0);
     if (snap.docs.some(d => d.data().order == null)) {
@@ -4362,9 +4362,17 @@ function renderFamilyMemberList() {
       const row = document.createElement('div');
       row.style.cssText = 'display:flex;align-items:center;gap:6px;background:var(--surface2);border-radius:8px;padding:6px 10px;font-size:.84rem;margin-bottom:6px';
       const removeArg = db ? `'${m.id}'` : i;
+      const genderArg = db ? `'${m.id}'` : i;
       const btnStyle = 'background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem;line-height:1;padding:0 3px';
       row.innerHTML = `
         <span style="flex:1">👤 ${esc(m.name)}</span>
+        <select onchange="setFamilyMemberGender(${genderArg},this.value)"
+                style="font-size:.75rem;padding:2px 4px;border-radius:5px;background:var(--surface);border:1px solid rgba(255,255,255,.15);color:var(--text);cursor:pointer"
+                title="Pronouns used by the assistant">
+          <option value="neutral" ${(m.gender||'neutral')==='neutral'?'selected':''}>they/them</option>
+          <option value="male"    ${m.gender==='male'   ?'selected':''}>he/him</option>
+          <option value="female"  ${m.gender==='female' ?'selected':''}>she/her</option>
+        </select>
         <button onclick="moveFamilyMember(${i},-1)" ${i === 0 ? 'disabled' : ''} style="${btnStyle};opacity:${i === 0 ? '.25' : '1'}" title="Move up">▲</button>
         <button onclick="moveFamilyMember(${i}, 1)" ${i === last ? 'disabled' : ''} style="${btnStyle};opacity:${i === last ? '.25' : '1'}" title="Move down">▼</button>
         <button onclick="removeFamilyMember(${removeArg})" style="${btnStyle};font-size:1rem" title="Remove">✕</button>`;
@@ -4374,13 +4382,28 @@ function renderFamilyMemberList() {
   populateTodoAssigneeDropdown();
 }
 
+async function setFamilyMemberGender(idOrIndex, gender) {
+  const m = typeof idOrIndex === 'string'
+    ? familyMembers.find(m => m.id === idOrIndex)
+    : familyMembers[idOrIndex];
+  if (!m) return;
+  m.gender = gender;
+  if (db) {
+    await db.collection('familyMembers').doc(m.id).update({ gender });
+    // onSnapshot will re-render
+  } else {
+    localStorage.setItem('fh_familyMembers', JSON.stringify(familyMembers));
+    renderFamilyMemberList();
+  }
+}
+
 async function addFamilyMember() {
   const input = document.getElementById('newFamilyMemberInput');
   const name  = input.value.trim();
   if (!name) return;
   input.value = '';
   if (db) {
-    await db.collection('familyMembers').add({ name, order: familyMembers.length });
+    await db.collection('familyMembers').add({ name, order: familyMembers.length, gender: 'neutral' });
     // onSnapshot updates familyMembers + renderFamilyMemberList
     return;
   }
@@ -5898,7 +5921,10 @@ function buildAssistantContext() {
   }
 
   // ── Family members ──
-  const memberNames = familyMembers.map(m => m.name);
+  const memberLines = familyMembers.map(m => {
+    const pronouns = m.gender === 'male' ? 'he/him' : m.gender === 'female' ? 'she/her' : 'they/them';
+    return `  • ${m.name} (${pronouns})`;
+  });
 
   // ── To-Do (pending) ──
   const pendingTodos = todoItems
@@ -5939,11 +5965,13 @@ function buildAssistantContext() {
   }
 
   const name = userName || 'the family';
-  return `You are a helpful assistant built into a family dashboard. You are talking to ${name}. Today is ${fmt(today, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}.
+  const timeStr = today.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  return `You are a helpful assistant built into a family dashboard. You are talking to ${name}. Today is ${fmt(today, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}. Current local time: ${timeStr}.
 
 CURRENT FAMILY DATA (use this to answer questions):
 
-Family members: ${memberNames.length ? memberNames.join(', ') : '(none set up)'}
+Family members and their pronouns (use ONLY these pronouns — never guess from names):
+${memberLines.length ? memberLines.join('\n') : '  (none set up)'}
 
 Weather: ${weatherSummary}
 
@@ -6258,8 +6286,9 @@ function clearAssistantChat() {
 }
 
 // ── Daily Briefing ─────────────────────────────────────────────
-const BRIEFING_DATE_KEY = 'fh_briefingDate';
-const BRIEFING_TEXT_KEY = 'fh_briefingText';
+const BRIEFING_DATE_KEY   = 'fh_briefingDate';
+const BRIEFING_TEXT_KEY   = 'fh_briefingText';
+const BRIEFING_BUCKET_KEY = 'fh_briefingBucket'; // 'morning'|'afternoon'|'evening'
 
 /** Show (or generate) the daily briefing banner above the chat. */
 async function loadDailyBriefing() {
@@ -6267,10 +6296,15 @@ async function loadDailyBriefing() {
   if (!banner || !mealAiKey) return;
 
   const today = new Date().toISOString().slice(0, 10);
-  const cachedDate = localStorage.getItem(BRIEFING_DATE_KEY);
-  const cachedText = localStorage.getItem(BRIEFING_TEXT_KEY);
+  const h = new Date().getHours();
+  const bucket = h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening';
+  const greeting = bucket === 'morning' ? 'Good morning' : bucket === 'afternoon' ? 'Good afternoon' : 'Good evening';
 
-  if (cachedDate === today && cachedText) {
+  const cachedDate   = localStorage.getItem(BRIEFING_DATE_KEY);
+  const cachedBucket = localStorage.getItem(BRIEFING_BUCKET_KEY);
+  const cachedText   = localStorage.getItem(BRIEFING_TEXT_KEY);
+
+  if (cachedDate === today && cachedBucket === bucket && cachedText) {
     showBriefingBanner(cachedText);
     return;
   }
@@ -6279,22 +6313,16 @@ async function loadDailyBriefing() {
   showBriefingBanner(null, true); // show loading state
   try {
     const context = buildAssistantContext();
-    const greeting = (() => {
-      const h = new Date().getHours();
-      if (h < 12) return 'Good morning';
-      if (h < 17) return 'Good afternoon';
-      return 'Good evening';
-    })();
     const prompt = `${context}
 
 ---
-Write a warm, concise daily briefing (3–5 sentences max). Open with "${greeting}!" then cover:
+Write a warm, concise daily briefing (3–5 sentences max). Your response MUST begin with exactly "${greeting}, ${userName || 'there'}!" — do not alter this opening phrase. Then cover:
 1. Any calendar events or tasks due today
 2. Today's weather highlights (if available)
 3. Any bills due soon or a notable meal planned
 4. One encouraging closing line
 
-Be specific and personal. Use the family data above. Do NOT use bullet points or headers — write in flowing prose. Do not include action tags.`;
+Be specific and personal. Use the family data above, including the correct pronouns for each family member. Do NOT use bullet points or headers — write in flowing prose. Do not include action tags.`;
 
     const resp = await geminiFetch({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
@@ -6304,8 +6332,9 @@ Be specific and personal. Use the family data above. Do NOT use bullet points or
     const data = await resp.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? '';
     if (text) {
-      localStorage.setItem(BRIEFING_DATE_KEY, today);
-      localStorage.setItem(BRIEFING_TEXT_KEY, text);
+      localStorage.setItem(BRIEFING_DATE_KEY,   today);
+      localStorage.setItem(BRIEFING_BUCKET_KEY, bucket);
+      localStorage.setItem(BRIEFING_TEXT_KEY,   text);
       showBriefingBanner(text);
     } else {
       banner.style.display = 'none';
