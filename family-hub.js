@@ -178,6 +178,7 @@ let mealAiKey       = localStorage.getItem('fh_mealAiKey')                || '';
 let mealAiProvider  = localStorage.getItem('fh_mealAiProvider')           || 'gemini';
 let mealDietPrefs   = lsGet('fh_mealDietPrefs', []);
 let mealPantryDef   = localStorage.getItem('fh_mealPantry')               || '';
+let mealTemplates   = lsGet('fh_mealTemplates', []);
 // ── Shopping categories ───────────────────────────────────────────────────
 const SHOP_DEFAULT_CATEGORIES = ['Produce','Dairy','Meat & Seafood','Bakery','Frozen','Pantry','Beverages','Household','Other'];
 const SHOP_CATEGORY_ICONS = {
@@ -5553,6 +5554,113 @@ async function removeMeal(dateKey, mealType) {
   // renderCurrentView() is triggered by onSnapshot (or by deleteMealFromFs in the !db fallback)
 }
 
+// ── Meal Plan Templates ───────────────────────────────────────
+
+function saveMealTemplate() {
+  const nameEl = document.getElementById('mealTemplateNameInput');
+  const name = (nameEl?.value || '').trim();
+  if (!name) { nameEl?.focus(); return; }
+
+  // Capture the currently-viewed week (week view) or current week (other views)
+  const weekStart = calView === 'week' ? getWeekStart(calViewDate) : getWeekStart(new Date());
+  const week = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekStart.getTime() + i * 86400000);
+    const dk = d.toISOString().slice(0, 10);
+    const dm = mealPlan[dk] || {};
+    week.push({
+      breakfast: dm.breakfast || null,
+      lunch:     dm.lunch     || null,
+      dinner:    dm.dinner    || null,
+    });
+  }
+
+  mealTemplates.push({ id: Date.now(), name, createdAt: new Date().toISOString().slice(0, 10), week });
+  localStorage.setItem('fh_mealTemplates', JSON.stringify(mealTemplates));
+  if (nameEl) nameEl.value = '';
+  renderMealTemplateList();
+}
+
+async function applyMealTemplate(id) {
+  const tmpl = mealTemplates.find(t => t.id === id);
+  if (!tmpl) return;
+
+  const mealCount = tmpl.week.reduce((n, d) =>
+    n + (d?.breakfast?1:0) + (d?.lunch?1:0) + (d?.dinner?1:0), 0);
+  if (!mealCount) { alert('This template has no meals saved.'); return; }
+
+  const weekStart = getWeekStart(new Date());
+  const targetDates = Array.from({length: 7}, (_, i) =>
+    new Date(weekStart.getTime() + i * 86400000).toISOString().slice(0, 10));
+
+  const hasExisting = targetDates.some(dk => {
+    const dm = mealPlan[dk] || {};
+    return dm.breakfast || dm.lunch || dm.dinner;
+  });
+  const weekLabel = `${weekStart.toLocaleDateString([],{month:'short',day:'numeric'})} – ${
+    new Date(weekStart.getTime()+6*86400000).toLocaleDateString([],{month:'short',day:'numeric'})}`;
+
+  if (hasExisting && !confirm(`Apply "${tmpl.name}" to this week (${weekLabel})?\nExisting meals will be replaced.`)) return;
+
+  for (let i = 0; i < 7; i++) {
+    const dk  = targetDates[i];
+    const day = tmpl.week[i] || {};
+    for (const mealType of ['breakfast', 'lunch', 'dinner']) {
+      if (day[mealType]) {
+        await setMealInFs(dk, mealType, day[mealType]);
+      } else if ((mealPlan[dk] || {})[mealType]) {
+        await deleteMealFromFs(dk, mealType);
+      }
+    }
+  }
+  closeSettings();
+}
+
+function deleteMealTemplate(id) {
+  if (!confirm('Delete this template?')) return;
+  mealTemplates = mealTemplates.filter(t => t.id !== id);
+  localStorage.setItem('fh_mealTemplates', JSON.stringify(mealTemplates));
+  renderMealTemplateList();
+}
+
+function renderMealTemplateList() {
+  const list = document.getElementById('mealTemplateList');
+  if (!list) return;
+  list.innerHTML = '';
+  if (!mealTemplates.length) {
+    list.innerHTML = '<div style="color:var(--muted);font-size:.8rem;padding:4px 0">No templates yet — plan a week then click Save Week.</div>';
+    return;
+  }
+  mealTemplates.forEach(tmpl => {
+    const mealCount = tmpl.week.reduce((n, d) =>
+      n + (d?.breakfast?1:0) + (d?.lunch?1:0) + (d?.dinner?1:0), 0);
+
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--surface2);border-radius:8px';
+
+    const info = document.createElement('div');
+    info.style.cssText = 'flex:1;min-width:0';
+    info.innerHTML = `<div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(tmpl.name)}</div>
+      <div style="font-size:.73rem;color:var(--muted)">${tmpl.createdAt} · ${mealCount} meal${mealCount !== 1 ? 's' : ''}</div>`;
+
+    const applyBtn = document.createElement('button');
+    applyBtn.className = 'btn btn-sm btn-primary';
+    applyBtn.textContent = '▶ Apply';
+    applyBtn.title = 'Apply to current week (Mon–Sun)';
+    applyBtn.onclick = () => applyMealTemplate(tmpl.id);
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'btn btn-sm';
+    delBtn.style.cssText = 'color:var(--red);background:none;border:1px solid rgba(255,255,255,.15);padding:3px 8px';
+    delBtn.textContent = '✕';
+    delBtn.title = 'Delete template';
+    delBtn.onclick = () => deleteMealTemplate(tmpl.id);
+
+    row.append(info, applyBtn, delBtn);
+    list.appendChild(row);
+  });
+}
+
 // ── Meal Detail modal ─────────────────────────────────────────
 const MEAL_DETAIL_LABELS = { breakfast:'🌅 Breakfast', lunch:'☀️ Lunch', dinner:'🌙 Dinner' };
 const MEAL_DETAIL_EMOJI  = { breakfast:'🍳', lunch:'🥪', dinner:'🍽' };
@@ -7005,6 +7113,7 @@ function openSettings() {
   if (hnc) hnc.value = newsHeadlineCount;
   renderLoadingMsgList();
   renderFamilyMemberList();
+  renderMealTemplateList();
   // Render diet checkboxes
   const dietGrid = document.getElementById('mealDietGrid');
   dietGrid.innerHTML = '';

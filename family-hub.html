@@ -733,6 +733,15 @@
             ↺ Reset to defaults
           </button>
         </div>
+        <div class="field">
+          <label>Meal Plan Templates</label>
+          <div style="display:flex;gap:8px;margin-bottom:10px">
+            <input type="text" id="mealTemplateNameInput" placeholder="Template name…" style="flex:1"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();saveMealTemplate()}" />
+            <button class="btn btn-sm btn-primary" onclick="saveMealTemplate()" style="white-space:nowrap">💾 Save Week</button>
+          </div>
+          <div id="mealTemplateList"></div>
+        </div>
       </div><!-- /meals -->
 
 
