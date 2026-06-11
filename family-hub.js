@@ -1525,15 +1525,22 @@ function renderMultidayOverlay() {
 
   if (!segments.length) return;
 
-  // Update spacers so single-day pills render below the overlay bars
-  rows.forEach((row, rowIdx) => {
-    const highestLane = rowLanes[rowIdx].reduce((max, v, i) => v !== null ? i : max, -1);
-    if (highestLane < 0) return;
-    const spacerH = (highestLane + 1) * (BAR_H + BAR_GAP);
-    row.dates.forEach(date => {
-      const sp = cellMap[date]?.el.querySelector('.cal-md-spacer');
-      if (sp) sp.style.height = spacerH + 'px';
-    });
+  // Update spacers per-cell: only cells that actually have bars through them get height.
+  // A cell with no bars should have spacer=0 so single-day events sit at the top.
+  const cellHighestLane = {}; // dateKey → highest lane index covering that cell
+  segments.forEach(({ startDate, endDate, lane }) => {
+    // Iterate every date in this segment (startDate..endDate inclusive)
+    const d = new Date(startDate + 'T00:00:00');
+    const end = new Date(endDate + 'T00:00:00');
+    while (d <= end) {
+      const dk = d.toISOString().slice(0, 10);
+      if (cellMap[dk]) cellHighestLane[dk] = Math.max(cellHighestLane[dk] ?? -1, lane);
+      d.setDate(d.getDate() + 1);
+    }
+  });
+  Object.entries(cellHighestLane).forEach(([date, highestLane]) => {
+    const sp = cellMap[date]?.el.querySelector('.cal-md-spacer');
+    if (sp) sp.style.height = ((highestLane + 1) * (BAR_H + BAR_GAP)) + 'px';
   });
 
   // Build overlay
