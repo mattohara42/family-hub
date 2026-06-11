@@ -1081,6 +1081,21 @@ body.nautical-mode .cal-month-nav button {
 .cal-day.can-add:hover::after { opacity: 0.55; }
 .cal-day.can-add:hover { background: rgba(255,255,255,.10); }
 .cal-day.other-month { opacity: .35; }
+
+/* ── Current day-of-week column highlight (month view) ── */
+body .cal-day.current-dow               { background: rgba(255,255,255,0.07); }
+body.light-mode .cal-day.current-dow   { background: rgba(0,0,0,0.06); }
+body.nautical-mode .cal-day.current-dow      { background: rgba(200,169,110,0.12); }
+body.nautical-light-mode .cal-day.current-dow { background: rgba(180,149,90,0.14); }
+body.has-bg .cal-day.current-dow        { background: rgba(255,255,255,0.06); }
+
+.cal-dow.current-dow {
+  color: var(--accent);
+  font-weight: var(--weight-bold);
+}
+
+/* current-week and today override current-dow */
+body .cal-day.current-week,
 .cal-day.current-week,
 .week-day-col.today,
 .day-hour-row.current-hour {

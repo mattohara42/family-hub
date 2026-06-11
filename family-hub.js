@@ -1628,7 +1628,7 @@ function renderMonthGrid() {
   grid.innerHTML = '';
 
   // Day-of-week headers
-  DOW_LABELS.forEach(d => {
+  DOW_LABELS.forEach((d, i) => {
     const el = document.createElement('div');
     el.className = 'cal-dow';
     el.textContent = d;
@@ -1639,6 +1639,10 @@ function renderMonthGrid() {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const daysInPrev  = new Date(year, month, 0).getDate();
   const today = new Date();
+  const todayDow = today.getDay(); // 0=Sun … 6=Sat
+
+  // Mark the matching DOW header
+  grid.querySelectorAll('.cal-dow')[todayDow]?.classList.add('current-dow');
 
   // Determine which column indices (0=Sun … 6=Sat) belong to the current week
   const todayInThisMonth = today.getFullYear() === year && today.getMonth() === month;
@@ -1651,13 +1655,16 @@ function renderMonthGrid() {
     const d = new Date(year, month - 1, daysInPrev - i);
     const cell = makeDayCell(year, month - 1, daysInPrev - i, true);
     if (inCurrentWeek(d)) cell.classList.add('current-week');
+    if (d.getDay() === todayDow) cell.classList.add('current-dow');
     grid.appendChild(cell);
   }
   // Current month
   for (let d = 1; d <= daysInMonth; d++) {
+    const dateObj = new Date(year, month, d);
     const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === d;
     const cell = makeDayCell(year, month, d, false, isToday);
-    if (inCurrentWeek(new Date(year, month, d))) cell.classList.add('current-week');
+    if (inCurrentWeek(dateObj)) cell.classList.add('current-week');
+    if (dateObj.getDay() === todayDow) cell.classList.add('current-dow');
     grid.appendChild(cell);
   }
   // Next-month filler
@@ -1667,6 +1674,7 @@ function renderMonthGrid() {
     const fd = new Date(year, month + 1, d);
     const cell = makeDayCell(year, month + 1, d, true);
     if (inCurrentWeek(fd)) cell.classList.add('current-week');
+    if (fd.getDay() === todayDow) cell.classList.add('current-dow');
     grid.appendChild(cell);
   }
 
