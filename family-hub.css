@@ -183,12 +183,7 @@ body.nautical-mode .cal-day.today .cal-day-num {
   color: #0c1a3a;
 }
 
-/* ── Calendar events: nautical pennant colours ── */
-body.nautical-mode .cal-event {
-  background: rgba(200, 169, 110, 0.28);
-  color: var(--text);
-  border-left: 2px solid #c8a96e;
-}
+/* Calendar events in nautical mode use their real Google Calendar colors */
 
 /* ── Accent / primary buttons ── */
 body.nautical-mode .btn-primary {
@@ -382,12 +377,7 @@ body.nautical-light-mode .cal-day.today {
   box-shadow: 0 0 0 1.5px rgba(240,192,64,0.80), 0 0 10px rgba(240,192,64,0.20);
 }
 
-/* ── Calendar events ── */
-body.nautical-light-mode .cal-event {
-  background: rgba(240,192,64,0.22);
-  color: var(--text);
-  border-left: 2px solid #f0c040;
-}
+/* Calendar events in nautical-light mode use their real Google Calendar colors */
 
 /* ── Accent / primary buttons ── */
 body.nautical-light-mode .btn-primary {
