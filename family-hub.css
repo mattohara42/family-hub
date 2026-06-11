@@ -1077,7 +1077,7 @@ body.nautical-mode .cal-month-nav button {
 .cal-day.other-month { opacity: .35; }
 
 /* ── Current day-of-week header highlight (month view) ── */
-.cal-dow.current-dow                          { background: rgba(255,255,255,0.13); border-radius: 6px; }
+.cal-dow.current-dow                          { color: var(--accent); background: rgba(255,255,255,0.13); border-radius: 6px; }
 body.light-mode .cal-dow.current-dow          { background: rgba(0,0,0,0.10); }
 body.nautical-mode .cal-dow.current-dow       { background: rgba(200,169,110,0.22); border-radius: 6px; }
 body.nautical-light-mode .cal-dow.current-dow { background: rgba(180,149,90,0.20); border-radius: 6px; }
