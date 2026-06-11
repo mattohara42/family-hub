@@ -2361,6 +2361,24 @@ body.light-mode .shop-cat-header { border-bottom-color: rgba(0,0,0,.08); }
 /* Allow SMS popover to overflow the card header boundary */
 #shopCard .card-header {
   overflow: visible;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+#shopCard .card-header h2 {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#shopCard .card-header > div {
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+  gap: 3px;
+}
+#shopCard .card-header .btn-sm {
+  padding: 3px 7px;
+  white-space: nowrap;
 }
 /* Constrain shopping category select so it doesn't widen the input row */
 .shop-cat-select {
