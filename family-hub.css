@@ -481,6 +481,42 @@ body.nautical-light-mode .assistant-msg.ai {
   background: rgba(44, 68, 128, 0.75);
 }
 
+/* ════════════════════════════════════════════════════════════════
+   👁  ACCESSIBLE MODE — High Contrast · Okabe-Ito colorblind-safe palette
+   Uses sky-blue accent, orange highlight, vermillion (not red), bluish-green
+   (not pure green) — all distinguishable by deuteranopes and protanopes.
+   ════════════════════════════════════════════════════════════════ */
+body.colorblind-mode {
+  --bg:                 #0d1117;
+  --surface:            rgba(18, 24, 38, 0.90);
+  --surface2:           rgba(26, 34, 54, 0.85);
+  --accent:             #56B4E9;        /* Okabe sky-blue — primary interactive */
+  --accent2:            #E69F00;        /* Okabe orange — secondary highlight */
+  --green:              #009E73;        /* Okabe bluish-green — safe for deuteranopia */
+  --red:                #D55E00;        /* Okabe vermillion — not pure red */
+  --text:               #F5F5F5;
+  --muted:              #8899bb;
+  --radius:             14px;
+  --shadow:             0 0 22px rgba(86,180,233,0.22), 0 4px 18px rgba(0,0,0,0.55);
+  --scrim:              rgba(0,0,0,0.45);
+  --card-bg-photo:      rgba(13,17,23,0.80);
+  --cal-card-bg-photo:  rgba(13,17,23,0.55);
+  --cal-day-bg-photo:   rgba(18,24,38,0.28);
+  --mini-card-bg-photo: rgba(18,24,38,0.75);
+  --strip-bg-photo:     rgba(13,17,23,0.75);
+}
+
+/* Calendar today/current-week: sky-blue glow instead of gold */
+body.colorblind-mode .cal-day.current-week,
+body.colorblind-mode .week-day-col.today,
+body.colorblind-mode .day-hour-row.current-hour {
+  box-shadow: 0 0 0 1.5px rgba(86,180,233,0.85), 0 0 10px rgba(86,180,233,0.25);
+}
+body.colorblind-mode .cal-day.current-week     { background: rgba(86,180,233,0.22); }
+body.colorblind-mode .cal-day.today            { background: rgba(86,180,233,0.45); box-shadow: 0 0 0 1.5px rgba(86,180,233,0.85), 0 0 10px rgba(86,180,233,0.25); }
+body.colorblind-mode .week-day-col.today       { background: rgba(86,180,233,0.30); }
+body.colorblind-mode .cal-dow.current-dow      { background: rgba(86,180,233,0.20); border-radius: 6px; }
+
 /* ── Light mode overrides ── */
 body.light-mode {
   --bg: #f0f2f8;
