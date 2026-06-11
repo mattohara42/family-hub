@@ -167,10 +167,7 @@ body.nautical-mode .cal-card .card-body {
 
 /* ── Calendar DOW row: brass-gold labels ── */
 body.nautical-mode .cal-dow {
-  color: #c8a96e;
-  font-weight: var(--weight-bold);
   letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 
 /* ── Calendar day cells ── */
@@ -356,10 +353,7 @@ body.nautical-light-mode .cal-card .card-body {
 
 /* ── Calendar DOW: yellow-gold labels ── */
 body.nautical-light-mode .cal-dow {
-  color: #f0c040;
-  font-weight: var(--weight-bold);
   letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 
 /* ── Calendar day cells ── */
