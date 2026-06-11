@@ -6340,12 +6340,21 @@ function setMobileTab(tab) {
   if (widBtn) widBtn.classList.toggle('active', tab === 'widgets');
 }
 
+const THEME_COLORS = {
+  dark:           '#0f1117',
+  light:          '#f0f2f8',
+  nautical:       '#0c1a3a',
+  'nautical-light': '#1a2e52',
+};
+
 function applyAppMode(mode) {
   appMode = mode;
   document.body.classList.remove('light-mode', 'nautical-mode', 'nautical-light-mode');
   if (mode === 'light')          document.body.classList.add('light-mode');
   if (mode === 'nautical')       document.body.classList.add('nautical-mode');
   if (mode === 'nautical-light') document.body.classList.add('nautical-light-mode');
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = THEME_COLORS[mode] || THEME_COLORS.dark;
 }
 
 window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', e => {
