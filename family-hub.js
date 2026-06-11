@@ -149,6 +149,17 @@ if (localStorage.getItem('fh_mode') === 'amazing') localStorage.setItem('fh_mode
 const _savedMode    = localStorage.getItem('fh_mode');
 let appMode         = _savedMode || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');  // 'light' | 'dark' | 'nautical'
 let mobileTab       = localStorage.getItem('fh_mobileTab') || 'cal';  // 'cal' | 'widgets'
+// URL param ?layout=auto|portrait|landscape overrides saved setting (emergency escape)
+(function() {
+  const p = new URLSearchParams(window.location.search).get('layout');
+  if (p === 'auto' || p === 'portrait' || p === 'landscape') {
+    localStorage.setItem('fh_layoutMode', p);
+    // Strip the param from the URL without reloading
+    const url = new URL(window.location.href);
+    url.searchParams.delete('layout');
+    window.history.replaceState({}, '', url);
+  }
+})();
 let layoutMode      = localStorage.getItem('fh_layoutMode') || 'auto'; // 'auto' | 'portrait' | 'landscape'
 let smsContacts     = lsGet('fh_smsContacts', []);
 // migrate legacy single-number setting
@@ -782,6 +793,21 @@ window.addEventListener('load', () => {
     if (e.key === 'Escape') {
       const modal = document.getElementById('eventEditorModal');
       if (modal && modal.style.display !== 'none') closeEventEditor();
+    }
+    // Alt+Shift+L → cycle layout mode (emergency escape if settings are unreachable)
+    if (e.altKey && e.shiftKey && e.key === 'L') {
+      const modes = ['auto', 'landscape', 'portrait'];
+      layoutMode = modes[(modes.indexOf(layoutMode) + 1) % modes.length];
+      localStorage.setItem('fh_layoutMode', layoutMode);
+      applyLayoutMode();
+      // Brief toast so user knows what mode they're now in
+      const t = document.createElement('div');
+      t.textContent = `Layout: ${layoutMode}`;
+      Object.assign(t.style, { position:'fixed', bottom:'24px', left:'50%', transform:'translateX(-50%)',
+        background:'var(--accent)', color:'#fff', padding:'8px 18px', borderRadius:'8px',
+        fontSize:'0.9rem', zIndex:'9999', pointerEvents:'none' });
+      document.body.appendChild(t);
+      setTimeout(() => t.remove(), 2000);
     }
   });
 });
