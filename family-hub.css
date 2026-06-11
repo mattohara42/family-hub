@@ -1010,7 +1010,8 @@ body.nautical-mode .cal-month-nav button {
 .cal-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  grid-auto-rows: 1fr;  /* all rows (including DOW header) share height equally */
+  grid-template-rows: auto;   /* first row (DOW headers) sizes to content */
+  grid-auto-rows: 1fr;        /* week rows share remaining height equally */
   gap: 2px;
   flex: 1;              /* grow to fill card body */
   min-height: 0;
