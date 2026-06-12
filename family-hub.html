@@ -56,7 +56,7 @@
       <div class="card-header cal-card-header">
         <!-- Left: app title + Refocus -->
         <div class="cal-title-zone">
-          <div class="cal-app-title">🏠 Family <span>Hub</span></div>
+          <div class="cal-app-title"><em class="cal-app-emoji">🏠</em><span class="cal-app-title-text">Family <span>Hub</span></span></div>
           <button id="backToTodayBtn" onclick="goToToday()" style="display:none">Refocus</button>
         </div>
         <!-- Centre: period navigator -->
@@ -402,6 +402,10 @@
         <div class="field">
           <label>App title <span style="font-weight:400;color:var(--muted)">(top-left header)</span></label>
           <input type="text" id="settingAppTitle" placeholder="e.g. Family Hub" maxlength="30" />
+        </div>
+        <div class="field">
+          <label>App icon emoji</label>
+          <div class="emoji-picker-grid" id="emojiPickerGrid"></div>
         </div>
         <div class="field">
           <label>Appearance</label>

@@ -145,6 +145,7 @@ let wxTickerEnabled     = lsGet('fh_wxTicker', true);      // weather info ticke
 let wxActivityEnabled   = lsGet('fh_wxActivity', true);    // activity tags strip
 let userName        = localStorage.getItem('fh_name') || 'Someone';
 let appTitle        = localStorage.getItem('fh_appTitle') || 'Family Hub';
+let appTitleEmoji   = localStorage.getItem('fh_appTitleEmoji') || '🏠';
 let familyMembers   = lsGet('fh_familyMembers', []);
 // each: { name: string }
 let todoItems       = []; // in-memory mirror of Firestore 'todo' collection for calendar use
@@ -7348,16 +7349,44 @@ const THEME_COLORS = {
   colorblind:       '#0d1117',
 };
 
+const EMOJI_PICKER_OPTIONS = [
+  '🏠','🏡','🌟','⭐','🌈','🌻','🌺','🦋',
+  '🐾','🎨','🎯','🌊','🌙','☀️','🍀','🦄',
+  '🐬','🎵','💫','✨','🔮','🧩','🦁','🌿',
+  '🎪','🚀','🎭','🎁','🎉','🐘','🌋','🏕️',
+];
+
+function renderEmojiPicker(selectedEmoji) {
+  const grid = document.getElementById('emojiPickerGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  EMOJI_PICKER_OPTIONS.forEach(e => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'emoji-picker-btn' + (e === selectedEmoji ? ' selected' : '');
+    btn.textContent = e;
+    btn.onclick = () => {
+      grid.querySelectorAll('.emoji-picker-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+    };
+    grid.appendChild(btn);
+  });
+}
+
 function applyAppTitle() {
   const el = document.querySelector('.cal-app-title');
   if (!el) return;
-  const parts = appTitle.trim().split(/\s+/);
+  const emoji = appTitleEmoji || '🏠';
+  const title = appTitle.trim() || 'Family Hub';
+  const parts = title.split(/\s+/);
+  let textHtml;
   if (parts.length >= 2) {
-    el.innerHTML = parts.slice(0, -1).join(' ') + ' <span>' + parts[parts.length - 1] + '</span>';
+    textHtml = parts.slice(0, -1).join(' ') + ' <span>' + parts[parts.length - 1] + '</span>';
   } else {
-    el.textContent = appTitle || 'Family Hub';
+    textHtml = '<span>' + title + '</span>';
   }
-  document.title = appTitle || 'Family Hub';
+  el.innerHTML = `<em class="cal-app-emoji">${emoji}</em><span class="cal-app-title-text">${textHtml}</span>`;
+  document.title = title;
 }
 
 function applyAppMode(mode) {
@@ -7419,6 +7448,7 @@ function openSettings() {
   if (lmEl) lmEl.value = layoutMode;
   document.getElementById('settingName').value          = userName;
   document.getElementById('settingAppTitle').value      = appTitle;
+  renderEmojiPicker(appTitleEmoji);
   document.getElementById('settingWeatherKey').value    = weatherKey;
   document.getElementById('sunArcToggle').checked        = sunArcEnabled;
   document.getElementById('wxTickerToggle').checked     = wxTickerEnabled;
@@ -7497,6 +7527,8 @@ function saveSettings() {
   userName      = document.getElementById('settingName').value.trim() || 'Someone';
   appTitle      = document.getElementById('settingAppTitle').value.trim() || 'Family Hub';
   localStorage.setItem('fh_appTitle', appTitle);
+  const selEmoji = document.querySelector('#emojiPickerGrid .emoji-picker-btn.selected');
+  if (selEmoji) { appTitleEmoji = selEmoji.textContent; localStorage.setItem('fh_appTitleEmoji', appTitleEmoji); }
   applyAppTitle();
   weatherKey    = document.getElementById('settingWeatherKey').value.trim();
   sunArcEnabled     = document.getElementById('sunArcToggle').checked;

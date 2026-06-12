@@ -229,7 +229,7 @@ body.nautical-mode .sidebar::-webkit-scrollbar-thumb {
 /* ── Card-header title text in beige-gold ── */
 body.nautical-mode .card-header h2 { color: #e8d5b0; }
 body.nautical-mode .cal-app-title  { color: #e8d5b0; }
-body.nautical-mode .cal-app-title span { color: #c8a96e; }
+body.nautical-mode .cal-app-title .cal-app-title-text span { color: #c8a96e; }
 
 /* ═══════════════════════════════════════════════════════════════
    ── Nautical Light theme ──
@@ -425,7 +425,7 @@ body.nautical-light-mode .sidebar::-webkit-scrollbar-thumb {
 /* ── Card-header title text ── */
 body.nautical-light-mode .card-header h2 { color: #ffe090; }
 body.nautical-light-mode .cal-app-title  { color: #ffe090; }
-body.nautical-light-mode .cal-app-title span { color: #f0c040; }
+body.nautical-light-mode .cal-app-title .cal-app-title-text span { color: #f0c040; }
 
 /* ── Year strip ── */
 body.nautical-light-mode #yearStrip { border-color: rgba(240,192,64,0.40); }
@@ -612,8 +612,36 @@ body.has-bg .day-hour-row {
   letter-spacing: -0.3px;
   line-height: 1.2;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
-.cal-app-title span { color: var(--accent); }
+.cal-app-title .cal-app-title-text span { color: var(--accent); }
+.cal-app-emoji {
+  font-size: 1.5rem;
+  line-height: 1;
+  font-style: normal;
+  flex-shrink: 0;
+}
+.emoji-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+  margin-top: 6px;
+}
+.emoji-picker-btn {
+  font-size: 1.4rem;
+  background: none;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+  text-align: center;
+  transition: border-color 0.15s;
+}
+.emoji-picker-btn:hover { border-color: var(--accent); }
+.emoji-picker-btn.selected { border-color: var(--accent); background: rgba(108,142,245,0.18); }
 
 /* ── Control card (top of sidebar) ── */
 #controlCard {
