@@ -2812,11 +2812,12 @@ function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
   }
 
   document.getElementById('eventEditorModal').style.display = 'flex';
-  setTimeout(() => document.getElementById('evtEdTitle').focus(), 50);
+  trapFocus(document.querySelector('#eventEditorModal .modal'), null, closeEventEditor);
 }
 
 function closeEventEditor() {
   document.getElementById('eventEditorModal').style.display = 'none';
+  releaseFocusTrap();
   evtEditing = null;
 }
 
@@ -4920,10 +4921,12 @@ function openMealModal(dateKey, mealType) {
   document.getElementById('mealSuggestionsWrap').innerHTML = '';
   document.getElementById('mealGenerateBtn').disabled      = false;
   document.getElementById('mealModal').style.display       = 'flex';
+  trapFocus(document.querySelector('#mealModal .modal'), null, closeMealModal);
 }
 
 function closeMealModal() {
   document.getElementById('mealModal').style.display = 'none';
+  releaseFocusTrap();
 }
 
 // ── Provider selector ─────────────────────────────────────────
@@ -7494,6 +7497,34 @@ function setAppMode(mode) {
   document.getElementById('modeColorblind').className     = 'btn btn-sm' + (mode === 'colorblind'     ? ' btn-mode-active' : '');
 }
 
+// ── Focus trap ─────────────────────────────────────────────────
+const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+let _focusTrapCleanup = null;
+
+function trapFocus(modalEl, returnEl, onEscape) {
+  if (_focusTrapCleanup) _focusTrapCleanup();
+  const focusable = () => [...modalEl.querySelectorAll(FOCUSABLE)].filter(el => !el.closest('[style*="display:none"]') && el.offsetParent !== null);
+  requestAnimationFrame(() => { const f = focusable()[0]; if (f) f.focus(); });
+  function onKeyDown(e) {
+    if (e.key === 'Escape') { if (onEscape) onEscape(); return; }
+    if (e.key !== 'Tab') return;
+    const els = focusable();
+    if (!els.length) { e.preventDefault(); return; }
+    if (e.shiftKey) { if (document.activeElement === els[0])      { e.preventDefault(); els.at(-1).focus(); } }
+    else            { if (document.activeElement === els.at(-1))   { e.preventDefault(); els[0].focus(); } }
+  }
+  document.addEventListener('keydown', onKeyDown);
+  _focusTrapCleanup = () => {
+    document.removeEventListener('keydown', onKeyDown);
+    _focusTrapCleanup = null;
+    if (returnEl) returnEl.focus();
+  };
+}
+
+function releaseFocusTrap() {
+  if (_focusTrapCleanup) _focusTrapCleanup();
+}
+
 // ── Settings modal ─────────────────────────────────────────────
 function switchSettingsTab(tab) {
   document.querySelectorAll('.modal-tab').forEach(btn => {
@@ -7581,10 +7612,12 @@ function openSettings() {
   document.querySelector(`input[name="assistantWelcome"][value="${assistantWelcomeMode}"]`).checked = true;
   document.getElementById('settingsModal').style.display = 'flex';
   applySafePaletteMode();
+  trapFocus(document.querySelector('#settingsModal .modal'), document.getElementById('settingsBtn'), closeSettings);
 }
 
 function closeSettings() {
   document.getElementById('settingsModal').style.display = 'none';
+  releaseFocusTrap();
 }
 
 function saveSettings() {
