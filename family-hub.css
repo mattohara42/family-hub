@@ -1998,6 +1998,14 @@ body.has-bg.light-mode .day-hour-row.current-hour { background: rgba(190,198,225
   display: flex; align-items: center; gap: 6px;
   font-size: var(--text-base); cursor: pointer;
 }
+.wx-view-option {
+  display: flex; align-items: center; gap: 5px;
+  font-size: var(--text-sm); cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid rgba(128,128,128,.25);
+  user-select: none;
+}
 
 /* ── Meal Planning — Detail Modal ── */
 .meal-detail-modal { max-width: 480px; }

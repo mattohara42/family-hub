@@ -139,6 +139,7 @@ const WX_CACHE_TTL      = 30 * 60 * 1000;     // 30 minutes
 let weatherForecastMode = localStorage.getItem('fh_wxForecastMode') || '5day'; // '5day' | 'hourly'
 let sunArcEnabled       = lsGet('fh_sunArc', true);        // sun-path arc visibility
 let snarkyMode          = lsGet('fh_snarkyMode', false);   // WTF/snarky forecast toggle
+let wxEnabledViews      = lsGet('fh_wxEnabledViews', { '5day': true, 'hourly': true, 'curve': true, 'radar': true, 'snarky': true });
 const snarkyCache       = {};                              // { cacheKey: text } — in-memory per session
 let wxTickerEnabled     = lsGet('fh_wxTicker', true);      // weather info ticker
 let wxActivityEnabled   = lsGet('fh_wxActivity', true);    // activity tags strip
@@ -3706,14 +3707,7 @@ function renderWeatherData(data) {
   if (fcastToggle) fcastToggle.style.display = '';
   document.getElementById('weatherSetup').style.display  = 'none';
   document.getElementById('weatherDisplay').style.display = 'block';
-
-  // Snarky button
-  const snarkyBtn = document.getElementById('wxSnarkyBtn');
-  if (snarkyBtn) {
-    snarkyBtn.style.display = '';
-    snarkyBtn.classList.toggle('snarky-active', snarkyMode);
-  }
-  if (snarkyMode) showSnarkyForecast();
+  applyWxViewToggles();
 }
 
 // Sun-path arc: shows the sun's position between sunrise & sunset, daylight
@@ -4114,6 +4108,32 @@ function changeCity() {
 }
 
 // ── Snarky / WTF Forecast ──
+function applyWxViewToggles() {
+  const btnMap = { '5day': 'wxToggle5day', 'hourly': 'wxToggleHourly', 'curve': 'wxToggleCurve', 'radar': 'wxToggleRadar' };
+  Object.entries(btnMap).forEach(([key, id]) => {
+    const btn = document.getElementById(id);
+    if (btn) btn.style.display = wxEnabledViews[key] ? '' : 'none';
+  });
+  const snarkyBtn = document.getElementById('wxSnarkyBtn');
+  if (snarkyBtn) {
+    snarkyBtn.style.display = wxEnabledViews['snarky'] ? '' : 'none';
+    snarkyBtn.classList.toggle('snarky-active', snarkyMode);
+  }
+  // If current forecast mode was disabled, fall back to first enabled mode
+  if (!wxEnabledViews[weatherForecastMode]) {
+    const first = ['5day','hourly','curve','radar'].find(k => wxEnabledViews[k]);
+    if (first) setWeatherForecastMode(first);
+  }
+  // If snarky was on but is now disabled, turn it off
+  if (!wxEnabledViews['snarky'] && snarkyMode) {
+    snarkyMode = false;
+    localStorage.setItem('fh_snarkyMode', JSON.stringify(false));
+    const el = document.getElementById('wxSnarky');
+    if (el) el.style.display = 'none';
+  }
+  if (snarkyMode) showSnarkyForecast();
+}
+
 function toggleSnarkyForecast() {
   snarkyMode = !snarkyMode;
   localStorage.setItem('fh_snarkyMode', JSON.stringify(snarkyMode));
@@ -4162,7 +4182,7 @@ Reply with only the 2 sentences. No intro, no labels.`;
 
     const resp = await geminiFetch({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 1.0, maxOutputTokens: 150 },
+      generationConfig: { temperature: 1.0, maxOutputTokens: 300 },
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
@@ -7386,6 +7406,11 @@ function openSettings() {
   document.getElementById('sunArcToggle').checked        = sunArcEnabled;
   document.getElementById('wxTickerToggle').checked     = wxTickerEnabled;
   document.getElementById('wxActivityToggle').checked   = wxActivityEnabled;
+  document.getElementById('wxView5day').checked   = !!wxEnabledViews['5day'];
+  document.getElementById('wxViewHourly').checked = !!wxEnabledViews['hourly'];
+  document.getElementById('wxViewCurve').checked  = !!wxEnabledViews['curve'];
+  document.getElementById('wxViewRadar').checked  = !!wxEnabledViews['radar'];
+  document.getElementById('wxViewSnarky').checked = !!wxEnabledViews['snarky'];
   renderWeatherLocationsList();
   renderSmsContactsList();
   renderShopCategorySettings();
@@ -7457,9 +7482,18 @@ function saveSettings() {
   sunArcEnabled     = document.getElementById('sunArcToggle').checked;
   wxTickerEnabled   = document.getElementById('wxTickerToggle').checked;
   wxActivityEnabled = document.getElementById('wxActivityToggle').checked;
-  localStorage.setItem('fh_sunArc',      JSON.stringify(sunArcEnabled));
-  localStorage.setItem('fh_wxTicker',    JSON.stringify(wxTickerEnabled));
-  localStorage.setItem('fh_wxActivity',  JSON.stringify(wxActivityEnabled));
+  wxEnabledViews = {
+    '5day':   document.getElementById('wxView5day').checked,
+    'hourly': document.getElementById('wxViewHourly').checked,
+    'curve':  document.getElementById('wxViewCurve').checked,
+    'radar':  document.getElementById('wxViewRadar').checked,
+    'snarky': document.getElementById('wxViewSnarky').checked,
+  };
+  localStorage.setItem('fh_sunArc',        JSON.stringify(sunArcEnabled));
+  localStorage.setItem('fh_wxTicker',      JSON.stringify(wxTickerEnabled));
+  localStorage.setItem('fh_wxActivity',    JSON.stringify(wxActivityEnabled));
+  localStorage.setItem('fh_wxEnabledViews', JSON.stringify(wxEnabledViews));
+  applyWxViewToggles();
   // smsContacts and familyMembers saved immediately on add/remove — nothing to save here
   slideInterval = parseInt(document.getElementById('settingSlideInterval').value) || 30;
   mealAiKey     = document.getElementById('settingMealAiKey').value.trim();
