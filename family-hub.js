@@ -138,6 +138,8 @@ const weatherCache      = {};                  // { cityKey: { ts, data } }
 const WX_CACHE_TTL      = 30 * 60 * 1000;     // 30 minutes
 let weatherForecastMode = localStorage.getItem('fh_wxForecastMode') || '5day'; // '5day' | 'hourly'
 let sunArcEnabled       = lsGet('fh_sunArc', true);        // sun-path arc visibility
+let snarkyMode          = lsGet('fh_snarkyMode', false);   // WTF/snarky forecast toggle
+const snarkyCache       = {};                              // { cacheKey: text } — in-memory per session
 let wxTickerEnabled     = lsGet('fh_wxTicker', true);      // weather info ticker
 let wxActivityEnabled   = lsGet('fh_wxActivity', true);    // activity tags strip
 let userName        = localStorage.getItem('fh_name') || 'Someone';
@@ -3704,6 +3706,14 @@ function renderWeatherData(data) {
   if (fcastToggle) fcastToggle.style.display = '';
   document.getElementById('weatherSetup').style.display  = 'none';
   document.getElementById('weatherDisplay').style.display = 'block';
+
+  // Snarky button
+  const snarkyBtn = document.getElementById('wxSnarkyBtn');
+  if (snarkyBtn) {
+    snarkyBtn.style.display = '';
+    snarkyBtn.classList.toggle('snarky-active', snarkyMode);
+  }
+  if (snarkyMode) showSnarkyForecast();
 }
 
 // Sun-path arc: shows the sun's position between sunrise & sunset, daylight
@@ -4101,6 +4111,71 @@ function changeCity() {
   renderWeatherNav();
   document.getElementById('cityInput').value = '';
   document.getElementById('cityInput').focus();
+}
+
+// ── Snarky / WTF Forecast ──
+function toggleSnarkyForecast() {
+  snarkyMode = !snarkyMode;
+  localStorage.setItem('fh_snarkyMode', JSON.stringify(snarkyMode));
+  const btn = document.getElementById('wxSnarkyBtn');
+  if (btn) btn.classList.toggle('snarky-active', snarkyMode);
+  if (snarkyMode) {
+    showSnarkyForecast();
+  } else {
+    const el = document.getElementById('wxSnarky');
+    if (el) el.style.display = 'none';
+  }
+}
+
+async function showSnarkyForecast() {
+  const el = document.getElementById('wxSnarky');
+  if (!el) return;
+  const city = weatherLocations[weatherLocIdx];
+  if (!city) { el.style.display = 'none'; return; }
+  const cached = weatherCache[city.toLowerCase().trim()];
+  if (!cached) { el.style.display = 'none'; return; }
+  const wx = cached.data;
+
+  const cacheKey = `${city.toLowerCase().trim()}_${wx.temp}_${wx.icon}`;
+  el.style.display = '';
+
+  if (snarkyCache[cacheKey]) {
+    el.innerHTML = `<div class="wx-snarky-label">😜 Snarky Forecast</div>${esc(snarkyCache[cacheKey])}`;
+    return;
+  }
+
+  el.innerHTML = `<div class="wx-snarky-label">😜 Snarky Forecast</div><span class="wx-snarky-loading">Cooking up something ridiculous…</span>`;
+
+  try {
+    const parts = [`${wx.temp}°F`, wx.desc];
+    if (wx.feels != null) parts.push(`feels like ${wx.feels}°F`);
+    if (wx.hi != null && wx.lo != null) parts.push(`high ${wx.hi}° / low ${wx.lo}°`);
+    if (wx.rain != null) parts.push(`${wx.rain}% chance of rain`);
+    if (wx.windSpeed) parts.push(`wind ${wx.windSpeed} mph`);
+    const conditions = parts.join(', ');
+
+    const prompt = `You are a hilariously dramatic but totally kid-friendly weather announcer for elementary school children. Write exactly 2 funny sentences describing today's weather. Use silly comparisons, goofy exaggeration, and playful humor — like a Saturday morning cartoon. No scary content, no gross-out humor, no adult themes, no bad words. Keep vocabulary simple enough for a 7-year-old.
+
+Weather: ${conditions}.
+
+Reply with only the 2 sentences. No intro, no labels.`;
+
+    const resp = await geminiFetch({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 1.0, maxOutputTokens: 150 },
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? '';
+    if (text) {
+      snarkyCache[cacheKey] = text;
+      el.innerHTML = `<div class="wx-snarky-label">😜 Snarky Forecast</div>${esc(text)}`;
+    } else {
+      el.style.display = 'none';
+    }
+  } catch(e) {
+    el.style.display = 'none';
+  }
 }
 
 // ── Calendar Swipe ──

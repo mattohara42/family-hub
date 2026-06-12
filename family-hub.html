@@ -127,11 +127,14 @@
     <div class="card" id="weatherCard">
       <div class="card-header">
         <h2>🌤 Weather</h2>
-        <div class="wx-forecast-toggle" id="wxForecastToggle" style="display:none">
-          <button id="wxToggle5day" class="active" onclick="setWeatherForecastMode('5day')">5-day</button>
-          <button id="wxToggleHourly" onclick="setWeatherForecastMode('hourly')">Hourly</button>
-          <button id="wxToggleCurve" onclick="setWeatherForecastMode('curve')">Curve</button>
-          <button id="wxToggleRadar" onclick="setWeatherForecastMode('radar')">Radar</button>
+        <div style="display:flex;align-items:center;gap:6px">
+          <button id="wxSnarkyBtn" class="btn btn-sm" onclick="toggleSnarkyForecast()" style="display:none" title="Snarky Forecast">😜</button>
+          <div class="wx-forecast-toggle" id="wxForecastToggle" style="display:none">
+            <button id="wxToggle5day" class="active" onclick="setWeatherForecastMode('5day')">5-day</button>
+            <button id="wxToggleHourly" onclick="setWeatherForecastMode('hourly')">Hourly</button>
+            <button id="wxToggleCurve" onclick="setWeatherForecastMode('curve')">Curve</button>
+            <button id="wxToggleRadar" onclick="setWeatherForecastMode('radar')">Radar</button>
+          </div>
         </div>
       </div>
       <div class="card-body">
@@ -164,6 +167,7 @@
           <div class="wx-sun-arc" id="wxSunArc" style="display:none"></div>
           <div class="wx-details" id="wDetails"></div>
           <div class="wx-activity-tags" id="wActivityTags"></div>
+          <div class="wx-snarky" id="wxSnarky" style="display:none"></div>
           <div class="wx-forecast" id="wForecast"></div>
           <!-- Radar map: persistent container, shown only in radar mode -->
           <div class="wx-radar-map" id="wxRadarMap" style="display:none"></div>

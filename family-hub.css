@@ -1568,6 +1568,33 @@ body.nautical-mode .wx-curve-dot  { fill: var(--accent2); }
 .wx-city-label { font-size: var(--text-sm); color: var(--muted); flex: 1; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #weatherChange { font-size: var(--text-sm); cursor: pointer; text-decoration: underline; background: none; border: none; color: var(--accent); }
 
+/* ── Snarky / WTF Forecast ── */
+.wx-snarky {
+  margin: 6px 0 4px;
+  padding: 9px 12px;
+  background: rgba(108,142,245,0.13);
+  border-radius: 10px;
+  border-left: 3px solid var(--accent2);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  color: var(--text);
+}
+body.light-mode .wx-snarky { background: rgba(108,142,245,0.10); }
+body.nautical-mode .wx-snarky { background: rgba(200,169,110,0.15); border-left-color: #c8a96e; }
+body.nautical-light-mode .wx-snarky { background: rgba(200,169,110,0.12); border-left-color: #b89050; }
+.wx-snarky-label {
+  font-size: .6rem;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--accent2);
+  margin-bottom: 4px;
+}
+body.nautical-mode .wx-snarky-label,
+body.nautical-light-mode .wx-snarky-label { color: #c8a96e; }
+.wx-snarky-loading { color: var(--muted); font-style: italic; }
+#wxSnarkyBtn.snarky-active { background: var(--accent2); color: #111; }
+
 /* ── Weather ticker ── */
 .wx-ticker {
   overflow: hidden;
