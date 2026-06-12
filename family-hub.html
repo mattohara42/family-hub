@@ -61,10 +61,10 @@
         </div>
         <!-- Centre: period navigator -->
         <div class="cal-month-nav">
-          <button onclick="changeCalPeriod(-1)">&#8249;</button>
+          <button onclick="changeCalPeriod(-1)" aria-label="Previous period">&#8249;</button>
           <span id="calMonthLabel"></span>
           <span id="calendarStatus"></span>
-          <button onclick="changeCalPeriod(1)">&#8250;</button>
+          <button onclick="changeCalPeriod(1)" aria-label="Next period">&#8250;</button>
         </div>
         <!-- Right: view tabs -->
         <div class="cal-view-tabs">
@@ -89,9 +89,9 @@
       <!-- hidden elements kept for JS compatibility -->
       <span id="stripRangeLabel" style="display:none"></span>
       <button id="stripTodayBtn" onclick="resetStripToToday()" style="display:none">Today</button>
-      <button class="strip-side-nav" onclick="changeStripMonth(-1)" title="Back one month">&#8249;</button>
+      <button class="strip-side-nav" onclick="changeStripMonth(-1)" title="Back one month" aria-label="Back one month">&#8249;</button>
       <div class="mini-grid" id="miniGrid"></div>
-      <button class="strip-side-nav" onclick="changeStripMonth(1)"  title="Forward one month">&#8250;</button>
+      <button class="strip-side-nav" onclick="changeStripMonth(1)"  title="Forward one month" aria-label="Forward one month">&#8250;</button>
     </div>
 
     <!-- Bottom widget strip (cards placed here when placement = bottom) -->
@@ -108,7 +108,7 @@
       <div class="ctrl-header" onclick="toggleControlCard()">
         <span class="ctrl-chevron" id="ctrlChevron">▶</span>
         <span id="statusPill" class="status-pill" onclick="handleStatusPillClick(event)"></span>
-        <button id="settingsBtn" title="Preferences" onclick="event.stopPropagation();openSettings()">⚙️</button>
+        <button id="settingsBtn" title="Preferences" aria-label="Preferences" onclick="event.stopPropagation();openSettings()">⚙️</button>
       </div>
       <!-- Collapsible body -->
       <div class="ctrl-body" id="ctrlBody" style="display:none">
@@ -132,15 +132,15 @@
           <button id="wxToggleHourly" onclick="setWeatherForecastMode('hourly')">Hourly</button>
           <button id="wxToggleCurve" onclick="setWeatherForecastMode('curve')">Curve</button>
           <button id="wxToggleRadar" onclick="setWeatherForecastMode('radar')">Radar</button>
-          <button id="wxSnarkyBtn" onclick="toggleSnarkyForecast()" style="display:none" title="Snarky Forecast">😜</button>
+          <button id="wxSnarkyBtn" onclick="toggleSnarkyForecast()" style="display:none" title="Snarky Forecast" aria-label="Snarky Forecast">😜</button>
         </div>
       </div>
       <div class="card-body">
         <div id="weatherSetup">
-          <input id="cityInput" type="text" placeholder="Enter city name…"
+          <input id="cityInput" type="text" placeholder="Enter city name…" aria-label="City name"
                  onkeydown="if(event.key==='Enter')fetchWeather()" />
           <button class="btn btn-primary" onclick="fetchWeather()">Go</button>
-          <button class="btn" id="geoLocBtn" title="Use my location" onclick="fetchWeatherByGeolocation()" style="padding:0 10px;font-size:1rem">📍</button>
+          <button class="btn" id="geoLocBtn" title="Use my location" aria-label="Use my location" onclick="fetchWeatherByGeolocation()" style="padding:0 10px;font-size:1rem">📍</button>
         </div>
         <div id="weatherDisplay">
           <div class="wx-current">
@@ -175,10 +175,10 @@
           </div>
           <!-- Location bar: city label + optional prev/next nav -->
           <div class="wx-loc-bar">
-            <button class="wx-loc-btn" id="wxLocPrev" onclick="prevWeatherLocation()" title="Previous location" style="display:none">&#8249;</button>
+            <button class="wx-loc-btn" id="wxLocPrev" onclick="prevWeatherLocation()" title="Previous location" aria-label="Previous location" style="display:none">&#8249;</button>
             <span id="weatherCity" class="wx-city-label"></span>
             <div class="wx-loc-dots" id="wxLocDots"></div>
-            <button class="wx-loc-btn" id="wxLocNext" onclick="nextWeatherLocation()" title="Next location" style="display:none">&#8250;</button>
+            <button class="wx-loc-btn" id="wxLocNext" onclick="nextWeatherLocation()" title="Next location" aria-label="Next location" style="display:none">&#8250;</button>
           </div>
         </div>
       </div>
@@ -194,13 +194,13 @@
                     onclick="toggleSmsPopover(event)">📱 SMS ▾</button>
             <div class="sms-popover" id="smsPopover"></div>
           </div>
-          <button id="shopClearDoneBtn" class="btn btn-secondary btn-sm" onclick="clearDoneShopping()" title="Clear completed items" style="display:none">✕ done</button>
-          <button id="shopClearAllBtn" class="btn btn-sm" onclick="clearAllShopping()" style="display:none;background:var(--surface2);color:var(--muted);padding:3px 7px" title="Clear all items">✕ all</button>
+          <button id="shopClearDoneBtn" class="btn btn-secondary btn-sm" onclick="clearDoneShopping()" title="Clear completed items" aria-label="Clear completed items" style="display:none">✕ done</button>
+          <button id="shopClearAllBtn" class="btn btn-sm" onclick="clearAllShopping()" style="display:none;background:var(--surface2);color:var(--muted);padding:3px 7px" title="Clear all items" aria-label="Clear all items">✕ all</button>
         </div>
       </div>
       <div class="card-body">
         <div class="list-input-row">
-          <input id="shopInput" type="text" placeholder="Add an item…" onkeydown="if(event.key==='Enter')addShop()" />
+          <input id="shopInput" type="text" placeholder="Add an item…" aria-label="Add a shopping item" onkeydown="if(event.key==='Enter')addShop()" />
           <select id="shopCategorySelect" class="shop-cat-select"></select>
           <button class="btn btn-primary btn-sm" onclick="addShop()">Add</button>
         </div>
@@ -214,14 +214,14 @@
       <div class="card-header">
         <h2>✅ To-Do</h2>
         <div style="display:flex;gap:4px">
-          <button id="todoClearDoneBtn" class="btn btn-sm" onclick="clearDoneTodo()" style="display:none;background:var(--surface2);color:var(--muted);padding:3px 7px" title="Clear completed tasks">✕ done</button>
-          <button id="todoClearAllBtn" class="btn btn-sm" onclick="clearAllTodo()" style="display:none;background:var(--surface2);color:var(--muted);padding:3px 7px" title="Clear all tasks">✕ all</button>
+          <button id="todoClearDoneBtn" class="btn btn-sm" onclick="clearDoneTodo()" style="display:none;background:var(--surface2);color:var(--muted);padding:3px 7px" title="Clear completed tasks" aria-label="Clear completed tasks">✕ done</button>
+          <button id="todoClearAllBtn" class="btn btn-sm" onclick="clearAllTodo()" style="display:none;background:var(--surface2);color:var(--muted);padding:3px 7px" title="Clear all tasks" aria-label="Clear all tasks">✕ all</button>
         </div>
       </div>
       <div class="card-body">
         <div class="list-input-row">
-          <input id="todoInput" type="text" placeholder="Add a task…" onkeydown="if(event.key==='Enter')addTodo()" />
-          <button class="btn btn-sm" onclick="toggleTodoExtra()" title="Due date / assign"
+          <input id="todoInput" type="text" placeholder="Add a task…" aria-label="Add a task" onkeydown="if(event.key==='Enter')addTodo()" />
+          <button class="btn btn-sm" onclick="toggleTodoExtra()" title="Due date / assign" aria-label="Due date / assign"
                   style="background:var(--surface2);color:var(--muted);padding:0 9px">⋯</button>
           <button class="btn btn-primary btn-sm" onclick="addTodo()">Add</button>
         </div>
@@ -261,10 +261,10 @@
       <div class="card-header">
         <h2>📆 Year at a Glance</h2>
         <div style="display:flex;gap:6px;align-items:center">
-          <button onclick="changeYearCardMonth(-1)" class="strip-nav-btn" title="Back one month">&#8249;</button>
-          <button onclick="resetYearCard()" id="yearCardTodayBtn" class="strip-nav-btn" title="Back to today"
+          <button onclick="changeYearCardMonth(-1)" class="strip-nav-btn" title="Back one month" aria-label="Back one month">&#8249;</button>
+          <button onclick="resetYearCard()" id="yearCardTodayBtn" class="strip-nav-btn" title="Back to today" aria-label="Back to today"
                   style="font-size:.7rem;width:auto;padding:0 8px;display:none">Today</button>
-          <button onclick="changeYearCardMonth(1)"  class="strip-nav-btn" title="Forward one month">&#8250;</button>
+          <button onclick="changeYearCardMonth(1)"  class="strip-nav-btn" title="Forward one month" aria-label="Forward one month">&#8250;</button>
         </div>
       </div>
       <div class="card-body" id="yearCardBody"></div>
@@ -274,7 +274,7 @@
     <div class="card" id="wotdCard">
       <div class="card-header">
         <h2>📖 Word of the Day</h2>
-        <button onclick="refreshWotd()" title="New word" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.6rem;line-height:1">↺</button>
+        <button onclick="refreshWotd()" title="New word" aria-label="New word" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.6rem;line-height:1">↺</button>
       </div>
       <div class="card-body" id="wotdBody">
         <div style="text-align:center;color:var(--muted);font-size:.85rem">Loading…</div>
@@ -285,7 +285,7 @@
     <div class="card" id="dadjokeCard">
       <div class="card-header">
         <h2>😄 Dad Joke</h2>
-        <button onclick="refreshDadJoke()" title="New joke" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.6rem;line-height:1">↺</button>
+        <button onclick="refreshDadJoke()" title="New joke" aria-label="New joke" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.6rem;line-height:1">↺</button>
       </div>
       <div class="card-body" id="dadjokeBody">
         <div style="text-align:center;color:var(--muted);font-size:.85rem">Loading…</div>
@@ -296,7 +296,7 @@
     <div class="card" id="quoteCard">
       <div class="card-header">
         <h2>✨ Quote of the Day</h2>
-        <button onclick="refreshQuote()" title="New quote" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.6rem;line-height:1">↺</button>
+        <button onclick="refreshQuote()" title="New quote" aria-label="New quote" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.6rem;line-height:1">↺</button>
       </div>
       <div class="card-body" id="quoteBody">
         <div style="text-align:center;color:var(--muted);font-size:.85rem">Loading…</div>
@@ -307,7 +307,7 @@
     <div class="card" id="newsCard">
       <div class="card-header">
         <h2>📰 News</h2>
-        <button onclick="loadNewsFeeds(true)" title="Refresh" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.6rem;line-height:1">↺</button>
+        <button onclick="loadNewsFeeds(true)" title="Refresh news" aria-label="Refresh news" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.6rem;line-height:1">↺</button>
       </div>
       <div class="card-body" id="newsBody" style="padding:10px 14px">
         <div style="text-align:center;color:var(--muted);font-size:.85rem">Loading…</div>
@@ -318,7 +318,7 @@
     <div class="card" id="stockCard">
       <div class="card-header">
         <h2>📈 Stocks</h2>
-        <button onclick="loadStockQuotes(true)" title="Refresh" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.6rem;line-height:1">↺</button>
+        <button onclick="loadStockQuotes(true)" title="Refresh stocks" aria-label="Refresh stocks" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.6rem;line-height:1">↺</button>
       </div>
       <div class="card-body" id="stockBody" style="padding:10px 14px">
         <div style="text-align:center;color:var(--muted);font-size:.85rem">Add tickers in ⚙️ Settings.</div>
@@ -340,21 +340,21 @@
         <div style="display:flex;align-items:center;gap:8px">
           <button id="briefingPill" onclick="toggleBriefing()" title="Daily briefing"
                   class="briefing-pill">☀️ Briefing</button>
-          <button id="assistantTtsBtn" onclick="toggleAssistantTTS()" title="Read replies aloud" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.3rem;line-height:1">🔇</button>
-          <button onclick="clearAssistantChat()" title="Clear chat" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.6rem;line-height:1">↺</button>
+          <button id="assistantTtsBtn" onclick="toggleAssistantTTS()" title="Read replies aloud" aria-label="Read replies aloud" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.3rem;line-height:1">🔇</button>
+          <button onclick="clearAssistantChat()" title="Clear chat" aria-label="Clear chat" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.6rem;line-height:1">↺</button>
         </div>
       </div>
       <div class="card-body assistant-card-body">
         <div id="briefingBanner" style="display:none"></div>
-        <div class="assistant-messages" id="assistantMessages">
+        <div class="assistant-messages" id="assistantMessages" aria-live="polite" aria-label="Family Assistant conversation">
           <div class="assistant-welcome">Hi! Ask me about your schedule, lists, or budget — or say things like "add milk to shopping" or "what's on this week?"</div>
         </div>
         <div class="assistant-input-row">
-          <button class="assistant-mic" id="assistantMicBtn" onclick="toggleAssistantMic()" title="Speak" style="display:none">🎤</button>
+          <button class="assistant-mic" id="assistantMicBtn" onclick="toggleAssistantMic()" title="Speak" aria-label="Speak" style="display:none">🎤</button>
           <input type="text" id="assistantInput" class="assistant-input"
-                 placeholder="Ask anything…"
+                 placeholder="Ask anything…" aria-label="Message to Family Assistant"
                  onkeydown="if(event.key==='Enter')sendAssistantMessage()" />
-          <button class="assistant-send" onclick="sendAssistantMessage()" title="Send">↑</button>
+          <button class="assistant-send" onclick="sendAssistantMessage()" title="Send" aria-label="Send message">↑</button>
         </div>
       </div>
     </div>
@@ -377,8 +377,8 @@
 
 <!-- Settings Modal -->
 <div class="modal-overlay" id="settingsModal" onclick="if(event.target===this)closeSettings()">
-  <div class="modal">
-    <h2>⚙️ Settings</h2>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
+    <h2 id="settingsModalTitle">⚙️ Settings</h2>
 
     <!-- Tab bar -->
     <div class="modal-tabs">
@@ -926,11 +926,11 @@
 
 <!-- Meal Planning Modal -->
 <div class="modal-overlay" id="mealModal" onclick="if(event.target===this)closeMealModal()">
-  <div class="modal meal-modal-inner">
+  <div class="modal meal-modal-inner" role="dialog" aria-modal="true" aria-labelledby="mealModalTitle">
 
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
       <h2 id="mealModalTitle">🍽 Meal Ideas</h2>
-      <button onclick="closeMealModal()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.3rem;line-height:1">✕</button>
+      <button onclick="closeMealModal()" title="Close" aria-label="Close meal modal" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.3rem;line-height:1">✕</button>
     </div>
     <p id="mealModalSubtitle" style="font-size:.8rem;color:var(--muted);margin-bottom:16px"></p>
 
@@ -1010,10 +1010,10 @@
 
 <!-- Event Editor Modal -->
 <div class="modal-overlay" id="eventEditorModal" onclick="if(event.target===this)closeEventEditor()" style="display:none">
-  <div class="modal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="eventEditorTitle">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
       <h2 id="eventEditorTitle">📅 New Event</h2>
-      <button class="evt-editor-close-btn" onclick="closeEventEditor()" title="Close (Esc)">✕</button>
+      <button class="evt-editor-close-btn" onclick="closeEventEditor()" title="Close (Esc)" aria-label="Close event editor">✕</button>
     </div>
 
     <div class="field">
