@@ -149,8 +149,9 @@ let appTitleEmoji   = localStorage.getItem('fh_appTitleEmoji') || '🏠';
 let familyMembers   = lsGet('fh_familyMembers', []);
 // each: { name: string }
 let todoItems       = []; // in-memory mirror of Firestore 'todo' collection for calendar use
-// Migrate old 'amazing' mode name to 'nautical'
-if (localStorage.getItem('fh_mode') === 'amazing') localStorage.setItem('fh_mode', 'nautical');
+// Migrate old mode names
+if (localStorage.getItem('fh_mode') === 'amazing')        localStorage.setItem('fh_mode', 'nautical');
+if (localStorage.getItem('fh_mode') === 'nautical-light') localStorage.setItem('fh_mode', 'nautical');
 const _savedMode    = localStorage.getItem('fh_mode');
 let appMode         = _savedMode || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');  // 'light' | 'dark' | 'nautical'
 let mobileTab       = localStorage.getItem('fh_mobileTab') || 'cal';  // 'cal' | 'widgets'
@@ -7344,8 +7345,7 @@ function setMobileTab(tab) {
 const THEME_COLORS = {
   dark:             '#0f1117',
   light:            '#f0f2f8',
-  nautical:         '#0c1a3a',
-  'nautical-light': '#1a2e52',
+  nautical:         '#1a2e52',
   colorblind:       '#0d1117',
 };
 
@@ -7391,11 +7391,10 @@ function applyAppTitle() {
 
 function applyAppMode(mode) {
   appMode = mode;
-  document.body.classList.remove('light-mode', 'nautical-mode', 'nautical-light-mode', 'colorblind-mode');
-  if (mode === 'light')          document.body.classList.add('light-mode');
-  if (mode === 'nautical')       document.body.classList.add('nautical-mode');
-  if (mode === 'nautical-light') document.body.classList.add('nautical-light-mode');
-  if (mode === 'colorblind')     document.body.classList.add('colorblind-mode');
+  document.body.classList.remove('light-mode', 'nautical-mode', 'colorblind-mode');
+  if (mode === 'light')      document.body.classList.add('light-mode');
+  if (mode === 'nautical')   document.body.classList.add('nautical-mode');
+  if (mode === 'colorblind') document.body.classList.add('colorblind-mode');
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.content = THEME_COLORS[mode] || THEME_COLORS.dark;
 }
@@ -7427,8 +7426,7 @@ function setAppMode(mode) {
   localStorage.setItem('fh_mode', mode);
   document.getElementById('modeLight').className          = 'btn btn-sm' + (mode === 'light'          ? ' btn-mode-active' : '');
   document.getElementById('modeDark').className           = 'btn btn-sm' + (mode === 'dark'           ? ' btn-mode-active' : '');
-  document.getElementById('modeAmazing').className        = 'btn btn-sm' + (mode === 'nautical'       ? ' btn-mode-active' : '');
-  document.getElementById('modeNauticalLight').className  = 'btn btn-sm' + (mode === 'nautical-light' ? ' btn-mode-active' : '');
+  document.getElementById('modeNautical').className       = 'btn btn-sm' + (mode === 'nautical'       ? ' btn-mode-active' : '');
   document.getElementById('modeColorblind').className     = 'btn btn-sm' + (mode === 'colorblind'     ? ' btn-mode-active' : '');
 }
 
@@ -7489,8 +7487,7 @@ function openSettings() {
   // Highlight active mode button
   document.getElementById('modeLight').className          = 'btn btn-sm' + (appMode === 'light'          ? ' btn-mode-active' : '');
   document.getElementById('modeDark').className           = 'btn btn-sm' + (appMode === 'dark'           ? ' btn-mode-active' : '');
-  document.getElementById('modeAmazing').className        = 'btn btn-sm' + (appMode === 'nautical'       ? ' btn-mode-active' : '');
-  document.getElementById('modeNauticalLight').className  = 'btn btn-sm' + (appMode === 'nautical-light' ? ' btn-mode-active' : '');
+  document.getElementById('modeNautical').className       = 'btn btn-sm' + (appMode === 'nautical'       ? ' btn-mode-active' : '');
   document.getElementById('modeColorblind').className     = 'btn btn-sm' + (appMode === 'colorblind'     ? ' btn-mode-active' : '');
   renderBgPreview();
   const statusEl = document.getElementById('bgStatus');

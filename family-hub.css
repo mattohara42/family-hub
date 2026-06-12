@@ -44,199 +44,11 @@
   --leading-loose:  1.65;
 }
 
+
 /* ════════════════════════════════════════════════════════════════
-   ⚓  NAUTICAL MODE — Navy Blue · White Stripes · Beige
+   ⚓  NAUTICAL MODE — Slate-Blue Hull · Bright Yellow-Gold Accents
    ════════════════════════════════════════════════════════════════ */
 body.nautical-mode {
-  --bg:                 #0c1a3a;
-  --surface:            rgba(14, 26, 62, 0.86);
-  --surface2:           rgba(24, 40, 88, 0.82);
-  --accent:             #c8a96e;        /* warm brass-gold */
-  --accent2:            #e8d5b0;        /* pale beige highlight */
-  --green:              #5bbf8e;
-  --red:                #e07070;
-  --text:               #f0eeea;        /* warm near-white */
-  --muted:              #8a9ec4;        /* steel-blue grey */
-  --radius:             14px;
-  --shadow:             0 0 22px rgba(200,169,110,0.22), 0 4px 18px rgba(0,0,0,0.60);
-  --scrim:              rgba(4, 12, 36, 0.52);
-  --card-bg-photo:      rgba(8, 18, 50, 0.82);
-  --cal-card-bg-photo:  rgba(8, 18, 50, 0.55);
-  --cal-day-bg-photo:   rgba(14, 26, 62, 0.42);
-  --mini-card-bg-photo: rgba(14, 26, 62, 0.80);
-  --strip-bg-photo:     rgba(8, 18, 50, 0.78);
-
-  /* ── Navy hull + 20% diagonal white stripes ── */
-  background-color: #0c1a3a;
-  background-image: repeating-linear-gradient(
-    -45deg,
-    transparent              0px,
-    transparent              20px,
-    rgba(255,255,255,0.20)   20px,
-    rgba(255,255,255,0.20)   22px
-  );
-}
-
-/* ── Anchor watermark — large ghosted ⚓ lower-right ── */
-body.nautical-mode::before {
-  content: '⚓';
-  position: fixed;
-  right: -2vw;
-  bottom: -3vh;
-  font-size: 36vmin;
-  line-height: 1;
-  opacity: 0.22;
-  z-index: 0;
-  pointer-events: none;
-  user-select: none;
-  color: #ffffff;
-  filter: none;
-}
-
-/* ── Animated wave banner along bottom edge ── */
-body.nautical-mode::after {
-  content: '';
-  position: fixed;
-  bottom: 0;
-  left: -10%;
-  width: 120%;
-  height: 56px;
-  background: rgba(255,255,255,0.055);
-  clip-path: polygon(
-    0%  55%, 2%  42%, 5%  55%, 8%  44%, 11% 57%, 14% 44%,
-    17% 57%, 20% 44%, 23% 57%, 26% 42%, 29% 55%, 32% 42%,
-    35% 55%, 38% 44%, 41% 57%, 44% 44%, 47% 57%, 50% 42%,
-    53% 55%, 56% 44%, 59% 57%, 62% 44%, 65% 57%, 68% 42%,
-    71% 55%, 74% 44%, 77% 57%, 80% 44%, 83% 57%, 86% 44%,
-    89% 57%, 92% 44%, 95% 57%, 98% 44%, 100% 55%,
-    100% 100%, 0% 100%
-  );
-  z-index: 0;
-  pointer-events: none;
-  animation: nauticalWave 7s ease-in-out infinite alternate;
-}
-@keyframes nauticalWave {
-  0%   { transform: translateX(0px)    scaleY(1.0); }
-  50%  { transform: translateX(-24px)  scaleY(1.2); }
-  100% { transform: translateX(12px)   scaleY(0.85); }
-}
-
-/* ── Card brass border + background ── */
-body.nautical-mode .card {
-  background: var(--surface);
-  border: 1px solid rgba(200, 169, 110, 0.48);
-  box-shadow: 0 4px 28px rgba(0,0,0,0.50),
-              inset 0 1px 0 rgba(200,169,110,0.18);  /* top-edge brass sheen */
-}
-body.nautical-mode .card.cal-card {
-  border-color: rgba(200, 169, 110, 0.48);
-  background: rgba(8, 18, 50, 0.18);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-}
-
-/* ── Rope-style card header divider ── */
-body.nautical-mode .card-header {
-  position: relative;
-  background: linear-gradient(to bottom, rgba(200,169,110,0.09) 0%, transparent 100%);
-  border-bottom: none;
-}
-body.nautical-mode .card-header::after {
-  content: '';
-  position: absolute;
-  bottom: 0; left: 0; right: 0;
-  height: 3px;
-  background: repeating-linear-gradient(
-    90deg,
-    #c8a96e          0px, #c8a96e          3px,
-    rgba(90,60,20,.5) 3px, rgba(90,60,20,.5) 6px,
-    #9a7a48          6px, #9a7a48          9px,
-    rgba(90,60,20,.5) 9px, rgba(90,60,20,.5) 12px
-  );
-  opacity: 0.70;
-}
-
-/* ── Calendar: compass rose radial glow ── */
-body.nautical-mode .cal-card .card-body {
-  background: radial-gradient(
-    ellipse 70% 60% at 50% 40%,
-    rgba(200,169,110,0.06) 0%,
-    transparent 70%
-  );
-}
-
-/* ── Calendar DOW row: brass-gold labels ── */
-body.nautical-mode .cal-dow {
-  letter-spacing: 0.06em;
-}
-
-/* ── Calendar day cells ── */
-body.nautical-mode .cal-day {
-  background: rgba(14, 26, 62, 0.32);
-  border-color: rgba(200,169,110,0.08);
-}
-body.nautical-mode .cal-day.today .cal-day-num {
-  background: #c8a96e;
-  color: #0c1a3a;
-}
-
-/* Calendar events in nautical mode use their real Google Calendar colors */
-
-/* ── Accent / primary buttons ── */
-body.nautical-mode .btn-primary {
-  background: linear-gradient(135deg, #d4b578 0%, #c8a96e 50%, #b8924a 100%);
-  color: #0c1a3a;
-  box-shadow: 0 2px 8px rgba(200,169,110,0.35);
-}
-body.nautical-mode .btn-primary:hover { opacity: .88; }
-
-/* ── Active view tab ── */
-body.nautical-mode .cal-view-tab.active {
-  background: linear-gradient(135deg, #d4b578 0%, #c8a96e 100%);
-  color: #0c1a3a;
-}
-
-/* ── Active mode button ── */
-body.nautical-mode .btn-mode-active {
-  color: #0c1a3a !important;
-  background: linear-gradient(135deg, #d4b578 0%, #c8a96e 100%) !important;
-}
-
-/* ── Budget summary pill ── */
-body.nautical-mode .budget-total-amount { color: #c8a96e; }
-
-/* ── SMS popover: solid hull-navy ── */
-body.nautical-mode .sms-popover {
-  background: #0e1e48;
-  border: 1px solid rgba(200,169,110,.28);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.65);
-}
-
-/* ── Checkboxes / radios ── */
-body.nautical-mode input[type=checkbox],
-body.nautical-mode input[type=radio] {
-  accent-color: #c8a96e;
-}
-
-/* ── Sidebar scrollbar: brass on navy ── */
-body.nautical-mode .sidebar::-webkit-scrollbar { width: 5px; }
-body.nautical-mode .sidebar::-webkit-scrollbar-track { background: rgba(14,26,62,0.5); }
-body.nautical-mode .sidebar::-webkit-scrollbar-thumb {
-  background: rgba(200,169,110,0.45);
-  border-radius: 3px;
-}
-
-/* ── Card-header title text in beige-gold ── */
-body.nautical-mode .card-header h2 { color: #e8d5b0; }
-body.nautical-mode .cal-app-title  { color: #e8d5b0; }
-body.nautical-mode .cal-app-title .cal-app-title-text span { color: #c8a96e; }
-
-/* ═══════════════════════════════════════════════════════════════
-   ── Nautical Light theme ──
-   Lighter, airier take on Nautical: slate-blue hull, bright
-   yellow-gold accents, and more transparency throughout.
-   ═══════════════════════════════════════════════════════════════ */
-body.nautical-light-mode {
   --bg:                 #1a2e52;          /* lighter navy hull */
   --surface:            rgba(30, 50, 100, 0.60);   /* more transparent cards */
   --surface2:           rgba(44, 68, 128, 0.55);
@@ -267,7 +79,7 @@ body.nautical-light-mode {
 }
 
 /* ── Anchor watermark — slightly lighter opacity ── */
-body.nautical-light-mode::before {
+body.nautical-mode::before {
   content: '⚓';
   position: fixed;
   right: -2vw;
@@ -283,7 +95,7 @@ body.nautical-light-mode::before {
 }
 
 /* ── Animated wave banner ── */
-body.nautical-light-mode::after {
+body.nautical-mode::after {
   content: '';
   position: fixed;
   bottom: 0;
@@ -306,7 +118,7 @@ body.nautical-light-mode::after {
 }
 
 /* ── Card yellow-gold border, high transparency ── */
-body.nautical-light-mode .card {
+body.nautical-mode .card {
   background: var(--surface);
   border: 1px solid rgba(240,192,64,0.40);
   box-shadow: 0 4px 28px rgba(0,0,0,0.35),
@@ -314,7 +126,7 @@ body.nautical-light-mode .card {
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
-body.nautical-light-mode .card.cal-card {
+body.nautical-mode .card.cal-card {
   border-color: rgba(240,192,64,0.38);
   background: rgba(20, 38, 80, 0.14);
   backdrop-filter: blur(8px);
@@ -322,12 +134,12 @@ body.nautical-light-mode .card.cal-card {
 }
 
 /* ── Rope-style card header divider (yellow-gold) ── */
-body.nautical-light-mode .card-header {
+body.nautical-mode .card-header {
   position: relative;
   background: linear-gradient(to bottom, rgba(240,192,64,0.10) 0%, transparent 100%);
   border-bottom: none;
 }
-body.nautical-light-mode .card-header::after {
+body.nautical-mode .card-header::after {
   content: '';
   position: absolute;
   bottom: 0; left: 0; right: 0;
@@ -343,7 +155,7 @@ body.nautical-light-mode .card-header::after {
 }
 
 /* ── Calendar compass rose glow ── */
-body.nautical-light-mode .cal-card .card-body {
+body.nautical-mode .cal-card .card-body {
   background: radial-gradient(
     ellipse 70% 60% at 50% 40%,
     rgba(240,192,64,0.06) 0%,
@@ -352,21 +164,21 @@ body.nautical-light-mode .cal-card .card-body {
 }
 
 /* ── Calendar DOW: yellow-gold labels ── */
-body.nautical-light-mode .cal-dow {
+body.nautical-mode .cal-dow {
   letter-spacing: 0.06em;
 }
 
 /* ── Calendar day cells ── */
-body.nautical-light-mode .cal-day {
+body.nautical-mode .cal-day {
   background: rgba(30, 50, 100, 0.22);
   border-color: rgba(240,192,64,0.08);
 }
-body.nautical-light-mode .cal-day.today .cal-day-num {
+body.nautical-mode .cal-day.today .cal-day-num {
   background: #f0c040;
   color: #1a2e52;
 }
-body.nautical-light-mode .cal-day.current-week { background: rgba(240,192,64,0.18); }
-body.nautical-light-mode .cal-day.today {
+body.nautical-mode .cal-day.current-week { background: rgba(240,192,64,0.18); }
+body.nautical-mode .cal-day.today {
   background: rgba(240,192,64,0.30);
   box-shadow: 0 0 0 1.5px rgba(240,192,64,0.80), 0 0 10px rgba(240,192,64,0.20);
 }
@@ -374,85 +186,85 @@ body.nautical-light-mode .cal-day.today {
 /* Calendar events in nautical-light mode use their real Google Calendar colors */
 
 /* ── Accent / primary buttons ── */
-body.nautical-light-mode .btn-primary {
+body.nautical-mode .btn-primary {
   background: linear-gradient(135deg, #f5d060 0%, #f0c040 50%, #d4a020 100%);
   color: #1a2e52;
   box-shadow: 0 2px 8px rgba(240,192,64,0.35);
 }
-body.nautical-light-mode .btn-primary:hover { opacity: .88; }
+body.nautical-mode .btn-primary:hover { opacity: .88; }
 
 /* ── Active view tab ── */
-body.nautical-light-mode .cal-view-tab.active {
+body.nautical-mode .cal-view-tab.active {
   background: linear-gradient(135deg, #f5d060 0%, #f0c040 100%);
   color: #1a2e52;
 }
 
 /* ── Active mode button ── */
-body.nautical-light-mode .btn-mode-active {
+body.nautical-mode .btn-mode-active {
   color: #1a2e52 !important;
   background: linear-gradient(135deg, #f5d060 0%, #f0c040 100%) !important;
 }
 
 /* ── Calendar month nav buttons ── */
-body.nautical-light-mode .cal-month-nav button {
+body.nautical-mode .cal-month-nav button {
   background: rgba(240,192,64,0.24);
 }
 
 /* ── Budget summary pill ── */
-body.nautical-light-mode .budget-total-amount { color: #f0c040; }
+body.nautical-mode .budget-total-amount { color: #f0c040; }
 
 /* ── SMS popover ── */
-body.nautical-light-mode .sms-popover {
+body.nautical-mode .sms-popover {
   background: #1e3264;
   border: 1px solid rgba(240,192,64,.28);
   box-shadow: 0 8px 32px rgba(0,0,0,0.55);
 }
 
 /* ── Checkboxes / radios ── */
-body.nautical-light-mode input[type=checkbox],
-body.nautical-light-mode input[type=radio] {
+body.nautical-mode input[type=checkbox],
+body.nautical-mode input[type=radio] {
   accent-color: #f0c040;
 }
 
 /* ── Sidebar scrollbar ── */
-body.nautical-light-mode .sidebar::-webkit-scrollbar { width: 5px; }
-body.nautical-light-mode .sidebar::-webkit-scrollbar-track { background: rgba(30,50,100,0.4); }
-body.nautical-light-mode .sidebar::-webkit-scrollbar-thumb {
+body.nautical-mode .sidebar::-webkit-scrollbar { width: 5px; }
+body.nautical-mode .sidebar::-webkit-scrollbar-track { background: rgba(30,50,100,0.4); }
+body.nautical-mode .sidebar::-webkit-scrollbar-thumb {
   background: rgba(240,192,64,0.40);
   border-radius: 3px;
 }
 
 /* ── Card-header title text ── */
-body.nautical-light-mode .card-header h2 { color: #ffe090; }
-body.nautical-light-mode .cal-app-title  { color: #ffe090; }
-body.nautical-light-mode .cal-app-title .cal-app-title-text span { color: #f0c040; }
+body.nautical-mode .card-header h2 { color: #ffe090; }
+body.nautical-mode .cal-app-title  { color: #ffe090; }
+body.nautical-mode .cal-app-title .cal-app-title-text span { color: #f0c040; }
 
 /* ── Year strip ── */
-body.nautical-light-mode #yearStrip { border-color: rgba(240,192,64,0.40); }
+body.nautical-mode #yearStrip { border-color: rgba(240,192,64,0.40); }
 
 /* ── Week / day view today highlight ── */
-body.nautical-light-mode .week-day-col.today { background: rgba(240,192,64,0.20); }
-body.nautical-light-mode .day-hour-row.current-hour { background: rgba(240,192,64,0.20); }
+body.nautical-mode .week-day-col.today { background: rgba(240,192,64,0.20); }
+body.nautical-mode .day-hour-row.current-hour { background: rgba(240,192,64,0.20); }
 
 /* ── Sun-path arc ── */
-body.nautical-light-mode .wx-sun-track    { stroke: rgba(240,192,64,.28); }
-body.nautical-light-mode .wx-sun-progress { stroke: rgba(255,210,60,.60); }
+body.nautical-mode .wx-sun-track    { stroke: rgba(240,192,64,.28); }
+body.nautical-mode .wx-sun-progress { stroke: rgba(255,210,60,.60); }
 
 /* ── Temp curve ── */
-body.nautical-light-mode .wx-curve-line { stroke: #f0c040; }
-body.nautical-light-mode .wx-curve-dot  { fill: #f0c040; }
+body.nautical-mode .wx-curve-line { stroke: #f0c040; }
+body.nautical-mode .wx-curve-dot  { fill: #f0c040; }
 
 /* ── Weather ticker ── */
-body.nautical-light-mode .wx-ticker { background: rgba(240,192,64,.05); border-top-color: rgba(240,192,64,.14); }
+body.nautical-mode .wx-ticker { background: rgba(240,192,64,.05); border-top-color: rgba(240,192,64,.14); }
 
 /* ── Meal & assistant chips ── */
-body.nautical-light-mode .meal-adjust-chip { border-color: rgba(240,192,64,.28); }
-body.nautical-light-mode .meal-adjust-chip:hover { background: #f0c040; border-color: #f0c040; color: #1a2e52; }
-body.nautical-light-mode .assistant-chip { border-color: rgba(240,192,64,.28); }
-body.nautical-light-mode .assistant-chip:hover { background: #f0c040; border-color: #f0c040; color: #1a2e52; }
+body.nautical-mode .meal-adjust-chip { border-color: rgba(240,192,64,.28); }
+body.nautical-mode .meal-adjust-chip:hover { background: #f0c040; border-color: #f0c040; color: #1a2e52; }
+body.nautical-mode .assistant-chip { border-color: rgba(240,192,64,.28); }
+body.nautical-mode .assistant-chip:hover { background: #f0c040; border-color: #f0c040; color: #1a2e52; }
 
 /* ── Event editor modal ── */
-body.nautical-light-mode #eventEditorModal .modal {
+body.nautical-mode #eventEditorModal .modal {
   background: linear-gradient(160deg, #223468 0%, #1a2a58 60%, #141e48 100%);
   border-top: 1px solid rgba(240,192,64,.30);
   border-left: 1px solid rgba(240,192,64,.15);
@@ -467,7 +279,7 @@ body.nautical-light-mode #eventEditorModal .modal {
 }
 
 /* ── Settings modal ── */
-body.nautical-light-mode #settingsModal .modal {
+body.nautical-mode #settingsModal .modal {
   background: #1a2a58;
   box-shadow:
     0 8px 48px rgba(0,0,0,.60),
@@ -477,7 +289,7 @@ body.nautical-light-mode #settingsModal .modal {
 }
 
 /* ── Assistant AI messages ── */
-body.nautical-light-mode .assistant-msg.ai {
+body.nautical-mode .assistant-msg.ai {
   background: rgba(44, 68, 128, 0.75);
 }
 
@@ -1145,7 +957,7 @@ body.nautical-mode .cal-month-nav button {
 .cal-dow.current-dow                          { color: var(--accent); background: rgba(255,255,255,0.13); border-radius: 6px; }
 body.light-mode .cal-dow.current-dow          { background: rgba(0,0,0,0.10); }
 body.nautical-mode .cal-dow.current-dow       { background: rgba(200,169,110,0.22); border-radius: 6px; }
-body.nautical-light-mode .cal-dow.current-dow { background: rgba(180,149,90,0.20); border-radius: 6px; }
+body.nautical-mode .cal-dow.current-dow { background: rgba(180,149,90,0.20); border-radius: 6px; }
 
 .cal-day.current-week,
 .week-day-col.today,
@@ -1607,7 +1419,7 @@ body.nautical-mode .wx-curve-dot  { fill: var(--accent2); }
 }
 body.light-mode .wx-snarky { background: rgba(230,159,0,0.08); }
 body.nautical-mode .wx-snarky { background: rgba(200,169,110,0.10); border-top-color: rgba(200,169,110,0.30); }
-body.nautical-light-mode .wx-snarky { background: rgba(200,169,110,0.08); border-top-color: rgba(200,169,110,0.25); }
+body.nautical-mode .wx-snarky { background: rgba(200,169,110,0.08); border-top-color: rgba(200,169,110,0.25); }
 .wx-snarky-track {
   display: inline-block;
   font-size: var(--text-xs);
@@ -2756,7 +2568,7 @@ body.has-bg #yearStrip {
 body .mini-card.current-month            { background: rgba(110,125,200,0.70); }
 body.light-mode .mini-card.current-month { background: rgba(190,198,225,0.88); }
 body.nautical-mode .mini-card.current-month      { background: rgba(200,169,110,0.28); }
-body.nautical-light-mode .mini-card.current-month { background: rgba(240,192,64,0.18); }
+body.nautical-mode .mini-card.current-month { background: rgba(240,192,64,0.18); }
 body.has-bg .mini-card.current-month             { background: rgba(110,125,200,0.55); }
 body.has-bg.light-mode .mini-card.current-month  { background: rgba(190,198,225,0.75); }
 body.colorblind-mode .mini-card.current-month    {
@@ -3166,7 +2978,7 @@ body.light-mode .briefing-banner {
 }
 /* Nautical themes */
 body.nautical-mode .briefing-banner,
-body.nautical-light-mode .briefing-banner {
+body.nautical-mode .briefing-banner {
   background: linear-gradient(135deg, rgba(240,192,64,.10), rgba(0,80,120,.15));
   border-bottom-color: rgba(240,192,64,.25);
 }
