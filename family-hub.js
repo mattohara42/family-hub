@@ -6058,11 +6058,12 @@ function buildAssistantContext() {
   const fmt = (d, opts) => d.toLocaleDateString('en-US', opts);
 
   // ── Calendar: next 7 days (with event times) ──
+  const localDateStr = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   const calLines = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date(today);
     d.setDate(d.getDate() + i);
-    const dateStr = d.toISOString().slice(0, 10);
+    const dateStr = localDateStr(d);
     const label = i === 0 ? 'Today' : i === 1 ? 'Tomorrow'
                 : fmt(d, { weekday: 'long', month: 'short', day: 'numeric' });
     const evts = Object.values(calEventCache)
@@ -6089,7 +6090,7 @@ function buildAssistantContext() {
   for (let i = 0; i < 7; i++) {
     const d = new Date(today);
     d.setDate(d.getDate() + i);
-    const dateStr = d.toISOString().slice(0, 10);
+    const dateStr = localDateStr(d);
     const label = i === 0 ? 'Today' : i === 1 ? 'Tomorrow'
                 : fmt(d, { weekday: 'long', month: 'short', day: 'numeric' });
     const dayMeals = mealPlan[dateStr] || {};
