@@ -3025,8 +3025,14 @@ function renderYearCard() {
 
     // Month + year label
     const lbl = document.createElement('div');
-    lbl.className = 'mini-month-label year-card-month-label';
+    lbl.className = 'mini-month-label year-card-month-label' + (isCurrentMonth ? ' current-month-label' : '');
     lbl.textContent = ref.toLocaleDateString([], { month: 'long', year: 'numeric' });
+    if (isCurrentMonth) {
+      const badge = document.createElement('span');
+      badge.className = 'year-card-now-badge';
+      badge.textContent = 'Now';
+      lbl.appendChild(badge);
+    }
     card.appendChild(lbl);
 
     // Mini grid

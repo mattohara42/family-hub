@@ -2862,6 +2862,28 @@ body.has-bg .mini-card:hover {
   text-align: center;
   margin-bottom: 5px;
   letter-spacing: .03em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+.current-month-label {
+  font-size: .78rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.year-card-now-badge {
+  font-size: .62rem;
+  font-weight: 700;
+  font-style: normal;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  background: transparent;
+  border: 1.5px solid currentColor;
+  border-radius: 3px;
+  padding: 0 4px;
+  line-height: 1.5;
+  flex-shrink: 0;
 }
 .mini-cal-grid {
   display: grid;
@@ -2915,6 +2937,10 @@ body.has-bg .mini-card:hover {
 .year-card-mini {
   cursor: pointer;
   padding: 10px 8px 8px;
+}
+.year-card-mini.current-month {
+  border-left: 3px solid currentColor;
+  padding-left: 6px;
 }
 
 .year-card-month-label {
