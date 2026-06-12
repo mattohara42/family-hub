@@ -144,6 +144,7 @@ const snarkyCache       = {};                              // { cacheKey: text }
 let wxTickerEnabled     = lsGet('fh_wxTicker', true);      // weather info ticker
 let wxActivityEnabled   = lsGet('fh_wxActivity', true);    // activity tags strip
 let userName        = localStorage.getItem('fh_name') || 'Someone';
+let appTitle        = localStorage.getItem('fh_appTitle') || 'Family Hub';
 let familyMembers   = lsGet('fh_familyMembers', []);
 // each: { name: string }
 let todoItems       = []; // in-memory mirror of Firestore 'todo' collection for calendar use
@@ -757,6 +758,7 @@ window.addEventListener('load', () => {
     initGoogleAuth();
   }
   applyAppMode(appMode);
+  applyAppTitle();
   applyLayoutMode();
   setMobileTab(mobileTab);
   updateStatusPill();
@@ -7346,6 +7348,18 @@ const THEME_COLORS = {
   colorblind:       '#0d1117',
 };
 
+function applyAppTitle() {
+  const el = document.querySelector('.cal-app-title');
+  if (!el) return;
+  const parts = appTitle.trim().split(/\s+/);
+  if (parts.length >= 2) {
+    el.innerHTML = parts.slice(0, -1).join(' ') + ' <span>' + parts[parts.length - 1] + '</span>';
+  } else {
+    el.textContent = appTitle || 'Family Hub';
+  }
+  document.title = appTitle || 'Family Hub';
+}
+
 function applyAppMode(mode) {
   appMode = mode;
   document.body.classList.remove('light-mode', 'nautical-mode', 'nautical-light-mode', 'colorblind-mode');
@@ -7404,6 +7418,7 @@ function openSettings() {
   const lmEl = document.getElementById('settingLayoutMode');
   if (lmEl) lmEl.value = layoutMode;
   document.getElementById('settingName').value          = userName;
+  document.getElementById('settingAppTitle').value      = appTitle;
   document.getElementById('settingWeatherKey').value    = weatherKey;
   document.getElementById('sunArcToggle').checked        = sunArcEnabled;
   document.getElementById('wxTickerToggle').checked     = wxTickerEnabled;
@@ -7480,6 +7495,9 @@ function closeSettings() {
 
 function saveSettings() {
   userName      = document.getElementById('settingName').value.trim() || 'Someone';
+  appTitle      = document.getElementById('settingAppTitle').value.trim() || 'Family Hub';
+  localStorage.setItem('fh_appTitle', appTitle);
+  applyAppTitle();
   weatherKey    = document.getElementById('settingWeatherKey').value.trim();
   sunArcEnabled     = document.getElementById('sunArcToggle').checked;
   wxTickerEnabled   = document.getElementById('wxTickerToggle').checked;
