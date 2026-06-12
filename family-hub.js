@@ -604,9 +604,8 @@ function renderBudgetCard() {
       + (isToday ? ' budget-card-row-today' : '');
     const dateLbl = calView === 'day' ? '' :
       new Date(date + 'T12:00:00').toLocaleDateString([], { month: 'short', day: 'numeric' });
-    const pastBadge = isPast ? ' <span class="budget-card-past-badge">⚠️ past</span>' : '';
     row.innerHTML = `
-      ${dateLbl ? `<span class="budget-card-date">${dateLbl}${isToday ? ' <span class="budget-card-today-badge">today</span>' : ''}${pastBadge}</span>` : (isPast ? `<span class="budget-card-date">${pastBadge}</span>` : '')}
+      ${dateLbl ? `<span class="budget-card-date">${dateLbl}${isToday ? ' <span class="budget-card-today-badge">today</span>' : ''}</span>` : ''}
       <span class="budget-card-name">${esc(item.name)}</span>
       <span class="budget-card-amt">${fmt$(item.amount)}</span>
       <button class="budget-item-del" onclick="deleteBudgetItem('${item.id}')" title="Remove">✕</button>`;
