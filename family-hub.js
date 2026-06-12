@@ -146,6 +146,12 @@ let wxActivityEnabled   = lsGet('fh_wxActivity', true);    // activity tags stri
 let userName        = localStorage.getItem('fh_name') || 'Someone';
 let appTitle        = localStorage.getItem('fh_appTitle') || 'Family Hub';
 let appTitleEmoji   = localStorage.getItem('fh_appTitleEmoji') || '🏠';
+let safePaletteMode = lsGet('fh_safePalette', false);
+const SAFE_COLORS = [
+  '#000000','#E69F00','#56B4E9','#009E73',
+  '#F0E442','#0072B2','#D55E00','#CC79A7',
+  '#FFFFFF','#888888','#CC3311','#33BBEE',
+];
 let familyMembers   = lsGet('fh_familyMembers', []);
 // each: { name: string }
 let todoItems       = []; // in-memory mirror of Firestore 'todo' collection for calendar use
@@ -761,6 +767,7 @@ window.addEventListener('load', () => {
   }
   applyAppMode(appMode);
   applyAppTitle();
+  applySafePaletteMode();
   applyLayoutMode();
   setMobileTab(mobileTab);
   updateStatusPill();
@@ -4584,6 +4591,7 @@ function renderFamilyMemberList() {
         <span style="flex:1">👤 ${esc(m.name)}</span>
         <input type="color" value="${m.color || '#6c8ef5'}"
                title="Calendar event color for ${esc(m.name)}"
+               class="lc-color"
                onchange="setFamilyMemberColor(${colorArg},this.value)"
                style="width:24px;height:24px;border:none;border-radius:4px;cursor:pointer;padding:0;background:none;flex-shrink:0;opacity:${m.color ? '1' : '0.4'}"
                oninput="this.style.opacity='1'">
@@ -7374,6 +7382,37 @@ function renderEmojiPicker(selectedEmoji) {
   });
 }
 
+function applySafePaletteMode() {
+  document.body.classList.toggle('safe-palette-on', safePaletteMode);
+  document.querySelectorAll('input.lc-color').forEach(input => {
+    let swatches = input.nextElementSibling;
+    if (!swatches || !swatches.classList.contains('safe-swatches')) {
+      swatches = document.createElement('div');
+      swatches.className = 'safe-swatches';
+      SAFE_COLORS.forEach(color => {
+        const s = document.createElement('button');
+        s.type = 'button';
+        s.className = 'color-swatch';
+        s.style.background = color;
+        s.title = color;
+        s.onclick = () => {
+          input.value = color;
+          swatches.querySelectorAll('.color-swatch').forEach(b => b.classList.remove('swatch-selected'));
+          s.classList.add('swatch-selected');
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+          input.dispatchEvent(new Event('input',  { bubbles: true }));
+        };
+        swatches.appendChild(s);
+      });
+      input.insertAdjacentElement('afterend', swatches);
+    }
+    const cur = input.value.toUpperCase();
+    swatches.querySelectorAll('.color-swatch').forEach(s => {
+      s.classList.toggle('swatch-selected', s.title.toUpperCase() === cur);
+    });
+  });
+}
+
 function applyAppTitle() {
   const el = document.querySelector('.cal-app-title');
   if (!el) return;
@@ -7516,7 +7555,9 @@ function openSettings() {
     if (radio) radio.checked = true;
   });
   lcOpenSettings();
+  document.getElementById('safePaletteToggle').checked = safePaletteMode;
   document.getElementById('settingsModal').style.display = 'flex';
+  applySafePaletteMode();
 }
 
 function closeSettings() {
@@ -7546,6 +7587,9 @@ function saveSettings() {
   localStorage.setItem('fh_wxActivity',    JSON.stringify(wxActivityEnabled));
   localStorage.setItem('fh_wxEnabledViews', JSON.stringify(wxEnabledViews));
   applyWxViewToggles();
+  safePaletteMode = document.getElementById('safePaletteToggle').checked;
+  localStorage.setItem('fh_safePalette', JSON.stringify(safePaletteMode));
+  applySafePaletteMode();
   // smsContacts and familyMembers saved immediately on add/remove — nothing to save here
   slideInterval = parseInt(document.getElementById('settingSlideInterval').value) || 30;
   mealAiKey     = document.getElementById('settingMealAiKey').value.trim();

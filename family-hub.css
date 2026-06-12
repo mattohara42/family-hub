@@ -673,6 +673,31 @@ body.has-bg .day-hour-row {
   font-style: normal;
   flex-shrink: 0;
 }
+.safe-swatches {
+  display: none;
+  flex-wrap: wrap;
+  gap: 3px;
+  align-items: center;
+}
+.safe-palette-on input.lc-color { display: none; }
+.safe-palette-on .safe-swatches { display: flex; }
+.color-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+  transition: border-color 0.12s, transform 0.1s;
+  outline: none;
+}
+.color-swatch:hover { border-color: var(--text); transform: scale(1.15); }
+.color-swatch.swatch-selected {
+  border-color: var(--text);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--text);
+}
+
 .emoji-picker-grid {
   display: grid;
   grid-template-columns: repeat(8, 1fr);
