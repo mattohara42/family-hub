@@ -4183,7 +4183,7 @@ Reply with only the 2 sentences. No intro, no labels.`;
 
     const resp = await geminiFetch({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 1.0, maxOutputTokens: 300 },
+      generationConfig: { temperature: 1.0, maxOutputTokens: 512, thinkingConfig: { thinkingBudget: 0 } },
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
@@ -6602,7 +6602,7 @@ Be specific and personal. Use the family data above, including the correct prono
 
     const resp = await geminiFetch({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 1024 },
+          generationConfig: { temperature: 0.7, maxOutputTokens: 1024, thinkingConfig: { thinkingBudget: 0 } },
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
