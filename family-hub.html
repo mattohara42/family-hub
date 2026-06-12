@@ -192,8 +192,8 @@
                     onclick="toggleSmsPopover(event)">📱 SMS ▾</button>
             <div class="sms-popover" id="smsPopover"></div>
           </div>
-          <button class="btn btn-secondary btn-sm" onclick="clearDoneShopping()" title="Clear completed items">✕ done</button>
-          <button class="btn btn-sm" onclick="clearAllShopping()" style="background:var(--surface2);color:var(--muted);padding:3px 7px" title="Clear all items">✕ all</button>
+          <button id="shopClearDoneBtn" class="btn btn-secondary btn-sm" onclick="clearDoneShopping()" title="Clear completed items" style="display:none">✕ done</button>
+          <button id="shopClearAllBtn" class="btn btn-sm" onclick="clearAllShopping()" style="display:none;background:var(--surface2);color:var(--muted);padding:3px 7px" title="Clear all items">✕ all</button>
         </div>
       </div>
       <div class="card-body">
@@ -212,8 +212,8 @@
       <div class="card-header">
         <h2>✅ To-Do</h2>
         <div style="display:flex;gap:4px">
-          <button class="btn btn-sm" onclick="clearDoneTodo()" style="background:var(--surface2);color:var(--muted);padding:3px 7px" title="Clear completed tasks">✕ done</button>
-          <button class="btn btn-sm" onclick="clearAllTodo()" style="background:var(--surface2);color:var(--muted);padding:3px 7px" title="Clear all tasks">✕ all</button>
+          <button id="todoClearDoneBtn" class="btn btn-sm" onclick="clearDoneTodo()" style="display:none;background:var(--surface2);color:var(--muted);padding:3px 7px" title="Clear completed tasks">✕ done</button>
+          <button id="todoClearAllBtn" class="btn btn-sm" onclick="clearAllTodo()" style="display:none;background:var(--surface2);color:var(--muted);padding:3px 7px" title="Clear all tasks">✕ all</button>
         </div>
       </div>
       <div class="card-body">

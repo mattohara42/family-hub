@@ -4229,6 +4229,12 @@ function renderTodoList() {
   const empty = document.getElementById('todoEmpty');
   if (!ul) return;
   ul.innerHTML = '';
+  const hasDone = todoItems.some(i => i.done);
+  const hasAny  = todoItems.length > 0;
+  const doneBtn = document.getElementById('todoClearDoneBtn');
+  const allBtn  = document.getElementById('todoClearAllBtn');
+  if (doneBtn) doneBtn.style.display = hasDone ? '' : 'none';
+  if (allBtn)  allBtn.style.display  = hasAny  ? '' : 'none';
   if (!todoItems.length) { empty.style.display = ''; return; }
   empty.style.display = 'none';
   todoItems.forEach(item => {
@@ -4605,6 +4611,12 @@ function renderShopGrouped(entries) {
   if (!ul) return;
   ul.innerHTML = '';
   shopItemsCache = entries.map(({ text, done, by, category }) => ({ text, done, by, category }));
+  const hasDone = entries.some(i => i.done);
+  const hasAny  = entries.length > 0;
+  const doneBtn = document.getElementById('shopClearDoneBtn');
+  const allBtn  = document.getElementById('shopClearAllBtn');
+  if (doneBtn) doneBtn.style.display = hasDone ? '' : 'none';
+  if (allBtn)  allBtn.style.display  = hasAny  ? '' : 'none';
   if (!entries.length) { empty.style.display = ''; return; }
   empty.style.display = 'none';
 
