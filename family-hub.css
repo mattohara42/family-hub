@@ -1585,7 +1585,7 @@ body.nautical-light-mode .wx-snarky { background: rgba(200,169,110,0.08); border
   font-size: var(--text-xs);
   color: var(--text);
   white-space: nowrap;
-  animation: wx-scroll linear 18s infinite;
+  animation: wx-scroll linear 24s infinite;
 }
 .wx-snarky-loading {
   display: inline-block;
