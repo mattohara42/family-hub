@@ -954,7 +954,8 @@ body.nautical-mode .card {
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-shrink: 0;
+  flex: 1;
+  min-width: 0;
 }
 .card-header > div {
   min-width: 0;
