@@ -3211,6 +3211,26 @@ body.colorblind-mode .year-card-week-row.today-week {
 .countdown-days strong { font-size: 1.15em; }
 
 /* ── Daily Briefing Banner ── */
+.briefing-pill {
+  font-size: var(--text-xs);
+  padding: 3px 10px;
+  border-radius: 20px;
+  background: var(--surface2);
+  border: 1px solid rgba(255,255,255,.10);
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.briefing-pill:hover { color: var(--text); border-color: rgba(255,255,255,.22); }
+.briefing-pill.active {
+  background: rgba(108,142,245,.18);
+  border-color: rgba(108,142,245,.42);
+  color: var(--accent);
+}
+body.light-mode .briefing-pill { border-color: rgba(0,0,0,.12); }
+body.light-mode .briefing-pill.active { background: rgba(79,142,247,.12); border-color: rgba(79,142,247,.35); }
+
 .briefing-banner {
   display: flex;
   align-items: flex-start;
@@ -3224,18 +3244,6 @@ body.colorblind-mode .year-card-week-row.today-week {
   flex-shrink: 0;
 }
 .briefing-body { flex: 1; min-width: 0; }
-.briefing-dismiss {
-  background: none;
-  border: none;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: .85rem;
-  padding: 0 2px;
-  flex-shrink: 0;
-  line-height: 1;
-  opacity: .6;
-}
-.briefing-dismiss:hover { opacity: 1; }
 .briefing-loading {
   justify-content: center;
   color: var(--muted);

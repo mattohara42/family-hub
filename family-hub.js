@@ -795,7 +795,7 @@ window.addEventListener('load', () => {
   initAssistantVoice();
   updateAssistantTtsBtn();      // set the 🔊/🔇 voice-output toggle state
   renderAssistantMessages();   // render empty-state welcome + quick-prompt chips
-  setTimeout(loadDailyBriefing, 1500);
+  // Briefing is now on-demand via the pill button in the assistant header
   renderCountdownCard(); // generate after page settles + weather/cal data loads
   // Close SMS popover on outside click
   document.addEventListener('click', e => {
@@ -6577,6 +6577,22 @@ const BRIEFING_DATE_KEY   = 'fh_briefingDate';
 const BRIEFING_TEXT_KEY   = 'fh_briefingText';
 const BRIEFING_BUCKET_KEY = 'fh_briefingBucket'; // 'morning'|'afternoon'|'evening'
 
+function toggleBriefing() {
+  const banner = document.getElementById('briefingBanner');
+  if (banner && banner.style.display !== 'none') {
+    dismissBriefing();
+  } else {
+    loadDailyBriefing();
+  }
+}
+
+function updateBriefingPill(active) {
+  const pill = document.getElementById('briefingPill');
+  if (!pill) return;
+  pill.classList.toggle('active', !!active);
+  pill.title = active ? 'Dismiss briefing' : 'Daily briefing';
+}
+
 /** Show (or generate) the daily briefing banner above the chat. */
 async function loadDailyBriefing() {
   const banner = document.getElementById('briefingBanner');
@@ -6640,20 +6656,22 @@ function showBriefingBanner(text, loading = false) {
     banner.style.display = '';
     banner.className = 'briefing-banner briefing-loading';
     banner.innerHTML = '<span class="briefing-dots">•••</span>';
+    updateBriefingPill(true);
     return;
   }
   banner.style.display = '';
   banner.className = 'briefing-banner';
   banner.innerHTML = `
     <div class="briefing-body">${formatAssistantText(text)}</div>
-    <button class="briefing-dismiss" onclick="dismissBriefing()" title="Dismiss">✕</button>
   `;
+  updateBriefingPill(true);
 }
 
 /** Hide the banner for the rest of this session (doesn't clear the cache). */
 function dismissBriefing() {
   const banner = document.getElementById('briefingBanner');
   if (banner) banner.style.display = 'none';
+  updateBriefingPill(false);
 }
 
 // ── Assistant voice output (TTS) ───────────────────────────────
