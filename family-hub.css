@@ -2128,9 +2128,21 @@ body.has-bg.light-mode .day-hour-row.current-hour { background: rgba(190,198,225
   background: var(--surface2);
   display: flex; align-items: center; justify-content: center;
   margin-bottom: 14px;
+  position: relative;
 }
 .meal-detail-img-placeholder { font-size: 4rem; opacity: .5; }
 #mealDetailImg { width: 100%; height: 100%; object-fit: cover; display: block; }
+.meal-stock-label {
+  position: absolute;
+  bottom: 6px; right: 8px;
+  font-size: .65rem;
+  font-style: italic;
+  color: #fff;
+  background: rgba(0,0,0,.45);
+  border-radius: 3px;
+  padding: 1px 5px;
+  pointer-events: none;
+}
 .meal-detail-meta {
   display: flex; gap: 12px; flex-wrap: wrap;
   font-size: var(--text-base); color: var(--muted); margin-bottom: 8px;

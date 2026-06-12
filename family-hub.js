@@ -5985,8 +5985,8 @@ function renderMealTemplateList() {
 const MEAL_DETAIL_LABELS = { breakfast:'🌅 Breakfast', lunch:'☀️ Lunch', dinner:'🌙 Dinner' };
 const MEAL_DETAIL_EMOJI  = { breakfast:'🍳', lunch:'🥪', dinner:'🍽' };
 
-/** Best-effort dish photo from TheMealDB (free, keyless). Returns a thumb URL or null.
- *  Tries the exact name first, then a simplified name (stripped adjectives / cooking methods). */
+/** Best-effort dish photo. Returns { url, stock } where stock=true means a representative image.
+ *  Pass 1: exact TheMealDB name. Pass 2: simplified name. Pass 3: LoremFlickr fallback. */
 async function fetchMealImage(name) {
   const key = (name || '').toLowerCase().trim();
   if (!key) return null;
@@ -6015,8 +6015,18 @@ async function fetchMealImage(name) {
     }
   }
 
-  _mealImgCache[key] = thumb;
-  return thumb;
+  if (thumb) {
+    const result = { url: thumb, stock: false };
+    _mealImgCache[key] = result;
+    return result;
+  }
+
+  // Pass 3: LoremFlickr representative food photo — always returns an image
+  const keywords = encodeURIComponent(name.replace(/\s+/g, ',').toLowerCase());
+  const stockUrl = `https://loremflickr.com/600/400/${keywords},food/all`;
+  const result = { url: stockUrl, stock: true };
+  _mealImgCache[key] = result;
+  return result;
 }
 
 /** Persist a found image URL onto the meal in Firestore so future opens are instant. */
@@ -6082,13 +6092,16 @@ function openMealDetail(dateKey, mealType) {
     img.onload = () => { if (_mealDetailDate + '|' + _mealDetailType === token) { img.style.display = ''; ph.style.display = 'none'; } };
     img.src = url;
   };
+  const stockLabel = document.getElementById('mealStockLabel');
   if (meal.image) {
     showImg(meal.image);
+    if (stockLabel) stockLabel.style.display = 'none';
   } else {
-    fetchMealImage(meal.name).then(thumb => {
-      if (thumb && _mealDetailDate + '|' + _mealDetailType === token) {
-        showImg(thumb);
-        persistMealImage(dateKey, mealType, thumb); // cache to Firestore for future opens
+    fetchMealImage(meal.name).then(result => {
+      if (result && _mealDetailDate + '|' + _mealDetailType === token) {
+        showImg(result.url);
+        if (stockLabel) stockLabel.style.display = result.stock ? '' : 'none';
+        if (!result.stock) persistMealImage(dateKey, mealType, result.url);
       }
     });
   }
