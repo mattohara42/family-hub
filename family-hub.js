@@ -7346,6 +7346,7 @@ const THEME_COLORS = {
   dark:             '#0f1117',
   light:            '#f0f2f8',
   nautical:         '#1a2e52',
+  aurora:           '#0d0820',
   colorblind:       '#0d1117',
 };
 
@@ -7391,9 +7392,10 @@ function applyAppTitle() {
 
 function applyAppMode(mode) {
   appMode = mode;
-  document.body.classList.remove('light-mode', 'nautical-mode', 'colorblind-mode');
+  document.body.classList.remove('light-mode', 'nautical-mode', 'aurora-mode', 'colorblind-mode');
   if (mode === 'light')      document.body.classList.add('light-mode');
   if (mode === 'nautical')   document.body.classList.add('nautical-mode');
+  if (mode === 'aurora')     document.body.classList.add('aurora-mode');
   if (mode === 'colorblind') document.body.classList.add('colorblind-mode');
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.content = THEME_COLORS[mode] || THEME_COLORS.dark;
@@ -7427,6 +7429,7 @@ function setAppMode(mode) {
   document.getElementById('modeLight').className          = 'btn btn-sm' + (mode === 'light'          ? ' btn-mode-active' : '');
   document.getElementById('modeDark').className           = 'btn btn-sm' + (mode === 'dark'           ? ' btn-mode-active' : '');
   document.getElementById('modeNautical').className       = 'btn btn-sm' + (mode === 'nautical'       ? ' btn-mode-active' : '');
+  document.getElementById('modeAurora').className         = 'btn btn-sm' + (mode === 'aurora'         ? ' btn-mode-active' : '');
   document.getElementById('modeColorblind').className     = 'btn btn-sm' + (mode === 'colorblind'     ? ' btn-mode-active' : '');
 }
 

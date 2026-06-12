@@ -294,6 +294,244 @@ body.nautical-mode .assistant-msg.ai {
 }
 
 /* ════════════════════════════════════════════════════════════════
+   🌌  AURORA MODE — Deep Violet · Wong Colorblind-Safe Palette
+   Orange (#FF8C00) + Sky Blue (#56C8F0) + Rose (#CC79A7)
+   Safe for deuteranopia, protanopia, and tritanopia.
+   ════════════════════════════════════════════════════════════════ */
+body.aurora-mode {
+  --bg:                 #0d0820;
+  --surface:            rgba(22, 10, 50, 0.82);
+  --surface2:           rgba(38, 18, 72, 0.75);
+  --accent:             #FF8C00;          /* vivid orange — Wong palette */
+  --accent2:            #56C8F0;          /* sky blue — Wong palette */
+  --green:              #009E73;          /* bluish green — Wong palette */
+  --red:                #e07070;
+  --text:               #f0ecff;
+  --muted:              #9080b8;
+  --radius:             14px;
+  --shadow:             0 0 22px rgba(255,140,0,0.18), 0 4px 18px rgba(0,0,0,0.45);
+  --scrim:              rgba(10, 5, 28, 0.42);
+  --card-bg-photo:      rgba(22, 10, 50, 0.72);
+  --cal-card-bg-photo:  rgba(22, 10, 50, 0.42);
+  --cal-day-bg-photo:   rgba(38, 18, 72, 0.32);
+  --mini-card-bg-photo: rgba(22, 10, 50, 0.70);
+  --strip-bg-photo:     rgba(18,  8, 42, 0.65);
+
+  background-color: #0d0820;
+}
+
+/* ── Aurora borealis glow — radial light columns ── */
+body.aurora-mode::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 55% 32% at 15% 18%, rgba(255,140,0,0.22)   0%, transparent 100%),
+    radial-gradient(ellipse 50% 28% at 82% 14%, rgba(86,200,240,0.20)   0%, transparent 100%),
+    radial-gradient(ellipse 40% 22% at 50% 58%, rgba(204,121,167,0.14) 0%, transparent 100%),
+    radial-gradient(ellipse 70% 38% at 50%  3%, rgba(255,140,0,0.07)   0%, transparent 100%);
+  pointer-events: none;
+  z-index: 0;
+  animation: auroraShift 14s ease-in-out infinite alternate;
+}
+
+/* ── Prismatic bottom accent bar ── */
+body.aurora-mode::after {
+  content: '';
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(to right, #FF8C00, #56C8F0, #CC79A7, #56C8F0, #FF8C00);
+  z-index: 9999;
+  pointer-events: none;
+}
+
+/* ── Card borders: orange for sidebar, sky-blue for calendar ── */
+body.aurora-mode .card {
+  background: var(--surface);
+  border: 1px solid rgba(255,140,0,0.32);
+  box-shadow: 0 4px 28px rgba(0,0,0,0.40),
+              inset 0 1px 0 rgba(255,140,0,0.14);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+body.aurora-mode .card.cal-card {
+  border-color: rgba(86,200,240,0.38);
+  background: rgba(22, 10, 50, 0.14);
+  box-shadow: 0 4px 28px rgba(0,0,0,0.40),
+              inset 0 1px 0 rgba(86,200,240,0.12);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* ── Card header: orange gradient strip ── */
+body.aurora-mode .card-header {
+  position: relative;
+  background: linear-gradient(to bottom, rgba(255,140,0,0.10) 0%, transparent 100%);
+  border-bottom: none;
+}
+body.aurora-mode .card-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(to right, #FF8C00, #56C8F0, #CC79A7, #56C8F0, #FF8C00);
+  opacity: 0.60;
+}
+
+/* ── Calendar glow ── */
+body.aurora-mode .cal-card .card-body {
+  background: radial-gradient(
+    ellipse 70% 55% at 50% 38%,
+    rgba(255,140,0,0.05) 0%,
+    transparent 70%
+  );
+}
+
+/* ── Calendar day cells ── */
+body.aurora-mode .cal-day {
+  background: rgba(38, 18, 72, 0.22);
+  border-color: rgba(255,140,0,0.06);
+}
+body.aurora-mode .cal-day.today .cal-day-num {
+  background: #FF8C00;
+  color: #0d0820;
+}
+body.aurora-mode .cal-day.current-week { background: rgba(86,200,240,0.14); }
+body.aurora-mode .cal-day.today {
+  background: rgba(255,140,0,0.22);
+  box-shadow: 0 0 0 1.5px rgba(255,140,0,0.80), 0 0 10px rgba(255,140,0,0.18);
+}
+body.aurora-mode .cal-dow.current-dow { background: rgba(86,200,240,0.16); border-radius: 6px; }
+
+/* ── Week/Day view today highlights ── */
+body.aurora-mode .week-day-col.today { background: rgba(255,140,0,0.14); }
+body.aurora-mode .day-hour-row.current-hour { background: rgba(86,200,240,0.14); }
+
+/* ── Accent / primary buttons ── */
+body.aurora-mode .btn-primary {
+  background: linear-gradient(135deg, #FFA830 0%, #FF8C00 50%, #D46A00 100%);
+  color: #0d0820;
+  box-shadow: 0 2px 8px rgba(255,140,0,0.35);
+}
+body.aurora-mode .btn-primary:hover { opacity: .88; }
+
+/* ── Active view tab ── */
+body.aurora-mode .cal-view-tab.active {
+  background: linear-gradient(135deg, #FFA830 0%, #FF8C00 100%);
+  color: #0d0820;
+}
+
+/* ── Active mode button ── */
+body.aurora-mode .btn-mode-active {
+  color: #0d0820 !important;
+  background: linear-gradient(135deg, #FFA830 0%, #FF8C00 100%) !important;
+}
+
+/* ── Calendar month nav ── */
+body.aurora-mode .cal-month-nav button {
+  background: rgba(255,140,0,0.18);
+}
+
+/* ── Budget pill ── */
+body.aurora-mode .budget-total-amount { color: #FF8C00; }
+
+/* ── SMS popover ── */
+body.aurora-mode .sms-popover {
+  background: #160a38;
+  border: 1px solid rgba(255,140,0,.32);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.55);
+}
+
+/* ── Checkboxes / radios ── */
+body.aurora-mode input[type=checkbox],
+body.aurora-mode input[type=radio] {
+  accent-color: #FF8C00;
+}
+
+/* ── Sidebar scrollbar ── */
+body.aurora-mode .sidebar::-webkit-scrollbar { width: 5px; }
+body.aurora-mode .sidebar::-webkit-scrollbar-track { background: rgba(22,10,50,0.4); }
+body.aurora-mode .sidebar::-webkit-scrollbar-thumb {
+  background: rgba(255,140,0,0.35);
+  border-radius: 3px;
+}
+
+/* ── Title text ── */
+body.aurora-mode .card-header h2 { color: #f0ecff; }
+body.aurora-mode .cal-app-title  { color: #f0ecff; }
+body.aurora-mode .cal-app-title .cal-app-title-text span { color: #FF8C00; }
+
+/* ── Year strip ── */
+body.aurora-mode #yearStrip { border-color: rgba(255,140,0,0.40); }
+
+/* ── Sun-path arc ── */
+body.aurora-mode .wx-sun-track    { stroke: rgba(255,140,0,.28); }
+body.aurora-mode .wx-sun-progress { stroke: rgba(255,180,60,.65); }
+
+/* ── Temp curve ── */
+body.aurora-mode .wx-curve-line { stroke: #56C8F0; }
+body.aurora-mode .wx-curve-dot  { fill: #56C8F0; }
+
+/* ── Snarky / weather ticker ── */
+body.aurora-mode .wx-snarky { background: rgba(255,140,0,0.08); border-top-color: rgba(255,140,0,0.25); }
+body.aurora-mode .wx-ticker { background: rgba(255,140,0,.05); border-top-color: rgba(255,140,0,.14); }
+
+/* ── Meal & assistant chips ── */
+body.aurora-mode .meal-adjust-chip { border-color: rgba(255,140,0,.28); }
+body.aurora-mode .meal-adjust-chip:hover { background: #FF8C00; border-color: #FF8C00; color: #0d0820; }
+body.aurora-mode .assistant-chip { border-color: rgba(255,140,0,.28); }
+body.aurora-mode .assistant-chip:hover { background: #FF8C00; border-color: #FF8C00; color: #0d0820; }
+
+/* ── Briefing banner ── */
+body.aurora-mode .briefing-banner {
+  background: linear-gradient(135deg, rgba(255,140,0,.10), rgba(86,200,240,.08));
+  border-bottom-color: rgba(255,140,0,.25);
+}
+
+/* ── Event editor modal ── */
+body.aurora-mode #eventEditorModal .modal {
+  background: linear-gradient(160deg, #1e0e44 0%, #160a38 60%, #100730 100%);
+  border-top: 1px solid rgba(255,140,0,.30);
+  border-left: 1px solid rgba(255,140,0,.15);
+  box-shadow:
+    0  1px 0  rgba(255,140,0,.18) inset,
+    0  0  80px rgba(255,140,0,.28),
+    0  0  40px rgba(86,200,240,.18),
+    0  0  16px rgba(255,140,0,.12),
+    0  0   0  1px rgba(255,140,0,.28);
+  transform: perspective(800px) rotateX(2deg) translateY(-4px);
+  transform-origin: 50% 0%;
+}
+
+/* ── Settings modal ── */
+body.aurora-mode #settingsModal .modal {
+  background: #160a38;
+  box-shadow:
+    0 8px 48px rgba(0,0,0,.75),
+    0 2px 12px rgba(0,0,0,.55),
+    0 0 80px rgba(255,140,0,.18),
+    0 0 200px rgba(86,200,240,.08);
+}
+
+/* ── Assistant AI messages ── */
+body.aurora-mode .assistant-msg.ai {
+  background: rgba(38, 18, 72, 0.90);
+}
+
+/* ── Year at a Glance current-month card ── */
+body.aurora-mode .mini-card.current-month {
+  background: rgba(255,140,0,0.18);
+  box-shadow: 0 0 0 1.5px rgba(255,140,0,0.80), 0 0 10px rgba(255,140,0,0.20);
+}
+
+/* ── Today's week row (Year at a Glance) ── */
+body.aurora-mode .year-card-week-row.today-week {
+  background: rgba(86,200,240,0.14);
+  border-radius: 4px;
+}
+
+/* ════════════════════════════════════════════════════════════════
    👁  ACCESSIBLE MODE — High Contrast · Okabe-Ito colorblind-safe palette
    Uses sky-blue accent, orange highlight, vermillion (not red), bluish-green
    (not pure green) — all distinguishable by deuteranopes and protanopes.
@@ -500,6 +738,16 @@ body.has-bg .day-hour-row {
 @keyframes pulse-red {
   0%, 100% { box-shadow: 0 0 8px rgba(125,46,46,.5); }
   50%       { box-shadow: 0 0 16px rgba(200,60,60,.8); }
+}
+@keyframes nauticalWave {
+  0%   { transform: translateX(0)   scaleY(1);    }
+  50%  { transform: translateX(-2%) scaleY(1.08); }
+  100% { transform: translateX(2%)  scaleY(0.94); }
+}
+@keyframes auroraShift {
+  0%   { opacity: 1;    filter: hue-rotate(0deg);   }
+  50%  { opacity: 0.80; filter: hue-rotate(15deg);  }
+  100% { opacity: 0.90; filter: hue-rotate(-10deg); }
 }
 .ctrl-body {
   border-top: 1px solid rgba(255,255,255,.06);
