@@ -604,8 +604,9 @@ function renderBudgetCard() {
       + (isToday ? ' budget-card-row-today' : '');
     const dateLbl = calView === 'day' ? '' :
       new Date(date + 'T12:00:00').toLocaleDateString([], { month: 'short', day: 'numeric' });
+    const pastBadge = isPast ? ' <span class="budget-card-past-badge">⚠️ past</span>' : '';
     row.innerHTML = `
-      ${dateLbl ? `<span class="budget-card-date">${dateLbl}${isToday ? ' <span class="budget-card-today-badge">today</span>' : ''}</span>` : ''}
+      ${dateLbl ? `<span class="budget-card-date">${dateLbl}${isToday ? ' <span class="budget-card-today-badge">today</span>' : ''}${pastBadge}</span>` : (isPast ? `<span class="budget-card-date">${pastBadge}</span>` : '')}
       <span class="budget-card-name">${esc(item.name)}</span>
       <span class="budget-card-amt">${fmt$(item.amount)}</span>
       <button class="budget-item-del" onclick="deleteBudgetItem('${item.id}')" title="Remove">✕</button>`;
@@ -4507,7 +4508,8 @@ function makeTodoItem(item, onToggle, onDelete) {
       const badge = document.createElement('span');
       badge.className = 'list-badge list-badge-due' + (overdue ? ' overdue' : '');
       const d = new Date(item.dueDate + 'T12:00:00');
-      badge.textContent = '📅 ' + d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+      const dateStr = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+      badge.textContent = overdue ? '⚠️ Overdue · ' + dateStr : '📅 ' + dateStr;
       badges.appendChild(badge);
     }
     if (item.assignedTo) {
