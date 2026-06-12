@@ -299,25 +299,25 @@ body.nautical-mode .assistant-msg.ai {
    Safe for deuteranopia, protanopia, and tritanopia.
    ════════════════════════════════════════════════════════════════ */
 body.aurora-mode {
-  --bg:                 #0d0820;
-  --surface:            rgba(22, 10, 50, 0.82);
-  --surface2:           rgba(38, 18, 72, 0.75);
-  --accent:             #FF8C00;          /* vivid orange — Wong palette */
-  --accent2:            #56C8F0;          /* sky blue — Wong palette */
-  --green:              #009E73;          /* bluish green — Wong palette */
-  --red:                #e07070;
-  --text:               #f0ecff;
-  --muted:              #9080b8;
+  --bg:                 #ede8ff;
+  --surface:            rgba(255, 253, 255, 0.88);
+  --surface2:           rgba(242, 238, 255, 0.85);
+  --accent:             #d96e00;          /* vivid orange, darkened for light bg contrast */
+  --accent2:            #0088bb;          /* sky blue, darkened for light bg contrast */
+  --green:              #007a58;          /* bluish green — Wong palette, darkened */
+  --red:                #c03030;
+  --text:               #1a0e38;
+  --muted:              #5a4890;
   --radius:             14px;
-  --shadow:             0 0 22px rgba(255,140,0,0.18), 0 4px 18px rgba(0,0,0,0.45);
-  --scrim:              rgba(10, 5, 28, 0.42);
-  --card-bg-photo:      rgba(22, 10, 50, 0.72);
-  --cal-card-bg-photo:  rgba(22, 10, 50, 0.42);
-  --cal-day-bg-photo:   rgba(38, 18, 72, 0.32);
-  --mini-card-bg-photo: rgba(22, 10, 50, 0.70);
-  --strip-bg-photo:     rgba(18,  8, 42, 0.65);
+  --shadow:             0 0 22px rgba(255,140,0,0.14), 0 4px 18px rgba(0,0,0,0.12);
+  --scrim:              rgba(200, 180, 255, 0.35);
+  --card-bg-photo:      rgba(255, 253, 255, 0.78);
+  --cal-card-bg-photo:  rgba(255, 253, 255, 0.55);
+  --cal-day-bg-photo:   rgba(242, 238, 255, 0.45);
+  --mini-card-bg-photo: rgba(255, 253, 255, 0.80);
+  --strip-bg-photo:     rgba(230, 224, 255, 0.75);
 
-  background-color: #0d0820;
+  background-color: #ede8ff;
 }
 
 /* ── Aurora borealis glow — radial light columns ── */
@@ -326,10 +326,10 @@ body.aurora-mode::before {
   position: fixed;
   inset: 0;
   background:
-    radial-gradient(ellipse 55% 32% at 15% 18%, rgba(255,140,0,0.22)   0%, transparent 100%),
-    radial-gradient(ellipse 50% 28% at 82% 14%, rgba(86,200,240,0.20)   0%, transparent 100%),
-    radial-gradient(ellipse 40% 22% at 50% 58%, rgba(204,121,167,0.14) 0%, transparent 100%),
-    radial-gradient(ellipse 70% 38% at 50%  3%, rgba(255,140,0,0.07)   0%, transparent 100%);
+    radial-gradient(ellipse 55% 32% at 15% 18%, rgba(255,140,0,0.18)   0%, transparent 100%),
+    radial-gradient(ellipse 50% 28% at 82% 14%, rgba(0,136,187,0.16)   0%, transparent 100%),
+    radial-gradient(ellipse 40% 22% at 50% 58%, rgba(204,121,167,0.12) 0%, transparent 100%),
+    radial-gradient(ellipse 70% 38% at 50%  3%, rgba(255,140,0,0.06)   0%, transparent 100%);
   pointer-events: none;
   z-index: 0;
   animation: auroraShift 14s ease-in-out infinite alternate;
@@ -349,17 +349,17 @@ body.aurora-mode::after {
 /* ── Card borders: orange for sidebar, sky-blue for calendar ── */
 body.aurora-mode .card {
   background: var(--surface);
-  border: 1px solid rgba(255,140,0,0.32);
-  box-shadow: 0 4px 28px rgba(0,0,0,0.40),
-              inset 0 1px 0 rgba(255,140,0,0.14);
+  border: 1px solid rgba(217,110,0,0.28);
+  box-shadow: 0 2px 16px rgba(0,0,0,0.10),
+              inset 0 1px 0 rgba(255,255,255,0.80);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
 body.aurora-mode .card.cal-card {
-  border-color: rgba(86,200,240,0.38);
-  background: rgba(22, 10, 50, 0.14);
-  box-shadow: 0 4px 28px rgba(0,0,0,0.40),
-              inset 0 1px 0 rgba(86,200,240,0.12);
+  border-color: rgba(0,136,187,0.30);
+  background: rgba(255, 253, 255, 0.70);
+  box-shadow: 0 2px 16px rgba(0,0,0,0.10),
+              inset 0 1px 0 rgba(255,255,255,0.80);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
@@ -390,42 +390,42 @@ body.aurora-mode .cal-card .card-body {
 
 /* ── Calendar day cells ── */
 body.aurora-mode .cal-day {
-  background: rgba(38, 18, 72, 0.22);
-  border-color: rgba(255,140,0,0.06);
+  background: rgba(242, 238, 255, 0.55);
+  border-color: rgba(217,110,0,0.08);
 }
 body.aurora-mode .cal-day.today .cal-day-num {
-  background: #FF8C00;
-  color: #0d0820;
+  background: #d96e00;
+  color: #fff;
 }
-body.aurora-mode .cal-day.current-week { background: rgba(86,200,240,0.14); }
+body.aurora-mode .cal-day.current-week { background: rgba(0,136,187,0.12); }
 body.aurora-mode .cal-day.today {
-  background: rgba(255,140,0,0.22);
-  box-shadow: 0 0 0 1.5px rgba(255,140,0,0.80), 0 0 10px rgba(255,140,0,0.18);
+  background: rgba(217,110,0,0.16);
+  box-shadow: 0 0 0 1.5px rgba(217,110,0,0.75), 0 0 10px rgba(217,110,0,0.14);
 }
-body.aurora-mode .cal-dow.current-dow { background: rgba(86,200,240,0.16); border-radius: 6px; }
+body.aurora-mode .cal-dow.current-dow { background: rgba(0,136,187,0.14); border-radius: 6px; }
 
 /* ── Week/Day view today highlights ── */
-body.aurora-mode .week-day-col.today { background: rgba(255,140,0,0.14); }
-body.aurora-mode .day-hour-row.current-hour { background: rgba(86,200,240,0.14); }
+body.aurora-mode .week-day-col.today { background: rgba(217,110,0,0.10); }
+body.aurora-mode .day-hour-row.current-hour { background: rgba(0,136,187,0.10); }
 
 /* ── Accent / primary buttons ── */
 body.aurora-mode .btn-primary {
-  background: linear-gradient(135deg, #FFA830 0%, #FF8C00 50%, #D46A00 100%);
-  color: #0d0820;
-  box-shadow: 0 2px 8px rgba(255,140,0,0.35);
+  background: linear-gradient(135deg, #e88020 0%, #d96e00 50%, #b85800 100%);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(217,110,0,0.30);
 }
 body.aurora-mode .btn-primary:hover { opacity: .88; }
 
 /* ── Active view tab ── */
 body.aurora-mode .cal-view-tab.active {
-  background: linear-gradient(135deg, #FFA830 0%, #FF8C00 100%);
-  color: #0d0820;
+  background: linear-gradient(135deg, #e88020 0%, #d96e00 100%);
+  color: #fff;
 }
 
 /* ── Active mode button ── */
 body.aurora-mode .btn-mode-active {
-  color: #0d0820 !important;
-  background: linear-gradient(135deg, #FFA830 0%, #FF8C00 100%) !important;
+  color: #fff !important;
+  background: linear-gradient(135deg, #e88020 0%, #d96e00 100%) !important;
 }
 
 /* ── Calendar month nav ── */
@@ -438,9 +438,9 @@ body.aurora-mode .budget-total-amount { color: #FF8C00; }
 
 /* ── SMS popover ── */
 body.aurora-mode .sms-popover {
-  background: #160a38;
-  border: 1px solid rgba(255,140,0,.32);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.55);
+  background: #f5f0ff;
+  border: 1px solid rgba(217,110,0,.32);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
 }
 
 /* ── Checkboxes / radios ── */
@@ -451,16 +451,16 @@ body.aurora-mode input[type=radio] {
 
 /* ── Sidebar scrollbar ── */
 body.aurora-mode .sidebar::-webkit-scrollbar { width: 5px; }
-body.aurora-mode .sidebar::-webkit-scrollbar-track { background: rgba(22,10,50,0.4); }
+body.aurora-mode .sidebar::-webkit-scrollbar-track { background: rgba(217,110,0,0.08); }
 body.aurora-mode .sidebar::-webkit-scrollbar-thumb {
-  background: rgba(255,140,0,0.35);
+  background: rgba(217,110,0,0.35);
   border-radius: 3px;
 }
 
 /* ── Title text ── */
-body.aurora-mode .card-header h2 { color: #f0ecff; }
-body.aurora-mode .cal-app-title  { color: #f0ecff; }
-body.aurora-mode .cal-app-title .cal-app-title-text span { color: #FF8C00; }
+body.aurora-mode .card-header h2 { color: #1a0e38; }
+body.aurora-mode .cal-app-title  { color: #1a0e38; }
+body.aurora-mode .cal-app-title .cal-app-title-text span { color: #d96e00; }
 
 /* ── Year strip ── */
 body.aurora-mode #yearStrip { border-color: rgba(255,140,0,0.40); }
@@ -491,43 +491,43 @@ body.aurora-mode .briefing-banner {
 
 /* ── Event editor modal ── */
 body.aurora-mode #eventEditorModal .modal {
-  background: linear-gradient(160deg, #1e0e44 0%, #160a38 60%, #100730 100%);
-  border-top: 1px solid rgba(255,140,0,.30);
-  border-left: 1px solid rgba(255,140,0,.15);
+  background: linear-gradient(160deg, #f5f0ff 0%, #ede6ff 60%, #e8e0ff 100%);
+  border-top: 1px solid rgba(217,110,0,.30);
+  border-left: 1px solid rgba(217,110,0,.15);
   box-shadow:
-    0  1px 0  rgba(255,140,0,.18) inset,
-    0  0  80px rgba(255,140,0,.28),
-    0  0  40px rgba(86,200,240,.18),
-    0  0  16px rgba(255,140,0,.12),
-    0  0   0  1px rgba(255,140,0,.28);
+    0  1px 0  rgba(255,255,255,.90) inset,
+    0  0  80px rgba(217,110,0,.16),
+    0  0  40px rgba(0,136,187,.10),
+    0  0  16px rgba(217,110,0,.08),
+    0  0   0  1px rgba(217,110,0,.22);
   transform: perspective(800px) rotateX(2deg) translateY(-4px);
   transform-origin: 50% 0%;
 }
 
 /* ── Settings modal ── */
 body.aurora-mode #settingsModal .modal {
-  background: #160a38;
+  background: #f5f0ff;
   box-shadow:
-    0 8px 48px rgba(0,0,0,.75),
-    0 2px 12px rgba(0,0,0,.55),
-    0 0 80px rgba(255,140,0,.18),
-    0 0 200px rgba(86,200,240,.08);
+    0 8px 48px rgba(0,0,0,.15),
+    0 2px 12px rgba(0,0,0,.10),
+    0 0 80px rgba(217,110,0,.12),
+    0 0 200px rgba(0,136,187,.06);
 }
 
 /* ── Assistant AI messages ── */
 body.aurora-mode .assistant-msg.ai {
-  background: rgba(38, 18, 72, 0.90);
+  background: rgba(232, 224, 255, 0.85);
 }
 
 /* ── Year at a Glance current-month card ── */
 body.aurora-mode .mini-card.current-month {
-  background: rgba(255,140,0,0.18);
-  box-shadow: 0 0 0 1.5px rgba(255,140,0,0.80), 0 0 10px rgba(255,140,0,0.20);
+  background: rgba(217,110,0,0.14);
+  box-shadow: 0 0 0 1.5px rgba(217,110,0,0.75), 0 0 10px rgba(217,110,0,0.16);
 }
 
 /* ── Today's week row (Year at a Glance) ── */
 body.aurora-mode .year-card-week-row.today-week {
-  background: rgba(86,200,240,0.14);
+  background: rgba(0,136,187,0.12);
   border-radius: 4px;
 }
 

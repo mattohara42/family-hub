@@ -7346,7 +7346,7 @@ const THEME_COLORS = {
   dark:             '#0f1117',
   light:            '#f0f2f8',
   nautical:         '#1a2e52',
-  aurora:           '#0d0820',
+  aurora:           '#ede8ff',
   colorblind:       '#0d1117',
 };
 
