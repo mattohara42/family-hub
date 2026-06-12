@@ -1568,32 +1568,32 @@ body.nautical-mode .wx-curve-dot  { fill: var(--accent2); }
 .wx-city-label { font-size: var(--text-sm); color: var(--muted); flex: 1; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #weatherChange { font-size: var(--text-sm); cursor: pointer; text-decoration: underline; background: none; border: none; color: var(--accent); }
 
-/* ── Snarky / WTF Forecast ── */
+/* ── Snarky / WTF Forecast ticker ── */
 .wx-snarky {
-  margin: 6px 0 4px;
-  padding: 9px 12px;
-  background: rgba(108,142,245,0.13);
-  border-radius: 10px;
-  border-left: 3px solid var(--accent2);
-  font-size: var(--text-sm);
-  line-height: 1.55;
+  overflow: hidden;
+  background: rgba(230,159,0,0.10);
+  border-top: 1px solid rgba(230,159,0,0.25);
+  margin-top: 8px;
+  padding: 5px 0;
+  white-space: nowrap;
+}
+body.light-mode .wx-snarky { background: rgba(230,159,0,0.08); }
+body.nautical-mode .wx-snarky { background: rgba(200,169,110,0.10); border-top-color: rgba(200,169,110,0.30); }
+body.nautical-light-mode .wx-snarky { background: rgba(200,169,110,0.08); border-top-color: rgba(200,169,110,0.25); }
+.wx-snarky-track {
+  display: inline-block;
+  font-size: var(--text-xs);
   color: var(--text);
+  white-space: nowrap;
+  animation: wx-scroll linear 30s infinite;
 }
-body.light-mode .wx-snarky { background: rgba(108,142,245,0.10); }
-body.nautical-mode .wx-snarky { background: rgba(200,169,110,0.15); border-left-color: #c8a96e; }
-body.nautical-light-mode .wx-snarky { background: rgba(200,169,110,0.12); border-left-color: #b89050; }
-.wx-snarky-label {
-  font-size: .6rem;
-  font-weight: 700;
-  letter-spacing: .07em;
-  text-transform: uppercase;
-  color: var(--accent2);
-  margin-bottom: 4px;
+.wx-snarky-loading {
+  display: inline-block;
+  font-size: var(--text-xs);
+  color: var(--muted);
+  font-style: italic;
+  padding: 0 12px;
 }
-body.nautical-mode .wx-snarky-label,
-body.nautical-light-mode .wx-snarky-label { color: #c8a96e; }
-.wx-snarky-loading { color: var(--muted); font-style: italic; }
-#wxSnarkyBtn.snarky-active { background: var(--accent2); color: #111; }
 
 /* ── Weather ticker ── */
 .wx-ticker {

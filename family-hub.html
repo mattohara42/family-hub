@@ -127,14 +127,12 @@
     <div class="card" id="weatherCard">
       <div class="card-header">
         <h2>🌤 Weather</h2>
-        <div style="display:flex;align-items:center;gap:6px">
-          <button id="wxSnarkyBtn" class="btn btn-sm" onclick="toggleSnarkyForecast()" style="display:none" title="Snarky Forecast">😜</button>
-          <div class="wx-forecast-toggle" id="wxForecastToggle" style="display:none">
-            <button id="wxToggle5day" class="active" onclick="setWeatherForecastMode('5day')">5-day</button>
-            <button id="wxToggleHourly" onclick="setWeatherForecastMode('hourly')">Hourly</button>
-            <button id="wxToggleCurve" onclick="setWeatherForecastMode('curve')">Curve</button>
-            <button id="wxToggleRadar" onclick="setWeatherForecastMode('radar')">Radar</button>
-          </div>
+        <div class="wx-forecast-toggle" id="wxForecastToggle" style="display:none">
+          <button id="wxToggle5day" class="active" onclick="setWeatherForecastMode('5day')">5-day</button>
+          <button id="wxToggleHourly" onclick="setWeatherForecastMode('hourly')">Hourly</button>
+          <button id="wxToggleCurve" onclick="setWeatherForecastMode('curve')">Curve</button>
+          <button id="wxToggleRadar" onclick="setWeatherForecastMode('radar')">Radar</button>
+          <button id="wxSnarkyBtn" onclick="toggleSnarkyForecast()" style="display:none" title="Snarky Forecast">😜</button>
         </div>
       </div>
       <div class="card-body">

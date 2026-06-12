@@ -4117,7 +4117,7 @@ function applyWxViewToggles() {
   const snarkyBtn = document.getElementById('wxSnarkyBtn');
   if (snarkyBtn) {
     snarkyBtn.style.display = wxEnabledViews['snarky'] ? '' : 'none';
-    snarkyBtn.classList.toggle('snarky-active', snarkyMode);
+    snarkyBtn.classList.toggle('active', snarkyMode);
   }
   // If current forecast mode was disabled, fall back to first enabled mode
   if (!wxEnabledViews[weatherForecastMode]) {
@@ -4138,7 +4138,7 @@ function toggleSnarkyForecast() {
   snarkyMode = !snarkyMode;
   localStorage.setItem('fh_snarkyMode', JSON.stringify(snarkyMode));
   const btn = document.getElementById('wxSnarkyBtn');
-  if (btn) btn.classList.toggle('snarky-active', snarkyMode);
+  if (btn) btn.classList.toggle('active', snarkyMode);
   if (snarkyMode) {
     showSnarkyForecast();
   } else {
@@ -4160,11 +4160,12 @@ async function showSnarkyForecast() {
   el.style.display = '';
 
   if (snarkyCache[cacheKey]) {
-    el.innerHTML = `<div class="wx-snarky-label">😜 Snarky Forecast</div>${esc(snarkyCache[cacheKey])}`;
+    const t = '😜 ' + snarkyCache[cacheKey] + '        ';
+    el.innerHTML = `<div class="wx-snarky-track">${esc(t)}${esc(t)}</div>`;
     return;
   }
 
-  el.innerHTML = `<div class="wx-snarky-label">😜 Snarky Forecast</div><span class="wx-snarky-loading">Cooking up something ridiculous…</span>`;
+  el.innerHTML = `<span class="wx-snarky-loading">Cooking up something ridiculous…</span>`;
 
   try {
     const parts = [`${wx.temp}°F`, wx.desc];
@@ -4189,7 +4190,8 @@ Reply with only the 2 sentences. No intro, no labels.`;
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? '';
     if (text) {
       snarkyCache[cacheKey] = text;
-      el.innerHTML = `<div class="wx-snarky-label">😜 Snarky Forecast</div>${esc(text)}`;
+      const t = '😜 ' + text + '        ';
+      el.innerHTML = `<div class="wx-snarky-track">${esc(t)}${esc(t)}</div>`;
     } else {
       el.style.display = 'none';
     }
