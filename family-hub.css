@@ -607,9 +607,9 @@ body.has-bg .day-hour-row {
 /* ── Header ── */
 /* ── App title inside calendar card header ── */
 .cal-app-title {
-  font-size: var(--text-md);
+  font-size: 1.6rem;
   font-weight: var(--weight-bold);
-  letter-spacing: -0.3px;
+  letter-spacing: -0.5px;
   line-height: 1.2;
   white-space: nowrap;
   display: flex;
@@ -618,7 +618,7 @@ body.has-bg .day-hour-row {
 }
 .cal-app-title .cal-app-title-text span { color: var(--accent); }
 .cal-app-emoji {
-  font-size: 1.5rem;
+  font-size: 1.6rem;
   line-height: 1;
   font-style: normal;
   flex-shrink: 0;
