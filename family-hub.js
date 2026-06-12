@@ -212,6 +212,7 @@ let shopItemsCache    = [];   // in-memory mirror of shopping items for context
 let assistantRecognition = null;  // SpeechRecognition instance
 let assistantListening   = false; // true while mic is open
 let assistantTTS         = lsGet('fh_assistantTTS', false); // read replies aloud
+let assistantWelcomeMode = localStorage.getItem('fh_assistantWelcome') || 'ticker'; // 'static' | 'ticker'
 // Starter prompts shown as clickable chips in the empty chat state.
 // ⚠️ Keep this current: when a new assistant capability ships (see ASSISTANT_BACKLOG.md),
 // add a representative prompt here so users discover it.
@@ -6464,14 +6465,17 @@ function renderAssistantMessages() {
   const container = document.getElementById('assistantMessages');
   if (!container) return;
   if (!assistantHistory.length) {
-    const chips = ASSISTANT_QUICK_PROMPTS
-      .map(p => `<button class="assistant-chip" onclick="useQuickPrompt(this.textContent)">${formatAssistantText(p)}</button>`)
-      .join('');
-    // Two identical groups so the marquee loops seamlessly at translateX(-50%)
-    const group = `<div class="assistant-ticker-group">${chips}</div>`;
-    container.innerHTML =
-      `<div class="assistant-welcome">Hi! Ask me about your schedule, lists, or budget — or tap a prompt to start:</div>
-       <div class="assistant-ticker"><div class="assistant-ticker-track">${group}${group}</div></div>`;
+    if (assistantWelcomeMode === 'static') {
+      container.innerHTML =
+        `<div class="assistant-welcome">Hi! Ask me about your schedule, lists, or budget — or say things like "add milk to shopping" or "what's on this week?"</div>`;
+    } else {
+      const chips = ASSISTANT_QUICK_PROMPTS
+        .map(p => `<button class="assistant-chip" onclick="useQuickPrompt(this.textContent)">${formatAssistantText(p)}</button>`)
+        .join('');
+      const group = `<div class="assistant-ticker-group">${chips}</div>`;
+      container.innerHTML =
+        `<div class="assistant-ticker"><div class="assistant-ticker-track">${group}${group}</div></div>`;
+    }
     return;
   }
   container.innerHTML = '';
@@ -7574,6 +7578,7 @@ function openSettings() {
   });
   lcOpenSettings();
   document.getElementById('safePaletteToggle').checked = safePaletteMode;
+  document.querySelector(`input[name="assistantWelcome"][value="${assistantWelcomeMode}"]`).checked = true;
   document.getElementById('settingsModal').style.display = 'flex';
   applySafePaletteMode();
 }
@@ -7608,6 +7613,12 @@ function saveSettings() {
   safePaletteMode = document.getElementById('safePaletteToggle').checked;
   localStorage.setItem('fh_safePalette', JSON.stringify(safePaletteMode));
   applySafePaletteMode();
+  const welcomeRadio = document.querySelector('input[name="assistantWelcome"]:checked');
+  if (welcomeRadio) {
+    assistantWelcomeMode = welcomeRadio.value;
+    localStorage.setItem('fh_assistantWelcome', assistantWelcomeMode);
+    renderAssistantMessages();
+  }
   // smsContacts and familyMembers saved immediately on add/remove — nothing to save here
   slideInterval = parseInt(document.getElementById('settingSlideInterval').value) || 30;
   mealAiKey     = document.getElementById('settingMealAiKey').value.trim();
