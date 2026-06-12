@@ -6473,7 +6473,8 @@ async function loadDailyBriefing() {
   const banner = document.getElementById('briefingBanner');
   if (!banner || !mealAiKey) return;
 
-  const today = new Date().toISOString().slice(0, 10);
+  const _now = new Date();
+  const today = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}-${String(_now.getDate()).padStart(2,'0')}`;
   const h = new Date().getHours();
   const bucket = h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening';
   const greeting = bucket === 'morning' ? 'Good morning' : bucket === 'afternoon' ? 'Good afternoon' : 'Good evening';
