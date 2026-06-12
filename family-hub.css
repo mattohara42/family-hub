@@ -2685,7 +2685,19 @@ body.has-bg #yearStrip {
   transform: translateY(-1px);
 }
 .mini-card.current-month {
-  border-color: var(--accent);
+  border-color: transparent;
+  box-shadow: 0 0 0 1.5px rgba(212,175,55,0.85),
+              0 0 10px rgba(212,175,55,0.25);
+}
+body .mini-card.current-month            { background: rgba(110,125,200,0.70); }
+body.light-mode .mini-card.current-month { background: rgba(190,198,225,0.88); }
+body.nautical-mode .mini-card.current-month      { background: rgba(200,169,110,0.28); }
+body.nautical-light-mode .mini-card.current-month { background: rgba(240,192,64,0.18); }
+body.has-bg .mini-card.current-month             { background: rgba(110,125,200,0.55); }
+body.has-bg.light-mode .mini-card.current-month  { background: rgba(190,198,225,0.75); }
+body.colorblind-mode .mini-card.current-month    {
+  background: rgba(86,180,233,0.22);
+  box-shadow: 0 0 0 1.5px rgba(86,180,233,0.85), 0 0 10px rgba(86,180,233,0.25);
 }
 body.has-bg .mini-card {
   background: var(--mini-card-bg-photo);
