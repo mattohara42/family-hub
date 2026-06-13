@@ -108,7 +108,7 @@
       <div class="ctrl-header" onclick="toggleControlCard()">
         <span class="ctrl-chevron" id="ctrlChevron">▶</span>
         <span id="statusPill" class="status-pill" onclick="handleStatusPillClick(event)"></span>
-        <button id="settingsBtn" title="Preferences" aria-label="Preferences" onclick="event.stopPropagation();handleSettingsBtnClick()">⚙️</button>
+        <button id="settingsBtn" title="Preferences" aria-label="Preferences" onclick="event.stopPropagation();openSettings()">⚙️</button>
       </div>
       <!-- Collapsible body -->
       <div class="ctrl-body" id="ctrlBody" style="display:none">
@@ -378,7 +378,7 @@
 <!-- Settings Modal -->
 <div class="modal-overlay" id="settingsModal" onclick="if(event.target===this)closeSettings()">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
-    <h2 id="settingsModalTitle">⚙️ Settings</h2>
+    <h2 id="settingsModalTitle"><span id="settingsModalGear" onclick="handleSettingsGearClick()" style="cursor:default" title="">⚙️</span> Settings</h2>
 
     <!-- Tab bar -->
     <div class="modal-tabs">

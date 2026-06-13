@@ -8111,26 +8111,26 @@ function switchSettingsTab(tab) {
   });
 }
 
-let _settingsClickCount = 0;
-let _settingsClickTimer = null;
-function handleSettingsBtnClick() {
-  _settingsClickCount++;
-  clearTimeout(_settingsClickTimer);
-  _settingsClickTimer = setTimeout(() => { _settingsClickCount = 0; }, 700);
-  if (_settingsClickCount < 3) {
-    // Subtle flash so the user senses something is happening
-    const btn = document.getElementById('settingsBtn');
-    btn.style.transition = 'opacity 0.1s';
-    btn.style.opacity = '0.4';
-    setTimeout(() => { btn.style.opacity = ''; setTimeout(() => { btn.style.transition = ''; }, 100); }, 100);
-    return; // don't open settings yet
+let _settingsGearClickCount = 0;
+let _settingsGearClickTimer = null;
+function handleSettingsGearClick() {
+  _settingsGearClickCount++;
+  clearTimeout(_settingsGearClickTimer);
+  _settingsGearClickTimer = setTimeout(() => { _settingsGearClickCount = 0; }, 700);
+  if (_settingsGearClickCount < 3) {
+    // Subtle flash on the gear so the user senses something is happening
+    const gear = document.getElementById('settingsModalGear');
+    gear.style.transition = 'opacity 0.1s';
+    gear.style.opacity = '0.3';
+    setTimeout(() => { gear.style.opacity = ''; setTimeout(() => { gear.style.transition = ''; }, 100); }, 100);
+    return;
   }
-  _settingsClickCount = 0;
+  _settingsGearClickCount = 0;
   if (!document.body.classList.contains('eggs-unlocked')) {
     document.body.classList.add('eggs-unlocked');
     showToast('🥚 Easter Eggs unlocked.', 2500);
+    switchSettingsTab('eggs');
   }
-  openSettings();
 }
 
 function openSettings() {
