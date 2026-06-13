@@ -174,6 +174,7 @@ let mobileTab       = localStorage.getItem('fh_mobileTab') || 'cal';  // 'cal' |
   }
 })();
 let layoutMode      = localStorage.getItem('fh_layoutMode') || 'auto'; // 'auto' | 'portrait' | 'landscape'
+let tvMode          = lsGet('fh_tvMode', false);
 let smsContacts     = lsGet('fh_smsContacts', []);
 // migrate legacy single-number setting
 (function(){
@@ -774,6 +775,8 @@ window.addEventListener('load', () => {
   applyAssistantName();
   applySafePaletteMode();
   applyLayoutMode();
+  if (new URLSearchParams(location.search).get('tv') === '1') tvMode = true;
+  applyTvMode();
   setMobileTab(mobileTab);
   updateStatusPill();
   if (weatherLocations.length) showWeatherLocation(0);
@@ -8149,6 +8152,30 @@ window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', e 
   if (!localStorage.getItem('fh_mode')) applyAppMode(e.matches ? 'light' : 'dark');
 });
 
+function applyTvMode(on) {
+  if (on !== undefined) tvMode = on;
+  if (tvMode) {
+    document.body.classList.add('tv-mode');
+  } else {
+    document.body.classList.remove('tv-mode');
+  }
+  localStorage.setItem('fh_tvMode', JSON.stringify(tvMode));
+}
+
+// Hide cursor after 4 s of inactivity in TV mode
+let _tvCursorTimer = null;
+document.addEventListener('mousemove', () => {
+  if (!tvMode) return;
+  document.body.classList.remove('tv-cursor-hidden');
+  clearTimeout(_tvCursorTimer);
+  _tvCursorTimer = setTimeout(() => { if (tvMode) document.body.classList.add('tv-cursor-hidden'); }, 4000);
+});
+
+// Escape exits TV mode
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && tvMode) { applyTvMode(false); showToast('TV mode off', 1800); }
+});
+
 function applyLayoutMode(mode) {
   if (mode !== undefined) layoutMode = mode;
   document.body.classList.remove('portrait-mode', 'force-landscape', 'auto-portrait');
@@ -8313,6 +8340,7 @@ function openSettings() {
   lcOpenSettings();
   document.getElementById('safePaletteToggle').checked = safePaletteMode;
   document.querySelector(`input[name="assistantWelcome"][value="${assistantWelcomeMode}"]`).checked = true;
+  document.getElementById('tvModeToggle').checked = tvMode;
   // Easter egg category toggles
   Object.keys(EGG_CATEGORY_DEFAULTS).forEach(cat => {
     const el = document.getElementById('egg_cat_' + cat);
@@ -8399,6 +8427,7 @@ function saveSettings() {
     showBillsOnCal = billsEl.checked;
     localStorage.setItem('fh_bills_on_cal', JSON.stringify(showBillsOnCal));
   }
+  applyTvMode(document.getElementById('tvModeToggle').checked);
   // Easter egg categories
   Object.keys(EGG_CATEGORY_DEFAULTS).forEach(cat => {
     const el = document.getElementById('egg_cat_' + cat);

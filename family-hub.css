@@ -4149,3 +4149,47 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
   touch-action: manipulation;
 }
 .budget-manage-toggle:hover { color: var(--text); }
+
+/* ── TV / Display mode ─────────────────────────────────────────── */
+body.tv-mode {
+  font-size: 1.15rem;
+}
+body.tv-cursor-hidden,
+body.tv-cursor-hidden * { cursor: none !important; }
+
+/* Hide all interactive / editing chrome */
+body.tv-mode #controlCard,
+body.tv-mode .list-input-row,
+body.tv-mode #todoExtra,
+body.tv-mode .assistant-input-row,
+body.tv-mode #briefingPill,
+body.tv-mode #assistantTtsBtn,
+body.tv-mode .widget-drag-handle,
+body.tv-mode .budget-manage-toggle,
+body.tv-mode #budgetAddBtn,
+body.tv-mode #budgetAddForm,
+body.tv-mode .bulk-btn,
+body.tv-mode .cal-strip-add,
+body.tv-mode [onclick*="openEventEditor"],
+body.tv-mode [onclick*="openMealDetail"] .meal-edit-btn,
+body.tv-mode .shop-extra-row,
+body.tv-mode #shopClearDoneBtn,
+body.tv-mode #shopClearAllBtn,
+body.tv-mode #todoClearDoneBtn,
+body.tv-mode #todoClearAllBtn {
+  display: none !important;
+}
+
+/* Larger, bolder list items for readability at distance */
+body.tv-mode .list-item-text   { font-size: 1.1rem; }
+body.tv-mode .card-header h2   { font-size: 1.25rem; }
+body.tv-mode .cal-day-num      { font-size: 1.1rem; }
+body.tv-mode .event-pill       { font-size: .95rem; padding: 3px 7px; }
+body.tv-mode .mini-month-label { font-size: .9rem; }
+
+/* Slight card padding bump so content breathes */
+body.tv-mode .card-body { padding: 14px 16px; }
+
+/* Suppress hover effects that look odd on a TV */
+body.tv-mode * { transition: none !important; }
+body.tv-mode .card:hover { box-shadow: none; }
