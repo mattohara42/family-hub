@@ -3273,6 +3273,9 @@ body.colorblind-mode .year-card-week-row.today-week {
 .countdown-days strong { font-size: 1.15em; }
 
 /* ── Easter eggs ── */
+.modal-tab[data-tab="eggs"] { display: none; }
+body.eggs-unlocked .modal-tab[data-tab="eggs"] { display: inline-flex; }
+
 #shopCard { position: relative; }
 
 /* Emoji fireworks sparks */

@@ -8111,6 +8111,20 @@ function switchSettingsTab(tab) {
   });
 }
 
+let _settingsClickCount = 0;
+let _settingsClickTimer = null;
+function handleSettingsBtnClick() {
+  _settingsClickCount++;
+  clearTimeout(_settingsClickTimer);
+  _settingsClickTimer = setTimeout(() => { _settingsClickCount = 0; }, 600);
+  if (_settingsClickCount === 3) {
+    _settingsClickCount = 0;
+    document.body.classList.add('eggs-unlocked');
+    showToast('🥚 Easter Eggs unlocked.', 2500);
+  }
+  openSettings();
+}
+
 function openSettings() {
   switchSettingsTab('look');   // always open on first tab
   const lmEl = document.getElementById('settingLayoutMode');
