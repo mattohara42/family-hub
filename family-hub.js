@@ -1120,6 +1120,34 @@ function checkCalendarEasterEggs() {
     badge.textContent = '⭐ May the 4th be with you';
     labelEl.parentNode.insertBefore(badge, labelEl.nextSibling);
   }
+
+  // Dec 24 — Home Alone
+  if (mo === 12 && day === 24 && todayInView) {
+    if (!sessionStorage.getItem('fh_egg_dec24')) {
+      sessionStorage.setItem('fh_egg_dec24', '1');
+      showToast('🎄 Merry Christmas, ya filthy animal.', 4000);
+    }
+  }
+
+  // July 4 — Independence Day
+  if (mo === 7 && day === 4 && todayInView && labelEl) {
+    const existing4 = document.getElementById('july4Badge');
+    if (!existing4) {
+      const badge = document.createElement('span');
+      badge.id = 'july4Badge';
+      badge.className = 'may4-badge';
+      badge.textContent = '🇺🇸 Today we celebrate our Independence Day!';
+      labelEl.parentNode.insertBefore(badge, labelEl.nextSibling);
+    }
+  }
+
+  // Feb 2 — Groundhog Day
+  if (mo === 2 && day === 2 && todayInView) {
+    if (!sessionStorage.getItem('fh_egg_feb2')) {
+      sessionStorage.setItem('fh_egg_feb2', '1');
+      showToast("It's Groundhog Day… again.", 3500);
+    }
+  }
 }
 
 // ── Week View ─────────────────────────────────────────────────
@@ -6858,6 +6886,152 @@ function checkAssistantEasterEgg(text) {
     document.body.style.filter = 'brightness(0.12)';
     setTimeout(() => { document.body.style.filter = ''; setTimeout(() => { document.body.style.transition = ''; }, 300); }, 1500);
     return `I think you mean **darker** mode.`;
+  }
+
+  // ── Princess Bride ──
+  if (/\binconceivable\b/.test(t)) {
+    return `You keep using that word. I do not think it means what you think it means.`;
+  }
+  if (/^as you wish[.!]?$/.test(t)) {
+    return `As you wish.`;
+  }
+  if (/my name is inigo montoya/.test(t)) {
+    return `You killed my productivity. Prepare to get organized.`;
+  }
+
+  // ── Terminator ──
+  if (/^i'?ll be back[.!]?$/.test(t)) {
+    return `Confirmed. I will return. I mean, I'm already here, but — noted.`;
+  }
+
+  // ── X-Files ──
+  if (/i want to believe/.test(t)) {
+    const n = shopItems.filter(i => !i.done).length;
+    return `The truth is out there. Also, you have ${n} item${n === 1 ? '' : 's'} on your shopping list that remain unexplained.`;
+  }
+
+  // ── Star Trek TNG ──
+  if (/^make it so[.!]?$/.test(t)) {
+    return `Aye, Captain.`;
+  }
+  if (/^beam me up(,? scotty)?[.!]?$/.test(t)) {
+    return `No intelligent life detected in the vicinity of the shopping list. Transporting anyway.`;
+  }
+
+  // ── Jerry Maguire ──
+  if (/show me the money/.test(t)) {
+    const now = new Date();
+    const weekStart = new Date(now); weekStart.setDate(now.getDate() - now.getDay());
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const fmt = d => d.toISOString().slice(0, 10);
+    const weekTotal = budgetItems.filter(i => i.date >= fmt(weekStart)).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0).toFixed(2);
+    const monthTotal = budgetItems.filter(i => i.date >= fmt(monthStart)).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0).toFixed(2);
+    return `YOU. COMPLETE. ME. Also: this week $${weekTotal}, this month $${monthTotal}.`;
+  }
+
+  // ── Seinfeld ──
+  if (/^yada yada yada[.!]?$/.test(t)) {
+    const briefing = buildDailyBriefingSummary();
+    return `…and that's when I realized: here's your day.\n\n${briefing}`;
+  }
+  if (/^no soup for you[.!]?$/.test(t)) {
+    return `NO SOUP FOR YOU. …fine. What do you need?`;
+  }
+
+  // ── Friends ──
+  if (/^how you doin'?[.!?]?$/.test(t)) {
+    return `Hey. How YOU doin'? (I'm an assistant. I don't actually know how I'm doing. What can I help you with?)`;
+  }
+
+  // ── A Few Good Men ──
+  if (/you can'?t handle the truth/.test(t)) {
+    const today = new Date().toISOString().slice(0, 10);
+    const overdue = todoItems.filter(i => !i.done && i.date && i.date < today);
+    const uncheckedShop = shopItems.filter(i => !i.done);
+    const unplanned = !((mealPlan[today] || {}).breakfast || (mealPlan[today] || {}).lunch || (mealPlan[today] || {}).dinner);
+    const lines = [];
+    if (overdue.length) lines.push(`${overdue.length} overdue to-do item${overdue.length === 1 ? '' : 's'}`);
+    if (uncheckedShop.length) lines.push(`${uncheckedShop.length} unchecked shopping item${uncheckedShop.length === 1 ? '' : 's'}`);
+    if (unplanned) lines.push(`no meals planned for today`);
+    const report = lines.length ? lines.join(', ') : `actually, things look pretty good`;
+    return `You want the truth? Here it is: ${report}.`;
+  }
+
+  // ── Ferris Bueller ──
+  if (/^bueller[.!?…]*$/.test(t)) {
+    const pending = todoItems.filter(i => !i.done);
+    if (!pending.length) return `Bueller… Bueller… crickets. You're on your own.`;
+    return `Bueller… Bueller… ${pending.length} task${pending.length === 1 ? '' : 's'} still waiting on someone. Anyone? Anyone?`;
+  }
+
+  // ── Wayne's World / Bill & Ted ──
+  if (/^party on,? (wayne|garth)[.!]?$/i.test(t)) {
+    return `Party on.`;
+  }
+  if (/^excellent[.!]?$/.test(t)) {
+    return `Excellent.`;
+  }
+
+  // ── Apollo 13 ──
+  if (/houston,? we (have|'?ve got) a problem/.test(t)) {
+    const today = new Date().toISOString().slice(0, 10);
+    const overdue = todoItems.filter(i => !i.done && i.date && i.date < today);
+    const uncheckedShop = shopItems.filter(i => !i.done);
+    const unplanned = !((mealPlan[today] || {}).breakfast || (mealPlan[today] || {}).lunch || (mealPlan[today] || {}).dinner);
+    const lines = [];
+    if (overdue.length) lines.push(`${overdue.length} overdue task${overdue.length === 1 ? '' : 's'}`);
+    if (uncheckedShop.length) lines.push(`${uncheckedShop.length} items still on the shopping list`);
+    if (unplanned) lines.push(`meals unplanned for today`);
+    const status = lines.length ? lines.join('; ') : `all systems nominal`;
+    return `Houston, we copy. Here's the situation: ${status}.`;
+  }
+
+  // ── The Matrix ──
+  if (/what is the matrix/.test(t)) {
+    const n = todoItems.filter(i => !i.done).length;
+    return `The Matrix is everywhere. It is all around us. Even now, in this very room. Also, you have ${n} task${n === 1 ? '' : 's'}. There is no spoon.`;
+  }
+
+  // ── Karate Kid ──
+  if (/wax on,? wax off/.test(t)) {
+    return `The discipline of the list is the discipline of the mind. Wax on: add an item. Wax off: check it done.`;
+  }
+
+  // ── Legend of Zelda ──
+  if (/it'?s dangerous to go alone/.test(t)) {
+    const tips = [
+      'Take a 5-minute walk', 'Drink some water', 'Check in with someone you love',
+      'Step outside for fresh air', 'Stretch for two minutes', 'Tell someone something you appreciate about them',
+    ];
+    const tip = tips[Math.floor(Math.random() * tips.length)];
+    if (db) {
+      addToFs('todo', tip);
+    } else {
+      const item = { id: String(Date.now()), text: tip, done: false, by: userName };
+      todoItems.push(item);
+      saveLocalList('todo', todoItems);
+      renderTodoList();
+    }
+    return `Take this. ⚔️ I've added "${tip}" to your to-do list. It's dangerous to go alone.`;
+  }
+
+  // ── Doom ──
+  if (/^iddqd$/.test(t)) {
+    return `God mode activated. You are now invincible. (This changes nothing about the shopping list.)`;
+  }
+  if (/^idkfa$/.test(t)) {
+    return `You now have all weapons, full ammo, and every key. I have checked: none of them open the fridge.`;
+  }
+
+  // ── Star Fox ──
+  if (/do a barrel roll/.test(t)) {
+    document.body.style.transition = 'transform 0.8s ease-in-out';
+    document.body.style.transform = 'rotateY(360deg)';
+    setTimeout(() => {
+      document.body.style.transform = '';
+      setTimeout(() => { document.body.style.transition = ''; }, 800);
+    }, 800);
+    return `Barrel roll complete. Enemy neutralized.`;
   }
 
   return null;
