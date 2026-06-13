@@ -3312,6 +3312,41 @@ body.colorblind-mode .year-card-week-row.today-week {
 }
 .ring-toast-show { opacity: 1; }
 
+/* Perfect weather 72° */
+@keyframes perfectPulse {
+  0%,100% { text-shadow: none; }
+  50%      { text-shadow: 0 0 12px rgba(255,210,80,.9); }
+}
+.wx-perfect::after {
+  content: ' 😎';
+  animation: perfectPulse 1s ease-in-out 3;
+}
+
+/* Heatwave sweat drops */
+@keyframes sweatDrop {
+  0%   { transform: translateY(0);   opacity: 1; }
+  100% { transform: translateY(80px); opacity: 0; }
+}
+.wx-sweat {
+  position: absolute;
+  top: 8px;
+  font-size: 1.1rem;
+  pointer-events: none;
+  animation: sweatDrop 2s ease-in forwards;
+  z-index: 5;
+}
+#weatherCard { position: relative; }
+
+/* Full moon glow */
+@keyframes moonGlow {
+  0%,100% { text-shadow: 0 0 4px rgba(220,220,180,.4); }
+  50%      { text-shadow: 0 0 14px rgba(220,220,180,1), 0 0 28px rgba(220,220,180,.5); }
+}
+.wx-full-moon {
+  display: inline-block;
+  animation: moonGlow 2.5s ease-in-out infinite;
+}
+
 /* $42 Don't Panic badge */
 .dont-panic-badge {
   display: inline-block;

@@ -3615,7 +3615,16 @@ function renderWeatherData(data) {
                       Mist:'wx-anim-clouds', Fog:'wx-anim-clouds', Haze:'wx-anim-clouds' };
   wrapEl.className = 'wx-icon-wrap ' + (animClass[data.icon] || '');
 
-  document.getElementById('wTemp').textContent  = data.temp + '°F';
+  const tempEl = document.getElementById('wTemp');
+  tempEl.textContent = data.temp + '°F';
+  // Easter egg: perfect weather
+  tempEl.classList.remove('wx-perfect');
+  if (data.temp === 72) {
+    tempEl.classList.add('wx-perfect');
+    setTimeout(() => tempEl.classList.remove('wx-perfect'), 5000);
+  }
+  // Easter egg: heatwave
+  if (data.temp >= 100) triggerHeatwave();
   const feelsEl = document.getElementById('wFeels');
   feelsEl.textContent = data.feels != null ? `Feels ${data.feels}°` : '';
   document.getElementById('wDesc').textContent  = data.desc;
@@ -4069,7 +4078,10 @@ function renderWeatherTicker(data) {
   if (data.sunrise) segments.push(`🌅 Sunrise ${data.sunrise}`);
   if (data.sunset)  segments.push(`🌇 Sunset ${data.sunset}`);
   const moon = getMoonPhase();
-  segments.push(`${moon.emoji} ${moon.name}`);
+  const moonHtml = moon.emoji === '🌕'
+    ? `<span class="wx-full-moon">${moon.emoji}</span> ${moon.name}`
+    : `${moon.emoji} ${moon.name}`;
+  segments.push(moonHtml);
 
   // Air Quality
   if (data.aqi != null) {
@@ -6663,6 +6675,20 @@ function triggerEmojiFireworks(el) {
   }
 }
 
+function triggerHeatwave() {
+  const card = document.getElementById('weatherCard');
+  if (!card || card.querySelector('.wx-sweat')) return;
+  for (let i = 0; i < 6; i++) {
+    const drop = document.createElement('div');
+    drop.className = 'wx-sweat';
+    drop.textContent = '💧';
+    drop.style.left  = (10 + Math.random() * 80) + '%';
+    drop.style.animationDelay = (Math.random() * 1.2) + 's';
+    card.appendChild(drop);
+    drop.addEventListener('animationend', () => drop.remove(), { once: true });
+  }
+}
+
 function triggerDestroyTheRing(li) {
   li.style.transition = 'box-shadow 0.3s, background 0.3s';
   li.style.background  = 'rgba(255,100,0,0.18)';
@@ -6758,6 +6784,11 @@ function checkAssistantEasterEgg(text) {
     document.getElementById('settingsModal')?.classList.add('gandalf-shake');
     setTimeout(() => document.getElementById('settingsModal')?.classList.remove('gandalf-shake'), 900);
     return `YOU… SHALL NOT… pass on answering this: what actually did you need help with?`;
+  }
+
+  // ── Weather on Arrakis ──
+  if (/arrakis/.test(t)) {
+    return `Hot. Extremely hot. Zero percent chance of rain. The Fremen consider this ideal. Do not go outside without a stillsuit.`;
   }
 
   // ── Birthday ──
