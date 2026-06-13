@@ -1808,7 +1808,35 @@ function makeDayCell(year, month, day, otherMonth, isToday) {
     cell.appendChild(pill);
   });
 
+  setupWormHold(cell);
   return cell;
+}
+
+function setupWormHold(cell) {
+  let holdTimer = null;
+  const HOLD_MS = 3000;
+
+  const start = () => {
+    holdTimer = setTimeout(() => spawnWorm(cell), HOLD_MS);
+  };
+  const cancel = () => { clearTimeout(holdTimer); holdTimer = null; };
+
+  cell.addEventListener('mousedown', start);
+  cell.addEventListener('mouseup', cancel);
+  cell.addEventListener('mouseleave', cancel);
+  cell.addEventListener('touchstart', e => { e.preventDefault(); start(); }, { passive: false });
+  cell.addEventListener('touchend', cancel);
+  cell.addEventListener('touchcancel', cancel);
+}
+
+function spawnWorm(cell) {
+  if (cell.querySelector('.cal-worm')) return; // already active
+  const worm = document.createElement('div');
+  worm.className = 'cal-worm';
+  worm.textContent = '🪱';
+  cell.style.position = 'relative';
+  cell.appendChild(worm);
+  setTimeout(() => worm.remove(), 2200);
 }
 
 async function loadAllCalendars() {
