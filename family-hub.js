@@ -146,6 +146,7 @@ let wxActivityEnabled   = lsGet('fh_wxActivity', true);    // activity tags stri
 let userName        = localStorage.getItem('fh_name') || 'Someone';
 let appTitle        = localStorage.getItem('fh_appTitle') || 'Family Hub';
 let appTitleEmoji   = localStorage.getItem('fh_appTitleEmoji') || '🏠';
+let assistantName   = localStorage.getItem('fh_assistantName') || 'Family Assistant';
 let safePaletteMode = lsGet('fh_safePalette', false);
 const SAFE_COLORS = [
   '#000000','#E69F00','#56B4E9','#009E73',
@@ -770,6 +771,7 @@ window.addEventListener('load', () => {
   }
   applyAppMode(appMode);
   applyAppTitle();
+  applyAssistantName();
   applySafePaletteMode();
   applyLayoutMode();
   setMobileTab(mobileTab);
@@ -6408,7 +6410,7 @@ function buildAssistantContext() {
 
   const name = userName || 'the family';
   const timeStr = today.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  return `You are a helpful assistant built into a family dashboard. You are talking to ${name}. Today is ${fmt(today, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}. Current local time: ${timeStr}.
+  return `You are ${assistantName}, a helpful assistant built into a family dashboard. You are talking to ${name}. Today is ${fmt(today, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}. Current local time: ${timeStr}.
 
 CURRENT FAMILY DATA (use this to answer questions):
 
@@ -8030,6 +8032,19 @@ function applyAppTitle() {
   document.title = title;
 }
 
+function applyAssistantName() {
+  const name = assistantName.trim() || 'Family Assistant';
+  const h2 = document.getElementById('assistantCardTitle');
+  if (h2) h2.textContent = name;
+  const msgs = document.getElementById('assistantMessages');
+  if (msgs) msgs.setAttribute('aria-label', name + ' conversation');
+  const input = document.getElementById('assistantInput');
+  if (input) input.setAttribute('aria-label', 'Message to ' + name);
+  // Widget label in settings
+  const widgetLabel = document.getElementById('assistantWidgetLabel');
+  if (widgetLabel) widgetLabel.textContent = '🤖 ' + name;
+}
+
 function applyAppMode(mode) {
   appMode = mode;
   document.body.classList.remove('light-mode', 'nautical-mode', 'aurora-mode', 'colorblind-mode');
@@ -8137,8 +8152,9 @@ function openSettings() {
   switchSettingsTab('look');   // always open on first tab
   const lmEl = document.getElementById('settingLayoutMode');
   if (lmEl) lmEl.value = layoutMode;
-  document.getElementById('settingName').value          = userName;
-  document.getElementById('settingAppTitle').value      = appTitle;
+  document.getElementById('settingName').value           = userName;
+  document.getElementById('settingAppTitle').value       = appTitle;
+  document.getElementById('settingAssistantName').value  = assistantName;
   renderEmojiPicker(appTitleEmoji);
   document.getElementById('settingWeatherKey').value    = weatherKey;
   document.getElementById('sunArcToggle').checked        = sunArcEnabled;
@@ -8226,6 +8242,9 @@ function closeSettings() {
 function saveSettings() {
   userName      = document.getElementById('settingName').value.trim() || 'Someone';
   appTitle      = document.getElementById('settingAppTitle').value.trim() || 'Family Hub';
+  assistantName = document.getElementById('settingAssistantName').value.trim() || 'Family Assistant';
+  localStorage.setItem('fh_assistantName', assistantName);
+  applyAssistantName();
   localStorage.setItem('fh_appTitle', appTitle);
   const selEmoji = document.querySelector('#emojiPickerGrid .emoji-picker-btn.selected');
   if (selEmoji) { appTitleEmoji = selEmoji.textContent; localStorage.setItem('fh_appTitleEmoji', appTitleEmoji); }

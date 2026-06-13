@@ -336,7 +336,7 @@
     <!-- Family Assistant -->
     <div class="card" id="assistantCard">
       <div class="card-header">
-        <h2>🤖 Family Assistant</h2>
+        <h2>🤖 <span id="assistantCardTitle">Family Assistant</span></h2>
         <div style="display:flex;align-items:center;gap:8px">
           <button id="briefingPill" onclick="toggleBriefing()" title="Daily briefing"
                   class="briefing-pill">☀️ Briefing</button>
@@ -405,6 +405,10 @@
         <div class="field">
           <label>App title <span style="font-weight:400;color:var(--muted)">(top-left header)</span></label>
           <input type="text" id="settingAppTitle" placeholder="e.g. Family Hub" maxlength="30" />
+        </div>
+        <div class="field">
+          <label>Assistant name <span style="font-weight:400;color:var(--muted)">(shown on the assistant card)</span></label>
+          <input type="text" id="settingAssistantName" placeholder="e.g. Family Assistant" maxlength="40" />
         </div>
         <div class="field">
           <label>App icon emoji</label>
@@ -851,7 +855,7 @@
             </div>
             <div class="widget-toggle-row">
               <input type="checkbox" id="widget_assistant" />
-              <span>🤖 Family Assistant</span>
+              <span id="assistantWidgetLabel">🤖 Family Assistant</span>
               <label class="widget-placement-radio"><input type="radio" name="placement_assistant" value="bottom"  /><span>Bottom</span></label>
               <label class="widget-placement-radio"><input type="radio" name="placement_assistant" value="sidebar" /><span>Sidebar</span></label>
             </div>
