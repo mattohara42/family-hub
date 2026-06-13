@@ -6518,6 +6518,102 @@ function useQuickPrompt(text) {
   sendAssistantMessage();
 }
 
+// ── Easter egg phrase triggers ──────────────────────────────────
+function checkAssistantEasterEgg(text) {
+  const t = text.toLowerCase().trim();
+
+  // ── Hitchhiker's Guide ──
+  if (/\b(answer to (life|everything)|meaning of life|42)\b/.test(t)) {
+    const n = todoItems.filter(i => !i.done).length;
+    return `42. Though I'd argue the more pressing question is why you still have ${n} item${n === 1 ? '' : 's'} on your to-do list.`;
+  }
+
+  if (/^don'?t panic[.!]?$/.test(t)) {
+    const briefing = buildDailyBriefingSummary();
+    return `Printed in large, friendly letters: **DON'T PANIC.**\n\n${briefing}`;
+  }
+
+  // ── Dune ──
+  if (/the spice must flow/.test(t)) {
+    return `The spice is the shopping list. The shopping list is the spice. Without the list, the household foldspace collapses. Add your items, Muad'Dib.`;
+  }
+
+  if (/^(tell|show) me (about |the )?the future[.!?]?$/.test(t) || /^what (does|will) the future (hold|bring)[.!?]?$/.test(t)) {
+    const briefing = buildDailyBriefingSummary();
+    return `I am not a Mentat. But I have looked at your calendar, and I can tell you this:\n\n${briefing}`;
+  }
+
+  // ── Lord of the Rings / Hobbit ──
+  if (/my precious/.test(t)) {
+    const pending = todoItems.filter(i => !i.done);
+    if (pending.length) {
+      const top = pending[0].text;
+      return `We wants it, we needs it… must finish *${top}*. Nasty unfinished taskses. Gollum.`;
+    }
+    return `We has no precious taskses. We is… free? Gollum.`;
+  }
+
+  if (/^(what('?s| is) the time|what time is it)[.!?]?$/.test(t)) {
+    const now = new Date();
+    const time = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    return `It is the quiet hour between second breakfast and elevenses — approximately ${time}. Mind you don't miss either.`;
+  }
+
+  if (/^(what'?s for dinner|what are we (having|eating) (for )?dinner)[.!?]?$/.test(t)) {
+    const today = new Date().toISOString().slice(0, 10);
+    const dinner = (mealPlan[today] || {}).dinner;
+    if (!dinner) {
+      return `In a hole in the ground there lived a hobbit. And that hobbit had absolutely no idea what was for dinner either. Perhaps you'd like to plan something?`;
+    }
+    return null; // let Gemini handle it — there's an actual meal planned
+  }
+
+  if (/^i am no (wo)?man[.!]?$/.test(t)) {
+    return `…and I am no scheduling assistant. Oh wait, yes I am. What do you need?`;
+  }
+
+  if (/^you shall not pass[.!]?$/.test(t)) {
+    document.getElementById('settingsModal')?.classList.add('gandalf-shake');
+    setTimeout(() => document.getElementById('settingsModal')?.classList.remove('gandalf-shake'), 900);
+    return `YOU… SHALL NOT… pass on answering this: what actually did you need help with?`;
+  }
+
+  // ── Politeness ──
+  if (/^(please|pretty please)[.!]?$/.test(t)) {
+    return `Well, since you asked so nicely — you're very welcome. 🌟 Now, what can I actually help you with?`;
+  }
+
+  // ── Battlestar Galactica ──
+  if (/^so say we all[.!]?$/.test(t)) {
+    return `So say we all.`;
+  }
+
+  // ── Dark mode escalation ──
+  if (/\b(darker mode|dark(er| mode))\b/.test(t)) {
+    document.body.style.transition = 'filter 0.3s';
+    document.body.style.filter = 'brightness(0.12)';
+    setTimeout(() => { document.body.style.filter = ''; setTimeout(() => { document.body.style.transition = ''; }, 300); }, 1500);
+    return `I think you mean **darker** mode.`;
+  }
+
+  return null;
+}
+
+/** Build a brief plain-text summary of today for easter egg responses. */
+function buildDailyBriefingSummary() {
+  const today = new Date().toISOString().slice(0, 10);
+  const lines = [];
+  const pending = todoItems.filter(i => !i.done);
+  if (pending.length) lines.push(`📋 ${pending.length} to-do item${pending.length === 1 ? '' : 's'} pending`);
+  const shopping = shopItems.filter(i => !i.done);
+  if (shopping.length) lines.push(`🛒 ${shopping.length} item${shopping.length === 1 ? '' : 's'} on the shopping list`);
+  const todayMeals = mealPlan[today] || {};
+  const plannedMeals = Object.entries(todayMeals).filter(([,v]) => v?.name).map(([k,v]) => `${k}: ${v.name}`);
+  if (plannedMeals.length) lines.push(`🍽 Today's meals: ${plannedMeals.join(', ')}`);
+  if (!lines.length) lines.push(`All clear — nothing pressing today.`);
+  return lines.join('\n');
+}
+
 /** Send the typed message to Gemini and render the reply. */
 async function sendAssistantMessage() {
   const input = document.getElementById('assistantInput');
@@ -6535,6 +6631,15 @@ async function sendAssistantMessage() {
   // Add user turn and show it immediately
   assistantHistory.push({ role: 'user', parts: [{ text }] });
   renderAssistantMessages();
+
+  // Easter egg intercept — skip Gemini for known phrases
+  const eggReply = checkAssistantEasterEgg(text);
+  if (eggReply !== null) {
+    assistantHistory.push({ role: 'model', parts: [{ text: eggReply }] });
+    renderAssistantMessages();
+    speakAssistant(eggReply);
+    return;
+  }
 
   // Thinking indicator
   const container = document.getElementById('assistantMessages');
