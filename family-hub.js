@@ -793,6 +793,7 @@ window.addEventListener('load', () => {
   loadQuote();
   loadNewsFeeds();
   loadStockQuotes();
+  setupKonamiCode();
   initAssistantVoice();
   updateAssistantTtsBtn();      // set the 🔊/🔇 voice-output toggle state
   renderAssistantMessages();   // render empty-state welcome + quick-prompt chips
@@ -6516,6 +6517,41 @@ function useQuickPrompt(text) {
   const inp = document.getElementById('assistantInput');
   if (inp) inp.value = text;
   sendAssistantMessage();
+}
+
+// ── Easter eggs ────────────────────────────────────────────────
+const KONAMI = ['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','b','a'];
+let _konamiBuf = [];
+
+function setupKonamiCode() {
+  document.addEventListener('keydown', e => {
+    _konamiBuf.push(e.key);
+    if (_konamiBuf.length > KONAMI.length) _konamiBuf.shift();
+    if (_konamiBuf.length === KONAMI.length && _konamiBuf.every((k, i) => k === KONAMI[i])) {
+      _konamiBuf = [];
+      triggerKonami();
+    }
+  });
+}
+
+function triggerKonami() {
+  if (document.body.classList.contains('konami-mode')) return;
+  document.body.classList.add('konami-mode');
+  // Brief toast
+  const toast = document.createElement('div');
+  toast.textContent = '🌈 KONAMI';
+  Object.assign(toast.style, {
+    position:'fixed', top:'50%', left:'50%', transform:'translate(-50%,-50%)',
+    fontSize:'3rem', fontWeight:'900', letterSpacing:'.1em',
+    background:'transparent', color:'#fff',
+    textShadow:'0 0 20px #fff, 0 0 40px #f0f',
+    zIndex:'99999', pointerEvents:'none', animation:'konamiText 3s ease forwards',
+  });
+  document.body.appendChild(toast);
+  setTimeout(() => {
+    document.body.classList.remove('konami-mode');
+    toast.remove();
+  }, 3000);
 }
 
 // ── Easter egg phrase triggers ──────────────────────────────────
