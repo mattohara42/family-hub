@@ -3274,6 +3274,58 @@ body.colorblind-mode .year-card-week-row.today-week {
 
 /* ── Easter eggs ── */
 #shopCard { position: relative; }
+
+/* Emoji fireworks sparks */
+@keyframes sparkFly {
+  0%   { transform: translate(0,0) scale(1); opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(0); opacity: 0; }
+}
+.emoji-spark {
+  position: fixed;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 99999;
+  animation: sparkFly 0.6s ease-out forwards;
+}
+
+/* "Destroy the ring" toast */
+@keyframes ringToastIn  { from { opacity:0; transform:translateX(-50%) translateY(12px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
+@keyframes ringToastOut { from { opacity:1; } to { opacity:0; } }
+.ring-toast {
+  position: fixed;
+  bottom: 32px; left: 50%;
+  transform: translateX(-50%);
+  background: #1a0a00;
+  color: #ff6a00;
+  border: 1px solid #ff6a00;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-size: .95rem;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  z-index: 99998;
+  box-shadow: 0 0 20px rgba(255,100,0,0.4);
+}
+.ring-toast-show { opacity: 1; }
+
+/* $42 Don't Panic badge */
+.dont-panic-badge {
+  display: inline-block;
+  margin-left: 6px;
+  background: #000;
+  color: #fff;
+  font-size: .6rem;
+  font-weight: 900;
+  letter-spacing: .06em;
+  border-radius: 3px;
+  padding: 1px 6px;
+  vertical-align: middle;
+  font-family: monospace;
+}
 @keyframes wormRise {
   0%   { transform: translateY(0) scaleX(1);   opacity: 1; }
   40%  { transform: translateY(-18px) scaleX(-1); opacity: 1; }

@@ -519,9 +519,11 @@ function renderBudgetCard() {
     const monthTotal = monthItems.reduce((s, item) => s + item.amount, 0);
 
     if (budgetItems.length && (weekTotal > 0 || monthTotal > 0)) {
+      const dontPanic = Math.round(monthTotal * 100) === 4200
+        ? ' <span class="dont-panic-badge">DON\'T PANIC</span>' : '';
       totalInner.innerHTML =
         `<div class="budget-total-row"><span class="budget-total-label">Total Bills this Week</span><span class="budget-total-amount">${fmt$(weekTotal)}</span></div>
-         <div class="budget-total-row"><span class="budget-total-label">Total Bills this Month</span><span class="budget-total-amount">${fmt$(monthTotal)}</span></div>`;
+         <div class="budget-total-row"><span class="budget-total-label">Total Bills this Month</span><span class="budget-total-amount">${fmt$(monthTotal)}${dontPanic}</span></div>`;
       totalCard.style.display = '';
     } else {
       totalCard.style.display = 'none';
@@ -794,6 +796,7 @@ window.addEventListener('load', () => {
   loadNewsFeeds();
   loadStockQuotes();
   setupKonamiCode();
+  setupEmojiFireworks();
   initAssistantVoice();
   updateAssistantTtsBtn();      // set the 🔊/🔇 voice-output toggle state
   renderAssistantMessages();   // render empty-state welcome + quick-prompt chips
@@ -4521,7 +4524,12 @@ function makeTodoItem(item, onToggle, onDelete) {
 
   const check = document.createElement('div');
   check.className = 'list-check' + (item.done ? ' done' : '');
-  check.onclick = onToggle;
+  check.onclick = () => {
+    if (!item.done && /^destroy the ring\.?$/i.test(item.text.trim())) {
+      triggerDestroyTheRing(li);
+    }
+    onToggle();
+  };
 
   const wrap = document.createElement('div');
   wrap.className = 'list-label-wrap';
@@ -6583,6 +6591,95 @@ function setupKonamiCode() {
   });
 }
 
+// ── Confetti ────────────────────────────────────────────────────
+function spawnConfetti(duration = 3000) {
+  const canvas = document.createElement('canvas');
+  Object.assign(canvas.style, {
+    position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+    pointerEvents: 'none', zIndex: '99998',
+  });
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+  document.body.appendChild(canvas);
+  const ctx = canvas.getContext('2d');
+  const COLORS = ['#E69F00','#56B4E9','#009E73','#CC79A7','#D55E00','#F0E442','#0072B2','#fff'];
+  const particles = Array.from({ length: 120 }, () => ({
+    x: Math.random() * canvas.width,
+    y: -10 - Math.random() * 40,
+    r: 4 + Math.random() * 6,
+    d: 2 + Math.random() * 3,
+    color: COLORS[Math.floor(Math.random() * COLORS.length)],
+    tilt: Math.random() * 10 - 5,
+    tiltDir: Math.random() < 0.5 ? -1 : 1,
+  }));
+  const end = Date.now() + duration;
+  function frame() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    particles.forEach(p => {
+      p.y += p.d;
+      p.tilt += p.tiltDir * 0.15;
+      ctx.beginPath();
+      ctx.ellipse(p.x + p.tilt, p.y, p.r * 0.6, p.r, Math.PI / 4, 0, Math.PI * 2);
+      ctx.fillStyle = p.color;
+      ctx.fill();
+    });
+    if (Date.now() < end) requestAnimationFrame(frame);
+    else canvas.remove();
+  }
+  requestAnimationFrame(frame);
+}
+
+// ── Emoji fireworks ──────────────────────────────────────────────
+let _emojiClickCount = 0, _emojiClickTimer = null;
+function setupEmojiFireworks() {
+  const el = document.querySelector('.cal-app-emoji');
+  if (!el) return;
+  el.style.cursor = 'pointer';
+  el.addEventListener('click', () => {
+    _emojiClickCount++;
+    clearTimeout(_emojiClickTimer);
+    if (_emojiClickCount >= 7) {
+      _emojiClickCount = 0;
+      triggerEmojiFireworks(el);
+    } else {
+      _emojiClickTimer = setTimeout(() => { _emojiClickCount = 0; }, 2000);
+    }
+  });
+}
+
+function triggerEmojiFireworks(el) {
+  const rect = el.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top  + rect.height / 2;
+  const COLORS = ['#E69F00','#56B4E9','#CC79A7','#D55E00','#009E73','#fff'];
+  for (let i = 0; i < 12; i++) {
+    const spark = document.createElement('div');
+    spark.className = 'emoji-spark';
+    const angle = (i / 12) * Math.PI * 2;
+    const dist  = 30 + Math.random() * 30;
+    spark.style.cssText = `left:${cx}px;top:${cy}px;background:${COLORS[i % COLORS.length]};--dx:${Math.cos(angle) * dist}px;--dy:${Math.sin(angle) * dist}px`;
+    document.body.appendChild(spark);
+    spark.addEventListener('animationend', () => spark.remove(), { once: true });
+  }
+}
+
+function triggerDestroyTheRing(li) {
+  li.style.transition = 'box-shadow 0.3s, background 0.3s';
+  li.style.background  = 'rgba(255,100,0,0.18)';
+  li.style.boxShadow   = '0 0 16px rgba(255,80,0,0.6)';
+  const toast = document.createElement('div');
+  toast.className = 'ring-toast';
+  toast.textContent = '🌋 Cast it into the fire! It is done.';
+  document.body.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add('ring-toast-show'));
+  setTimeout(() => {
+    li.style.background = '';
+    li.style.boxShadow  = '';
+    toast.classList.remove('ring-toast-show');
+    toast.addEventListener('transitionend', () => toast.remove(), { once: true });
+  }, 3000);
+}
+
 function triggerKonami() {
   if (document.body.classList.contains('konami-mode')) return;
   document.body.classList.add('konami-mode');
@@ -6661,6 +6758,14 @@ function checkAssistantEasterEgg(text) {
     document.getElementById('settingsModal')?.classList.add('gandalf-shake');
     setTimeout(() => document.getElementById('settingsModal')?.classList.remove('gandalf-shake'), 900);
     return `YOU… SHALL NOT… pass on answering this: what actually did you need help with?`;
+  }
+
+  // ── Birthday ──
+  if (/\bit'?s?\s+(my|([\w]+)'?s?)\s+birthday\b/i.test(t)) {
+    const nameMatch = t.match(/it'?s?\s+([\w]+)'?s?\s+birthday/i);
+    const who = nameMatch && nameMatch[1].toLowerCase() !== 'my' ? nameMatch[1] : userName;
+    spawnConfetti(3000);
+    return `Happy birthday, ${who}! 🎉 Want me to add it to the calendar?`;
   }
 
   // ── Politeness ──
