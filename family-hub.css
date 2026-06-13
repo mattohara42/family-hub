@@ -3272,6 +3272,31 @@ body.colorblind-mode .year-card-week-row.today-week {
 }
 .countdown-days strong { font-size: 1.15em; }
 
+/* ── Easter eggs ── */
+#shopCard { position: relative; }
+.one-ring-banner {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%) translateY(8px);
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 20px;
+  padding: 5px 16px;
+  font-size: var(--text-xs);
+  font-style: italic;
+  color: var(--accent);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  z-index: 10;
+}
+.one-ring-banner-show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
 /* ── Daily Briefing Banner ── */
 .briefing-pill {
   font-size: var(--text-xs);

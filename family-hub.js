@@ -4785,6 +4785,27 @@ function renderShopGrouped(entries) {
     groupLi.appendChild(itemsUl);
     ul.appendChild(groupLi);
   });
+
+  // Easter egg: exactly 9 pending items
+  const pendingCount = entries.filter(i => !i.done).length;
+  if (pendingCount === 9) triggerOneRing();
+}
+
+let _oneRingShown = false;
+function triggerOneRing() {
+  if (_oneRingShown) return;
+  _oneRingShown = true;
+  const card = document.getElementById('shopCard');
+  if (!card) return;
+  const banner = document.createElement('div');
+  banner.className = 'one-ring-banner';
+  banner.textContent = '💍 One list to rule them all.';
+  card.appendChild(banner);
+  requestAnimationFrame(() => banner.classList.add('one-ring-banner-show'));
+  setTimeout(() => {
+    banner.classList.remove('one-ring-banner-show');
+    banner.addEventListener('transitionend', () => { banner.remove(); _oneRingShown = false; }, { once: true });
+  }, 4000);
 }
 
 function populateShopCategorySelect() {
