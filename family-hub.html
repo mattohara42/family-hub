@@ -390,6 +390,7 @@
       <button class="modal-tab"        data-tab="meals"    onclick="switchSettingsTab('meals')">🍽 Meals</button>
       <button class="modal-tab"        data-tab="widgets"  onclick="switchSettingsTab('widgets')">🧩 Widgets</button>
       <button class="modal-tab"        data-tab="feeds"    onclick="switchSettingsTab('feeds')">📊 Feeds</button>
+      <button class="modal-tab"        data-tab="eggs"     onclick="switchSettingsTab('eggs')">🥚 Easter Eggs</button>
     </div>
 
     <!-- Scrollable panel area -->
@@ -912,6 +913,56 @@
         </div>
 
       </div><!-- /feeds -->
+
+      <div class="settings-panel" data-panel="eggs">
+        <p style="font-size:.82rem;color:var(--muted);margin:0 0 14px">
+          Hidden surprises scattered throughout the app. Toggle categories on or off — your family doesn't need to know these exist.
+        </p>
+
+        <div class="toggle-row">
+          <label class="toggle-switch">
+            <input type="checkbox" id="egg_cat_phrases" />
+            <span class="toggle-track"></span>
+          </label>
+          <div>
+            <div class="toggle-label">🎭 Pop Culture Phrases</div>
+            <div class="toggle-sub">Say the magic words to the Family Assistant — Hitchhiker's Guide, Dune, Lord of the Rings, Princess Bride, Star Trek, Seinfeld, and more</div>
+          </div>
+        </div>
+
+        <div class="toggle-row">
+          <label class="toggle-switch">
+            <input type="checkbox" id="egg_cat_calendar" />
+            <span class="toggle-track"></span>
+          </label>
+          <div>
+            <div class="toggle-label">📅 Calendar &amp; Date Surprises</div>
+            <div class="toggle-sub">Special badges and toasts on May 4th, July 4th, Halloween, Groundhog Day, Christmas Eve, Christmas, and Valentine's Day</div>
+          </div>
+        </div>
+
+        <div class="toggle-row">
+          <label class="toggle-switch">
+            <input type="checkbox" id="egg_cat_ui" />
+            <span class="toggle-track"></span>
+          </label>
+          <div>
+            <div class="toggle-label">🕹 UI &amp; Interaction Surprises</div>
+            <div class="toggle-sub">Konami code, emoji fireworks, the calendar worm, the One Ring at 9 items, Destroy the Ring, and Shire navigation toasts</div>
+          </div>
+        </div>
+
+        <div class="toggle-row">
+          <label class="toggle-switch">
+            <input type="checkbox" id="egg_cat_weather" />
+            <span class="toggle-track"></span>
+          </label>
+          <div>
+            <div class="toggle-label">🌤 Weather Effects</div>
+            <div class="toggle-sub">Perfect 72°F pulse, heatwave sweat drops at 100°F+, and full moon silver glow</div>
+          </div>
+        </div>
+      </div><!-- /eggs -->
 
       <!-- ── Home Calendars ── -->
     </div><!-- /settings-panels -->

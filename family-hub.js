@@ -795,8 +795,8 @@ window.addEventListener('load', () => {
   loadQuote();
   loadNewsFeeds();
   loadStockQuotes();
-  setupKonamiCode();
-  setupEmojiFireworks();
+  if (eggCategories.ui) setupKonamiCode();
+  if (eggCategories.ui) setupEmojiFireworks();
   initAssistantVoice();
   updateAssistantTtsBtn();      // set the 🔊/🔇 voice-output toggle state
   renderAssistantMessages();   // render empty-state welcome + quick-prompt chips
@@ -1052,7 +1052,7 @@ function goToToday() {
   renderCurrentView();
   renderYearStrip();
   if (googleToken) loadAllCalendars();
-  if (!alreadyToday) showToast(`The Shire has been quiet in your absence, ${userName}.`, 3000);
+  if (!alreadyToday && eggCategories.ui) showToast(`The Shire has been quiet in your absence, ${userName}.`, 3000);
 }
 
 function switchCalView(view) {
@@ -1099,6 +1099,7 @@ function renderCurrentView() {
 }
 
 function checkCalendarEasterEggs() {
+  if (!eggCategories.calendar) return;
   const now   = new Date();
   const mo    = now.getMonth() + 1; // 1-based
   const day   = now.getDate();
@@ -1867,7 +1868,7 @@ function makeDayCell(year, month, day, otherMonth, isToday) {
     cell.appendChild(pill);
   });
 
-  setupWormHold(cell);
+  if (eggCategories.ui) setupWormHold(cell);
   return cell;
 }
 
@@ -3014,7 +3015,7 @@ async function rescheduleEvent(ev, newDateKey) {
   if (!googleToken || !ev.eventId) return;
   const oldDateKey = ev.startDate || ev.startDT?.slice(0, 10);
   if (!oldDateKey || oldDateKey === newDateKey) return;
-  if (newDateKey === new Date().toISOString().slice(0, 10)) {
+  if (newDateKey === new Date().toISOString().slice(0, 10) && eggCategories.ui) {
     showToast('⚡ Back to the future!', 2500);
   }
 
@@ -3676,14 +3677,15 @@ function renderWeatherData(data) {
 
   const tempEl = document.getElementById('wTemp');
   tempEl.textContent = data.temp + '°F';
-  // Easter egg: perfect weather
+  // Easter egg: perfect weather / heatwave
   tempEl.classList.remove('wx-perfect');
-  if (data.temp === 72) {
-    tempEl.classList.add('wx-perfect');
-    setTimeout(() => tempEl.classList.remove('wx-perfect'), 5000);
+  if (eggCategories.weather) {
+    if (data.temp === 72) {
+      tempEl.classList.add('wx-perfect');
+      setTimeout(() => tempEl.classList.remove('wx-perfect'), 5000);
+    }
+    if (data.temp >= 100) triggerHeatwave();
   }
-  // Easter egg: heatwave
-  if (data.temp >= 100) triggerHeatwave();
   const feelsEl = document.getElementById('wFeels');
   feelsEl.textContent = data.feels != null ? `Feels ${data.feels}°` : '';
   document.getElementById('wDesc').textContent  = data.desc;
@@ -4137,7 +4139,7 @@ function renderWeatherTicker(data) {
   if (data.sunrise) segments.push(`🌅 Sunrise ${data.sunrise}`);
   if (data.sunset)  segments.push(`🌇 Sunset ${data.sunset}`);
   const moon = getMoonPhase();
-  const moonHtml = moon.emoji === '🌕'
+  const moonHtml = (moon.emoji === '🌕' && eggCategories.weather)
     ? `<span class="wx-full-moon">${moon.emoji}</span> ${moon.name}`
     : `${moon.emoji} ${moon.name}`;
   segments.push(moonHtml);
@@ -4596,7 +4598,7 @@ function makeTodoItem(item, onToggle, onDelete) {
   const check = document.createElement('div');
   check.className = 'list-check' + (item.done ? ' done' : '');
   check.onclick = () => {
-    if (!item.done && /^destroy the ring\.?$/i.test(item.text.trim())) {
+    if (!item.done && eggCategories.ui && /^destroy the ring\.?$/i.test(item.text.trim())) {
       triggerDestroyTheRing(li);
     }
     onToggle();
@@ -4895,7 +4897,7 @@ function renderShopGrouped(entries) {
 
   // Easter egg: exactly 9 pending items
   const pendingCount = entries.filter(i => !i.done).length;
-  if (pendingCount === 9) triggerOneRing();
+  if (pendingCount === 9 && eggCategories.ui) triggerOneRing();
 }
 
 let _oneRingShown = false;
@@ -6648,6 +6650,9 @@ function useQuickPrompt(text) {
 }
 
 // ── Easter eggs ────────────────────────────────────────────────
+const EGG_CATEGORY_DEFAULTS = { phrases: true, calendar: true, ui: true, weather: true };
+let eggCategories = JSON.parse(localStorage.getItem('fh_eggCategories') || 'null') || { ...EGG_CATEGORY_DEFAULTS };
+
 const KONAMI = ['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','b','a'];
 let _konamiBuf = [];
 
@@ -6799,6 +6804,7 @@ function triggerKonami() {
 
 // ── Easter egg phrase triggers ──────────────────────────────────
 function checkAssistantEasterEgg(text) {
+  if (!eggCategories.phrases) return null;
   const t = text.toLowerCase().trim();
 
   // ── Hitchhiker's Guide ──
@@ -8006,10 +8012,11 @@ function applyAppTitle() {
   if (!el) return;
   const now = new Date();
   const mo = now.getMonth() + 1, day = now.getDate();
-  const seasonalEmoji = (mo === 12 && day === 25) ? '🎄'
-                      : (mo === 10 && day === 31) ? '🎃'
-                      : (mo ===  2 && day === 14) ? '💝'
-                      : null;
+  const seasonalEmoji = eggCategories.calendar && (
+      (mo === 12 && day === 25) ? '🎄'
+    : (mo === 10 && day === 31) ? '🎃'
+    : (mo ===  2 && day === 14) ? '💝'
+    : null);
   const emoji = seasonalEmoji || appTitleEmoji || '🏠';
   const title = appTitle.trim() || 'Family Hub';
   const parts = title.split(/\s+/);
@@ -8179,6 +8186,11 @@ function openSettings() {
   lcOpenSettings();
   document.getElementById('safePaletteToggle').checked = safePaletteMode;
   document.querySelector(`input[name="assistantWelcome"][value="${assistantWelcomeMode}"]`).checked = true;
+  // Easter egg category toggles
+  Object.keys(EGG_CATEGORY_DEFAULTS).forEach(cat => {
+    const el = document.getElementById('egg_cat_' + cat);
+    if (el) el.checked = eggCategories[cat];
+  });
   document.getElementById('settingsModal').style.display = 'flex';
   applySafePaletteMode();
   trapFocus(document.querySelector('#settingsModal .modal'), document.getElementById('settingsBtn'), closeSettings);
@@ -8257,6 +8269,12 @@ function saveSettings() {
     showBillsOnCal = billsEl.checked;
     localStorage.setItem('fh_bills_on_cal', JSON.stringify(showBillsOnCal));
   }
+  // Easter egg categories
+  Object.keys(EGG_CATEGORY_DEFAULTS).forEach(cat => {
+    const el = document.getElementById('egg_cat_' + cat);
+    if (el) eggCategories[cat] = el.checked;
+  });
+  localStorage.setItem('fh_eggCategories', JSON.stringify(eggCategories));
   closeSettings();
   injectLocalEvents();
   renderCurrentView();
