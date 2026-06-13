@@ -3312,6 +3312,45 @@ body.colorblind-mode .year-card-week-row.today-week {
 }
 .ring-toast-show { opacity: 1; }
 
+/* Generic egg toast */
+.egg-toast {
+  position: fixed;
+  bottom: 32px; left: 50%;
+  transform: translateX(-50%) translateY(12px);
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 9px 20px;
+  font-size: .9rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.35s ease;
+  z-index: 99997;
+  box-shadow: 0 4px 16px rgba(0,0,0,.25);
+}
+.egg-toast-show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* May the 4th badge */
+.may4-badge {
+  display: inline-block;
+  margin-left: 10px;
+  font-size: .72rem;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: .03em;
+  animation: may4Pulse 2s ease-in-out infinite;
+}
+@keyframes may4Pulse {
+  0%,100% { opacity: 1; }
+  50%      { opacity: 0.5; }
+}
+
 /* Perfect weather 72° */
 @keyframes perfectPulse {
   0%,100% { text-shadow: none; }

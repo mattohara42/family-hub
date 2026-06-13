@@ -1046,10 +1046,13 @@ function changeCalPeriod(delta) {
 }
 
 function goToToday() {
-  calViewDate = new Date();
+  const now = new Date();
+  const alreadyToday = calViewDate.toDateString() === now.toDateString();
+  calViewDate = now;
   renderCurrentView();
   renderYearStrip();
   if (googleToken) loadAllCalendars();
+  if (!alreadyToday) showToast(`The Shire has been quiet in your absence, ${userName}.`, 3000);
 }
 
 function switchCalView(view) {
@@ -1092,6 +1095,31 @@ function renderCurrentView() {
   }
 
   renderBudgetCard();
+  checkCalendarEasterEggs();
+}
+
+function checkCalendarEasterEggs() {
+  const now   = new Date();
+  const mo    = now.getMonth() + 1; // 1-based
+  const day   = now.getDate();
+
+  // May the 4th — show badge in nav label when today is in view
+  const labelEl = document.getElementById('calMonthLabel');
+  const existing = document.getElementById('may4Badge');
+  if (existing) existing.remove();
+  const todayInView = (() => {
+    if (calView === 'month')  return calViewDate.getFullYear() === now.getFullYear() && calViewDate.getMonth() === now.getMonth();
+    if (calView === 'week')   return getWeekStart(calViewDate) <= now && now <= new Date(getWeekStart(calViewDate).getTime() + 6*86400000);
+    if (calView === 'day')    return calViewDate.toDateString() === now.toDateString();
+    return true; // agenda
+  })();
+  if (mo === 5 && day === 4 && todayInView && labelEl) {
+    const badge = document.createElement('span');
+    badge.id = 'may4Badge';
+    badge.className = 'may4-badge';
+    badge.textContent = '⭐ May the 4th be with you';
+    labelEl.parentNode.insertBefore(badge, labelEl.nextSibling);
+  }
 }
 
 // ── Week View ─────────────────────────────────────────────────
@@ -2958,6 +2986,9 @@ async function rescheduleEvent(ev, newDateKey) {
   if (!googleToken || !ev.eventId) return;
   const oldDateKey = ev.startDate || ev.startDT?.slice(0, 10);
   if (!oldDateKey || oldDateKey === newDateKey) return;
+  if (newDateKey === new Date().toISOString().slice(0, 10)) {
+    showToast('⚡ Back to the future!', 2500);
+  }
 
   const deltaDays = Math.round(
     (new Date(newDateKey + 'T00:00:00') - new Date(oldDateKey + 'T00:00:00')) / 86400000
@@ -6675,6 +6706,18 @@ function triggerEmojiFireworks(el) {
   }
 }
 
+function showToast(msg, duration = 2500) {
+  const t = document.createElement('div');
+  t.className = 'egg-toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  requestAnimationFrame(() => t.classList.add('egg-toast-show'));
+  setTimeout(() => {
+    t.classList.remove('egg-toast-show');
+    t.addEventListener('transitionend', () => t.remove(), { once: true });
+  }, duration);
+}
+
 function triggerHeatwave() {
   const card = document.getElementById('weatherCard');
   if (!card || card.querySelector('.wx-sweat')) return;
@@ -7787,7 +7830,13 @@ function applySafePaletteMode() {
 function applyAppTitle() {
   const el = document.querySelector('.cal-app-title');
   if (!el) return;
-  const emoji = appTitleEmoji || '🏠';
+  const now = new Date();
+  const mo = now.getMonth() + 1, day = now.getDate();
+  const seasonalEmoji = (mo === 12 && day === 25) ? '🎄'
+                      : (mo === 10 && day === 31) ? '🎃'
+                      : (mo ===  2 && day === 14) ? '💝'
+                      : null;
+  const emoji = seasonalEmoji || appTitleEmoji || '🏠';
   const title = appTitle.trim() || 'Family Hub';
   const parts = title.split(/\s+/);
   let textHtml;
