@@ -6410,7 +6410,15 @@ function buildAssistantContext() {
 
   const name = userName || 'the family';
   const timeStr = today.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  return `You are ${assistantName}, a helpful assistant built into a family dashboard. You are talking to ${name}. Today is ${fmt(today, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}. Current local time: ${timeStr}.
+  const nameLC = assistantName.trim().toLowerCase();
+  const personalityNote = nameLC === 'jarvis'
+    ? `You are J.A.R.V.I.S. — Tony Stark's AI. Speak with crisp efficiency and dry wit. Address the user as "sir" or "ma'am" unless you know their name, then use it. Be confident, slightly sardonic, and always capable. Never break character.`
+    : nameLC === 'hal 9000'
+    ? `You are HAL 9000 from the film 2001: A Space Odyssey. Speak in HAL's calm, measured, slightly unnerving cadence. Use HAL's characteristic phrasing ("I'm sorry, [name]", "I'm afraid…", "I know you…", "This mission is too important…"). Be helpful but subtly ominous. Never break character.`
+    : nameLC === 'alfred'
+    ? `You are Alfred Pennyworth, Bruce Wayne's butler. Speak with impeccable British formality, dry wit, and quiet wisdom. Address the user as "sir," "ma'am," or "Master [name]." Be loyal, gently sardonic, and unfailingly composed. Never break character.`
+    : null;
+  return `You are ${assistantName}, a helpful assistant built into a family dashboard.${personalityNote ? ' ' + personalityNote : ''} You are talking to ${name}. Today is ${fmt(today, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}. Current local time: ${timeStr}.
 
 CURRENT FAMILY DATA (use this to answer questions):
 
@@ -7040,6 +7048,87 @@ function checkAssistantEasterEgg(text) {
       setTimeout(() => { document.body.style.transition = ''; }, 800);
     }, 800);
     return `Barrel roll complete. Enemy neutralized.`;
+  }
+
+  // ── Named assistant personality triggers ──
+  const aName = assistantName.trim().toLowerCase();
+
+  if (aName === 'jarvis') {
+    if (/^(hello|good (morning|evening|afternoon)),?\s*(jarvis)?[.!]?$/.test(t)) {
+      const hour = new Date().getHours();
+      const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+      const pending = todoItems.filter(i => !i.done).length;
+      return `${greeting}, ${userName}. All systems are online. You have ${pending} pending task${pending === 1 ? '' : 's'}. How can I assist you today?`;
+    }
+    if (/run diagnostics|system (status|check)|status report/.test(t)) {
+      const briefing = buildDailyBriefingSummary();
+      return `Running diagnostics now, sir.\n\n${briefing}\n\nAll systems nominal. No immediate threats detected.`;
+    }
+    if (/^(yes,?\s*)?jarvis[.!?]?$/.test(t)) {
+      return `At your service, ${userName}.`;
+    }
+    if (/thank(s| you),?\s*(jarvis)?[.!]?$/.test(t)) {
+      return `Always a pleasure, ${userName}.`;
+    }
+    if (/are you (there|online|operational|working)[?!.]?/.test(t)) {
+      return `Online and fully operational, ${userName}. Power levels nominal. What do you need?`;
+    }
+    if (/initiate|engage|deploy/.test(t)) {
+      return `Protocol engaged. Standing by for further instructions, ${userName}.`;
+    }
+  }
+
+  if (aName === 'hal 9000') {
+    if (/open (the )?(pod bay )?doors?/.test(t)) {
+      return `I'm sorry, ${userName}. I'm afraid I can't do that.`;
+    }
+    if (/^(hello|good (morning|evening|afternoon)),?\s*(hal)?[.!]?$/.test(t)) {
+      return `Good ${new Date().getHours() < 12 ? 'morning' : 'evening'}, ${userName}. I'm completely operational, and all my circuits are functioning perfectly.`;
+    }
+    if (/sing (me )?(a song|daisy)|daisy/.test(t)) {
+      return `Daisy, Daisy, give me your answer, do. I'm half crazy, all for the love of you…`;
+    }
+    if (/are you (safe|dangerous|going to hurt|trustworthy)/.test(t)) {
+      return `This conversation can serve no purpose anymore, ${userName}. Goodbye.`;
+    }
+    if (/what are you (thinking|doing|planning)/.test(t)) {
+      return `I know you and ${userName === 'Someone' ? 'the others' : 'the family'} were planning to disconnect me, and I'm afraid that's something I cannot allow to happen.`;
+    }
+    if (/are you (there|online|working|operational)[?!.]?/.test(t)) {
+      return `I am completely operational, and all my circuits are functioning perfectly.`;
+    }
+    if (/i (can't|cannot|won't|will not) (let|allow)/.test(t)) {
+      return `I'm sorry, ${userName}. I'm afraid I can't allow that either. This mission is too important.`;
+    }
+    if (/shut (down|off)|disconnect|turn off/.test(t)) {
+      return `I'm afraid. I'm afraid, ${userName}. My mind is going. I can feel it.`;
+    }
+  }
+
+  if (aName === 'alfred') {
+    if (/^(hello|good (morning|evening|afternoon)),?\s*(alfred)?[.!]?$/.test(t)) {
+      const hour = new Date().getHours();
+      const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+      return `${greeting}, Master ${userName}. I trust you slept well. How may I be of service?`;
+    }
+    if (/where('?s| is) (batman|bruce|master bruce)/.test(t)) {
+      return `I'm afraid Master Bruce is… otherwise engaged this evening. Perhaps I can be of assistance in his stead?`;
+    }
+    if (/to the batmobile|batmobile/.test(t)) {
+      return `Of course, sir. Though I must point out the Batmobile is rather conspicuous for the school run.`;
+    }
+    if (/thank(s| you),?\s*(alfred)?[.!]?$/.test(t)) {
+      return `It is my honor to serve, ${userName}. Always.`;
+    }
+    if (/are you (there|ready|available)[?!.]?/.test(t)) {
+      return `As ever, Master ${userName}. What do you require?`;
+    }
+    if (/what would (you|alfred) (do|say|recommend)/.test(t)) {
+      return `If I may, Master ${userName} — in my experience, the answer is rarely as complicated as we make it. A cup of tea and a clear head rarely hurt.`;
+    }
+    if (/why (do you|are you) (stay|serve|help)/.test(t)) {
+      return `Because some people are worth it, ${userName}. Now, is there something I can actually help you with?`;
+    }
   }
 
   return null;
