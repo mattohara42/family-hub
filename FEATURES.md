@@ -1,6 +1,6 @@
 # Family Hub — Feature Map
 
-*Last updated: 2026-06-01*
+*Last updated: 2026-06-14*
 
 A living reference of every feature, its key functions, state variables, localStorage keys, and HTML anchor points. Update this file whenever a feature is added or significantly changed.
 
@@ -12,7 +12,7 @@ A living reference of every feature, its key functions, state variables, localSt
 - **Served via:** Netlify (production) or `python3 -m http.server 8080` → `http://localhost:8080/family-hub.html` (local dev)
 - **Config block:** Top of `family-hub.js` — `FIREBASE_CONFIG`, `GOOGLE_CLIENT_ID`, pinned API constants
 - **State:** Mix of `let` globals + `localStorage` + IndexedDB (photos only)
-- **Shared state:** Firebase Firestore (shopping list, to-do list, budget)
+- **Shared state:** Firebase Firestore (shopping list, to-do list, budget, meal plan, family members, chores)
 - **Theming:** CSS custom properties on `:root` — `--text`, `--surface`, `--surface2`, `--accent`, `--accent2`, `--muted`, `--card-bg-photo`, `--scrim`, etc.
 - **Layout:** CSS Grid (`.layout` = `1fr 300px`) — `.cal-column` left, `.sidebar` right
 - **Full-viewport stretch:** `body` is `flex-column 100dvh`; `.layout` fills remaining space; `.cal-card` grows to fill `.cal-column`; `.sidebar` scrolls with `overflow-y: auto`
@@ -60,6 +60,9 @@ family-hub.css    (stylesheet)
 ├── Event Editor           (.evt-editor-*, .btn-danger)
 ├── SMS popover            (.sms-*)
 ├── Settings modal         (.modal-*, .settings-panel, .widget-toggle-row)
+├── Chore Chart            (.chore-*, .chore-members-row, #bottomStrip #choreCard grid layout)
+├── TV mode                (body.tv-mode overrides, .tv-cursor-hidden)
+├── Easter egg animations  (@keyframes hadouken, .hadouken-ball, @keyframes choreRedeemPulse)
 └── Touch / responsive     (@media hover:none tap targets, @media breakpoints)
 
 family-hub.js     (all logic)
@@ -87,6 +90,8 @@ family-hub.js     (all logic)
 ├── ── MEAL PLANNING ──        openMealModal, generateMealSuggestions, callMealAI
 ├── ── WORD OF DAY ──          loadWotd, renderWotd, WOTD_FALLBACKS
 ├── ── DAD JOKE ──             loadDadJoke, renderDadJoke
+├── ── CHORE CHART ──          renderChoreCard, addChore, deleteChore, toggleChore, redeemChoreReward, renderChoreRewardList
+├── ── EASTER EGGS ──          checkAssistantEasterEgg, checkCalendarEasterEggs, buildVogonPoetry, triggerHadouken, handleSettingsGearClick
 └── window.addEventListener('load', ...) — app init
 ```
 
@@ -270,6 +275,15 @@ let appMode = localStorage.getItem('fh_mode') || 'dark'; // 'light' | 'dark' | '
 
 **localStorage:** `fh_mode` — migration: `'amazing'` is auto-upgraded to `'nautical'` on load
 
+**TV / Display Mode:**
+Activated via Settings → Look & Feel → 📺 TV / Display Mode toggle, or by appending `?tv=1` to the URL.
+- Adds `body.tv-mode` — hides all edit controls and input chrome, enlarges text, suppresses hover effects
+- Cursor hides after 4 s of inactivity (`body.tv-cursor-hidden`); any mouse move restores it
+- Escape key exits TV mode
+- **State:** `let tvMode = lsGet('fh_tvMode', false);`
+- **Key function:** `applyTvMode(on?)` — toggles the class, saves to `fh_tvMode`
+- **HTML:** `#tvModeToggle` in Settings → Look & Feel
+
 ---
 
 ### 6. Widget Placement System
@@ -278,23 +292,29 @@ Every sidebar widget can be assigned to **Sidebar** or **Bottom** via ⚙️ Set
 
 **State:**
 ```js
-const WIDGET_DEFAULTS = { shopping: true, todo: true, budget: true, wotd: true, quote: true, dadjoke: true, yearstrip: true };
+const WIDGET_DEFAULTS = { shopping: true, todo: true, budget: true, chores: true, wotd: true, quote: true, dadjoke: true, yearstrip: true, assistant: true, countdown: true, news: false, stock: false };
 let widgetVisibility = { ...WIDGET_DEFAULTS, ...lsGet('fh_widgets', {}) };
 
 const WIDGET_PLACEMENT_DEFAULTS = {
-  shopping: 'sidebar', todo: 'sidebar', budget: 'sidebar',
-  wotd: 'sidebar', quote: 'sidebar', dadjoke: 'sidebar', yearstrip: 'bottom'
+  shopping: 'sidebar', todo: 'sidebar', budget: 'sidebar', chores: 'sidebar',
+  wotd: 'sidebar', quote: 'sidebar', dadjoke: 'sidebar', yearstrip: 'bottom',
+  assistant: 'sidebar', countdown: 'sidebar', news: 'sidebar', stock: 'sidebar',
 };
 let widgetPlacement = { ...WIDGET_PLACEMENT_DEFAULTS, ...lsGet('fh_widget_placement', {}) };
 
 const WIDGET_ORDER = [
-  { key: 'shopping',  id: 'shopCard'    },
-  { key: 'todo',      id: 'todoCard'    },
-  { key: 'budget',    id: 'budgetCard'  },
-  { key: 'yearstrip', id: 'yearCard'    },
-  { key: 'wotd',      id: 'wotdCard'    },
-  { key: 'dadjoke',   id: 'dadjokeCard' },
-  { key: 'quote',     id: 'quoteCard'   },
+  { key: 'shopping',  id: 'shopCard'      },
+  { key: 'todo',      id: 'todoCard'      },
+  { key: 'budget',    id: 'budgetCard'    },
+  { key: 'chores',    id: 'choreCard'     },
+  { key: 'yearstrip', id: 'yearCard'      },
+  { key: 'wotd',      id: 'wotdCard'      },
+  { key: 'dadjoke',   id: 'dadjokeCard'   },
+  { key: 'quote',     id: 'quoteCard'     },
+  { key: 'assistant', id: 'assistantCard' },
+  { key: 'countdown', id: 'countdownCard' },
+  { key: 'news',      id: 'newsCard'      },
+  { key: 'stock',     id: 'stockCard'     },
 ];
 ```
 **Key functions:**
@@ -304,6 +324,10 @@ const WIDGET_ORDER = [
 **Special case — Year at a Glance:**
 - In **sidebar**: `#yearCard` (shows 2 months with ‹/› navigation)
 - In **bottom**: `#yearStrip` (6-month horizontal strip, always inside `.cal-column`)
+
+**Special case — Chore Chart:**
+- In **sidebar**: per-member sections stacked vertically; add-row below card body
+- In **bottom**: per-member sections tiled horizontally in a scrollable `.chore-members-row` flex container; add-row moves to the right side via CSS grid on `#choreCard`
 
 **HTML anchors:** `#bottomStrip` (inside `.cal-column`), `.sidebar`
 
@@ -360,9 +384,10 @@ let familyMembers  = JSON.parse(localStorage.getItem('fh_familyMembers') || '[]'
 ### 9. Settings Modal
 
 **Key functions:** `openSettings()`, `closeSettings()`, `saveSettings()`, `switchSettingsTab(tab)`
-**Tabs:** `look` · `calendar` · `weather` · `shopping` · `todo` · `meals` · `budget` · `widgets`
-**HTML anchor:** `#settingsModal`
+**Tabs:** `look` · `calendar` · `weather` · `shopping` · `todo` · `meals` · `budget` · `widgets` · `chores` · `eggs` *(eggs hidden; revealed by triple-clicking the ⚙️ in the modal title)*
+**HTML anchor:** `#settingsModal`, `#settingsModalGear` (triple-click target in modal `<h2>`)
 **Pattern:** Each tab has a `.settings-panel[data-panel="X"]` div; `switchSettingsTab` toggles `.active`
+**Easter eggs unlock:** `handleSettingsGearClick()` — triple-click on `#settingsModalGear` within 700ms adds `body.eggs-unlocked`, revealing the 🥚 tab
 
 ---
 
@@ -477,7 +502,12 @@ let budgetItems = []; // live from Firestore onSnapshot
 
 Gemini-powered chat (shares the Meals key `mealAiKey`) with live family-data context. See `ASSISTANT_BACKLOG.md` for the enhancement roadmap.
 
+**Assistant rename:** Name is user-configurable. `applyAssistantName()` updates the card title, aria-labels, and the `#assistantWidgetLabel`. Named personalities: naming the assistant **Jarvis**, **HAL 9000**, or **Alfred** injects a character voice into `buildAssistantContext()`.
+
 **State:** `assistantHistory` (in-memory, not persisted), `shopItemsCache`, `ASSISTANT_QUICK_PROMPTS` (empty-state chips — keep current as capabilities grow).
+```js
+let assistantName = localStorage.getItem('fh_assistantName') || 'Family Assistant';
+```
 
 **Key functions:**
 - `buildAssistantContext()` — builds the system prompt (calendar 7d, to-dos, shopping, budget, weather location) + the ACTIONS spec
@@ -490,10 +520,76 @@ Gemini-powered chat (shares the Meals key `mealAiKey`) with live family-data con
 
 **Action vocabulary** (`[ACTION:...]`): `addShopping` · `addTodo` · `completeTodo` · `checkShopping` · `addEvent:YYYY-MM-DD|HH:MM|Title` (Google Calendar `primary`; `allday` for no time) · `setMeal:YYYY-MM-DD|mealType|Name` · `addBudget:Name|Amount|frequency`. Handlers: `assistantAddShopping/AddTodo/CompleteTodo/CheckShopping/AddEvent/SetMeal/AddBudget`, plus `fuzzyTextMatch()`.
 
-**HTML anchors:** `#assistantCard`, `#assistantMessages`, `#assistantInput`, `#assistantMicBtn`, `#assistantTtsBtn`, `.assistant-chip`
-**localStorage:** `fh_assistantTTS` (bool — read replies aloud)
+**HTML anchors:** `#assistantCard`, `#assistantCardTitle` (renamed by `applyAssistantName`), `#assistantMessages`, `#assistantInput`, `#assistantMicBtn`, `#assistantTtsBtn`, `.assistant-chip`
+**localStorage:** `fh_assistantTTS` (bool — read replies aloud), `fh_assistantName` (string — display name)
 
 **Requires:** Gemini key for chat; Google sign-in for `addEvent` (degrades gracefully otherwise).
+
+---
+
+### 16. Chore Chart
+
+**Backend:** Firebase Firestore collections `chores` + `familyMembers`
+**Firestore schema:**
+```js
+// chores collection
+{ text: string, points: number, assignedTo: memberId, doneDate: 'YYYY-MM-DD'|null, createdAt }
+
+// familyMembers collection (also used by To-Do assignee and member colors)
+{ name, color, points: number, rewardName?: string, rewardThreshold?: number }
+```
+
+**Daily reset pattern:** `doneDate` stores the date last completed (`YYYY-MM-DD`). A chore renders as done only if `doneDate === today` — no reset job needed.
+
+**Points + rewards:** Completing a chore atomically increments `familyMembers.points` via `firebase.firestore.FieldValue.increment(n)`. When points reach `rewardThreshold`, a pulsing "🎉 Redeem!" button appears. `redeemChoreReward(memberId)` resets points to 0 and fires confetti + toast.
+
+**Bottom-strip layout:** When `widgetPlacement.chores === 'bottom'`, `renderChoreCard()` wraps member sections in `.chore-members-row` (horizontal flex, overflow-x scroll). The card itself becomes a CSS grid (`1fr auto`) so the add-row sits as a vertical column on the right side.
+
+**Key functions:**
+- `renderChoreCard()` — renders per-member sections; detects bottom placement for horizontal layout
+- `addChore()` — reads `#choreInput`, `#chorePoints`, `#choreAssignee`; writes to Firestore
+- `deleteChore(choreId)` — removes from Firestore
+- `toggleChore(choreId, memberId, pts, wasDone)` — batch updates `chores.doneDate` + `familyMembers.points`
+- `redeemChoreReward(memberId)` — resets member points to 0, triggers confetti
+- `renderChoreRewardList()` — populates Settings → ⭐ Chores reward configuration
+- `updateChoreAssigneeDropdown()` — syncs `#choreAssignee` options from `familyMembers`
+
+**HTML anchors:** `#choreCard`, `#choreCardBody`, `#choreInput`, `#chorePoints`, `#choreAssignee`, `#choreRewardList`
+
+**CSS classes:** `.chore-member-section`, `.chore-member-header`, `.chore-member-name`, `.chore-pts-total`, `.chore-redeem-btn`, `.chore-progress-wrap`, `.chore-progress-fill`, `.chore-list`, `.chore-item`, `.chore-check`, `.chore-text`, `.chore-pts-badge`, `.chore-del-btn`, `.chore-add-row`, `.chore-pts-input`, `.chore-assignee-sel`, `.chore-members-row`
+
+---
+
+### 17. Easter Eggs
+
+Hidden delights gated by `eggCategories`. All eggs are session-only; no persistence beyond the category on/off toggles.
+
+**Category system:**
+```js
+const EGG_CATEGORY_DEFAULTS = { phrases: true, calendar: true, ui: true, weather: true };
+let eggCategories = lsGet('fh_eggCategories', { ...EGG_CATEGORY_DEFAULTS });
+```
+Categories: `phrases` (assistant triggers), `calendar` (date-based), `ui` (interaction tricks), `weather` (weather card).
+
+**Settings unlock:** Triple-clicking `#settingsModalGear` (the ⚙️ in the modal `<h2>`) within 700ms reveals the hidden 🥚 Easter Eggs tab via `body.eggs-unlocked`. Function: `handleSettingsGearClick()`.
+
+**Assistant phrase triggers (`phrases` category):**
+`checkAssistantEasterEgg(text)` — called in `sendAssistantMessage()` before the Gemini API call. Returns a canned response string or `null`. Covers 40+ triggers: LOTR, Hitchhiker's Guide, Dune, Hobbit, BSG, Star Trek, Star Wars, Seinfeld, Friends, 80s/90s movies, video game cheats (IDDQD, IDKFA), and more. See `EASTEREGGS_BACKLOG.md` for the full list.
+
+**UI eggs (`ui` category):**
+- **Konami Code** — rainbow hue-rotate + 🌈 burst
+- **Emoji Fireworks** — 7× click app title emoji → 12 colored sparks
+- **Do a Barrel Roll** — `rotateY` full-page flip
+- **Darker Mode** — dims to near-black for 2 s
+- **Hadouken** — `triggerHadouken()` spawns `.hadouken-ball` across viewport
+- **Last to-do confetti** — `renderTodoList()` fires `spawnConfetti` when all to-dos are done
+- **Destroy the Ring** — checking off a to-do named "destroy the ring" triggers an orange glow
+
+**Calendar eggs (`calendar` category):** `checkCalendarEasterEggs(dateKey)` — May 4, Dec 24/25, Oct 31, Feb 14, Jul 4, Feb 2, seasonal emoji, Back to the Future drag, Welcome Back to the Shire.
+
+**Weather eggs (`weather` category):** Triple-click temperature → toggle °F/°C; Perfect Weather (72°F); Heatwave (≥100°F); Full Moon glow; weather on Arrakis assistant trigger.
+
+**Named-assistant personalities:** Detected in `buildAssistantContext()` — `assistantName.toLowerCase()` matched against `'jarvis'`, `'hal 9000'`, `'alfred'`. Each injects a character voice into the Gemini system prompt and enables special phrase triggers.
 
 ---
 
@@ -524,5 +620,20 @@ Gemini-powered chat (shares the Meals key `mealAiKey`) with live family-data con
 | `fh_familyMembers` | JSON array | To-Do | `[{ name }]` — used to populate assignee dropdown |
 | `fh_wotd` | JSON object | Word of Day | `{ date, word, phonetic, partOfSpeech, definition, example }` |
 | `fh_dadjoke` | JSON object | Dad Joke | `{ date, joke }` |
+| `fh_assistantName` | string | Assistant | Display name (default `'Family Assistant'`) |
+| `fh_assistantTTS` | bool | Assistant | Read replies aloud via TTS (default off) |
+| `fh_tvMode` | bool | TV Mode | TV / Display Mode on/off (default false) |
+| `fh_eggCategories` | JSON object | Easter Eggs | `{ phrases, calendar, ui, weather }` — all true by default |
+
+**Firestore collections:**
+
+| Collection | Ordered by | Used by |
+|---|---|---|
+| `shopping` | `createdAt` | Shopping list |
+| `todo` | `createdAt` | To-Do list |
+| `budget` | `createdAt` | Budget |
+| `mealPlan` | — (doc per date key) | Meal Planning |
+| `familyMembers` | `createdAt` | To-Do assignees, Chore Chart members + points |
+| `chores` | `createdAt` | Chore Chart |
 
 **IndexedDB:** `fh_bgImages` (object store `images`) — stores downloaded photo blobs for background slideshow
