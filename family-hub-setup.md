@@ -1,6 +1,6 @@
 # Family Hub — Setup Guide
 
-*Last updated: 2026-06-02*
+*Last updated: 2026-06-14*
 
 Family Hub is a web dashboard made of three files — `family-hub.html`, `family-hub.css`, and `family-hub.js` — that run together in your browser. No installation is required, but a handful of free cloud accounts are needed to unlock the full feature set. This guide walks through every account, every step, and every value you need to configure.
 
@@ -11,7 +11,7 @@ Family Hub is a web dashboard made of three files — `family-hub.html`, `family
 | Service | Used For | Cost |
 |---|---|---|
 | Google Cloud Console | Calendar sync, Google sign-in, background photos | Free |
-| Firebase | Shared real-time Shopping & To-Do lists | Free tier |
+| Firebase | Shared real-time Shopping, To-Do, Budget, Meal Plans, Family Members & Chore Chart | Free tier |
 | OpenWeatherMap | Weather widget | Free tier |
 | Google AI Studio | Meal Planning AI suggestions | Free tier (or pay-as-you-go) |
 
@@ -109,9 +109,9 @@ Replace it with your actual Client ID.
 
 ---
 
-## Step 2 — Firebase (Shared Shopping List & To-Do)
+## Step 2 — Firebase (Shared Real-Time Data)
 
-The Shopping List and To-Do list sync in real time across all family members' devices via Firebase Firestore. This step is optional — the lists work locally without Firebase, but won't sync.
+The following features sync in real time across all family members' devices via Firebase Firestore: Shopping List, To-Do List, Budget, Meal Plans, Family Members, and the Chore Chart. This step is optional — all features work locally without Firebase, but data won't be shared between devices.
 
 ### 2a. Create a Firebase project
 
@@ -304,6 +304,17 @@ Same two clear buttons as Shopping. To-Do items can also be assigned to a family
 3. A **Budget Total** pill appears in the right sidebar showing the total for the current calendar period (month or week)
 4. The pill is hidden when no bills fall in the current period
 
+### Chore Chart
+
+1. ⚙️ **Settings → ⭐ Chores** → configure a reward name and point threshold per family member
+2. In the Chore Chart card, type a chore name, set its point value, choose who it's assigned to, and click **Add**
+3. Each day, family members tap the checkbox next to their chore to mark it done — the progress bar fills as points accumulate
+4. When a member hits their threshold, a pulsing **🎉 Redeem!** button appears — click it to reset their points and celebrate with confetti
+5. Chores reset automatically each day (marking done is per-day, not permanent)
+6. The Chore Chart can be placed in the sidebar or the bottom strip — in the bottom strip, each family member gets their own card displayed horizontally
+
+> **Requires Firebase** — points and completion status sync across all devices in real time.
+
 ### Meal Planning Loading Messages
 
 The funny loading messages shown while AI thinks are customizable:
@@ -320,18 +331,22 @@ Family Hub can be shared in two ways:
 1. Send family members the Netlify URL
 2. Add each person's Google account as a Test User in Google Cloud Console (Step 1c)
 3. They open the URL, click **Sign in with Google**, and they're in
-4. The Shopping and To-Do lists sync automatically via Firebase
+4. Shopping, To-Do, Budget, Meal Plans, Family Members, and Chore Chart sync automatically via Firebase
 
 **Option B — Each person runs it locally**
 1. Send each family member copies of `family-hub.html`, `family-hub.css`, and `family-hub.js`
 2. They put all three files in the same folder and run `python3 -m http.server 8080`
 3. Add their Google account as a Test User in Google Cloud Console (Step 1c)
 4. They sign in with their own Google account
-5. The Shopping and To-Do lists sync automatically via Firebase
+5. Shopping, To-Do, Budget, Meal Plans, Family Members, and Chore Chart sync automatically via Firebase
 
-**What syncs across devices:**
+**What syncs across devices (Firebase):**
 - Shopping List items ✅
 - To-Do items ✅
+- Budget items ✅
+- Meal Plans ✅
+- Family Members (names, colors, points) ✅
+- Chore Chart (chores, completion status, rewards) ✅
 
 **What is local per-device:**
 - Settings (name, weather key, API keys)
@@ -339,8 +354,6 @@ Family Hub can be shared in two ways:
 - Weather locations
 - Calendar view preferences
 - Background photos
-- Meal plans
-- Budget items
 - Word of the Day / Dad Joke cache
 - Widget placement preferences
 
