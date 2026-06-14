@@ -3687,6 +3687,36 @@ function renderWeatherData(data) {
 
   const tempEl = document.getElementById('wTemp');
   tempEl.textContent = data.temp + '°F';
+  tempEl.dataset.tempF = data.temp;
+  // Easter egg: triple-click toggles °F ↔ °C
+  if (!tempEl._tripleClickSetup) {
+    tempEl._tripleClickSetup = true;
+    tempEl.style.cursor = 'default';
+    let _tClicks = 0, _tTimer = null;
+    tempEl.addEventListener('click', () => {
+      if (!eggCategories.weather) return;
+      _tClicks++;
+      clearTimeout(_tTimer);
+      _tTimer = setTimeout(() => { _tClicks = 0; }, 500);
+      if (_tClicks >= 3) {
+        _tClicks = 0;
+        const f = parseFloat(tempEl.dataset.tempF);
+        if (tempEl._showingC) {
+          tempEl.textContent = f + '°F';
+          tempEl._showingC = false;
+        } else {
+          const c = Math.round((f - 32) * 5 / 9);
+          tempEl.textContent = c + '°C';
+          tempEl._showingC = true;
+          showToast('🌡 Fine. Here\'s your Celsius.', 1800);
+        }
+      }
+    });
+  }
+  if (tempEl._showingC) {
+    const c = Math.round((data.temp - 32) * 5 / 9);
+    tempEl.textContent = c + '°C';
+  }
   // Easter egg: perfect weather / heatwave
   tempEl.classList.remove('wx-perfect');
   if (eggCategories.weather) {
@@ -4475,6 +4505,20 @@ function renderTodoList() {
   if (allBtn)  allBtn.style.display  = hasAny  ? '' : 'none';
   if (!todoItems.length) { empty.style.display = ''; return; }
   empty.style.display = 'none';
+
+  // Easter egg: last item just got checked off
+  const allDone = todoItems.length > 0 && todoItems.every(i => i.done);
+  if (allDone && eggCategories.ui) {
+    if (!renderTodoList._confettiFired) {
+      renderTodoList._confettiFired = true;
+      spawnConfetti(3000);
+      showToast('🎉 All done! Nothing left to do.', 3000);
+      setTimeout(() => { renderTodoList._confettiFired = false; }, 5000);
+    }
+  } else {
+    renderTodoList._confettiFired = false;
+  }
+
   todoItems.forEach(item => {
     const onToggle = db
       ? () => toggleFs('todo', item.id, item.done)
