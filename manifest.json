@@ -1,0 +1,13 @@
+{
+  "name": "Family Hub",
+  "short_name": "Family Hub",
+  "description": "Family dashboard — calendar, weather, meals, shopping, and more.",
+  "start_url": "/family-hub.html",
+  "display": "standalone",
+  "orientation": "landscape",
+  "theme_color": "#0f1117",
+  "background_color": "#0f1117",
+  "icons": [
+    { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
