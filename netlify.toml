@@ -1,6 +1,6 @@
 [build]
   publish = "."
-  command = ""
+  command = "node netlify-build.js"
   functions = "netlify/functions"
 
 [[redirects]]
@@ -15,3 +15,15 @@
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
     Permissions-Policy = "geolocation=(self), microphone=(self), camera=()"
+
+# Never cache the HTML entry point or service worker — users must always get
+# the latest version so SW updates are picked up promptly.
+[[headers]]
+  for = "/family-hub.html"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
