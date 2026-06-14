@@ -6803,7 +6803,7 @@ function triggerHadouken() {
 }
 
 function buildVogonPoetry() {
-  const items = shopItems.filter(i => !i.done).map(i => i.text);
+  const items = shopItemsCache.filter(i => !i.done).map(i => i.text);
   if (!items.length) {
     return `Oh freddled gruntbuggly,\nThy micturations are to me\nAs plurdled gabbleblotchits on a lurgid bee.\n\nAlso, your shopping list is empty. Grob.`;
   }
@@ -6956,7 +6956,7 @@ function checkAssistantEasterEgg(text) {
 
   // ── X-Files ──
   if (/i want to believe/.test(t)) {
-    const n = shopItems.filter(i => !i.done).length;
+    const n = shopItemsCache.filter(i => !i.done).length;
     return `The truth is out there. Also, you have ${n} item${n === 1 ? '' : 's'} on your shopping list that remain unexplained.`;
   }
 
@@ -6997,7 +6997,7 @@ function checkAssistantEasterEgg(text) {
   if (/you can'?t handle the truth/.test(t)) {
     const today = new Date().toISOString().slice(0, 10);
     const overdue = todoItems.filter(i => !i.done && i.date && i.date < today);
-    const uncheckedShop = shopItems.filter(i => !i.done);
+    const uncheckedShop = shopItemsCache.filter(i => !i.done);
     const unplanned = !((mealPlan[today] || {}).breakfast || (mealPlan[today] || {}).lunch || (mealPlan[today] || {}).dinner);
     const lines = [];
     if (overdue.length) lines.push(`${overdue.length} overdue to-do item${overdue.length === 1 ? '' : 's'}`);
@@ -7026,7 +7026,7 @@ function checkAssistantEasterEgg(text) {
   if (/houston,? we (have|'?ve got) a problem/.test(t)) {
     const today = new Date().toISOString().slice(0, 10);
     const overdue = todoItems.filter(i => !i.done && i.date && i.date < today);
-    const uncheckedShop = shopItems.filter(i => !i.done);
+    const uncheckedShop = shopItemsCache.filter(i => !i.done);
     const unplanned = !((mealPlan[today] || {}).breakfast || (mealPlan[today] || {}).lunch || (mealPlan[today] || {}).dinner);
     const lines = [];
     if (overdue.length) lines.push(`${overdue.length} overdue task${overdue.length === 1 ? '' : 's'}`);
@@ -7185,7 +7185,7 @@ function buildDailyBriefingSummary() {
   const lines = [];
   const pending = todoItems.filter(i => !i.done);
   if (pending.length) lines.push(`📋 ${pending.length} to-do item${pending.length === 1 ? '' : 's'} pending`);
-  const shopping = shopItems.filter(i => !i.done);
+  const shopping = shopItemsCache.filter(i => !i.done);
   if (shopping.length) lines.push(`🛒 ${shopping.length} item${shopping.length === 1 ? '' : 's'} on the shopping list`);
   const todayMeals = mealPlan[today] || {};
   const plannedMeals = Object.entries(todayMeals).filter(([,v]) => v?.name).map(([k,v]) => `${k}: ${v.name}`);
