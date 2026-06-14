@@ -323,13 +323,30 @@ The funny loading messages shown while AI thinks are customizable:
 
 ---
 
+## OAuth App — Stay in Testing Mode
+
+When you try to publish the OAuth consent screen app, Google will say **"Your app requires verification."** This is expected — apps requesting Calendar and Photos scopes must go through a formal review (weeks-long, requires a privacy policy). **Don't submit for review.**
+
+Instead, keep the app in **Testing** mode and add each family member as a test user:
+
+1. Google Cloud Console → **APIs & Services → OAuth consent screen**
+2. Scroll to **Test users → Add users**
+3. Add every family member's Google email address
+4. Click **Save**
+
+Family members will see an "unverified app" warning the first time they sign in — click **Advanced → Go to Family Hub** to proceed. This only happens once per device.
+
+> **Note on token expiry:** This app uses short-lived access tokens (1 hour) that Google silently refreshes in the background while users are signed in to Google. The 7-day refresh token limit that applies to testing mode does not affect this app's sign-in flow.
+
+---
+
 ## Sharing with Family Members
 
 Family Hub can be shared in two ways:
 
 **Option A — Share via Netlify (easiest)**
 1. Send family members the Netlify URL
-2. Add each person's Google account as a Test User in Google Cloud Console (Step 1c)
+2. Add each person's Google account as a Test User in Google Cloud Console (see above)
 3. They open the URL, click **Sign in with Google**, and they're in
 4. Shopping, To-Do, Budget, Meal Plans, Family Members, and Chore Chart sync automatically via Firebase
 
