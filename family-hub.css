@@ -4360,3 +4360,21 @@ body.tv-mode .card:hover { box-shadow: none; }
 @media (hover: none) {
   .chore-del-btn { opacity: 0.35; }
 }
+
+/* Chore card — horizontal per-person layout when in bottom strip */
+.chore-members-row {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+}
+.chore-members-row .chore-member-section {
+  flex: 0 0 200px;
+  min-width: 180px;
+  margin-bottom: 0;
+  background: var(--surface2);
+  border-radius: var(--radius);
+  padding: 10px 10px 8px;
+}

@@ -5101,6 +5101,11 @@ function renderChoreCard() {
 
   body.innerHTML = '';
 
+  const inBottom = widgetPlacement.chores === 'bottom';
+  const container = document.createElement('div');
+  if (inBottom) container.className = 'chore-members-row';
+  body.appendChild(container);
+
   familyMembers.forEach(member => {
     const memberChores = choreItems.filter(c => c.assignedTo === member.id);
     if (!memberChores.length && choreItems.length) return; // skip memberless members when chores exist for others
@@ -5158,7 +5163,7 @@ function renderChoreCard() {
       section.appendChild(empty);
     }
 
-    body.appendChild(section);
+    container.appendChild(section);
   });
 
   // Unassigned chores (no matching member)
@@ -5181,7 +5186,7 @@ function renderChoreCard() {
       ul.appendChild(li);
     });
     section.appendChild(ul);
-    body.appendChild(section);
+    container.appendChild(section);
   }
 }
 
