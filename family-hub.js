@@ -365,6 +365,7 @@ function applyWidgetVisibility() {
     shopping: 'shopCard',
     todo:     'todoCard',
     budget:   'budgetCard',
+    chores:   'choreCard',
     wotd:     'wotdCard',
     quote:    'quoteCard',
     dadjoke:  'dadjokeCard',
