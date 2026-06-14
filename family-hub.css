@@ -4361,6 +4361,46 @@ body.tv-mode .card:hover { box-shadow: none; }
   .chore-del-btn { opacity: 0.35; }
 }
 
+/* Chore card — layout when in bottom strip */
+#bottomStrip #choreCard {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  grid-template-columns: 1fr auto;
+}
+#bottomStrip #choreCard .card-header {
+  grid-column: 1 / -1;
+  grid-row: 1;
+}
+#bottomStrip #choreCard .card-body {
+  grid-column: 1;
+  grid-row: 2;
+  overflow: hidden;
+}
+#bottomStrip #choreCard .chore-add-row {
+  grid-column: 2;
+  grid-row: 2;
+  flex-direction: column;
+  align-items: stretch;
+  border-top: none;
+  border-left: 1px solid rgba(128,128,128,.12);
+  padding: 10px 12px;
+  width: 180px;
+}
+#bottomStrip #choreCard .chore-add-row input[type="text"] {
+  flex: none;
+  min-width: unset;
+  width: 100%;
+}
+#bottomStrip #choreCard .chore-pts-input {
+  width: 100%;
+}
+#bottomStrip #choreCard .chore-assignee-sel {
+  width: 100%;
+}
+#bottomStrip #choreCard .chore-add-row .btn {
+  width: 100%;
+}
+
 /* Chore card — horizontal per-person layout when in bottom strip */
 .chore-members-row {
   display: flex;
