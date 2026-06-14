@@ -227,12 +227,12 @@ const ASSISTANT_QUICK_PROMPTS = [
   "Add a $60 internet bill monthly",
 ];
 // ── Widget visibility & placement ────────────────────────────────────────────
-const WIDGET_DEFAULTS = { shopping: true, todo: true, budget: true, wotd: true, quote: true, dadjoke: true, yearstrip: true, assistant: true, countdown: true, news: false, stock: false };
+const WIDGET_DEFAULTS = { shopping: true, todo: true, budget: true, chores: true, wotd: true, quote: true, dadjoke: true, yearstrip: true, assistant: true, countdown: true, news: false, stock: false };
 let widgetVisibility = { ...WIDGET_DEFAULTS, ...lsGet('fh_widgets', {}) };
 
 // Placement: 'sidebar' (right column) or 'bottom' (full-width strip below layout)
 const WIDGET_PLACEMENT_DEFAULTS = {
-  shopping: 'sidebar', todo: 'sidebar', budget: 'sidebar',
+  shopping: 'sidebar', todo: 'sidebar', budget: 'sidebar', chores: 'sidebar',
   wotd: 'sidebar', quote: 'sidebar', dadjoke: 'sidebar',
   yearstrip: 'bottom', assistant: 'sidebar', countdown: 'sidebar',
   news: 'sidebar', stock: 'sidebar',
@@ -244,6 +244,7 @@ const WIDGET_ORDER = [
   { key: 'shopping',  id: 'shopCard'       },
   { key: 'todo',      id: 'todoCard'       },
   { key: 'budget',    id: 'budgetCard'     },
+  { key: 'chores',    id: 'choreCard'      },
   { key: 'yearstrip', id: 'yearCard'       },  // sidebar 2-month view
   { key: 'wotd',      id: 'wotdCard'       },
   { key: 'dadjoke',   id: 'dadjokeCard'    },
@@ -388,6 +389,9 @@ function applyWidgetVisibility() {
 // ── Budget ───────────────────────────────────────────────────────────────────
 let budgetItems = []; // populated by Firestore onSnapshot (or localStorage fallback)
 const BUDGET_COLOR = '#e57373'; // all budget items are red
+
+// ── Chore Chart state ───────────────────────────────────────────
+let choreItems = []; // { id, text, points, assignedTo (member id), doneDate }
 
 /** Returns dates (as YYYY-MM-DD strings) on which a budget item falls within [startD, endD] */
 function budgetDatesInRange(item, startD, endD) {
@@ -795,6 +799,7 @@ window.addEventListener('load', () => {
   applyWidgetPlacement();   // moves cards to sidebar/bottom, then calls applyWidgetVisibility
   initWidgetDragDrop();
   renderBudgetCard();
+  renderChoreCard();
   loadWotd();
   loadDadJoke();
   loadQuote();
@@ -4421,9 +4426,15 @@ function setupListeners() {
     });
   }
 
+  // Chore Chart — real-time sync
+  db.collection('chores').orderBy('createdAt').onSnapshot(snap => {
+    choreItems = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    renderChoreCard();
+  });
+
   // Family members — real-time sync so every device shares the same list
   db.collection('familyMembers').orderBy('order').onSnapshot(snap => {
-    familyMembers = snap.docs.map(doc => ({ id: doc.id, name: doc.data().name, order: doc.data().order ?? 0, gender: doc.data().gender || 'neutral', color: doc.data().color || null }));
+    familyMembers = snap.docs.map(doc => ({ id: doc.id, name: doc.data().name, order: doc.data().order ?? 0, gender: doc.data().gender || 'neutral', color: doc.data().color || null, points: doc.data().points || 0, rewardName: doc.data().rewardName || '', rewardThreshold: doc.data().rewardThreshold || 100 }));
     // Back-fill missing order fields (e.g. docs created before this field existed)
     const needsOrder = familyMembers.filter(m => m.order === 0 && familyMembers.indexOf(m) > 0);
     if (snap.docs.some(d => d.data().order == null)) {
@@ -4434,6 +4445,7 @@ function setupListeners() {
       batch.commit();
     }
     renderFamilyMemberList();
+    renderChoreCard();
   });
 
   // One-time migration: push localStorage family members to Firestore
@@ -4733,6 +4745,7 @@ function renderFamilyMemberList() {
     });
   }
   populateTodoAssigneeDropdown();
+  populateChoreAssigneeDropdown();
 }
 
 async function setFamilyMemberGender(idOrIndex, gender) {
@@ -5028,6 +5041,243 @@ function clearDoneLocal(col) {
     saveLocalList(col, items);
     renderLocalList(col);
   }
+}
+
+// ── Chore Chart ────────────────────────────────────────────────
+
+function renderChoreCard() {
+  const body = document.getElementById('choreCardBody');
+  if (!body) return;
+  const today = new Date().toISOString().slice(0, 10);
+
+  if (!familyMembers.length) {
+    body.innerHTML = '<div class="list-empty" style="display:block">Add family members in Settings to get started.</div>';
+    return;
+  }
+
+  body.innerHTML = '';
+
+  familyMembers.forEach(member => {
+    const memberChores = choreItems.filter(c => c.assignedTo === member.id);
+    if (!memberChores.length && choreItems.length) return; // skip memberless members when chores exist for others
+
+    const section = document.createElement('div');
+    section.className = 'chore-member-section';
+
+    // Header row: name + points badge
+    const header = document.createElement('div');
+    header.className = 'chore-member-header';
+    const pts = member.points || 0;
+    const threshold = member.rewardThreshold || 100;
+    const pct = Math.min(100, Math.round((pts / threshold) * 100));
+    const rewardLabel = member.rewardName ? ` → ${member.rewardName}` : '';
+    header.innerHTML = `
+      <span class="chore-member-name" style="color:${member.color || 'var(--accent)'}">
+        ${esc(member.name)}
+      </span>
+      <span class="chore-pts-total">${pts} / ${threshold} pts${rewardLabel}</span>
+      ${pts >= threshold
+        ? `<button class="btn btn-sm chore-redeem-btn" onclick="redeemChoreReward('${member.id}')">🎉 Redeem!</button>`
+        : ''}
+    `;
+    section.appendChild(header);
+
+    // Progress bar
+    const barWrap = document.createElement('div');
+    barWrap.className = 'chore-progress-wrap';
+    barWrap.innerHTML = `<div class="chore-progress-fill" style="width:${pct}%"></div>`;
+    section.appendChild(barWrap);
+
+    // Chore list
+    if (memberChores.length) {
+      const ul = document.createElement('ul');
+      ul.className = 'chore-list';
+      memberChores.forEach(chore => {
+        const doneToday = chore.doneDate === today;
+        const li = document.createElement('li');
+        li.className = 'chore-item' + (doneToday ? ' chore-done' : '');
+        li.innerHTML = `
+          <div class="chore-check${doneToday ? ' done' : ''}" onclick="toggleChore('${chore.id}','${member.id}',${chore.points || 1},${doneToday})">
+            ${doneToday ? '✓' : ''}
+          </div>
+          <span class="chore-text">${esc(chore.text)}</span>
+          <span class="chore-pts-badge">+${chore.points || 1}</span>
+          <button class="chore-del-btn" onclick="deleteChore('${chore.id}')" title="Remove chore" aria-label="Remove chore">✕</button>
+        `;
+        ul.appendChild(li);
+      });
+      section.appendChild(ul);
+    } else {
+      const empty = document.createElement('div');
+      empty.style.cssText = 'font-size:.78rem;color:var(--muted);padding:4px 0 6px';
+      empty.textContent = 'No chores assigned yet.';
+      section.appendChild(empty);
+    }
+
+    body.appendChild(section);
+  });
+
+  // Unassigned chores (no matching member)
+  const unassigned = choreItems.filter(c => !familyMembers.find(m => m.id === c.assignedTo));
+  if (unassigned.length) {
+    const section = document.createElement('div');
+    section.className = 'chore-member-section';
+    section.innerHTML = `<div class="chore-member-header"><span class="chore-member-name" style="color:var(--muted)">Unassigned</span></div>`;
+    const ul = document.createElement('ul');
+    ul.className = 'chore-list';
+    unassigned.forEach(chore => {
+      const li = document.createElement('li');
+      li.className = 'chore-item';
+      li.innerHTML = `
+        <div class="chore-check"></div>
+        <span class="chore-text">${esc(chore.text)}</span>
+        <span class="chore-pts-badge">+${chore.points || 1}</span>
+        <button class="chore-del-btn" onclick="deleteChore('${chore.id}')" title="Remove" aria-label="Remove">✕</button>
+      `;
+      ul.appendChild(li);
+    });
+    section.appendChild(ul);
+    body.appendChild(section);
+  }
+}
+
+async function toggleChore(choreId, memberId, pts, wasDone) {
+  const today = new Date().toISOString().slice(0, 10);
+  const newDoneDate = wasDone ? null : today;
+  const pointsDelta = wasDone ? -(pts) : pts;
+
+  if (db) {
+    const batch = db.batch();
+    batch.update(db.collection('chores').doc(choreId), { doneDate: newDoneDate });
+    batch.update(db.collection('familyMembers').doc(memberId), {
+      points: firebase.firestore.FieldValue.increment(pointsDelta)
+    });
+    await batch.commit();
+  } else {
+    const chore = choreItems.find(c => c.id === choreId);
+    if (chore) chore.doneDate = newDoneDate;
+    const member = familyMembers.find(m => m.id === memberId);
+    if (member) member.points = Math.max(0, (member.points || 0) + pointsDelta);
+    renderChoreCard();
+  }
+
+  // Check for reward threshold
+  if (!wasDone) {
+    const member = familyMembers.find(m => m.id === memberId);
+    if (member) {
+      const newPts = (member.points || 0) + pointsDelta;
+      if (newPts >= (member.rewardThreshold || 100)) {
+        spawnConfetti(2500);
+        showToast(`🎉 ${member.name} earned: ${member.rewardName || 'their reward'}!`, 4000);
+      }
+    }
+  }
+}
+
+async function addChore() {
+  const textEl   = document.getElementById('choreInput');
+  const ptsEl    = document.getElementById('chorePoints');
+  const memberEl = document.getElementById('choreAssignee');
+  const text   = textEl.value.trim();
+  const pts    = Math.max(1, parseInt(ptsEl.value) || 5);
+  const assignedTo = memberEl.value;
+  if (!text) return;
+  textEl.value = '';
+
+  const item = { text, points: pts, assignedTo, doneDate: null, createdAt: firebase.firestore.FieldValue.serverTimestamp() };
+  if (db) {
+    await db.collection('chores').add(item);
+  } else {
+    choreItems.push({ id: String(Date.now()), ...item, createdAt: new Date() });
+    renderChoreCard();
+  }
+}
+
+async function deleteChore(id) {
+  if (db) {
+    await db.collection('chores').doc(id).delete();
+  } else {
+    choreItems = choreItems.filter(c => c.id !== id);
+    renderChoreCard();
+  }
+}
+
+async function redeemChoreReward(memberId) {
+  const member = familyMembers.find(m => m.id === memberId);
+  if (!member) return;
+  if (!confirm(`Redeem "${member.rewardName || 'reward'}" for ${member.name} and reset their points to 0?`)) return;
+  if (db) {
+    await db.collection('familyMembers').doc(memberId).update({ points: 0 });
+  } else {
+    member.points = 0;
+    renderChoreCard();
+  }
+  showToast(`✅ Reward redeemed for ${member.name}!`, 2500);
+}
+
+function renderChoreRewardList() {
+  const el = document.getElementById('choreRewardList');
+  if (!el) return;
+  el.innerHTML = '';
+  if (!familyMembers.length) {
+    el.innerHTML = '<div style="font-size:.82rem;color:var(--muted)">Add family members in Settings → ✅ To-Do first.</div>';
+    return;
+  }
+  familyMembers.forEach(m => {
+    const row = document.createElement('div');
+    row.style.cssText = 'background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:10px';
+    row.innerHTML = `
+      <div style="font-weight:var(--weight-semi);margin-bottom:8px;color:${m.color || 'var(--accent)'}">
+        ${esc(m.name)}
+        <span style="font-weight:400;color:var(--muted);margin-left:6px;font-size:.8rem">${m.points || 0} pts earned</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <label style="font-size:.8rem;color:var(--muted);flex:none">Reward</label>
+        <input type="text" class="chore-reward-name" data-id="${m.id}"
+               value="${esc(m.rewardName || '')}" placeholder="e.g. Pizza night"
+               style="flex:1;min-width:120px" />
+        <label style="font-size:.8rem;color:var(--muted);flex:none">at</label>
+        <input type="number" class="chore-reward-threshold" data-id="${m.id}"
+               value="${m.rewardThreshold || 100}" min="1" max="9999"
+               style="width:70px" />
+        <label style="font-size:.8rem;color:var(--muted);flex:none">pts</label>
+      </div>
+    `;
+    el.appendChild(row);
+  });
+}
+
+async function saveChoreRewards() {
+  const nameInputs      = document.querySelectorAll('.chore-reward-name');
+  const threshInputs    = document.querySelectorAll('.chore-reward-threshold');
+  const updates = [];
+  nameInputs.forEach(inp => {
+    const id        = inp.dataset.id;
+    const name      = inp.value.trim();
+    const threshEl  = document.querySelector(`.chore-reward-threshold[data-id="${id}"]`);
+    const threshold = Math.max(1, parseInt(threshEl?.value) || 100);
+    const m         = familyMembers.find(m => m.id === id);
+    if (!m) return;
+    m.rewardName      = name;
+    m.rewardThreshold = threshold;
+    if (db) updates.push(db.collection('familyMembers').doc(id).update({ rewardName: name, rewardThreshold: threshold }));
+  });
+  await Promise.all(updates);
+  if (!db) renderChoreCard();
+}
+
+function populateChoreAssigneeDropdown() {
+  const sel = document.getElementById('choreAssignee');
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">— anyone —</option>';
+  familyMembers.forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m.id;
+    opt.textContent = m.name;
+    sel.appendChild(opt);
+  });
+  if (prev) sel.value = prev;
 }
 
 // ── Meal Planning ──────────────────────────────────────────────
@@ -8379,6 +8629,7 @@ function openSettings() {
     const radio = document.querySelector(`input[name="placement_${key}"][value="${placement}"]`);
     if (radio) radio.checked = true;
   });
+  renderChoreRewardList();
   lcOpenSettings();
   document.getElementById('safePaletteToggle').checked = safePaletteMode;
   document.querySelector(`input[name="assistantWelcome"][value="${assistantWelcomeMode}"]`).checked = true;
@@ -8469,6 +8720,7 @@ function saveSettings() {
     showBillsOnCal = billsEl.checked;
     localStorage.setItem('fh_bills_on_cal', JSON.stringify(showBillsOnCal));
   }
+  saveChoreRewards();
   applyTvMode(document.getElementById('tvModeToggle').checked);
   // Easter egg categories
   Object.keys(EGG_CATEGORY_DEFAULTS).forEach(cat => {

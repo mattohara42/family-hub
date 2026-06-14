@@ -256,6 +256,26 @@
       </div>
     </div>
 
+    <!-- Chore Chart -->
+    <div class="card" id="choreCard">
+      <div class="card-header">
+        <h2>⭐ Chore Chart</h2>
+      </div>
+      <div class="card-body" id="choreCardBody">
+        <!-- populated by renderChoreCard() -->
+      </div>
+      <div class="chore-add-row">
+        <input id="choreInput" type="text" placeholder="Add a chore…" aria-label="Add a chore"
+               onkeydown="if(event.key==='Enter')addChore()" />
+        <input id="chorePoints" type="number" min="1" max="999" value="5"
+               title="Points" aria-label="Points" class="chore-pts-input" />
+        <select id="choreAssignee" class="chore-assignee-sel" aria-label="Assign to">
+          <option value="">— anyone —</option>
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="addChore()">Add</button>
+      </div>
+    </div>
+
     <!-- Year at a Glance -->
     <div class="card" id="yearCard">
       <div class="card-header">
@@ -387,6 +407,7 @@
       <button class="modal-tab"        data-tab="weather"  onclick="switchSettingsTab('weather')">🌤 Weather</button>
       <button class="modal-tab"        data-tab="shopping" onclick="switchSettingsTab('shopping')">🛒 Shopping</button>
       <button class="modal-tab"        data-tab="todo"     onclick="switchSettingsTab('todo')">✅ To-Do</button>
+      <button class="modal-tab"        data-tab="chores"   onclick="switchSettingsTab('chores')">⭐ Chores</button>
       <button class="modal-tab"        data-tab="meals"    onclick="switchSettingsTab('meals')">🍽 Meals</button>
       <button class="modal-tab"        data-tab="widgets"  onclick="switchSettingsTab('widgets')">🧩 Widgets</button>
       <button class="modal-tab"        data-tab="feeds"    onclick="switchSettingsTab('feeds')">📊 Feeds</button>
@@ -762,6 +783,14 @@
         </div>
       </div><!-- /todo -->
 
+      <!-- ── Chores ── -->
+      <div class="settings-panel" data-panel="chores">
+        <p style="font-size:.82rem;color:var(--muted);margin:0 0 14px">
+          Set a reward and point threshold for each family member. When they earn enough points completing chores, they unlock their reward.
+        </p>
+        <div id="choreRewardList"></div>
+      </div><!-- /chores -->
+
       <!-- ── Meal Planning ── -->
       <div class="settings-panel" data-panel="meals">
         <div class="field">
@@ -838,6 +867,12 @@
               <span>💰 Budget</span>
               <label class="widget-placement-radio"><input type="radio" name="placement_budget" value="bottom"  /><span>Bottom</span></label>
               <label class="widget-placement-radio"><input type="radio" name="placement_budget" value="sidebar" /><span>Sidebar</span></label>
+            </div>
+            <div class="widget-toggle-row">
+              <input type="checkbox" id="widget_chores" />
+              <span>⭐ Chore Chart</span>
+              <label class="widget-placement-radio"><input type="radio" name="placement_chores" value="bottom"  /><span>Bottom</span></label>
+              <label class="widget-placement-radio"><input type="radio" name="placement_chores" value="sidebar" /><span>Sidebar</span></label>
             </div>
             <div class="widget-toggle-row">
               <input type="checkbox" id="widget_wotd" />

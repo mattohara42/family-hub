@@ -4215,3 +4215,148 @@ body.tv-mode .card:hover { box-shadow: none; }
   pointer-events: none;
   animation: hadouken 0.85s cubic-bezier(.4,0,.6,1) forwards;
 }
+
+/* ── Chore Chart ─────────────────────────────────────────────── */
+.chore-member-section {
+  margin-bottom: 14px;
+}
+.chore-member-section:last-child { margin-bottom: 0; }
+
+.chore-member-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+.chore-member-name {
+  font-weight: var(--weight-semi);
+  font-size: .9rem;
+}
+.chore-pts-total {
+  font-size: .75rem;
+  color: var(--muted);
+  flex: 1;
+}
+.chore-redeem-btn {
+  font-size: .72rem;
+  padding: 2px 8px;
+  background: var(--accent);
+  color: #fff;
+  animation: choreRedeemPulse 1.2s ease-in-out infinite;
+}
+@keyframes choreRedeemPulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .7; }
+}
+
+.chore-progress-wrap {
+  height: 5px;
+  background: var(--surface2);
+  border-radius: 3px;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+.chore-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width .4s ease;
+  min-width: 4px;
+}
+
+.chore-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.chore-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(128,128,128,.1);
+}
+.chore-item:last-child { border-bottom: none; }
+
+.chore-check {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .7rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  color: #fff;
+  transition: background .15s, border-color .15s;
+}
+.chore-check:hover { border-color: var(--accent); }
+.chore-check.done  { background: var(--accent); border-color: var(--accent); }
+
+.chore-text {
+  flex: 1;
+  font-size: .85rem;
+}
+.chore-item.chore-done .chore-text {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.chore-pts-badge {
+  font-size: .7rem;
+  font-weight: var(--weight-semi);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-radius: 10px;
+  padding: 1px 6px;
+  flex-shrink: 0;
+}
+.chore-item.chore-done .chore-pts-badge { opacity: .4; }
+
+.chore-del-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: .8rem;
+  padding: 2px 4px;
+  opacity: 0;
+  transition: opacity .15s;
+  flex-shrink: 0;
+}
+.chore-item:hover .chore-del-btn { opacity: 1; }
+
+.chore-add-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 12px 10px;
+  border-top: 1px solid rgba(128,128,128,.12);
+  flex-wrap: wrap;
+}
+.chore-add-row input[type="text"] {
+  flex: 1;
+  min-width: 100px;
+}
+.chore-pts-input {
+  width: 52px;
+  flex-shrink: 0;
+}
+.chore-assignee-sel {
+  flex: 1;
+  min-width: 90px;
+  font-size: .82rem;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--surface2);
+  border: 1px solid rgba(128,128,128,.2);
+  color: var(--text);
+  cursor: pointer;
+}
+
+@media (hover: none) {
+  .chore-del-btn { opacity: 0.35; }
+}
