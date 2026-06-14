@@ -1,0 +1,132 @@
+<svg viewBox="0 0 820 560" xmlns="http://www.w3.org/2000/svg" role="img" font-family="system-ui, -apple-system, sans-serif">
+  <title>Family Hub Infrastructure Diagram</title>
+  <desc>Architecture showing browser clients connecting to Netlify static hosting, with Firebase Firestore, Google APIs, OpenWeatherMap, and Gemini as external services.</desc>
+
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#888"/>
+    </marker>
+    <marker id="arr-accent" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#4f8ef7"/>
+    </marker>
+  </defs>
+
+  <!-- background -->
+  <rect width="820" height="560" fill="#0f1117"/>
+
+  <!-- ── CLIENTS (left) ── -->
+  <g id="clients">
+    <text x="68" y="22" text-anchor="middle" font-size="11" font-weight="600" fill="#888" letter-spacing="1">CLIENTS</text>
+
+    <rect x="14" y="32" width="108" height="52" rx="8" fill="#1e2130" stroke="#2a2f45" stroke-width="1.5"/>
+    <text x="68" y="53" text-anchor="middle" font-size="18">📱</text>
+    <text x="68" y="72" text-anchor="middle" font-size="11" fill="#e2e8f0">Mobile Browser</text>
+
+    <rect x="14" y="100" width="108" height="52" rx="8" fill="#1e2130" stroke="#2a2f45" stroke-width="1.5"/>
+    <text x="68" y="121" text-anchor="middle" font-size="18">📺</text>
+    <text x="68" y="140" text-anchor="middle" font-size="11" fill="#e2e8f0">TV / Chromecast</text>
+
+    <rect x="14" y="168" width="108" height="52" rx="8" fill="#1e2130" stroke="#2a2f45" stroke-width="1.5"/>
+    <text x="68" y="189" text-anchor="middle" font-size="18">🖥️</text>
+    <text x="68" y="208" text-anchor="middle" font-size="11" fill="#e2e8f0">Desktop Browser</text>
+  </g>
+
+  <!-- Client → Netlify arrows -->
+  <line x1="122" y1="58" x2="198" y2="130" stroke="#888" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="122" y1="126" x2="198" y2="148" stroke="#888" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="122" y1="194" x2="198" y2="164" stroke="#888" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ── NETLIFY (centre) ── -->
+  <g id="netlify">
+    <text x="318" y="22" text-anchor="middle" font-size="11" font-weight="600" fill="#888" letter-spacing="1">HOSTING</text>
+
+    <rect x="196" y="32" width="244" height="230" rx="10" fill="#1e2130" stroke="#4f8ef7" stroke-width="2"/>
+    <text x="318" y="55" text-anchor="middle" font-size="13" font-weight="700" fill="#4f8ef7">Netlify</text>
+
+    <rect x="212" y="64" width="212" height="72" rx="6" fill="#0f1117" stroke="#2a2f45" stroke-width="1"/>
+    <text x="318" y="82" text-anchor="middle" font-size="11" font-weight="600" fill="#e2e8f0">Static Files</text>
+    <text x="318" y="98" text-anchor="middle" font-size="10" fill="#888">family-hub.html</text>
+    <text x="318" y="113" text-anchor="middle" font-size="10" fill="#888">family-hub.css · family-hub.js · sw.js</text>
+    <text x="318" y="128" text-anchor="middle" font-size="10" fill="#888">manifest.json · favicon.svg</text>
+
+    <rect x="212" y="148" width="212" height="100" rx="6" fill="#0f1117" stroke="#2a2f45" stroke-width="1"/>
+    <text x="318" y="168" text-anchor="middle" font-size="11" font-weight="600" fill="#e2e8f0">Serverless Functions</text>
+    <rect x="224" y="178" width="88" height="30" rx="4" fill="#1e2130" stroke="#2a2f45" stroke-width="1"/>
+    <text x="268" y="196" text-anchor="middle" font-size="10" fill="#e2e8f0">ai.js</text>
+    <text x="268" y="207" text-anchor="middle" font-size="9" fill="#888">Gemini proxy</text>
+    <rect x="324" y="178" width="88" height="30" rx="4" fill="#1e2130" stroke="#2a2f45" stroke-width="1"/>
+    <text x="368" y="196" text-anchor="middle" font-size="10" fill="#e2e8f0">weather.js</text>
+    <text x="368" y="207" text-anchor="middle" font-size="9" fill="#888">OWM proxy</text>
+    <text x="318" y="232" text-anchor="middle" font-size="9" fill="#888">🔒 GEMINI_KEY · OWM_KEY (env vars)</text>
+    <text x="318" y="246" text-anchor="middle" font-size="9" fill="#888">Keys never reach the browser</text>
+
+    <text x="318" y="278" text-anchor="middle" font-size="9" fill="#888">Build: netlify-build.js stamps SW cache version</text>
+  </g>
+
+  <!-- ── SERVICE WORKER ── -->
+  <rect x="232" y="282" width="172" height="42" rx="8" fill="#1e2130" stroke="#2a2f45" stroke-width="1.5"/>
+  <text x="318" y="300" text-anchor="middle" font-size="11" font-weight="600" fill="#e2e8f0">Service Worker (sw.js)</text>
+  <text x="318" y="315" text-anchor="middle" font-size="9" fill="#888">Cache-first app shell · network-only APIs</text>
+  <line x1="318" y1="262" x2="318" y2="282" stroke="#888" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+
+  <!-- ── BROWSER STORAGE ── -->
+  <g id="storage">
+    <text x="68" y="360" text-anchor="middle" font-size="11" font-weight="600" fill="#888" letter-spacing="1">BROWSER STORAGE</text>
+    <rect x="14" y="370" width="108" height="42" rx="8" fill="#1e2130" stroke="#2a2f45" stroke-width="1.5"/>
+    <text x="68" y="388" text-anchor="middle" font-size="11" fill="#e2e8f0">localStorage</text>
+    <text x="68" y="403" text-anchor="middle" font-size="9" fill="#888">settings · prefs · cache</text>
+    <rect x="14" y="424" width="108" height="42" rx="8" fill="#1e2130" stroke="#2a2f45" stroke-width="1.5"/>
+    <text x="68" y="443" text-anchor="middle" font-size="11" fill="#e2e8f0">IndexedDB</text>
+    <text x="68" y="458" text-anchor="middle" font-size="9" fill="#888">background photos</text>
+  </g>
+  <line x1="68" y1="220" x2="68" y2="370" stroke="#888" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+
+  <!-- ── EXTERNAL SERVICES (right) ── -->
+  <text x="636" y="22" text-anchor="middle" font-size="11" font-weight="600" fill="#888" letter-spacing="1">EXTERNAL SERVICES</text>
+
+  <rect x="474" y="32" width="156" height="90" rx="8" fill="#1e2130" stroke="#2a2f45" stroke-width="1.5"/>
+  <text x="552" y="54" text-anchor="middle" font-size="13">🔥</text>
+  <text x="552" y="70" text-anchor="middle" font-size="11" font-weight="600" fill="#e2e8f0">Firebase Firestore</text>
+  <text x="552" y="86" text-anchor="middle" font-size="9" fill="#888">shopping · todo · budget</text>
+  <text x="552" y="100" text-anchor="middle" font-size="9" fill="#888">meals · members · chores</text>
+  <text x="552" y="114" text-anchor="middle" font-size="9" fill="#888">🔒 email allowlist rules</text>
+
+  <rect x="474" y="140" width="156" height="90" rx="8" fill="#1e2130" stroke="#2a2f45" stroke-width="1.5"/>
+  <text x="552" y="162" text-anchor="middle" font-size="13">🔐</text>
+  <text x="552" y="178" text-anchor="middle" font-size="11" font-weight="600" fill="#e2e8f0">Google APIs</text>
+  <text x="552" y="194" text-anchor="middle" font-size="9" fill="#888">OAuth · Calendar</text>
+  <text x="552" y="208" text-anchor="middle" font-size="9" fill="#888">Photos Picker</text>
+  <text x="552" y="222" text-anchor="middle" font-size="9" fill="#888">token in-memory only</text>
+
+  <rect x="474" y="248" width="156" height="72" rx="8" fill="#1e2130" stroke="#2a2f45" stroke-width="1.5"/>
+  <text x="552" y="270" text-anchor="middle" font-size="13">✨</text>
+  <text x="552" y="286" text-anchor="middle" font-size="11" font-weight="600" fill="#e2e8f0">Gemini API</text>
+  <text x="552" y="302" text-anchor="middle" font-size="9" fill="#888">meals · assistant · briefing</text>
+  <text x="552" y="314" text-anchor="middle" font-size="9" fill="#888">via Netlify proxy</text>
+
+  <rect x="474" y="338" width="156" height="60" rx="8" fill="#1e2130" stroke="#2a2f45" stroke-width="1.5"/>
+  <text x="552" y="360" text-anchor="middle" font-size="13">🌤️</text>
+  <text x="552" y="376" text-anchor="middle" font-size="11" font-weight="600" fill="#e2e8f0">OpenWeatherMap</text>
+  <text x="552" y="392" text-anchor="middle" font-size="9" fill="#888">via Netlify proxy</text>
+
+  <rect x="474" y="416" width="156" height="72" rx="8" fill="#1e2130" stroke="#2a2f45" stroke-width="1.5"/>
+  <text x="552" y="438" text-anchor="middle" font-size="11" font-weight="600" fill="#e2e8f0">Free / Keyless APIs</text>
+  <text x="552" y="454" text-anchor="middle" font-size="9" fill="#888">Dictionary API (WOTD)</text>
+  <text x="552" y="468" text-anchor="middle" font-size="9" fill="#888">icanhazdadjoke</text>
+  <text x="552" y="482" text-anchor="middle" font-size="9" fill="#888">TheMealDB · NWS alerts</text>
+
+  <!-- ── ARROWS: Netlify → External Services ── -->
+  <line x1="440" y1="77" x2="474" y2="77" stroke="#4f8ef7" stroke-width="1.5" marker-end="url(#arr-accent)"/>
+  <line x1="440" y1="185" x2="474" y2="185" stroke="#4f8ef7" stroke-width="1.5" marker-end="url(#arr-accent)"/>
+  <line x1="440" y1="198" x2="474" y2="284" stroke="#4f8ef7" stroke-width="1.5" marker-end="url(#arr-accent)"/>
+  <line x1="440" y1="210" x2="474" y2="368" stroke="#4f8ef7" stroke-width="1.5" marker-end="url(#arr-accent)"/>
+  <line x1="440" y1="220" x2="474" y2="452" stroke="#4f8ef7" stroke-width="1.5" marker-end="url(#arr-accent)"/>
+
+  <!-- ── LEGEND ── -->
+  <g transform="translate(196,510)">
+    <line x1="0" y1="8" x2="28" y2="8" stroke="#4f8ef7" stroke-width="1.5" marker-end="url(#arr-accent)"/>
+    <text x="34" y="12" font-size="10" fill="#888">network request</text>
+    <line x1="130" y1="8" x2="158" y2="8" stroke="#888" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+    <text x="164" y="12" font-size="10" fill="#888">internal / local</text>
+  </g>
+</svg>
