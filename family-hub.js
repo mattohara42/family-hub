@@ -6795,6 +6795,37 @@ function triggerDestroyTheRing(li) {
   }, 3000);
 }
 
+function triggerHadouken() {
+  const ball = document.createElement('div');
+  ball.className = 'hadouken-ball';
+  document.body.appendChild(ball);
+  ball.addEventListener('animationend', () => ball.remove());
+}
+
+function buildVogonPoetry() {
+  const items = shopItems.filter(i => !i.done).map(i => i.text);
+  if (!items.length) {
+    return `Oh freddled gruntbuggly,\nThy micturations are to me\nAs plurdled gabbleblotchits on a lurgid bee.\n\nAlso, your shopping list is empty. Grob.`;
+  }
+  const lines = [
+    `Oh freddled gruntbuggly,`,
+    `Thy micturations are to me`,
+    `As plurdled gabbleblotchits on a lurgid bee.`,
+    `Groop, I implore thee — thou shalt procure:`,
+    ``,
+  ];
+  // Weave items into terrible couplets
+  const verbs = ['Hath', 'Doth', 'Skulks', 'Lurks', 'Grobs', 'Flurbles', 'Weeps'];
+  items.forEach((item, i) => {
+    const verb = verbs[i % verbs.length];
+    lines.push(`  ${verb} the ${item.toLowerCase()} upon the shelf of anguish,`);
+  });
+  lines.push(``, `Yet still I must acquire them all, in miserable languish.`);
+  lines.push(``, `*This poem has been rated the third worst in the universe.*`);
+  lines.push(`*Your shopping list has not been modified.*`);
+  return lines.join('\n');
+}
+
 function triggerKonami() {
   if (document.body.classList.contains('konami-mode')) return;
   document.body.classList.add('konami-mode');
@@ -7051,6 +7082,17 @@ function checkAssistantEasterEgg(text) {
       setTimeout(() => { document.body.style.transition = ''; }, 800);
     }, 800);
     return `Barrel roll complete. Enemy neutralized.`;
+  }
+
+  // ── Street Fighter ──
+  if (/^hadouken[!.]?$/.test(t)) {
+    triggerHadouken();
+    return `HADOUKEN!`;
+  }
+
+  // ── Vogon poetry ──
+  if (/vogon (poetry|poem)|recite (my |the )?(shopping list|list)|oh freddled/.test(t)) {
+    return buildVogonPoetry();
   }
 
   // ── Named assistant personality triggers ──
