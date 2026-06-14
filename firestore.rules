@@ -1,0 +1,28 @@
+rules_version = '2';
+
+// Family Hub — Firestore Security Rules
+//
+// Restricts all read/write access to signed-in Google accounts whose email
+// is in the ALLOWED_EMAILS list below. Add every family member's Google
+// email address here.
+//
+// To deploy: Firebase Console → Firestore Database → Rules → paste and Publish
+// (or use: firebase deploy --only firestore:rules)
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAllowed() {
+      return request.auth != null
+          && request.auth.token.email in [
+               'ohara.matt@gmail.com'
+               // Add other family member emails here, e.g.:
+               // 'familymember@gmail.com',
+             ];
+    }
+
+    match /{document=**} {
+      allow read, write: if isAllowed();
+    }
+  }
+}
