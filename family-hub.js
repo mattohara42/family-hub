@@ -763,11 +763,6 @@ function onGsiLoad() {
   initGoogleAuth();
 }
 
-// Register service worker for offline support / PWA
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').catch(() => {});
-}
-
 // ── Error monitoring ────────────────────────────────────────────
 // Catches unhandled JS errors and promise rejections.
 // If SENTRY_DSN is set (via Sentry SDK loaded before this file), errors are
@@ -785,6 +780,10 @@ window.onerror = (msg, src, line, col, err) => {
 };
 
 window.addEventListener('load', () => {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js')
+      .catch(err => console.warn('[SW] Registration failed:', err));
+  }
   if (!isConfigured) return;
   // GSI may already be ready (cached) or will call onGsiLoad when it loads
   if (typeof google !== 'undefined' && google.accounts) {
