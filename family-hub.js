@@ -161,7 +161,55 @@ if (localStorage.getItem('fh_mode') === 'amazing')        localStorage.setItem('
 if (localStorage.getItem('fh_mode') === 'nautical-light') localStorage.setItem('fh_mode', 'nautical');
 const _savedMode    = localStorage.getItem('fh_mode');
 let appMode         = _savedMode || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');  // 'light' | 'dark' | 'nautical'
-let mobileTab       = localStorage.getItem('fh_mobileTab') || 'cal';  // 'cal' | 'widgets'
+// Compute smart tab default: time-based on first daily visit, saved on return visits
+function getTimeBasedDefaultTab() {
+  const hour = new Date().getHours();
+  if (hour >= 6 && hour < 12) return 'cal';
+  if (hour >= 12 && hour < 18) return 'shop';
+  if (hour >= 18 && hour < 23) return 'todo';
+  return 'cal';  // 11 PM–6 AM
+}
+
+function getInitialMobileTab() {
+  const today = new Date().toISOString().split('T')[0];  // YYYY-MM-DD
+  const savedDate = localStorage.getItem('fh_mobileTabDate');
+  const savedTab = localStorage.getItem('fh_mobileTab');
+
+  // If we have a saved tab from today, use it
+  if (savedDate === today && savedTab) {
+    return savedTab;
+  }
+
+  // Otherwise, use time-based default for first visit of the day
+  const defaultTab = getTimeBasedDefaultTab();
+  localStorage.setItem('fh_mobileTabDate', today);
+  return defaultTab;
+}
+
+let mobileTab       = getInitialMobileTab();  // 'cal' | 'todo' | 'shop' | 'weather'
+let isMenuOpen      = false;
+let previousTab     = 'cal';  // track previous tab for back navigation from menu
+
+// Compute isMobile boolean for viewport-width-dependent logic
+function updateIsMobile() {
+  return window.innerWidth < 640;
+}
+let isMobile = updateIsMobile();
+
+// Update isMobile on resize
+window.addEventListener('resize', () => {
+  isMobile = updateIsMobile();
+});
+
+// Optional: Lock orientation to portrait on mobile (if browser supports it)
+function lockPortraitOrientation() {
+  if (isMobile && screen.orientation) {
+    screen.orientation.lock('portrait-primary').catch((err) => {
+      console.debug('Portrait lock not supported:', err);
+    });
+  }
+}
+
 // URL param ?layout=auto|portrait|landscape overrides saved setting (emergency escape)
 (function() {
   const p = new URLSearchParams(window.location.search).get('layout');
@@ -1043,7 +1091,7 @@ const CAL_COLORS = DEFAULT_COLORS;
 const DOW_LABELS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
 let calViewDate    = new Date();  // anchor date for any view
-let calView        = localStorage.getItem('fh_calView') || 'month'; // 'month'|'week'|'day'
+let calView        = localStorage.getItem('fh_calView') || (window.innerWidth < 640 ? 'day' : 'month'); // 'month'|'week'|'day'
 // calEventCache: { [calId]: { [YYYY-MM-DD]: [{summary, color, holiday, allDay, startDT, endDT}] } }
 let calEventCache  = {};
 // IDs currently hidden by the user clicking a pill
@@ -8390,9 +8438,55 @@ function setMobileTab(tab) {
   localStorage.setItem('fh_mobileTab', tab);
   document.body.setAttribute('data-mobile-tab', tab);
   const calBtn = document.getElementById('mobileNavCal');
-  const widBtn = document.getElementById('mobileNavWidgets');
+  const todoBtn = document.getElementById('mobileNavTodo');
+  const shopBtn = document.getElementById('mobileNavShop');
+  const weatherBtn = document.getElementById('mobileNavWeather');
   if (calBtn) calBtn.classList.toggle('active', tab === 'cal');
-  if (widBtn) widBtn.classList.toggle('active', tab === 'widgets');
+  if (todoBtn) todoBtn.classList.toggle('active', tab === 'todo');
+  if (shopBtn) shopBtn.classList.toggle('active', tab === 'shop');
+  if (weatherBtn) weatherBtn.classList.toggle('active', tab === 'weather');
+}
+
+function toggleMenu() {
+  if (isMenuOpen) closeMenu();
+  else openMenu();
+}
+
+function openMenu() {
+  isMenuOpen = true;
+  const drawer = document.getElementById('menuDrawer');
+  const backdrop = document.getElementById('menuBackdrop');
+  if (drawer) drawer.classList.add('open');
+  if (backdrop) backdrop.classList.add('open');
+}
+
+function closeMenu() {
+  isMenuOpen = false;
+  const drawer = document.getElementById('menuDrawer');
+  const backdrop = document.getElementById('menuBackdrop');
+  if (drawer) drawer.classList.remove('open');
+  if (backdrop) backdrop.classList.remove('open');
+}
+
+function navigateToMenuItem(item) {
+  previousTab = mobileTab;
+  let tabToShow = null;
+  const menuItemMap = {
+    'budget': 'budget',
+    'wotd': 'wotd',
+    'dadjoke': 'dadjoke',
+    'quotes': 'quotes',
+    'countdown': 'countdown',
+    'news': 'news',
+    'stock': 'stock',
+    'assistant': 'assistant',
+    'members': 'members',
+  };
+  tabToShow = menuItemMap[item];
+  if (tabToShow) {
+    setMobileTab(tabToShow);
+    closeMenu();
+  }
 }
 
 const THEME_COLORS = {
