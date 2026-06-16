@@ -189,6 +189,27 @@ function getInitialMobileTab() {
 let mobileTab       = getInitialMobileTab();  // 'cal' | 'todo' | 'shop' | 'weather'
 let isMenuOpen      = false;
 let previousTab     = 'cal';  // track previous tab for back navigation from menu
+
+// Compute isMobile boolean for viewport-width-dependent logic
+function updateIsMobile() {
+  return window.innerWidth < 640;
+}
+let isMobile = updateIsMobile();
+
+// Update isMobile on resize
+window.addEventListener('resize', () => {
+  isMobile = updateIsMobile();
+});
+
+// Optional: Lock orientation to portrait on mobile (if browser supports it)
+function lockPortraitOrientation() {
+  if (isMobile && screen.orientation) {
+    screen.orientation.lock('portrait-primary').catch((err) => {
+      console.debug('Portrait lock not supported:', err);
+    });
+  }
+}
+
 // URL param ?layout=auto|portrait|landscape overrides saved setting (emergency escape)
 (function() {
   const p = new URLSearchParams(window.location.search).get('layout');
@@ -1070,7 +1091,7 @@ const CAL_COLORS = DEFAULT_COLORS;
 const DOW_LABELS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
 let calViewDate    = new Date();  // anchor date for any view
-let calView        = localStorage.getItem('fh_calView') || 'month'; // 'month'|'week'|'day'
+let calView        = localStorage.getItem('fh_calView') || (window.innerWidth < 640 ? 'day' : 'month'); // 'month'|'week'|'day'
 // calEventCache: { [calId]: { [YYYY-MM-DD]: [{summary, color, holiday, allDay, startDT, endDT}] } }
 let calEventCache  = {};
 // IDs currently hidden by the user clicking a pill
