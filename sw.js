@@ -14,6 +14,8 @@ const APP_SHELL = [
   '/family-hub.js',
   '/favicon.svg',
   '/manifest.json',
+  '/icon-192.png',
+  '/icon-512.png',
 ];
 
 // ── Install: pre-cache app shell ──────────────────────────────
