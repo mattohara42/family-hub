@@ -275,7 +275,7 @@ const ASSISTANT_QUICK_PROMPTS = [
   "Add a $60 internet bill monthly",
 ];
 // ── Widget visibility & placement ────────────────────────────────────────────
-const WIDGET_DEFAULTS = { shopping: true, todo: true, budget: true, chores: true, wotd: true, quote: true, dadjoke: true, yearstrip: true, assistant: true, countdown: true, news: false, stock: false };
+const WIDGET_DEFAULTS = { shopping: true, todo: true, budget: true, chores: true, wotd: true, quote: true, dadjoke: true, yearstrip: true, assistant: true, countdown: true, news: false, stock: false, claudeRemote: false };
 let widgetVisibility = { ...WIDGET_DEFAULTS, ...lsGet('fh_widgets', {}) };
 
 // Placement: 'sidebar' (right column) or 'bottom' (full-width strip below layout)
@@ -283,7 +283,7 @@ const WIDGET_PLACEMENT_DEFAULTS = {
   shopping: 'sidebar', todo: 'sidebar', budget: 'sidebar', chores: 'sidebar',
   wotd: 'sidebar', quote: 'sidebar', dadjoke: 'sidebar',
   yearstrip: 'bottom', assistant: 'sidebar', countdown: 'sidebar',
-  news: 'sidebar', stock: 'sidebar',
+  news: 'sidebar', stock: 'sidebar', claudeRemote: 'sidebar',
 };
 let widgetPlacement = { ...WIDGET_PLACEMENT_DEFAULTS, ...lsGet('fh_widget_placement', {}) };
 
@@ -301,6 +301,7 @@ const WIDGET_ORDER = [
   { key: 'countdown', id: 'countdownCard' },
   { key: 'news',      id: 'newsCard'      },
   { key: 'stock',     id: 'stockCard'     },
+  { key: 'claudeRemote', id: 'claudeRemoteCard' },
 ];
 
 // User-defined widget order (keys only). Persisted in fh_widget_order.
@@ -876,6 +877,7 @@ window.addEventListener('load', () => {
   renderAssistantMessages();   // render empty-state welcome + quick-prompt chips
   // Briefing is now on-demand via the pill button in the assistant header
   renderCountdownCard(); // generate after page settles + weather/cal data loads
+  initClaudeRemote();
   // Close SMS popover on outside click
   document.addEventListener('click', e => {
     const pop = document.getElementById('smsPopover');
@@ -7025,6 +7027,192 @@ function useQuickPrompt(text) {
   sendAssistantMessage();
 }
 
+// ── Claude Remote ──────────────────────────────────────────────
+// Drives Claude Code on your own machine through the local bridge in /bridge.
+// Config (bridge URL + bearer token) lives in localStorage; the token is your
+// machine's secret, never sent anywhere but the bridge you point it at.
+let crConfig    = lsGet('fh_claude_remote', { url: '', token: '' });
+let crSessionId = null;     // resume id from the last run — threads follow-ups
+let crController = null;    // AbortController for the in-flight run
+
+/** Set the header status dot. state: 'ok' | 'off' | 'busy'. */
+function crSetStatus(state, title) {
+  const dot = document.getElementById('crStatusDot');
+  if (!dot) return;
+  dot.className = 'cr-dot cr-' + state;
+  dot.title = title || '';
+}
+
+function crScroll() {
+  const wrap = document.getElementById('crMessages');
+  if (wrap) wrap.scrollTop = wrap.scrollHeight;
+}
+
+/** Append a line/bubble to the transcript and return the element (for live updates). */
+function crAppend(kind, text) {
+  const wrap = document.getElementById('crMessages');
+  if (!wrap) return null;
+  const welcome = document.getElementById('crWelcome');
+  if (welcome) welcome.remove();
+  const el = document.createElement('div');
+  if (kind === 'user')        el.className = 'assistant-msg user';
+  else if (kind === 'assistant') el.className = 'assistant-msg ai cr-stream';
+  else                        el.className = 'cr-line cr-' + kind;   // tool | error | system
+  el.textContent = text;
+  wrap.appendChild(el);
+  crScroll();
+  return el;
+}
+
+/** Short, safe hint of what a tool call is touching. */
+function crToolHint(input) {
+  if (!input || typeof input !== 'object') return '';
+  const v = input.file_path || input.path || input.pattern || input.command || input.query || input.url;
+  return v ? ' — ' + String(v).slice(0, 80) : '';
+}
+
+/** Parse one SSE record ("event: x\ndata: {...}"). Returns {event, data} or null. */
+function crParseEvent(raw) {
+  let event = 'message', data = '';
+  for (const line of raw.split('\n')) {
+    if (line.startsWith('event:'))     event = line.slice(6).trim();
+    else if (line.startsWith('data:')) data += line.slice(5).trim();
+    // lines beginning ':' are heartbeat comments — ignored
+  }
+  if (!data) return null;
+  try { return { event, data: JSON.parse(data) }; }
+  catch { return null; }
+}
+
+function crSetSending(sending) {
+  const send = document.getElementById('crSendBtn');
+  const stop = document.getElementById('crStopBtn');
+  const input = document.getElementById('crInput');
+  if (send)  send.style.display  = sending ? 'none' : '';
+  if (stop)  stop.style.display  = sending ? '' : 'none';
+  if (input) input.disabled = sending;
+  crSetStatus(sending ? 'busy' : (crConfig.url && crConfig.token ? 'ok' : 'off'),
+              sending ? 'Working…' : (crConfig.url ? 'Ready' : 'Not configured'));
+}
+
+async function crSend() {
+  const input = document.getElementById('crInput');
+  const prompt = (input?.value || '').trim();
+  if (!prompt) return;
+  if (!crConfig.url || !crConfig.token) {
+    crAppend('error', 'Set the bridge URL and token in ⚙️ Settings → 🛰 Claude Remote first.');
+    return;
+  }
+  input.value = '';
+  crAppend('user', prompt);
+  crSetSending(true);
+  const bubble = crAppend('assistant', '');   // live-updating assistant bubble
+  let assembled = '';
+  crController = new AbortController();
+
+  try {
+    const res = await fetch(crConfig.url.replace(/\/+$/, '') + '/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + crConfig.token },
+      body: JSON.stringify({ prompt, sessionId: crSessionId || undefined }),
+      signal: crController.signal,
+    });
+    if (!res.ok || !res.body) {
+      crAppend('error', res.status === 401 ? 'Unauthorized — check the token.' : `Bridge error ${res.status}.`);
+      return;
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buf.indexOf('\n\n')) >= 0) {
+        const ev = crParseEvent(buf.slice(0, idx));
+        buf = buf.slice(idx + 2);
+        if (!ev) continue;
+        switch (ev.event) {
+          case 'session':
+            crSessionId = ev.data.sessionId || crSessionId;
+            break;
+          case 'text':
+            assembled += ev.data.text;
+            bubble.textContent = assembled;
+            crScroll();
+            break;
+          case 'tool':
+            crAppend('tool', '🔧 ' + ev.data.name + crToolHint(ev.data.input));
+            break;
+          case 'result':
+            crSessionId = ev.data.sessionId || crSessionId;
+            if (ev.data.isError) crAppend('error', ev.data.text || 'Run ended with an error.');
+            else if (!assembled && ev.data.text) bubble.textContent = ev.data.text;
+            break;
+          case 'error':
+            crAppend('error', ev.data.message || 'Bridge error.');
+            break;
+          case 'aborted':
+            crAppend('system', 'Stopped.');
+            break;
+        }
+      }
+    }
+  } catch (e) {
+    if (crController?.signal.aborted) crAppend('system', 'Stopped.');
+    else crAppend('error', 'Could not reach the bridge — is it running? ' + (e.message || ''));
+  } finally {
+    crSetSending(false);
+    crController = null;
+    if (bubble && !bubble.textContent) bubble.remove();   // drop empty assistant bubble
+  }
+}
+
+function crStop() {
+  if (crController) crController.abort();
+}
+
+function clearClaudeRemote() {
+  crSessionId = null;
+  const wrap = document.getElementById('crMessages');
+  if (wrap) {
+    wrap.innerHTML = '<div class="assistant-welcome" id="crWelcome">New conversation. Send a task to Claude Code on your machine.</div>';
+  }
+}
+
+/** Settings → Test button: GET /health to verify reachability + token. */
+async function crTestConnection() {
+  const url   = document.getElementById('crBridgeUrl').value.trim();
+  const token = document.getElementById('crBridgeToken').value.trim();
+  const out   = document.getElementById('crTestResult');
+  if (!url || !token) { if (out) { out.textContent = 'Enter a URL and token first.'; out.style.color = 'var(--muted)'; } return; }
+  if (out) { out.textContent = 'Testing…'; out.style.color = 'var(--muted)'; }
+  try {
+    const res = await fetch(url.replace(/\/+$/, '') + '/health', {
+      headers: { 'Authorization': 'Bearer ' + token },
+    });
+    if (res.ok) {
+      const info = await res.json().catch(() => ({}));
+      if (out) {
+        out.textContent = `✓ Connected — ${info.permissionMode || '?'} mode, cwd ${info.cwd || '?'}`;
+        out.style.color = 'var(--accent)';
+      }
+    } else if (res.status === 401) {
+      if (out) { out.textContent = '✗ Reached the bridge, but the token was rejected.'; out.style.color = '#e06c75'; }
+    } else {
+      if (out) { out.textContent = `✗ Bridge responded ${res.status}.`; out.style.color = '#e06c75'; }
+    }
+  } catch (e) {
+    if (out) { out.textContent = '✗ Could not reach the bridge. Is it running? Mixed content? '; out.style.color = '#e06c75'; }
+  }
+}
+
+function initClaudeRemote() {
+  crSetStatus(crConfig.url && crConfig.token ? 'ok' : 'off',
+              crConfig.url ? 'Ready' : 'Not configured');
+}
+
 // ── Easter eggs ────────────────────────────────────────────────
 const EGG_CATEGORY_DEFAULTS = { phrases: true, calendar: true, ui: true, weather: true };
 let eggCategories = JSON.parse(localStorage.getItem('fh_eggCategories') || 'null') || { ...EGG_CATEGORY_DEFAULTS };
@@ -8789,6 +8977,10 @@ function openSettings() {
     if (radio) radio.checked = true;
   });
   renderChoreRewardList();
+  // Claude Remote
+  document.getElementById('crBridgeUrl').value   = crConfig.url || '';
+  document.getElementById('crBridgeToken').value = crConfig.token || '';
+  const crTest = document.getElementById('crTestResult'); if (crTest) crTest.textContent = '';
   lcOpenSettings();
   document.getElementById('safePaletteToggle').checked = safePaletteMode;
   document.querySelector(`input[name="assistantWelcome"][value="${assistantWelcomeMode}"]`).checked = true;
@@ -8880,6 +9072,13 @@ function saveSettings() {
     localStorage.setItem('fh_bills_on_cal', JSON.stringify(showBillsOnCal));
   }
   saveChoreRewards();
+  // Claude Remote
+  crConfig = {
+    url:   document.getElementById('crBridgeUrl').value.trim(),
+    token: document.getElementById('crBridgeToken').value.trim(),
+  };
+  localStorage.setItem('fh_claude_remote', JSON.stringify(crConfig));
+  initClaudeRemote();
   applyTvMode(document.getElementById('tvModeToggle').checked);
   // Easter egg categories
   Object.keys(EGG_CATEGORY_DEFAULTS).forEach(cat => {
