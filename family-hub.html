@@ -47,6 +47,35 @@
   See <code>family-hub-setup.md</code> for step-by-step instructions.
 </div>
 
+<!-- Hamburger menu button (mobile only) -->
+<button class="hamburger-btn" id="hamburgerBtn" onclick="toggleMenu()" aria-label="Open menu">☰</button>
+
+<!-- Menu drawer (slides from left) -->
+<div class="menu-drawer" id="menuDrawer">
+  <div class="menu-header">
+    <h2>Menu</h2>
+    <button class="menu-close" onclick="closeMenu()" aria-label="Close menu">✕</button>
+  </div>
+  <nav class="menu-items">
+    <!-- Secondary widgets -->
+    <button class="menu-item" onclick="navigateToMenuItem('budget')">💰 Budget</button>
+    <button class="menu-item" onclick="navigateToMenuItem('wotd')">📖 Word of the Day</button>
+    <button class="menu-item" onclick="navigateToMenuItem('dadjoke')">😄 Dad Joke</button>
+    <button class="menu-item" onclick="navigateToMenuItem('quotes')">💭 Quotes</button>
+    <button class="menu-item" onclick="navigateToMenuItem('countdown')">⏱️ Countdown</button>
+    <button class="menu-item" onclick="navigateToMenuItem('news')">📰 News</button>
+    <button class="menu-item" onclick="navigateToMenuItem('stock')">📈 Stock</button>
+    <button class="menu-item" onclick="navigateToMenuItem('assistant')">🤖 Assistant</button>
+    <hr style="margin:8px 0;border:none;border-top:1px solid rgba(255,255,255,0.1)">
+    <!-- Settings and account -->
+    <button class="menu-item" onclick="openSettings();closeMenu()">⚙️ Settings</button>
+    <button class="menu-item" onclick="navigateToMenuItem('members')">👥 Family Members</button>
+  </nav>
+</div>
+
+<!-- Menu backdrop (for closing when clicked outside) -->
+<div class="menu-backdrop" id="menuBackdrop" onclick="closeMenu()"></div>
+
 <div class="layout">
 
   <!-- Left: calendar + 6-month strip stacked -->
@@ -389,9 +418,17 @@
     <span class="mobile-nav-icon">📅</span>
     <span>Calendar</span>
   </button>
-  <button class="mobile-nav-btn" id="mobileNavWidgets" onclick="setMobileTab('widgets')">
-    <span class="mobile-nav-icon">🧩</span>
-    <span>Widgets</span>
+  <button class="mobile-nav-btn" id="mobileNavTodo" onclick="setMobileTab('todo')">
+    <span class="mobile-nav-icon">✅</span>
+    <span>To-Do</span>
+  </button>
+  <button class="mobile-nav-btn" id="mobileNavShop" onclick="setMobileTab('shop')">
+    <span class="mobile-nav-icon">🛒</span>
+    <span>Shopping</span>
+  </button>
+  <button class="mobile-nav-btn" id="mobileNavWeather" onclick="setMobileTab('weather')">
+    <span class="mobile-nav-icon">🌤️</span>
+    <span>Weather</span>
   </button>
 </nav>
 

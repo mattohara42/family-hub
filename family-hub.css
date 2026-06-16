@@ -3977,14 +3977,17 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
 
 /* Hidden on desktop — shown only inside the 640px media query below */
 .mobile-bottom-nav { display: none; }
+.hamburger-btn { display: none; }
+.menu-drawer { display: none; }
+.menu-backdrop { display: none; }
 
 @media (max-width: 640px) {
-  /* Calendar tab: hide sidebar */
-  body[data-mobile-tab="cal"] .sidebar    { display: none; }
+  /* Calendar tab: show calendar, hide sidebar */
+  body[data-mobile-tab="cal"] .sidebar { display: none; }
 
-  /* Widgets tab: hide calendar column, make sidebar scrollable full-width */
-  body[data-mobile-tab="widgets"] .cal-column { display: none; }
-  body[data-mobile-tab="widgets"] .sidebar {
+  /* To-Do tab: show only to-do card full-width */
+  body[data-mobile-tab="todo"] .cal-column { display: none; }
+  body[data-mobile-tab="todo"] .sidebar {
     display: flex !important;
     flex-direction: column;
     align-items: stretch;
@@ -3993,11 +3996,84 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
     min-height: 0;
     width: 100%;
   }
-  body[data-mobile-tab="widgets"] .sidebar > .card {
+  body[data-mobile-tab="todo"] .sidebar > .card {
     width: 100%;
     box-sizing: border-box;
     flex: none;
   }
+  body[data-mobile-tab="todo"] .sidebar > #weatherCard,
+  body[data-mobile-tab="todo"] .sidebar > #shopCard,
+  body[data-mobile-tab="todo"] .sidebar > #budgetCard,
+  body[data-mobile-tab="todo"] .sidebar > #choreCard,
+  body[data-mobile-tab="todo"] .sidebar > #yearCard,
+  body[data-mobile-tab="todo"] .sidebar > #wotdCard,
+  body[data-mobile-tab="todo"] .sidebar > #dadjokeCard,
+  body[data-mobile-tab="todo"] .sidebar > #quoteCard,
+  body[data-mobile-tab="todo"] .sidebar > #countdownCard,
+  body[data-mobile-tab="todo"] .sidebar > #newsCard,
+  body[data-mobile-tab="todo"] .sidebar > #stockCard,
+  body[data-mobile-tab="todo"] .sidebar > #assistantCard,
+  body[data-mobile-tab="todo"] .sidebar > #controlCard { display: none; }
+
+  /* Shopping tab: show only shopping card full-width */
+  body[data-mobile-tab="shop"] .cal-column { display: none; }
+  body[data-mobile-tab="shop"] .sidebar {
+    display: flex !important;
+    flex-direction: column;
+    align-items: stretch;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+  }
+  body[data-mobile-tab="shop"] .sidebar > .card {
+    width: 100%;
+    box-sizing: border-box;
+    flex: none;
+  }
+  body[data-mobile-tab="shop"] .sidebar > #weatherCard,
+  body[data-mobile-tab="shop"] .sidebar > #todoCard,
+  body[data-mobile-tab="shop"] .sidebar > #budgetCard,
+  body[data-mobile-tab="shop"] .sidebar > #choreCard,
+  body[data-mobile-tab="shop"] .sidebar > #yearCard,
+  body[data-mobile-tab="shop"] .sidebar > #wotdCard,
+  body[data-mobile-tab="shop"] .sidebar > #dadjokeCard,
+  body[data-mobile-tab="shop"] .sidebar > #quoteCard,
+  body[data-mobile-tab="shop"] .sidebar > #countdownCard,
+  body[data-mobile-tab="shop"] .sidebar > #newsCard,
+  body[data-mobile-tab="shop"] .sidebar > #stockCard,
+  body[data-mobile-tab="shop"] .sidebar > #assistantCard,
+  body[data-mobile-tab="shop"] .sidebar > #controlCard { display: none; }
+
+  /* Weather tab: show only weather card full-width */
+  body[data-mobile-tab="weather"] .cal-column { display: none; }
+  body[data-mobile-tab="weather"] .sidebar {
+    display: flex !important;
+    flex-direction: column;
+    align-items: stretch;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+  }
+  body[data-mobile-tab="weather"] .sidebar > .card {
+    width: 100%;
+    box-sizing: border-box;
+    flex: none;
+  }
+  body[data-mobile-tab="weather"] .sidebar > #todoCard,
+  body[data-mobile-tab="weather"] .sidebar > #shopCard,
+  body[data-mobile-tab="weather"] .sidebar > #budgetCard,
+  body[data-mobile-tab="weather"] .sidebar > #choreCard,
+  body[data-mobile-tab="weather"] .sidebar > #yearCard,
+  body[data-mobile-tab="weather"] .sidebar > #wotdCard,
+  body[data-mobile-tab="weather"] .sidebar > #dadjokeCard,
+  body[data-mobile-tab="weather"] .sidebar > #quoteCard,
+  body[data-mobile-tab="weather"] .sidebar > #countdownCard,
+  body[data-mobile-tab="weather"] .sidebar > #newsCard,
+  body[data-mobile-tab="weather"] .sidebar > #stockCard,
+  body[data-mobile-tab="weather"] .sidebar > #assistantCard,
+  body[data-mobile-tab="weather"] .sidebar > #controlCard { display: none; }
 
   /* Bottom nav bar */
   .mobile-bottom-nav {
@@ -4052,6 +4128,268 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
   textarea {
     font-size: max(16px, 1em);
   }
+
+  /* Hamburger button */
+  .hamburger-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    width: 44px;
+    height: 44px;
+    background: var(--surface);
+    border: none;
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 1.5rem;
+    cursor: pointer;
+    z-index: 300;
+    touch-action: manipulation;
+  }
+  .hamburger-btn:active { background: var(--surface2); }
+
+  /* Menu drawer */
+  .menu-drawer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 75vw;
+    max-width: 300px;
+    height: 100vh;
+    background: var(--surface);
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.3);
+    transform: translateX(-100%);
+    transition: transform 0.3s ease-out;
+    z-index: 250;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .menu-drawer.open {
+    transform: translateX(0);
+  }
+
+  /* Menu header */
+  .menu-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .menu-header h2 {
+    margin: 0;
+    font-size: 1.2rem;
+    font-weight: var(--weight-semi);
+  }
+  .menu-close {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 4px;
+    touch-action: manipulation;
+  }
+
+  /* Menu items navigation */
+  .menu-items {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    flex: 1;
+  }
+  .menu-item {
+    background: none;
+    border: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--text);
+    padding: 14px 16px;
+    text-align: left;
+    font-size: 0.95rem;
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: background-color 0.15s;
+  }
+  .menu-item:active { background-color: var(--surface2); }
+
+  /* Menu backdrop (for closing when clicked outside) */
+  .menu-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease-out;
+    z-index: 240;
+  }
+  .menu-backdrop.open {
+    background: rgba(0, 0, 0, 0.5);
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* Secondary menu items: Budget, WOTD, Dad Joke, Quotes, Countdown, News, Stock, Assistant, Members */
+  /* Each shows full-screen with only that card visible */
+  body[data-mobile-tab="budget"] .cal-column,
+  body[data-mobile-tab="wotd"] .cal-column,
+  body[data-mobile-tab="dadjoke"] .cal-column,
+  body[data-mobile-tab="quotes"] .cal-column,
+  body[data-mobile-tab="countdown"] .cal-column,
+  body[data-mobile-tab="news"] .cal-column,
+  body[data-mobile-tab="stock"] .cal-column,
+  body[data-mobile-tab="assistant"] .cal-column,
+  body[data-mobile-tab="members"] .cal-column { display: none; }
+
+  body[data-mobile-tab="budget"] .sidebar,
+  body[data-mobile-tab="wotd"] .sidebar,
+  body[data-mobile-tab="dadjoke"] .sidebar,
+  body[data-mobile-tab="quotes"] .sidebar,
+  body[data-mobile-tab="countdown"] .sidebar,
+  body[data-mobile-tab="news"] .sidebar,
+  body[data-mobile-tab="stock"] .sidebar,
+  body[data-mobile-tab="assistant"] .sidebar,
+  body[data-mobile-tab="members"] .sidebar {
+    display: flex !important;
+    flex-direction: column;
+    align-items: stretch;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+  }
+
+  body[data-mobile-tab="budget"] .sidebar > .card,
+  body[data-mobile-tab="wotd"] .sidebar > .card,
+  body[data-mobile-tab="dadjoke"] .sidebar > .card,
+  body[data-mobile-tab="quotes"] .sidebar > .card,
+  body[data-mobile-tab="countdown"] .sidebar > .card,
+  body[data-mobile-tab="news"] .sidebar > .card,
+  body[data-mobile-tab="stock"] .sidebar > .card,
+  body[data-mobile-tab="assistant"] .sidebar > .card,
+  body[data-mobile-tab="members"] .sidebar > .card {
+    width: 100%;
+    box-sizing: border-box;
+    flex: none;
+  }
+
+  /* Hide non-matching cards for each menu item */
+  body[data-mobile-tab="budget"] .sidebar > #wotdCard,
+  body[data-mobile-tab="budget"] .sidebar > #dadjokeCard,
+  body[data-mobile-tab="budget"] .sidebar > #quoteCard,
+  body[data-mobile-tab="budget"] .sidebar > #countdownCard,
+  body[data-mobile-tab="budget"] .sidebar > #newsCard,
+  body[data-mobile-tab="budget"] .sidebar > #stockCard,
+  body[data-mobile-tab="budget"] .sidebar > #assistantCard,
+  body[data-mobile-tab="budget"] .sidebar > #todoCard,
+  body[data-mobile-tab="budget"] .sidebar > #shopCard,
+  body[data-mobile-tab="budget"] .sidebar > #weatherCard,
+  body[data-mobile-tab="budget"] .sidebar > #choreCard,
+  body[data-mobile-tab="budget"] .sidebar > #yearCard,
+  body[data-mobile-tab="budget"] .sidebar > #controlCard { display: none; }
+
+  body[data-mobile-tab="wotd"] .sidebar > #budgetCard,
+  body[data-mobile-tab="wotd"] .sidebar > #dadjokeCard,
+  body[data-mobile-tab="wotd"] .sidebar > #quoteCard,
+  body[data-mobile-tab="wotd"] .sidebar > #countdownCard,
+  body[data-mobile-tab="wotd"] .sidebar > #newsCard,
+  body[data-mobile-tab="wotd"] .sidebar > #stockCard,
+  body[data-mobile-tab="wotd"] .sidebar > #assistantCard,
+  body[data-mobile-tab="wotd"] .sidebar > #todoCard,
+  body[data-mobile-tab="wotd"] .sidebar > #shopCard,
+  body[data-mobile-tab="wotd"] .sidebar > #weatherCard,
+  body[data-mobile-tab="wotd"] .sidebar > #choreCard,
+  body[data-mobile-tab="wotd"] .sidebar > #yearCard,
+  body[data-mobile-tab="wotd"] .sidebar > #controlCard { display: none; }
+
+  body[data-mobile-tab="dadjoke"] .sidebar > #budgetCard,
+  body[data-mobile-tab="dadjoke"] .sidebar > #wotdCard,
+  body[data-mobile-tab="dadjoke"] .sidebar > #quoteCard,
+  body[data-mobile-tab="dadjoke"] .sidebar > #countdownCard,
+  body[data-mobile-tab="dadjoke"] .sidebar > #newsCard,
+  body[data-mobile-tab="dadjoke"] .sidebar > #stockCard,
+  body[data-mobile-tab="dadjoke"] .sidebar > #assistantCard,
+  body[data-mobile-tab="dadjoke"] .sidebar > #todoCard,
+  body[data-mobile-tab="dadjoke"] .sidebar > #shopCard,
+  body[data-mobile-tab="dadjoke"] .sidebar > #weatherCard,
+  body[data-mobile-tab="dadjoke"] .sidebar > #choreCard,
+  body[data-mobile-tab="dadjoke"] .sidebar > #yearCard,
+  body[data-mobile-tab="dadjoke"] .sidebar > #controlCard { display: none; }
+
+  body[data-mobile-tab="quotes"] .sidebar > #budgetCard,
+  body[data-mobile-tab="quotes"] .sidebar > #wotdCard,
+  body[data-mobile-tab="quotes"] .sidebar > #dadjokeCard,
+  body[data-mobile-tab="quotes"] .sidebar > #countdownCard,
+  body[data-mobile-tab="quotes"] .sidebar > #newsCard,
+  body[data-mobile-tab="quotes"] .sidebar > #stockCard,
+  body[data-mobile-tab="quotes"] .sidebar > #assistantCard,
+  body[data-mobile-tab="quotes"] .sidebar > #todoCard,
+  body[data-mobile-tab="quotes"] .sidebar > #shopCard,
+  body[data-mobile-tab="quotes"] .sidebar > #weatherCard,
+  body[data-mobile-tab="quotes"] .sidebar > #choreCard,
+  body[data-mobile-tab="quotes"] .sidebar > #yearCard,
+  body[data-mobile-tab="quotes"] .sidebar > #controlCard { display: none; }
+
+  body[data-mobile-tab="countdown"] .sidebar > #budgetCard,
+  body[data-mobile-tab="countdown"] .sidebar > #wotdCard,
+  body[data-mobile-tab="countdown"] .sidebar > #dadjokeCard,
+  body[data-mobile-tab="countdown"] .sidebar > #quoteCard,
+  body[data-mobile-tab="countdown"] .sidebar > #newsCard,
+  body[data-mobile-tab="countdown"] .sidebar > #stockCard,
+  body[data-mobile-tab="countdown"] .sidebar > #assistantCard,
+  body[data-mobile-tab="countdown"] .sidebar > #todoCard,
+  body[data-mobile-tab="countdown"] .sidebar > #shopCard,
+  body[data-mobile-tab="countdown"] .sidebar > #weatherCard,
+  body[data-mobile-tab="countdown"] .sidebar > #choreCard,
+  body[data-mobile-tab="countdown"] .sidebar > #yearCard,
+  body[data-mobile-tab="countdown"] .sidebar > #controlCard { display: none; }
+
+  body[data-mobile-tab="news"] .sidebar > #budgetCard,
+  body[data-mobile-tab="news"] .sidebar > #wotdCard,
+  body[data-mobile-tab="news"] .sidebar > #dadjokeCard,
+  body[data-mobile-tab="news"] .sidebar > #quoteCard,
+  body[data-mobile-tab="news"] .sidebar > #countdownCard,
+  body[data-mobile-tab="news"] .sidebar > #stockCard,
+  body[data-mobile-tab="news"] .sidebar > #assistantCard,
+  body[data-mobile-tab="news"] .sidebar > #todoCard,
+  body[data-mobile-tab="news"] .sidebar > #shopCard,
+  body[data-mobile-tab="news"] .sidebar > #weatherCard,
+  body[data-mobile-tab="news"] .sidebar > #choreCard,
+  body[data-mobile-tab="news"] .sidebar > #yearCard,
+  body[data-mobile-tab="news"] .sidebar > #controlCard { display: none; }
+
+  body[data-mobile-tab="stock"] .sidebar > #budgetCard,
+  body[data-mobile-tab="stock"] .sidebar > #wotdCard,
+  body[data-mobile-tab="stock"] .sidebar > #dadjokeCard,
+  body[data-mobile-tab="stock"] .sidebar > #quoteCard,
+  body[data-mobile-tab="stock"] .sidebar > #countdownCard,
+  body[data-mobile-tab="stock"] .sidebar > #newsCard,
+  body[data-mobile-tab="stock"] .sidebar > #assistantCard,
+  body[data-mobile-tab="stock"] .sidebar > #todoCard,
+  body[data-mobile-tab="stock"] .sidebar > #shopCard,
+  body[data-mobile-tab="stock"] .sidebar > #weatherCard,
+  body[data-mobile-tab="stock"] .sidebar > #choreCard,
+  body[data-mobile-tab="stock"] .sidebar > #yearCard,
+  body[data-mobile-tab="stock"] .sidebar > #controlCard { display: none; }
+
+  body[data-mobile-tab="assistant"] .sidebar > #budgetCard,
+  body[data-mobile-tab="assistant"] .sidebar > #wotdCard,
+  body[data-mobile-tab="assistant"] .sidebar > #dadjokeCard,
+  body[data-mobile-tab="assistant"] .sidebar > #quoteCard,
+  body[data-mobile-tab="assistant"] .sidebar > #countdownCard,
+  body[data-mobile-tab="assistant"] .sidebar > #newsCard,
+  body[data-mobile-tab="assistant"] .sidebar > #stockCard,
+  body[data-mobile-tab="assistant"] .sidebar > #todoCard,
+  body[data-mobile-tab="assistant"] .sidebar > #shopCard,
+  body[data-mobile-tab="assistant"] .sidebar > #weatherCard,
+  body[data-mobile-tab="assistant"] .sidebar > #choreCard,
+  body[data-mobile-tab="assistant"] .sidebar > #yearCard,
+  body[data-mobile-tab="assistant"] .sidebar > #controlCard { display: none; }
 }
 
 /* ≤400px: re-apply bottom padding (that breakpoint resets padding shorthand) */
