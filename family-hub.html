@@ -469,6 +469,7 @@
       <button class="modal-tab"        data-tab="chores"   onclick="switchSettingsTab('chores')">⭐ Chores</button>
       <button class="modal-tab"        data-tab="meals"    onclick="switchSettingsTab('meals')">🍽 Meals</button>
       <button class="modal-tab"        data-tab="widgets"  onclick="switchSettingsTab('widgets')">🧩 Widgets</button>
+      <button class="modal-tab"        data-tab="events"   onclick="switchSettingsTab('events')">💡 Events</button>
       <button class="modal-tab"        data-tab="feeds"    onclick="switchSettingsTab('feeds')">📊 Feeds</button>
       <button class="modal-tab"        data-tab="claude"   onclick="switchSettingsTab('claude')">🛰 Claude Remote</button>
       <button class="modal-tab"        data-tab="eggs"     onclick="switchSettingsTab('eggs')">🥚 Easter Eggs</button>
@@ -1108,6 +1109,66 @@
           </p>
         </div>
       </div><!-- /claude -->
+
+      <!-- ── Events ── -->
+      <div class="settings-panel" data-panel="events">
+        <div class="field">
+          <label>Location</label>
+          <input type="text" id="eventLocation" placeholder="e.g. Portland, OR" />
+        </div>
+        <div class="field">
+          <label>Max distance</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:6px">
+              <input type="radio" name="eventDistance" value="30" />
+              <span>30 min</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:6px">
+              <input type="radio" name="eventDistance" value="60" />
+              <span>1 hour</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:6px">
+              <input type="radio" name="eventDistance" value="120" />
+              <span>2 hours</span>
+            </label>
+          </div>
+        </div>
+        <div class="toggle-row" style="margin-top:10px;border-top:1px solid rgba(128,128,128,.12);padding-top:12px">
+          <label class="toggle-switch">
+            <input type="checkbox" id="eventShowOnCalendar" />
+            <span class="toggle-track"></span>
+          </label>
+          <div>
+            <div class="toggle-label">Show events on calendar</div>
+            <div class="toggle-sub">Display event indicators on calendar grid (by type)</div>
+          </div>
+        </div>
+        <div class="field" style="margin-top:12px;border-top:1px solid rgba(128,128,128,.12);padding-top:12px">
+          <label>Event types to show on calendar</label>
+          <div style="display:flex;flex-wrap:wrap;gap:8px">
+            <label style="display:flex;align-items:center;gap:4px">
+              <input type="checkbox" value="concert" class="eventTypeCheckbox" />
+              <span>Concerts</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:4px">
+              <input type="checkbox" value="hike" class="eventTypeCheckbox" />
+              <span>Hikes</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:4px">
+              <input type="checkbox" value="class" class="eventTypeCheckbox" />
+              <span>Classes</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:4px">
+              <input type="checkbox" value="estate" class="eventTypeCheckbox" />
+              <span>Estate Sales</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:4px">
+              <input type="checkbox" value="activity" class="eventTypeCheckbox" />
+              <span>Activities</span>
+            </label>
+          </div>
+        </div>
+      </div><!-- /events -->
 
       <!-- ── Home Calendars ── -->
     </div><!-- /settings-panels -->

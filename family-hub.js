@@ -143,6 +143,11 @@ let wxEnabledViews      = lsGet('fh_wxEnabledViews', { '5day': true, 'hourly': t
 const snarkyCache       = {};                              // { cacheKey: text } — in-memory per session
 let wxTickerEnabled     = lsGet('fh_wxTicker', true);      // weather info ticker
 let wxActivityEnabled   = lsGet('fh_wxActivity', true);    // activity tags strip
+// ── Event Discovery ──
+let eventLocation       = lsGet('fh_eventLocation', 'Portland');   // City name for event search
+let eventMaxDistance    = lsGet('fh_eventMaxDistance', 120);       // Minutes: 30, 60, or 120
+let eventShowOnCalendar = lsGet('fh_eventShowOnCalendar', false);  // Show event indicators on calendar
+let eventCalendarTypes  = lsGet('fh_eventCalendarTypes', []);      // Event types to show on calendar
 let userName        = localStorage.getItem('fh_name') || 'Someone';
 let appTitle        = localStorage.getItem('fh_appTitle') || 'Family Hub';
 let appTitleEmoji   = localStorage.getItem('fh_appTitleEmoji') || '🏠';
@@ -8934,6 +8939,13 @@ function openSettings() {
   renderLoadingMsgList();
   renderFamilyMemberList();
   renderMealTemplateList();
+  // ── Event settings ──
+  document.getElementById('eventLocation').value = eventLocation;
+  document.querySelector(`input[name="eventDistance"][value="${eventMaxDistance}"]`).checked = true;
+  document.getElementById('eventShowOnCalendar').checked = eventShowOnCalendar;
+  document.querySelectorAll('.eventTypeCheckbox').forEach(cb => {
+    cb.checked = eventCalendarTypes.includes(cb.value);
+  });
   // Render diet checkboxes
   const dietGrid = document.getElementById('mealDietGrid');
   dietGrid.innerHTML = '';
@@ -9058,6 +9070,15 @@ function saveSettings() {
   localStorage.setItem('fh_widgets',          JSON.stringify(widgetVisibility));
   localStorage.setItem('fh_widget_placement', JSON.stringify(widgetPlacement));
   applyWidgetPlacement();
+  // ── Event settings ──
+  eventLocation = document.getElementById('eventLocation').value.trim() || 'Portland';
+  eventMaxDistance = parseInt(document.querySelector(`input[name="eventDistance"]:checked`).value) || 120;
+  eventShowOnCalendar = document.getElementById('eventShowOnCalendar').checked;
+  eventCalendarTypes = Array.from(document.querySelectorAll('.eventTypeCheckbox:checked')).map(cb => cb.value);
+  localStorage.setItem('fh_eventLocation', eventLocation);
+  localStorage.setItem('fh_eventMaxDistance', String(eventMaxDistance));
+  localStorage.setItem('fh_eventShowOnCalendar', JSON.stringify(eventShowOnCalendar));
+  localStorage.setItem('fh_eventCalendarTypes', JSON.stringify(eventCalendarTypes));
   const hncEl = document.getElementById('newsHeadlineCount');
   if (hncEl) { newsHeadlineCount = parseInt(hncEl.value) || 5; saveNewsFeeds(); }
   if (widgetVisibility.news)  loadNewsFeeds();
