@@ -12,10 +12,17 @@ const OWM_GEO_BASE = 'https://api.openweathermap.org/geo/1.0';
 
 // Source status tracking for this request
 const sourceStatus = {
-  ticketmaster: { ok: true, count: 0 },
-  eventbrite: { ok: true, count: 0 },
-  estatesales: { ok: true, count: 0 },
-  craigslist: { ok: true, count: 0 }
+  ticketmaster: { ok: true, count: 0, error: null },
+  eventbrite: { ok: true, count: 0, error: null },
+  estatesales: { ok: true, count: 0, error: null },
+  craigslist: { ok: true, count: 0, error: null }
+};
+
+// Retry configuration
+const RETRY_CONFIG = {
+  maxRetries: 2,
+  baseDelay: 1000,  // 1 second
+  maxDelay: 10000   // 10 seconds
 };
 
 exports.handler = async (event) => {
@@ -105,9 +112,14 @@ async function geocodeLocation(location) {
     const key = process.env.OWM_KEY;
     if (!key) throw new Error('OWM_KEY not set');
 
-    const params = new URLSearchParams({ q: location, limit: 1, appid: key });
-    const r = await fetch(`${OWM_GEO_BASE}/direct?${params}`);
-    const data = await r.json();
+    const data = await fetchWithRetry(async () => {
+      const params = new URLSearchParams({ q: location, limit: 1, appid: key });
+      const r = await fetch(`${OWM_GEO_BASE}/direct?${params}`);
+      if (!r.ok) {
+        throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+      }
+      return r.json();
+    }, 'Geocoding');
 
     if (!data || data.length === 0) {
       throw new Error(`No results for location: ${location}`);
@@ -122,6 +134,30 @@ async function geocodeLocation(location) {
 }
 
 // ────────────────────────────────────────────────────────────────
+// RETRY LOGIC
+// ────────────────────────────────────────────────────────────────
+
+async function fetchWithRetry(fn, sourceName, maxRetries = RETRY_CONFIG.maxRetries) {
+  let lastErr;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (attempt < maxRetries) {
+        const delay = Math.min(
+          RETRY_CONFIG.baseDelay * Math.pow(2, attempt),
+          RETRY_CONFIG.maxDelay
+        );
+        console.warn(`[Events] ${sourceName} attempt ${attempt + 1} failed, retrying in ${delay}ms:`, err.message);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  throw lastErr;
+}
+
+// ────────────────────────────────────────────────────────────────
 // API: TICKETMASTER
 // ────────────────────────────────────────────────────────────────
 
@@ -131,24 +167,26 @@ async function fetchTicketmaster(city, state, lat, lon) {
     if (!key) {
       console.warn('[Events] TICKETMASTER_KEY not set');
       sourceStatus.ticketmaster.ok = false;
+      sourceStatus.ticketmaster.error = 'API key not configured';
       return [];
     }
 
-    const params = new URLSearchParams({
-      apikey: key,
-      latlong: `${lat},${lon}`,
-      radius: 120,  // km
-      size: 50,
-      sort: 'date,asc'
-    });
+    const data = await fetchWithRetry(async () => {
+      const params = new URLSearchParams({
+        apikey: key,
+        latlong: `${lat},${lon}`,
+        radius: 120,  // km
+        size: 50,
+        sort: 'date,asc'
+      });
 
-    const r = await fetch(`${TM_API_BASE}/events.json?${params}`);
-    if (!r.ok) {
-      sourceStatus.ticketmaster.ok = false;
-      return [];
-    }
+      const r = await fetch(`${TM_API_BASE}/events.json?${params}`);
+      if (!r.ok) {
+        throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+      }
+      return r.json();
+    }, 'Ticketmaster');
 
-    const data = await r.json();
     const events = data._embedded?.events || [];
 
     const results = events.map(e => ({
@@ -173,10 +211,13 @@ async function fetchTicketmaster(city, state, lat, lon) {
     }));
 
     sourceStatus.ticketmaster.count = results.length;
+    sourceStatus.ticketmaster.ok = true;
+    sourceStatus.ticketmaster.error = null;
     return results;
   } catch (err) {
     console.error('[Events] Ticketmaster error:', err);
     sourceStatus.ticketmaster.ok = false;
+    sourceStatus.ticketmaster.error = err.message;
     return [];
   }
 }
@@ -191,28 +232,29 @@ async function fetchEventbrite(lat, lon) {
     if (!key) {
       console.warn('[Events] EVENTBRITE_KEY not set');
       sourceStatus.eventbrite.ok = false;
+      sourceStatus.eventbrite.error = 'API key not configured';
       return [];
     }
 
-    // Eventbrite uses search with location in different ways; this is a simplified approach
-    const params = new URLSearchParams({
-      token: key,
-      'location.latitude': lat,
-      'location.longitude': lon,
-      'location.within': '120km',
-      'start_date.range_start': new Date().toISOString().split('T')[0],
-      'start_date.range_end': new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      'sort_by': 'date',
-      'expand': 'venue'
-    });
+    const data = await fetchWithRetry(async () => {
+      const params = new URLSearchParams({
+        token: key,
+        'location.latitude': lat,
+        'location.longitude': lon,
+        'location.within': '120km',
+        'start_date.range_start': new Date().toISOString().split('T')[0],
+        'start_date.range_end': new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        'sort_by': 'date',
+        'expand': 'venue'
+      });
 
-    const r = await fetch(`${EB_API_BASE}/events/search/?${params}`);
-    if (!r.ok) {
-      sourceStatus.eventbrite.ok = false;
-      return [];
-    }
+      const r = await fetch(`${EB_API_BASE}/events/search/?${params}`);
+      if (!r.ok) {
+        throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+      }
+      return r.json();
+    }, 'Eventbrite');
 
-    const data = await r.json();
     const events = data.events || [];
 
     const results = events.map(e => ({
@@ -237,10 +279,13 @@ async function fetchEventbrite(lat, lon) {
     }));
 
     sourceStatus.eventbrite.count = results.length;
+    sourceStatus.eventbrite.ok = true;
+    sourceStatus.eventbrite.error = null;
     return results;
   } catch (err) {
     console.error('[Events] Eventbrite error:', err);
     sourceStatus.eventbrite.ok = false;
+    sourceStatus.eventbrite.error = err.message;
     return [];
   }
 }
@@ -348,17 +393,21 @@ async function addWeatherContext(event) {
     const key = process.env.OWM_KEY;
     if (!key) return event;
 
-    const params = new URLSearchParams({
-      lat: event.location.lat,
-      lon: event.location.lon,
-      appid: key,
-      units: 'imperial'
-    });
+    const data = await fetchWithRetry(async () => {
+      const params = new URLSearchParams({
+        lat: event.location.lat,
+        lon: event.location.lon,
+        appid: key,
+        units: 'imperial'
+      });
 
-    const r = await fetch(`${OWM_API_BASE}/forecast?${params}`);
-    if (!r.ok) return event;
+      const r = await fetch(`${OWM_API_BASE}/forecast?${params}`);
+      if (!r.ok) {
+        throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+      }
+      return r.json();
+    }, 'Weather', 1);  // Single retry for weather (less critical)
 
-    const data = await r.json();
     const eventDate = event.date;
     const dayForecasts = (data.list || []).filter(f => f.dt_txt.startsWith(eventDate));
 
@@ -377,6 +426,7 @@ async function addWeatherContext(event) {
     return event;
   } catch (err) {
     // Silently continue if weather fails
+    console.warn('[Events] Weather enrichment failed (non-critical):', err.message);
     return event;
   }
 }
