@@ -9429,3 +9429,119 @@ function showBgPhoto(url) {
   }, 300);
 }
 
+// ═══════════════════════════════════════════════════════════════════
+//  🎫 EVENT DISCOVERY — IndexedDB caching layer
+// ═══════════════════════════════════════════════════════════════════
+
+const EVENTS_DB_NAME = 'fh_events';
+const EVENTS_DB_VERSION = 1;
+const EVENTS_STORE_NAME = 'events';
+const EVENTS_CACHE_STORE_NAME = 'eventCache';
+
+async function initEventsDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(EVENTS_DB_NAME, EVENTS_DB_VERSION);
+
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => resolve(req.result);
+
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+
+      // Events store
+      if (!db.objectStoreNames.contains(EVENTS_STORE_NAME)) {
+        const evStore = db.createObjectStore(EVENTS_STORE_NAME, { keyPath: 'id' });
+        evStore.createIndex('byDate', 'date');
+        evStore.createIndex('byType', 'type');
+        evStore.createIndex('byDistance', 'location.distanceMiles');
+      }
+
+      // Cache metadata store
+      if (!db.objectStoreNames.contains(EVENTS_CACHE_STORE_NAME)) {
+        db.createObjectStore(EVENTS_CACHE_STORE_NAME, { keyPath: 'key' });
+      }
+    };
+  });
+}
+
+async function getEventsFromCache() {
+  try {
+    const db = await initEventsDB();
+    const tx = db.transaction(EVENTS_STORE_NAME, 'readonly');
+    const store = tx.objectStore(EVENTS_STORE_NAME);
+
+    return new Promise((resolve, reject) => {
+      const req = store.getAll();
+      req.onsuccess = () => {
+        const events = req.result;
+        if (!events || events.length === 0) {
+          resolve(null);
+        } else {
+          resolve(events);
+        }
+      };
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) {
+    console.warn('[Events] Cache read failed:', err);
+    return null;
+  }
+}
+
+async function saveEventsToCache(events, meta) {
+  try {
+    const db = await initEventsDB();
+    const tx = db.transaction([EVENTS_STORE_NAME, EVENTS_CACHE_STORE_NAME], 'readwrite');
+
+    // Clear old events
+    const clearReq = tx.objectStore(EVENTS_STORE_NAME).clear();
+
+    // Write new events with timestamp
+    events.forEach(e => {
+      tx.objectStore(EVENTS_STORE_NAME).add({
+        ...e,
+        fetchedAt: Date.now()
+      });
+    });
+
+    // Write metadata
+    tx.objectStore(EVENTS_CACHE_STORE_NAME).put({
+      key: 'current',
+      timestamp: Date.now(),
+      ...meta
+    });
+
+    return new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (err) {
+    console.warn('[Events] Cache write failed:', err);
+  }
+}
+
+async function shouldRefreshCache() {
+  try {
+    const db = await initEventsDB();
+    const tx = db.transaction(EVENTS_CACHE_STORE_NAME, 'readonly');
+    const store = tx.objectStore(EVENTS_CACHE_STORE_NAME);
+
+    return new Promise((resolve) => {
+      const req = store.get('current');
+      req.onsuccess = () => {
+        const meta = req.result;
+        if (!meta) {
+          resolve(true);  // No cache
+        } else {
+          const ageMinutes = (Date.now() - meta.timestamp) / 60000;
+          resolve(ageMinutes > 240);  // Refresh if > 4 hours old
+        }
+      };
+      req.onerror = () => resolve(true);  // Error = refresh
+    });
+  } catch (err) {
+    console.warn('[Events] Cache age check failed:', err);
+    return true;  // Error = refresh
+  }
+}
+
