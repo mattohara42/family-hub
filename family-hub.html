@@ -95,12 +95,15 @@
           <span id="calendarStatus"></span>
           <button onclick="changeCalPeriod(1)" aria-label="Next period">&#8250;</button>
         </div>
-        <!-- Right: view tabs -->
-        <div class="cal-view-tabs">
-          <button class="cal-view-tab" id="viewTab_month"  onclick="switchCalView('month')">Month</button>
-          <button class="cal-view-tab" id="viewTab_week"   onclick="switchCalView('week')">Week</button>
-          <button class="cal-view-tab" id="viewTab_day"    onclick="switchCalView('day')">Day</button>
-          <button class="cal-view-tab" id="viewTab_agenda" onclick="switchCalView('agenda')">Agenda</button>
+        <!-- Right: event discovery + view tabs -->
+        <div style="display:flex;align-items:center;gap:12px">
+          <button id="eventsDiscoverBtn" class="cal-event-discover-btn" onclick="openEventsModal()" title="Discover nearby events" aria-label="Discover events">💡</button>
+          <div class="cal-view-tabs">
+            <button class="cal-view-tab" id="viewTab_month"  onclick="switchCalView('month')">Month</button>
+            <button class="cal-view-tab" id="viewTab_week"   onclick="switchCalView('week')">Week</button>
+            <button class="cal-view-tab" id="viewTab_day"    onclick="switchCalView('day')">Day</button>
+            <button class="cal-view-tab" id="viewTab_agenda" onclick="switchCalView('agenda')">Agenda</button>
+          </div>
         </div>
       </div>
       <div class="card-body">
