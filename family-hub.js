@@ -9545,3 +9545,190 @@ async function shouldRefreshCache() {
   }
 }
 
+// ───────────────────────────────────────────────────────────────────
+// EVENT DISCOVERY MODAL
+// ───────────────────────────────────────────────────────────────────
+
+let eventsModalOpen = false;
+let eventsData = [];           // Current displayed events
+let eventsRawData = [];        // Full result set from backend
+let eventsFetchTimestamp = 0;  // When we last fetched
+let eventsSort = 'distance';   // Current sort mode
+
+async function openEventsModal() {
+  eventsModalOpen = true;
+  document.getElementById('eventsModal').style.display = 'flex';
+
+  // 1. Show cached data immediately
+  const cached = await getEventsFromCache();
+  if (cached?.length > 0) {
+    eventsData = cached;
+    eventsRawData = cached;
+    renderEventsList(cached);
+    updateEventsAgeLabel(cached[0]?.fetchedAt);
+  } else {
+    document.getElementById('eventsList').innerHTML = '<p style="color:var(--muted)">Loading events…</p>';
+  }
+
+  // 2. Fetch fresh in background
+  fetchAndUpdateEvents();
+
+  trapFocus(document.querySelector('#eventsModal .modal'), null, closeEventsModal);
+}
+
+function closeEventsModal() {
+  eventsModalOpen = false;
+  document.getElementById('eventsModal').style.display = 'none';
+  releaseFocusTrap();
+}
+
+async function fetchAndUpdateEvents() {
+  const location = eventLocation;
+  const radius = eventMaxDistance;
+
+  try {
+    const url = `/.netlify/functions/events?location=${encodeURIComponent(location)}&radius=${radius}`;
+    const r = await fetch(url);
+    const data = await r.json();
+
+    if (data.success) {
+      eventsRawData = data.events;
+      eventsData = applyFiltersAndSort(eventsRawData);
+
+      // Save to IndexedDB
+      await saveEventsToCache(eventsRawData, {
+        timestamp: Date.now(),
+        location,
+        radius
+      });
+
+      // Re-render
+      renderEventsList(eventsData);
+      updateEventsAgeLabel(Date.now());
+    } else {
+      showEventsError(`Unable to fetch events: ${data.error}`);
+    }
+  } catch (err) {
+    console.warn('[Events] Fetch failed:', err);
+    showEventsError('Unable to fetch events. Using cached data.');
+  }
+}
+
+function applyFiltersAndSort(events) {
+  let filtered = [...events];
+
+  // Apply type filter if specified
+  const typeFilter = document.getElementById('eventsFilterType').value.toLowerCase().trim();
+  if (typeFilter) {
+    filtered = filtered.filter(e => e.type.toLowerCase().includes(typeFilter));
+  }
+
+  // Apply sort
+  const sortBy = document.getElementById('eventsSortBy').value || eventsSort;
+  if (sortBy === 'distance') {
+    filtered.sort((a, b) => (a.location.distanceMiles || 999) - (b.location.distanceMiles || 999));
+  } else if (sortBy === 'date') {
+    filtered.sort((a, b) => (a.date || '9999').localeCompare(b.date || '9999'));
+  }
+
+  return filtered;
+}
+
+function sortAndRenderEvents() {
+  eventsData = applyFiltersAndSort(eventsRawData);
+  renderEventsList(eventsData);
+}
+
+function renderEventsList(events) {
+  const html = events.length > 0
+    ? events.map(e => renderEventCard(e)).join('')
+    : '<p style="color:var(--muted);padding:20px;text-align:center">No events found. Try expanding your distance or changing your location.</p>';
+
+  document.getElementById('eventsList').innerHTML = html;
+}
+
+function renderEventCard(event) {
+  const calendarLabel = event.calendarConflict
+    ? '<span class="event-calendar-indicator calendar-conflict">⚠ You\'re busy</span>'
+    : '<span class="event-calendar-indicator">✓ You\'re free</span>';
+
+  const weatherHtml = event.weather
+    ? `<div class="event-weather"><span class="weather-icon">${getWeatherEmoji(event.weather.condition)}</span><span class="weather-text">${event.weather.temp}°F, ${event.weather.condition}</span></div>`
+    : '';
+
+  return `
+    <div class="event-card">
+      <h3>${escapeHtml(event.title)} <span class="event-type-badge">${event.type}</span></h3>
+      <div class="event-date-time">
+        <span class="event-date">${event.date || 'TBD'}</span>
+        ${event.time ? `<span class="event-time">${event.time}</span>` : '<span style="color:var(--muted)">All day</span>'}
+      </div>
+      <div class="event-location">
+        <span class="event-distance">${(event.location.distanceMiles || 0).toFixed(1)} mi</span>
+        <span>${escapeHtml(event.location.address)}</span>
+      </div>
+      ${calendarLabel}
+      ${weatherHtml}
+      <div class="event-description">${escapeHtml(event.description)}</div>
+      <div class="event-actions">
+        <a href="${escapeHtml(event.sourceUrl)}" target="_blank" rel="noopener">View on ${event.source}</a>
+      </div>
+    </div>
+  `;
+}
+
+function updateEventsAgeLabel(timestamp) {
+  const el = document.getElementById('eventsAgeLabel');
+  if (!timestamp) {
+    el.textContent = '';
+    return;
+  }
+
+  const ageMs = Date.now() - timestamp;
+  const minutes = Math.round(ageMs / 60000);
+
+  let label = '';
+  if (minutes <= 2) {
+    label = '🟢 Fresh — just now';
+  } else if (minutes < 60) {
+    label = `From ${minutes} minutes ago`;
+  } else if (minutes < 1440) {
+    const hours = Math.round(minutes / 60);
+    label = `From ${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+  } else {
+    label = '⚠️ Cached — may be outdated. Tap Refresh.';
+  }
+
+  el.textContent = label;
+}
+
+function refreshEvents() {
+  document.getElementById('eventsList').innerHTML = '<p style="color:var(--muted)">Refreshing…</p>';
+  fetchAndUpdateEvents();
+}
+
+function showEventsError(msg) {
+  const el = document.getElementById('eventsList');
+  el.innerHTML = `<div style="color:var(--red);padding:20px;text-align:center">${escapeHtml(msg)}<br><button class="btn btn-sm" onclick="refreshEvents()" style="margin-top:10px">Retry</button></div>`;
+}
+
+function getWeatherEmoji(condition) {
+  const map = {
+    'sunny': '☀️', 'clear': '☀️',
+    'rainy': '🌧️', 'rain': '🌧️',
+    'cloudy': '☁️', 'clouds': '☁️',
+    'snowy': '❄️', 'snow': '❄️',
+    'stormy': '⛈️', 'thunderstorm': '⛈️',
+    'windy': '💨'
+  };
+  const key = (condition || '').toLowerCase();
+  return map[key] || '🌤️';
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
