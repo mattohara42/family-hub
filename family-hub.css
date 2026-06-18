@@ -4913,3 +4913,22 @@ body.tv-mode .card:hover { box-shadow: none; }
   opacity: 1;
   transform: scale(1.1);
 }
+
+/* Calendar overlay event indicators */
+.event-overlay-indicator {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-size: 12px;
+  line-height: 24px;
+  text-align: center;
+  margin: 2px;
+  background: var(--accent);
+  color: var(--text);
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+.event-overlay-indicator:hover {
+  transform: scale(1.2);
+  box-shadow: 0 2px 8px rgba(108,142,245,0.3);
+}

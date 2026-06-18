@@ -9592,7 +9592,7 @@ async function fetchAndUpdateEvents() {
     const data = await r.json();
 
     if (data.success) {
-      eventsRawData = data.events;
+      eventsRawData = attachCalendarConflictsToEvents(data.events);
       eventsData = applyFiltersAndSort(eventsRawData);
 
       // Save to IndexedDB
@@ -9604,6 +9604,7 @@ async function fetchAndUpdateEvents() {
 
       // Re-render
       renderEventsList(eventsData);
+      renderEventCalendarOverlay();  // Update calendar with event indicators
       updateEventsAgeLabel(Date.now());
     } else {
       showEventsError(`Unable to fetch events: ${data.error}`);
@@ -9730,5 +9731,83 @@ function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
+}
+
+// ───────────────────────────────────────────────────────────────────
+// CALENDAR INTEGRATION — Conflict detection & overlay
+// ───────────────────────────────────────────────────────────────────
+
+function checkCalendarConflict(eventDate, eventStartTime, eventEndTime) {
+  // eventDate: 'YYYY-MM-DD'
+  // eventStartTime, eventEndTime: 'HH:MM' or null (all-day)
+
+  // If event is all-day, mark as busy if any calendar has events
+  if (!eventStartTime) {
+    for (const calId of Object.keys(calEventCache || {})) {
+      const dayEvents = (calEventCache[calId] || {})[eventDate] || [];
+      if (dayEvents.length > 0) return true;  // Busy
+    }
+    return false;  // Free all day
+  }
+
+  // Timed event: check for overlap
+  const eventStart = timeStringToMinutes(eventStartTime);
+  const eventEnd = eventEndTime ? timeStringToMinutes(eventEndTime) : eventStart + 60;
+
+  for (const calId of Object.keys(calEventCache || {})) {
+    const dayEvents = (calEventCache[calId] || {})[eventDate] || [];
+    for (const calEvent of dayEvents) {
+      if (calEvent.allDay) {
+        return true;  // Calendar busy all day; event conflicts
+      }
+      const calStart = timeStringToMinutes(calEvent.startDT || calEvent.start);
+      const calEnd = timeStringToMinutes(calEvent.endDT || calEvent.end);
+
+      // Check for overlap
+      if (!(eventEnd <= calStart || eventStart >= calEnd)) {
+        return true;  // Overlap detected
+      }
+    }
+  }
+  return false;  // Free
+}
+
+function timeStringToMinutes(timeStr) {
+  if (!timeStr) return 0;
+  const [h, m] = timeStr.split(':').map(Number);
+  return h * 60 + (m || 0);
+}
+
+function attachCalendarConflictsToEvents(events) {
+  return events.map(e => ({
+    ...e,
+    calendarConflict: checkCalendarConflict(e.date, e.time, null)
+  }));
+}
+
+function renderEventCalendarOverlay() {
+  if (!eventShowOnCalendar || !eventsRawData?.length) return;
+
+  const eventsToShow = eventsRawData.filter(e =>
+    eventCalendarTypes.includes(e.type.toLowerCase()) && !e.calendarConflict
+  );
+
+  // Render indicators on calendar grid
+  eventsToShow.forEach(event => {
+    const dateKey = event.date;  // 'YYYY-MM-DD'
+    const dayCell = document.querySelector(`[data-date="${dateKey}"]`);
+    if (dayCell) {
+      const indicator = document.createElement('div');
+      indicator.className = `event-overlay-indicator event-type-${event.type.toLowerCase().replace(/[^a-z]/g, '')}`;
+      indicator.textContent = getWeatherEmoji(event.type);  // Use type-specific emoji
+      indicator.title = event.title;
+      indicator.style.cursor = 'pointer';
+      indicator.onclick = (e) => {
+        e.stopPropagation();
+        openEventsModal();
+      };
+      dayCell.appendChild(indicator);
+    }
+  });
 }
 
