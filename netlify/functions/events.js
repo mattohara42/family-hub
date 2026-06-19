@@ -296,13 +296,82 @@ async function fetchEventbrite(lat, lon) {
 
 async function scrapeEstateSales(city, state, lat, lon) {
   try {
-    // Placeholder: would scrape estatesales.net with cheerio
-    // For now, return empty; to be implemented with HTML parsing
-    sourceStatus.estatesales.count = 0;
-    return [];
+    const cheerio = require('cheerio');
+
+    // Search estatesales.net by city/state
+    const searchUrl = `https://www.estatesales.net/en/search?city=${encodeURIComponent(city)}&state=${state}`;
+
+    const r = await fetch(searchUrl, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Family Hub Event Discovery)' }
+    });
+    if (!r.ok) {
+      sourceStatus.estatesales.ok = false;
+      return [];
+    }
+
+    const html = await r.text();
+    const $ = cheerio.load(html);
+
+    const events = [];
+
+    // Parse estate sale listings
+    $('div.item').each((i, elem) => {
+      try {
+        const titleElem = $(elem).find('a.overlay');
+        const title = titleElem.text().trim();
+        const url = titleElem.attr('href');
+
+        if (!title || !url) return;
+
+        const dateElem = $(elem).find('.dates');
+        const dateText = dateElem.text().trim();
+
+        const addressElem = $(elem).find('.address');
+        const address = addressElem.text().trim();
+
+        // Extract date (format varies; try to parse)
+        let date = null;
+        if (dateText) {
+          const dateMatch = dateText.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+          if (dateMatch) {
+            const [, m, d, y] = dateMatch;
+            date = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+          }
+        }
+
+        events.push({
+          id: `es_${url.split('/').pop()}`,
+          title: title,
+          type: 'sale',
+          source: 'estatesales',
+          sourceUrl: url.startsWith('http') ? url : `https://www.estatesales.net${url}`,
+          date: date,
+          time: null,
+          duration: null,
+          location: {
+            city: city,
+            state: state,
+            address: address,
+            lat: lat,
+            lon: lon,
+            distanceMiles: null
+          },
+          description: dateText,
+          weather: null
+        });
+      } catch (itemErr) {
+        console.warn('[Events] Error parsing estate sale item:', itemErr);
+      }
+    });
+
+    sourceStatus.estatesales.count = events.length;
+    sourceStatus.estatesales.ok = true;
+    sourceStatus.estatesales.error = null;
+    return events;
   } catch (err) {
     console.warn('[Events] Estate sales scraping error:', err);
     sourceStatus.estatesales.ok = false;
+    sourceStatus.estatesales.error = err.message;
     return [];
   }
 }
@@ -345,7 +414,10 @@ function normalizeEventType(tmType) {
   if (type.includes('theater') || type.includes('show') || type.includes('performing')) return 'show';
   if (type.includes('comedy')) return 'comedy';
   if (type.includes('sale') || type.includes('estate') || type.includes('garage')) return 'sale';
-  if (type.includes('art') || type.includes('exhibition')) return 'activity';
+  if (type.includes('hike') || type.includes('trail') || type.includes('outdoor') || type.includes('nature')) return 'hike';
+  if (type.includes('class') || type.includes('workshop') || type.includes('seminar') || type.includes('course')) return 'class';
+  if (type.includes('food') || type.includes('festival') || type.includes('wine') || type.includes('dinner') || type.includes('tasting')) return 'food';
+  if (type.includes('art') || type.includes('exhibition') || type.includes('gallery') || type.includes('museum')) return 'art';
   return 'activity';
 }
 
