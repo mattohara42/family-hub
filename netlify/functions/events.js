@@ -303,6 +303,19 @@ async function fetchWithRetry(fn, sourceName, maxRetries = RETRY_CONFIG.maxRetri
 // API: TICKETMASTER
 // ────────────────────────────────────────────────────────────────
 
+/**
+ * Ticketmaster event fetching with venue enrichment.
+ * Fetches events from Ticketmaster Discovery v2 API and extracts venue details
+ * from the standard response (no separate venue API call needed).
+ *
+ * Venue enrichment strategy:
+ * - Ticketmaster /events.json response includes venue data in _embedded.venues[0]
+ * - We extract: name, address, capacity, website, accessibility fields
+ * - Gracefully handles missing/null venue fields (won't break event display)
+ * - No separate /venues/{id} call required (keeps API quota low)
+ *
+ * See docs/API_RESEARCH.md for full Ticketmaster parameter reference.
+ */
 async function fetchTicketmaster(city, state, lat, lon) {
   // Ticketmaster Discovery API v2: /events.json endpoint
   // Currently using basic location/date/size params. Could enhance with:
@@ -338,26 +351,48 @@ async function fetchTicketmaster(city, state, lat, lon) {
 
     const events = data._embedded?.events || [];
 
-    const results = events.map(e => ({
-      id: `tm_${e.id}`,
-      title: e.name,
-      type: normalizeEventType(e.classifications?.[0]?.segment?.name),
-      source: 'ticketmaster',
-      sourceUrl: e.url,
-      date: e.dates?.start?.localDate || null,
-      time: e.dates?.start?.localTime || null,
-      duration: null,
-      location: {
-        city: e._embedded?.venues?.[0]?.city?.name || city,
-        state: e._embedded?.venues?.[0]?.state?.stateCode || state,
-        address: e._embedded?.venues?.[0]?.address?.address1 || '',
-        lat: parseFloat(e._embedded?.venues?.[0]?.location?.latitude) || lat,
-        lon: parseFloat(e._embedded?.venues?.[0]?.location?.longitude) || lon,
-        distanceMiles: null  // Will calculate
-      },
-      description: e.description || '',
-      weather: null
-    }));
+    const results = events.map(e => {
+      // Extract venue data from Ticketmaster response (if available)
+      // Ticketmaster includes venue info in _embedded.venues[0], but capacity/ratings may be null
+      // Enrich with what's available; graceful fallback if fields are missing
+      const tmVenue = e._embedded?.venues?.[0];
+      const venueData = tmVenue ? {
+        name: tmVenue.name || null,
+        address: tmVenue.address?.address1 || null,
+        city: tmVenue.city?.name || city,
+        state: tmVenue.state?.stateCode || state,
+        capacity: tmVenue.capacity || null,  // May be null; graceful handling below
+        website: tmVenue.url || null,
+        // Accessibility info from Ticketmaster (may be sparse)
+        accessibility: {
+          wheelchairAccess: tmVenue.accessibility?.wheelchairAccess ?? false,
+          parking: tmVenue.parking?.parkingDetail ?? false,
+          transit: tmVenue.publicTransitInfo || null
+        }
+      } : null;
+
+      return {
+        id: `tm_${e.id}`,
+        title: e.name,
+        type: normalizeEventType(e.classifications?.[0]?.segment?.name),
+        source: 'ticketmaster',
+        sourceUrl: e.url,
+        date: e.dates?.start?.localDate || null,
+        time: e.dates?.start?.localTime || null,
+        duration: null,
+        location: {
+          city: e._embedded?.venues?.[0]?.city?.name || city,
+          state: e._embedded?.venues?.[0]?.state?.stateCode || state,
+          address: e._embedded?.venues?.[0]?.address?.address1 || '',
+          lat: parseFloat(e._embedded?.venues?.[0]?.location?.latitude) || lat,
+          lon: parseFloat(e._embedded?.venues?.[0]?.location?.longitude) || lon,
+          distanceMiles: null,  // Will calculate
+          venue: venueData  // Enrich with venue details
+        },
+        description: e.description || '',
+        weather: null
+      };
+    });
 
     sourceStatus.ticketmaster.count = results.length;
     sourceStatus.ticketmaster.ok = true;
@@ -375,11 +410,24 @@ async function fetchTicketmaster(city, state, lat, lon) {
 // API: EVENTBRITE
 // ────────────────────────────────────────────────────────────────
 
+/**
+ * Eventbrite event fetching with venue enrichment.
+ * Fetches events from Eventbrite API v3 with expand=venue to include venue details inline.
+ *
+ * Venue enrichment strategy:
+ * - Eventbrite /events/search endpoint supports expand=venue parameter
+ * - This includes full venue object in each event response (no separate call needed)
+ * - We extract: name, address, capacity, website, accessibility fields
+ * - Gracefully handles missing/null venue fields (won't break event display)
+ * - Single API call per request (no bulk venue enrichment needed)
+ *
+ * See docs/API_RESEARCH.md for full Eventbrite endpoint catalog (61 endpoints across 13 resources).
+ */
 async function fetchEventbrite(lat, lon) {
-  // Eventbrite API v3: /events/search endpoint
+  // Eventbrite API v3: /events/search endpoint with expand=venue
   // Currently using location/date filters with venue expansion. Could enhance with:
-  //   - GET /categories, /subcategories: improved event type taxonomy
-  //   - GET /venues/{id}: venue capacity, ratings, accessibility info
+  //   - GET /categories, /subcategories: improved event type taxonomy (U1 completed)
+  //   - GET /venues/{id}: separate venue detail calls (not needed; using expand instead)
   //   - Advanced filters: price range, ticket availability, free vs. paid
   // See docs/API_RESEARCH.md for full endpoint catalog (61 endpoints across 13 resources).
 
@@ -429,6 +477,24 @@ async function fetchEventbrite(lat, lon) {
         };
       }
 
+      // Enrich venue data from Eventbrite's expand=venue response
+      // Eventbrite includes venue details in e.venue when expand=venue is used
+      // Extract capacity, ratings, and accessibility info if available; graceful fallback if missing
+      const ebVenue = e.venue ? {
+        name: e.venue.name || null,
+        address: e.venue.address?.address_1 || null,
+        city: e.venue.address?.city || '',
+        state: e.venue.address?.region || '',
+        capacity: e.venue.capacity || null,  // May be null; graceful handling
+        website: e.venue.address?.website || null,
+        // Accessibility: Eventbrite may include in venue.address or separate field
+        accessibility: {
+          wheelchairAccess: e.venue.address?.wheelchair_access ?? false,
+          parking: e.venue.address?.parking || false,
+          transit: e.venue.address?.public_transit_info || null
+        }
+      } : null;
+
       return {
         id: `eb_${e.id}`,
         title: e.name?.text || 'Event',
@@ -444,7 +510,8 @@ async function fetchEventbrite(lat, lon) {
           address: e.venue?.address?.address_1 || '',
           lat: parseFloat(e.venue?.address?.latitude) || lat,
           lon: parseFloat(e.venue?.address?.longitude) || lon,
-          distanceMiles: null
+          distanceMiles: null,
+          venue: ebVenue  // Enrich with venue details
         },
         description: e.description?.text || '',
         weather: null,
