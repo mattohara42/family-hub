@@ -76,7 +76,7 @@ exports.handler = async (event) => {
   }
 
   const qs = event.queryStringParameters || {};
-  const { location, radius, eventTypes } = qs;
+  const { location, radius, eventTypes, keyword, attractionId, venueId } = qs;
 
   if (!location) {
     return json(400, { error: 'location parameter required' });
@@ -97,7 +97,7 @@ exports.handler = async (event) => {
 
     // Step 2: Fetch from all sources in parallel
     const [tmEvents, ebEvents, estateSalesEvents, craigslistEvents] = await Promise.allSettled([
-      fetchTicketmaster(city, state, lat, lon),
+      fetchTicketmaster(city, state, lat, lon, { keyword, attractionId, venueId }),
       fetchEventbrite(lat, lon),
       scrapeEstateSales(city, state, lat, lon),
       scrapeCraigslist(city, state, lat, lon)
@@ -304,7 +304,7 @@ async function fetchWithRetry(fn, sourceName, maxRetries = RETRY_CONFIG.maxRetri
 // ────────────────────────────────────────────────────────────────
 
 /**
- * Ticketmaster event fetching with venue enrichment.
+ * Ticketmaster event fetching with venue enrichment and advanced filtering.
  * Fetches events from Ticketmaster Discovery v2 API and extracts venue details
  * from the standard response (no separate venue API call needed).
  *
@@ -314,15 +314,21 @@ async function fetchWithRetry(fn, sourceName, maxRetries = RETRY_CONFIG.maxRetri
  * - Gracefully handles missing/null venue fields (won't break event display)
  * - No separate /venues/{id} call required (keeps API quota low)
  *
- * See docs/API_RESEARCH.md for full Ticketmaster parameter reference.
+ * Advanced filtering:
+ * - keyword: Text search in event name (e.g., "jazz", "comedy")
+ * - attractionId: Filter by specific artist/performer ID (alphanumeric validation)
+ * - venueId: Filter by specific venue ID (alphanumeric validation)
+ * - All filters are optional and passed server-side to Ticketmaster API
+ * - See docs/API_RESEARCH.md for full Ticketmaster parameter reference.
+ *   https://developer.ticketmaster.com/products-and-docs/apis/discovery-api/v2/
  */
-async function fetchTicketmaster(city, state, lat, lon) {
+async function fetchTicketmaster(city, state, lat, lon, filters = {}) {
   // Ticketmaster Discovery API v2: /events.json endpoint
-  // Currently using basic location/date/size params. Could enhance with:
-  //   - attractionId: pre-filter by artist/performer
+  // Supports optional advanced filtering parameters from query string:
   //   - keyword: text search in event name
-  //   - venueId: filter to specific venue
-  // See docs/API_RESEARCH.md for full parameter reference.
+  //   - attractionId: pre-filter by artist/performer ID
+  //   - venueId: filter to specific venue ID
+  // See https://developer.ticketmaster.com/products-and-docs/apis/discovery-api/v2/
 
   try {
     const key = process.env.TICKETMASTER_KEY;
@@ -334,6 +340,7 @@ async function fetchTicketmaster(city, state, lat, lon) {
     }
 
     const data = await fetchWithRetry(async () => {
+      // Build base params (always included)
       const params = new URLSearchParams({
         apikey: key,
         latlong: `${lat},${lon}`,
@@ -341,6 +348,37 @@ async function fetchTicketmaster(city, state, lat, lon) {
         size: 50,     // Results limit (max 200)
         sort: 'date,asc'  // Sort by date ascending
       });
+
+      // Add optional advanced filter parameters from query string
+      // All parameters are forwarded directly to Ticketmaster API (server-side filtering)
+      // Validation prevents injection attacks while allowing flexibility
+
+      const { keyword, attractionId, venueId } = filters;
+
+      // keyword: text search in event name (safe string pass-through, no validation needed)
+      if (keyword && typeof keyword === 'string' && keyword.trim()) {
+        params.set('keyword', keyword.trim());
+      }
+
+      // attractionId: filter by specific artist/performer
+      // Validation: alphanumeric only (Ticketmaster IDs are numeric, but allow alphanum for safety)
+      if (attractionId && typeof attractionId === 'string') {
+        if (!/^[a-zA-Z0-9]+$/.test(attractionId)) {
+          console.warn('[Events] Invalid attractionId format (non-alphanumeric), ignoring:', attractionId);
+        } else {
+          params.set('attractionId', attractionId);
+        }
+      }
+
+      // venueId: filter by specific venue
+      // Validation: alphanumeric only (Ticketmaster IDs are numeric, but allow alphanum for safety)
+      if (venueId && typeof venueId === 'string') {
+        if (!/^[a-zA-Z0-9]+$/.test(venueId)) {
+          console.warn('[Events] Invalid venueId format (non-alphanumeric), ignoring:', venueId);
+        } else {
+          params.set('venueId', venueId);
+        }
+      }
 
       const r = await fetch(`${TM_API_BASE}/events.json?${params}`);
       if (!r.ok) {
