@@ -9837,6 +9837,49 @@ function renderEventsList(events) {
   document.getElementById('eventsList').innerHTML = html;
 }
 
+function renderVenueDetails(venue) {
+  // Return empty string if no venue data
+  if (!venue) return '';
+
+  // Build venue section HTML
+  let venueHtml = '<div class="event-venue">';
+
+  // Venue name (always shown if venue exists)
+  if (venue.name) {
+    venueHtml += `<span class="venue-name">${escapeHtml(venue.name)}</span>`;
+  }
+
+  // Capacity (show if > 0)
+  if (venue.capacity && venue.capacity > 0) {
+    const formattedCapacity = venue.capacity.toLocaleString();
+    venueHtml += `<span class="venue-capacity">(${formattedCapacity} capacity)</span>`;
+  }
+
+  // Website link (show if exists)
+  if (venue.website) {
+    venueHtml += `<a href="${escapeHtml(venue.website)}" class="venue-website" target="_blank" rel="noopener">Venue Website →</a>`;
+  }
+
+  // Accessibility badges
+  const accessibilityBadges = [];
+  if (venue.wheelchairAccessible) {
+    accessibilityBadges.push('<span>♿ Wheelchair accessible</span>');
+  }
+  if (venue.parkingAvailable) {
+    accessibilityBadges.push('<span>🅿️ Parking available</span>');
+  }
+  if (venue.transitInfo) {
+    accessibilityBadges.push(`<span>🚌 ${escapeHtml(venue.transitInfo)}</span>`);
+  }
+
+  if (accessibilityBadges.length > 0) {
+    venueHtml += `<div class="venue-accessibility">${accessibilityBadges.join('')}</div>`;
+  }
+
+  venueHtml += '</div>';
+  return venueHtml;
+}
+
 function renderEventCard(event) {
   const calendarLabel = event.calendarConflict
     ? '<span class="event-calendar-indicator calendar-conflict">⚠ You\'re busy</span>'
@@ -9845,6 +9888,8 @@ function renderEventCard(event) {
   const weatherHtml = event.weather
     ? `<div class="event-weather"><span class="weather-icon">${getWeatherEmoji(event.weather.condition)}</span><span class="weather-text">${event.weather.temp}°F, ${event.weather.condition}</span></div>`
     : '';
+
+  const venueHtml = renderVenueDetails(event.location?.venue);
 
   return `
     <div class="event-card">
@@ -9857,6 +9902,7 @@ function renderEventCard(event) {
         <span class="event-distance">${(event.location.distanceMiles || 0).toFixed(1)} mi</span>
         <span>${escapeHtml(event.location.address)}</span>
       </div>
+      ${venueHtml}
       ${calendarLabel}
       ${weatherHtml}
       <div class="event-description">${escapeHtml(event.description)}</div>

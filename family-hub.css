@@ -4885,6 +4885,54 @@ body.tv-mode .card:hover { box-shadow: none; }
   font-size: 1.2rem;
 }
 
+/* ── Event Venue Details ── */
+.event-venue {
+  padding: 8px 0;
+  border-top: 1px solid rgba(128, 128, 128, 0.1);
+  margin: 8px 0;
+  font-size: var(--text-sm);
+  color: var(--text);
+}
+
+.venue-name {
+  font-weight: var(--weight-semi);
+  color: var(--text);
+}
+
+.venue-capacity {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  margin-left: 4px;
+}
+
+.venue-website {
+  display: block;
+  color: var(--accent);
+  text-decoration: none;
+  font-size: var(--text-sm);
+  margin-top: 4px;
+  transition: opacity 0.1s;
+}
+
+.venue-website:hover {
+  opacity: 0.8;
+}
+
+.venue-accessibility {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: var(--text-xs);
+  color: var(--text);
+}
+
+.venue-accessibility span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
 .event-description {
   font-size: var(--text-sm);
   color: var(--text);
