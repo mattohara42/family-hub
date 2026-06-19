@@ -21,6 +21,39 @@ const EB_API_BASE = 'https://www.eventbriteapi.com/v3';
 const OWM_API_BASE = 'https://api.openweathermap.org/data/2.5';
 const OWM_GEO_BASE = 'https://api.openweathermap.org/geo/1.0';
 
+// ────────────────────────────────────────────────────────────────
+// EVENTBRITE CATEGORY CACHE
+// ────────────────────────────────────────────────────────────────
+
+// In-memory cache for Eventbrite categories/subcategories.
+// TTL: 24 hours. Memoized to avoid repeated API calls.
+let categoryCache = {
+  categories: {},      // { id: "name" } mapping
+  subcategories: {},   // { id: "name" } mapping
+  timestamp: null      // when cache was populated
+};
+
+// 24 hours in milliseconds
+const CATEGORY_CACHE_TTL = 24 * 60 * 60 * 1000;
+
+// Hardcoded fallback categories (top-level Eventbrite categories)
+// Used if API fetch fails, ensures graceful degradation
+const FALLBACK_CATEGORIES = {
+  '1': 'Music',
+  '6': 'Food & Drink',
+  '11': 'Business & Professional',
+  '13': 'Charity & Causes',
+  '19': 'Classes & Workshops',
+  '21': 'Community & Culture',
+  '22': 'Family & Education',
+  '25': 'Film, Media & Entertainment',
+  '31': 'Hobbies & Special Interests',
+  '34': 'Performing & Visual Arts',
+  '40': 'Science & Technology',
+  '41': 'Sports & Fitness',
+  '114': 'Travel & Outdoor'
+};
+
 // Source status tracking for this request
 const sourceStatus = {
   ticketmaster: { ok: true, count: 0, error: null },
@@ -53,6 +86,9 @@ exports.handler = async (event) => {
   const eventTypesList = eventTypes ? eventTypes.split(',').map(t => t.trim().toLowerCase()) : [];
 
   try {
+    // Step 0: Ensure category cache is populated (lazy initialization)
+    await ensureCategoryCache();
+
     // Step 1: Geocode location (city → lat/lon)
     const { lat, lon, city, state } = await geocodeLocation(location);
     if (!lat || !lon) {
@@ -142,6 +178,101 @@ async function geocodeLocation(location) {
     console.error('[Events] Geocoding failed:', err);
     throw err;
   }
+}
+
+// ────────────────────────────────────────────────────────────────
+// CATEGORY FETCHING & CACHING
+// ────────────────────────────────────────────────────────────────
+
+/**
+ * Fetch and cache Eventbrite categories and subcategories.
+ * Called on startup (via first event search) and refreshed every 24 hours.
+ *
+ * Pattern: Mirrors fetchWithRetry() for consistency. On failure, gracefully
+ * falls back to hardcoded category list. Categories are memoized in memory
+ * to avoid repeated API calls within the 24-hour window.
+ */
+async function ensureCategoryCache() {
+  // Check if cache is still valid (within TTL)
+  if (categoryCache.timestamp && Date.now() - categoryCache.timestamp < CATEGORY_CACHE_TTL) {
+    return categoryCache;
+  }
+
+  try {
+    const key = process.env.EVENTBRITE_KEY;
+    if (!key) {
+      console.warn('[Events] EVENTBRITE_KEY not set, using fallback categories');
+      categoryCache.categories = FALLBACK_CATEGORIES;
+      categoryCache.timestamp = Date.now();
+      return categoryCache;
+    }
+
+    // Fetch both categories and subcategories in parallel
+    const [categoriesResult, subcategoriesResult] = await Promise.allSettled([
+      fetchWithRetry(async () => {
+        const params = new URLSearchParams({ token: key });
+        const r = await fetch(`${EB_API_BASE}/categories/?${params}`);
+        if (!r.ok) {
+          throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+        }
+        return r.json();
+      }, 'Eventbrite Categories', 1),  // Single retry for reference data
+      fetchWithRetry(async () => {
+        const params = new URLSearchParams({ token: key });
+        const r = await fetch(`${EB_API_BASE}/subcategories/?${params}`);
+        if (!r.ok) {
+          throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+        }
+        return r.json();
+      }, 'Eventbrite Subcategories', 1)
+    ]);
+
+    // Process categories
+    if (categoriesResult.status === 'fulfilled' && categoriesResult.value?.categories) {
+      categoriesResult.value.categories.forEach(cat => {
+        categoryCache.categories[cat.id] = cat.name;
+      });
+    }
+
+    // Process subcategories
+    if (subcategoriesResult.status === 'fulfilled' && subcategoriesResult.value?.subcategories) {
+      subcategoriesResult.value.subcategories.forEach(subcat => {
+        categoryCache.subcategories[subcat.id] = subcat.name;
+      });
+    }
+
+    // If either fetch failed but we got some data, that's ok
+    if (Object.keys(categoryCache.categories).length === 0) {
+      console.warn('[Events] Category fetch returned no data, using fallback');
+      categoryCache.categories = FALLBACK_CATEGORIES;
+    }
+
+    categoryCache.timestamp = Date.now();
+    console.log('[Events] Categories cached:', {
+      categories: Object.keys(categoryCache.categories).length,
+      subcategories: Object.keys(categoryCache.subcategories).length
+    });
+
+    return categoryCache;
+  } catch (err) {
+    console.warn('[Events] Category caching failed, using fallback:', err.message);
+    categoryCache.categories = FALLBACK_CATEGORIES;
+    categoryCache.timestamp = Date.now();
+    return categoryCache;
+  }
+}
+
+/**
+ * Look up category name by ID.
+ * Returns the official Eventbrite category/subcategory name if found,
+ * otherwise returns the ID as a fallback.
+ */
+function getCategoryName(categoryId) {
+  if (!categoryId) return null;
+  // Check subcategories first (more specific), then top-level categories
+  return categoryCache.subcategories[categoryId] ||
+         categoryCache.categories[categoryId] ||
+         null;
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -282,26 +413,44 @@ async function fetchEventbrite(lat, lon) {
 
     const events = data.events || [];
 
-    const results = events.map(e => ({
-      id: `eb_${e.id}`,
-      title: e.name?.text || 'Event',
-      type: 'activity',  // Eventbrite doesn't always categorize clearly
-      source: 'eventbrite',
-      sourceUrl: e.url,
-      date: e.start?.local?.split('T')[0] || null,
-      time: e.start?.local?.split('T')[1] || null,
-      duration: null,
-      location: {
-        city: e.venue?.address?.city || '',
-        state: e.venue?.address?.region || '',
-        address: e.venue?.address?.address_1 || '',
-        lat: parseFloat(e.venue?.address?.latitude) || lat,
-        lon: parseFloat(e.venue?.address?.longitude) || lon,
-        distanceMiles: null
-      },
-      description: e.description?.text || '',
-      weather: null
-    }));
+    const results = events.map(e => {
+      // Enrich with Eventbrite official category/subcategory if available
+      let category = null;
+      if (e.category_id) {
+        category = {
+          id: e.category_id,
+          name: getCategoryName(e.category_id) || 'Activity'
+        };
+      }
+      if (e.subcategory_id) {
+        category = {
+          id: e.subcategory_id,
+          name: getCategoryName(e.subcategory_id) || 'Activity'
+        };
+      }
+
+      return {
+        id: `eb_${e.id}`,
+        title: e.name?.text || 'Event',
+        type: 'activity',  // Eventbrite doesn't always categorize clearly
+        source: 'eventbrite',
+        sourceUrl: e.url,
+        date: e.start?.local?.split('T')[0] || null,
+        time: e.start?.local?.split('T')[1] || null,
+        duration: null,
+        location: {
+          city: e.venue?.address?.city || '',
+          state: e.venue?.address?.region || '',
+          address: e.venue?.address?.address_1 || '',
+          lat: parseFloat(e.venue?.address?.latitude) || lat,
+          lon: parseFloat(e.venue?.address?.longitude) || lon,
+          distanceMiles: null
+        },
+        description: e.description?.text || '',
+        weather: null,
+        category: category  // Official Eventbrite category metadata (optional)
+      };
+    });
 
     sourceStatus.eventbrite.count = results.length;
     sourceStatus.eventbrite.ok = true;
