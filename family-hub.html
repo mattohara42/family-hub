@@ -1293,13 +1293,21 @@
       <button class="event-tab" data-type="sale" onclick="filterEventsByTab(this)">Sales</button>
     </div>
 
-    <div class="events-search-bar" style="margin-bottom:12px;display:flex;gap:6px;flex-wrap:wrap">
-      <input type="text" id="eventsFilterType" placeholder="Filter by type (optional)…" style="flex:1;min-width:150px" />
-      <select id="eventsSortBy" style="min-width:100px" onchange="sortAndRenderEvents()">
-        <option value="distance">Sort by distance</option>
-        <option value="date">Sort by date</option>
-      </select>
-      <button class="btn btn-primary btn-sm" onclick="refreshEvents()">🔄 Refresh</button>
+    <div class="events-search-bar" style="margin-bottom:12px;display:flex;gap:6px;flex-wrap:wrap;flex-direction:column">
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <input type="text" id="eventsFilterType" placeholder="Filter by type (optional)…" style="flex:1;min-width:150px" />
+        <select id="eventsSortBy" style="min-width:100px" onchange="sortAndRenderEvents()">
+          <option value="distance">Sort by distance</option>
+          <option value="date">Sort by date</option>
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="refreshEvents()">🔄 Refresh</button>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        <input type="text" id="eventsKeywordSearch" placeholder="Search by event name…" style="flex:1;min-width:150px" oninput="handleEventSearchInput()" />
+        <input type="text" id="eventsArtistSearch" placeholder="Search by artist…" style="flex:1;min-width:150px" oninput="handleEventSearchInput()" />
+        <input type="text" id="eventsVenueSearch" placeholder="Search by venue…" style="flex:1;min-width:150px" oninput="handleEventSearchInput()" />
+        <button class="btn btn-secondary btn-sm" onclick="clearEventSearchFilters()" style="white-space:nowrap">Clear</button>
+      </div>
     </div>
 
     <div id="eventsList" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding-right:4px"></div>

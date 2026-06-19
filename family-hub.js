@@ -9702,6 +9702,17 @@ function filterEventsByCategory(categoryId) {
 // EVENT DISCOVERY MODAL
 // ───────────────────────────────────────────────────────────────────
 
+// Debounce utility for search inputs
+function debounce(func, delay) {
+  let timeoutId;
+  return function(...args) {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => func(...args), delay);
+  };
+}
+
+const debouncedEventSearch = debounce(fetchAndUpdateEvents, 300);
+
 let eventsModalOpen = false;
 let eventsData = [];           // Current displayed events
 let eventsRawData = [];        // Full result set from backend
@@ -9710,6 +9721,9 @@ let eventsSort = 'distance';   // Current sort mode
 let eventsTabFilter = 'all';   // Current tab filter
 let eventsCategoryFilter = null;  // Category filter (null = all)
 let eventsCategories = {};     // Category objects from backend: { id: { id, name } }
+let eventsSearchKeyword = '';  // Keyword search filter
+let eventsSearchArtist = '';   // Artist/performer search filter
+let eventsSearchVenue = '';    // Venue search filter
 
 async function openEventsModal() {
   eventsModalOpen = true;
@@ -9739,7 +9753,21 @@ function closeEventsModal() {
   eventsModalOpen = false;
   document.getElementById('eventsModal').style.display = 'none';
   eventsCategoryFilter = null;  // Reset category filter on close
+  // Clear search filters
+  eventsSearchKeyword = '';
+  eventsSearchArtist = '';
+  eventsSearchVenue = '';
   releaseFocusTrap();
+}
+
+function handleEventSearchInput() {
+  // Update state from input values
+  eventsSearchKeyword = document.getElementById('eventsKeywordSearch')?.value || '';
+  eventsSearchArtist = document.getElementById('eventsArtistSearch')?.value || '';
+  eventsSearchVenue = document.getElementById('eventsVenueSearch')?.value || '';
+
+  // Debounced fetch
+  debouncedEventSearch();
 }
 
 async function fetchAndUpdateEvents() {
@@ -9747,7 +9775,15 @@ async function fetchAndUpdateEvents() {
   const radius = eventMaxDistance;
 
   try {
-    const url = `/.netlify/functions/events?location=${encodeURIComponent(location)}&radius=${radius}`;
+    // Build query params with filters
+    const params = new URLSearchParams();
+    params.set('location', location);
+    params.set('radius', radius);
+    if (eventsSearchKeyword) params.set('keyword', eventsSearchKeyword);
+    if (eventsSearchArtist) params.set('attractionId', eventsSearchArtist);
+    if (eventsSearchVenue) params.set('venueId', eventsSearchVenue);
+
+    const url = `/.netlify/functions/events?${params}`;
     const r = await fetch(url);
     const data = await r.json();
 
@@ -9800,6 +9836,26 @@ function applyFiltersAndSort(events) {
     filtered = filtered.filter(e => e.type.toLowerCase().includes(typeFilter));
   }
 
+  // Apply keyword search filter (client-side fallback)
+  if (eventsSearchKeyword) {
+    const keywordLower = eventsSearchKeyword.toLowerCase();
+    filtered = filtered.filter(e =>
+      e.title.toLowerCase().includes(keywordLower) ||
+      (e.description && e.description.toLowerCase().includes(keywordLower))
+    );
+  }
+
+  // Apply venue search filter (client-side fallback)
+  if (eventsSearchVenue) {
+    const venueLower = eventsSearchVenue.toLowerCase();
+    filtered = filtered.filter(e =>
+      e.location?.venue?.name &&
+      e.location.venue.name.toLowerCase().includes(venueLower)
+    );
+  }
+
+  // Note: Artist/attractionId filtering is server-side; no client-side fallback available
+
   // Apply sort
   const sortBy = document.getElementById('eventsSortBy').value || eventsSort;
   if (sortBy === 'distance') {
@@ -9825,6 +9881,25 @@ function filterEventsByTab(tabButton) {
   eventsTabFilter = tabButton.dataset.type;
 
   // Re-render with new filter
+  eventsData = applyFiltersAndSort(eventsRawData);
+  renderEventsList(eventsData);
+}
+
+function clearEventSearchFilters() {
+  // Clear state
+  eventsSearchKeyword = '';
+  eventsSearchArtist = '';
+  eventsSearchVenue = '';
+
+  // Clear inputs
+  const keywordEl = document.getElementById('eventsKeywordSearch');
+  const artistEl = document.getElementById('eventsArtistSearch');
+  const venueEl = document.getElementById('eventsVenueSearch');
+  if (keywordEl) keywordEl.value = '';
+  if (artistEl) artistEl.value = '';
+  if (venueEl) venueEl.value = '';
+
+  // Re-render
   eventsData = applyFiltersAndSort(eventsRawData);
   renderEventsList(eventsData);
 }
