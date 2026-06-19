@@ -68,7 +68,7 @@ exports.handler = async (event) => {
     const uniqueEvents = deduplicateEvents(allEvents);
 
     // Step 4: Filter by distance and date
-    const filteredEvents = filterEventsByDistanceAndDate(uniqueEvents, radiusMinutes);
+    const filteredEvents = filterEventsByDistanceAndDate(uniqueEvents, radiusMinutes, lat, lon);
 
     // Step 5: Add weather context to each event
     const withWeather = await Promise.all(
@@ -342,8 +342,10 @@ function normalizeEventType(tmType) {
   const type = tmType.toLowerCase();
   if (type.includes('music') || type.includes('concert')) return 'concert';
   if (type.includes('sport')) return 'sports';
-  if (type.includes('theater') || type.includes('show')) return 'show';
+  if (type.includes('theater') || type.includes('show') || type.includes('performing')) return 'show';
   if (type.includes('comedy')) return 'comedy';
+  if (type.includes('sale') || type.includes('estate') || type.includes('garage')) return 'sale';
+  if (type.includes('art') || type.includes('exhibition')) return 'activity';
   return 'activity';
 }
 
@@ -368,7 +370,7 @@ function deduplicateEvents(events) {
   });
 }
 
-function filterEventsByDistanceAndDate(events, radiusMinutes) {
+function filterEventsByDistanceAndDate(events, radiusMinutes, searchLat, searchLon) {
   const radiusMiles = radiusMinutes / 60 * 70;  // Rough approximation: ~70 mph
   const today = new Date().toISOString().split('T')[0];
   const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -378,8 +380,8 @@ function filterEventsByDistanceAndDate(events, radiusMinutes) {
     if (!e.date || e.date < today || e.date > nextWeek) return false;
 
     const dist = calculateDistance(
-      e.location.lat, e.location.lon,
-      e.location.lat, e.location.lon  // TODO: pass home coords
+      searchLat, searchLon,
+      e.location.lat, e.location.lon
     );
     e.location.distanceMiles = Math.round(dist * 10) / 10;
     return dist <= radiusMiles;

@@ -15,7 +15,7 @@
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self';
                  script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com https://accounts.google.com https://unpkg.com;
-                 connect-src https:;
+                 connect-src https: http://localhost:8888;
                  img-src 'self' https: blob: data:;
                  style-src 'self' 'unsafe-inline' https://unpkg.com;
                  font-src 'self' data:;
@@ -1278,6 +1278,15 @@
     </div>
 
     <div id="eventsAgeLabel" style="font-size:.8rem;color:var(--muted);margin-bottom:8px"></div>
+
+    <div class="events-tabs" style="display:flex;gap:4px;margin-bottom:12px;overflow-x:auto;padding-bottom:8px;min-height:32px">
+      <button class="event-tab active" data-type="all" onclick="filterEventsByTab(this)">All</button>
+      <button class="event-tab" data-type="concert" onclick="filterEventsByTab(this)">Concerts</button>
+      <button class="event-tab" data-type="show" onclick="filterEventsByTab(this)">Shows</button>
+      <button class="event-tab" data-type="sports" onclick="filterEventsByTab(this)">Sports</button>
+      <button class="event-tab" data-type="activity" onclick="filterEventsByTab(this)">Activities</button>
+      <button class="event-tab" data-type="sale" onclick="filterEventsByTab(this)">Sales</button>
+    </div>
 
     <div class="events-search-bar" style="margin-bottom:12px;display:flex;gap:6px;flex-wrap:wrap">
       <input type="text" id="eventsFilterType" placeholder="Filter by type (optional)…" style="flex:1;min-width:150px" />

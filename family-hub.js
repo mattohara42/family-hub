@@ -9554,6 +9554,7 @@ let eventsData = [];           // Current displayed events
 let eventsRawData = [];        // Full result set from backend
 let eventsFetchTimestamp = 0;  // When we last fetched
 let eventsSort = 'distance';   // Current sort mode
+let eventsTabFilter = 'all';   // Current tab filter
 
 async function openEventsModal() {
   eventsModalOpen = true;
@@ -9618,6 +9619,17 @@ async function fetchAndUpdateEvents() {
 function applyFiltersAndSort(events) {
   let filtered = [...events];
 
+  // Apply tab filter
+  if (eventsTabFilter !== 'all') {
+    filtered = filtered.filter(e => {
+      const type = e.type.toLowerCase();
+      if (eventsTabFilter === 'sale') {
+        return type.includes('sale') || type.includes('estate');
+      }
+      return type === eventsTabFilter || type.includes(eventsTabFilter);
+    });
+  }
+
   // Apply type filter if specified
   const typeFilter = document.getElementById('eventsFilterType').value.toLowerCase().trim();
   if (typeFilter) {
@@ -9636,6 +9648,19 @@ function applyFiltersAndSort(events) {
 }
 
 function sortAndRenderEvents() {
+  eventsData = applyFiltersAndSort(eventsRawData);
+  renderEventsList(eventsData);
+}
+
+function filterEventsByTab(tabButton) {
+  // Update active tab
+  document.querySelectorAll('.event-tab').forEach(btn => btn.classList.remove('active'));
+  tabButton.classList.add('active');
+
+  // Update filter state
+  eventsTabFilter = tabButton.dataset.type;
+
+  // Re-render with new filter
   eventsData = applyFiltersAndSort(eventsRawData);
   renderEventsList(eventsData);
 }

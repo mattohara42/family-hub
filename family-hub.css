@@ -4781,6 +4781,27 @@ body.tv-mode .card:hover { box-shadow: none; }
    🎫 EVENT DISCOVERY — Event cards and modal styling
    ════════════════════════════════════════════════════════════════ */
 
+.event-tab {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.event-tab:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.event-tab.active {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+}
+
 .event-card {
   background: var(--surface2);
   border-radius: var(--radius);
