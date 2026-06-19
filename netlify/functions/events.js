@@ -3,6 +3,17 @@
  * Fetches from Ticketmaster, Eventbrite APIs + scrapes estatesales.net, Craigslist
  * Normalizes, geocodes, adds weather context, filters by distance/date
  * Client calls: /.netlify/functions/events?location=<city>&radius=<minutes>&eventTypes=<comma-sep>
+ *
+ * API Integration Notes:
+ * - Eventbrite: Uses /events/search endpoint (v3 API). Could leverage categories, venues,
+ *   subcategories endpoints for enhanced filtering. See docs/API_RESEARCH.md for full endpoint list.
+ * - Ticketmaster: Uses /events.json endpoint (Discovery v2 API). Available params include
+ *   keyword, attractionId, venueId for advanced filtering. See docs/API_RESEARCH.md for details.
+ * - OpenWeatherMap: Geocoding (direct API) + Forecast (data.2.5/forecast for weather context)
+ * - Retry strategy: Exponential backoff (1s, 2s, 4s max). Gracefully handles partial source failures.
+ *
+ * Performance: Parallel source fetching via Promise.allSettled. Weather enrichment happens
+ * after aggregation. Distance filtering uses Haversine formula (see calculateDistance).
  */
 
 const TM_API_BASE = 'https://app.ticketmaster.com/discovery/v2';
@@ -162,6 +173,13 @@ async function fetchWithRetry(fn, sourceName, maxRetries = RETRY_CONFIG.maxRetri
 // ────────────────────────────────────────────────────────────────
 
 async function fetchTicketmaster(city, state, lat, lon) {
+  // Ticketmaster Discovery API v2: /events.json endpoint
+  // Currently using basic location/date/size params. Could enhance with:
+  //   - attractionId: pre-filter by artist/performer
+  //   - keyword: text search in event name
+  //   - venueId: filter to specific venue
+  // See docs/API_RESEARCH.md for full parameter reference.
+
   try {
     const key = process.env.TICKETMASTER_KEY;
     if (!key) {
@@ -175,9 +193,9 @@ async function fetchTicketmaster(city, state, lat, lon) {
       const params = new URLSearchParams({
         apikey: key,
         latlong: `${lat},${lon}`,
-        radius: 120,  // km
-        size: 50,
-        sort: 'date,asc'
+        radius: 120,  // km (API default ~100, we expand to 120)
+        size: 50,     // Results limit (max 200)
+        sort: 'date,asc'  // Sort by date ascending
       });
 
       const r = await fetch(`${TM_API_BASE}/events.json?${params}`);
@@ -227,6 +245,13 @@ async function fetchTicketmaster(city, state, lat, lon) {
 // ────────────────────────────────────────────────────────────────
 
 async function fetchEventbrite(lat, lon) {
+  // Eventbrite API v3: /events/search endpoint
+  // Currently using location/date filters with venue expansion. Could enhance with:
+  //   - GET /categories, /subcategories: improved event type taxonomy
+  //   - GET /venues/{id}: venue capacity, ratings, accessibility info
+  //   - Advanced filters: price range, ticket availability, free vs. paid
+  // See docs/API_RESEARCH.md for full endpoint catalog (61 endpoints across 13 resources).
+
   try {
     const key = process.env.EVENTBRITE_KEY;
     if (!key) {
@@ -241,11 +266,11 @@ async function fetchEventbrite(lat, lon) {
         token: key,
         'location.latitude': lat,
         'location.longitude': lon,
-        'location.within': '120km',
-        'start_date.range_start': new Date().toISOString().split('T')[0],
-        'start_date.range_end': new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        'location.within': '120km',  // Search radius
+        'start_date.range_start': new Date().toISOString().split('T')[0],  // Today
+        'start_date.range_end': new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],  // +7 days
         'sort_by': 'date',
-        'expand': 'venue'
+        'expand': 'venue'  // Include venue data in response
       });
 
       const r = await fetch(`${EB_API_BASE}/events/search/?${params}`);
