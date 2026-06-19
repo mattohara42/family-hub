@@ -4802,6 +4802,10 @@ body.tv-mode .card:hover { box-shadow: none; }
   border-color: var(--accent);
 }
 
+.events-category-filters {
+  display: flex;
+}
+
 .event-card {
   background: var(--surface2);
   border-radius: var(--radius);

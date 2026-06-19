@@ -9434,9 +9434,10 @@ function showBgPhoto(url) {
 // ═══════════════════════════════════════════════════════════════════
 
 const EVENTS_DB_NAME = 'fh_events';
-const EVENTS_DB_VERSION = 1;
+const EVENTS_DB_VERSION = 2;
 const EVENTS_STORE_NAME = 'events';
 const EVENTS_CACHE_STORE_NAME = 'eventCache';
+const EVENTS_CATEGORIES_STORE_NAME = 'eventCategories';
 
 async function initEventsDB() {
   return new Promise((resolve, reject) => {
@@ -9459,6 +9460,11 @@ async function initEventsDB() {
       // Cache metadata store
       if (!db.objectStoreNames.contains(EVENTS_CACHE_STORE_NAME)) {
         db.createObjectStore(EVENTS_CACHE_STORE_NAME, { keyPath: 'key' });
+      }
+
+      // Categories store (new in v2)
+      if (!db.objectStoreNames.contains(EVENTS_CATEGORIES_STORE_NAME)) {
+        db.createObjectStore(EVENTS_CATEGORIES_STORE_NAME, { keyPath: 'key' });
       }
     };
   });
@@ -9545,6 +9551,153 @@ async function shouldRefreshCache() {
   }
 }
 
+// ── Category filtering ──
+
+async function getCategoriesFromCache() {
+  try {
+    const db = await initEventsDB();
+    const tx = db.transaction(EVENTS_CATEGORIES_STORE_NAME, 'readonly');
+    const store = tx.objectStore(EVENTS_CATEGORIES_STORE_NAME);
+
+    return new Promise((resolve, reject) => {
+      const req = store.get('current');
+      req.onsuccess = () => {
+        const data = req.result;
+        if (!data) {
+          resolve(null);
+        } else {
+          resolve(data);
+        }
+      };
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) {
+    console.warn('[Events] Category cache read failed:', err);
+    return null;
+  }
+}
+
+async function saveCategoriesToCache(categories) {
+  try {
+    const db = await initEventsDB();
+    const tx = db.transaction(EVENTS_CATEGORIES_STORE_NAME, 'readwrite');
+    const store = tx.objectStore(EVENTS_CATEGORIES_STORE_NAME);
+
+    tx.objectStore(EVENTS_CATEGORIES_STORE_NAME).put({
+      key: 'current',
+      categories: categories,
+      timestamp: Date.now()
+    });
+
+    return new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (err) {
+    console.warn('[Events] Category cache write failed:', err);
+  }
+}
+
+async function fetchCategories() {
+  try {
+    const url = `/.netlify/functions/events?categories=true`;
+    const r = await fetch(url);
+    const data = await r.json();
+
+    if (data.success && data.categories) {
+      return data.categories;
+    } else {
+      console.warn('[Events] Backend returned no categories:', data.error);
+      return null;
+    }
+  } catch (err) {
+    console.warn('[Events] Category fetch failed:', err);
+    return null;
+  }
+}
+
+async function loadAndRenderCategories() {
+  // Check IndexedDB cache
+  const cached = await getCategoriesFromCache();
+  let categories = null;
+
+  if (cached) {
+    const ageMinutes = (Date.now() - cached.timestamp) / 60000;
+    if (ageMinutes < 1440) {  // 24 hours
+      categories = cached.categories;
+    }
+  }
+
+  // If no valid cache, fetch from backend
+  if (!categories) {
+    categories = await fetchCategories();
+    if (categories) {
+      await saveCategoriesToCache(categories);
+    }
+  }
+
+  // Update module state
+  if (categories && Array.isArray(categories)) {
+    eventsCategories = {};
+    categories.forEach(cat => {
+      eventsCategories[cat.id] = cat;
+    });
+    renderCategoryTabs(categories);
+  } else {
+    // No categories available; hide the category filter section
+    document.getElementById('eventsCategoryFilters').style.display = 'none';
+  }
+}
+
+function renderCategoryTabs(categories) {
+  if (!categories || categories.length === 0) {
+    document.getElementById('eventsCategoryFilters').style.display = 'none';
+    return;
+  }
+
+  const container = document.getElementById('eventsCategoryFilters');
+  container.innerHTML = '';
+
+  // Add "All" tab
+  const allBtn = document.createElement('button');
+  allBtn.className = 'event-tab active';
+  allBtn.dataset.category = 'all';
+  allBtn.textContent = 'All';
+  allBtn.onclick = () => filterEventsByCategory(null);
+  container.appendChild(allBtn);
+
+  // Add category tabs
+  categories.forEach(cat => {
+    const btn = document.createElement('button');
+    btn.className = 'event-tab';
+    btn.dataset.category = cat.id;
+    btn.textContent = cat.name;
+    btn.onclick = () => filterEventsByCategory(cat.id);
+    container.appendChild(btn);
+  });
+
+  container.style.display = 'flex';
+}
+
+function filterEventsByCategory(categoryId) {
+  // Update state
+  eventsCategoryFilter = categoryId;
+
+  // Update active tab
+  document.querySelectorAll('#eventsCategoryFilters .event-tab').forEach(btn => {
+    btn.classList.remove('active');
+  });
+
+  const selector = categoryId === null
+    ? '#eventsCategoryFilters .event-tab[data-category="all"]'
+    : `#eventsCategoryFilters .event-tab[data-category="${categoryId}"]`;
+  document.querySelector(selector)?.classList.add('active');
+
+  // Re-render
+  eventsData = applyFiltersAndSort(eventsRawData);
+  renderEventsList(eventsData);
+}
+
 // ───────────────────────────────────────────────────────────────────
 // EVENT DISCOVERY MODAL
 // ───────────────────────────────────────────────────────────────────
@@ -9555,12 +9708,17 @@ let eventsRawData = [];        // Full result set from backend
 let eventsFetchTimestamp = 0;  // When we last fetched
 let eventsSort = 'distance';   // Current sort mode
 let eventsTabFilter = 'all';   // Current tab filter
+let eventsCategoryFilter = null;  // Category filter (null = all)
+let eventsCategories = {};     // Category objects from backend: { id: { id, name } }
 
 async function openEventsModal() {
   eventsModalOpen = true;
   document.getElementById('eventsModal').style.display = 'flex';
 
-  // 1. Show cached data immediately
+  // 1. Load categories and render filter tabs
+  await loadAndRenderCategories();
+
+  // 2. Show cached data immediately
   const cached = await getEventsFromCache();
   if (cached?.length > 0) {
     eventsData = cached;
@@ -9571,7 +9729,7 @@ async function openEventsModal() {
     document.getElementById('eventsList').innerHTML = '<p style="color:var(--muted)">Loading events…</p>';
   }
 
-  // 2. Fetch fresh in background
+  // 3. Fetch fresh in background
   fetchAndUpdateEvents();
 
   trapFocus(document.querySelector('#eventsModal .modal'), null, closeEventsModal);
@@ -9580,6 +9738,7 @@ async function openEventsModal() {
 function closeEventsModal() {
   eventsModalOpen = false;
   document.getElementById('eventsModal').style.display = 'none';
+  eventsCategoryFilter = null;  // Reset category filter on close
   releaseFocusTrap();
 }
 
@@ -9618,6 +9777,11 @@ async function fetchAndUpdateEvents() {
 
 function applyFiltersAndSort(events) {
   let filtered = [...events];
+
+  // Apply category filter
+  if (eventsCategoryFilter !== null) {
+    filtered = filtered.filter(e => e.category?.id === eventsCategoryFilter);
+  }
 
   // Apply tab filter
   if (eventsTabFilter !== 'all') {
