@@ -596,7 +596,6 @@ async function fetchLibraryWeb(city, state, lat, lon) {
           }
 
           const eventId = (ve.URL || '').match(/\/event\/(\d+)/)?.[1] || `${branch.cid}_${title}_${date}`;
-          const branchLabel = icalUnescape(ve.LOCATION) || branch.name;
 
           branchEvents.push({
             id: `lw_${eventId}`,
@@ -609,7 +608,7 @@ async function fetchLibraryWeb(city, state, lat, lon) {
             duration,
             location: {
               city, state,
-              address: branchLabel,
+              address: branch.name,   // clean branch name (shown on the card)
               lat: branch.lat,
               lon: branch.lon,
               distanceMiles: null

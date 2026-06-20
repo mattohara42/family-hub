@@ -9771,7 +9771,7 @@ function renderEventCard(event) {
           </div>
           ${shortSummary ? `<p class="event-description">${escapeHtml(shortSummary)}</p>` : ''}
           <div class="event-compact-foot">
-            <span class="event-compact-meta">${dateLabel} · ${distLabel}</span>
+            <span class="event-compact-meta">${dateLabel} · ${event.source === 'libraryweb' ? escapeHtml(event.location.address || 'Library') : distLabel}</span>
             <a href="${escapeHtml(event.sourceUrl)}" target="_blank" rel="noopener" class="event-link event-link-sm">Details${linkIcon}</a>
           </div>
         </div>
