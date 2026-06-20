@@ -455,6 +455,7 @@ async function fetchTicketmaster(city, state, lat, lon, filters = {}) {
           venue: venueData  // Enrich with venue details
         },
         description: e.description || '',
+        image: e.images?.[0]?.url || null,
         weather: null
       };
     });
@@ -579,6 +580,7 @@ async function fetchEventbrite(lat, lon) {
           venue: ebVenue  // Enrich with venue details
         },
         description: e.description?.text || '',
+        image: e.logo?.url || null,
         weather: null,
         category: category  // Official Eventbrite category metadata (optional)
       };
@@ -900,6 +902,7 @@ async function scrapeAllTrails(city, state, lat, lon) {
             distanceMiles: distance > 0 ? distance : null
           },
           description: description,
+          image: trail.image_url || null,
           weather: null
         });
       } catch (trailErr) {
