@@ -155,7 +155,8 @@ exports.handler = async (event) => {
         ticketmaster: sourceStatus.ticketmaster.count,
         eventbrite: sourceStatus.eventbrite.count,
         estatesales: sourceStatus.estatesales.count,
-        craigslist: sourceStatus.craigslist.count
+        craigslist: sourceStatus.craigslist.count,
+        alltrails: sourceStatus.alltrails.count
       },
       warnings: Object.entries(sourceStatus)
         .filter(([, status]) => !status.ok)
