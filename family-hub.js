@@ -9761,36 +9761,36 @@ function renderVenueDetails(venue) {
 }
 
 function renderEventCard(event) {
-  const calendarLabel = event.calendarConflict
-    ? '<span class="event-calendar-indicator calendar-conflict">⚠ You\'re busy</span>'
-    : '<span class="event-calendar-indicator">✓ You\'re free</span>';
+  const imageHtml = event.image
+    ? `<div class="event-image" style="background-image: url('${escapeHtml(event.image)}')"></div>`
+    : `<div class="event-image event-image-placeholder">${getEventEmoji(event.type)}</div>`;
 
-  const weatherHtml = event.weather
-    ? `<div class="event-weather"><span class="weather-icon">${getWeatherEmoji(event.weather.condition)}</span><span class="weather-text">${event.weather.temp}°F, ${event.weather.condition}</span></div>`
+  const descriptionPreview = event.description
+    ? event.description.substring(0, 100) + (event.description.length > 100 ? '…' : '')
     : '';
-
-  const venueHtml = renderVenueDetails(event.location?.venue);
 
   return `
     <div class="event-card">
-      <h3>${escapeHtml(event.title)} <span class="event-type-badge">${event.type}</span></h3>
-      <div class="event-date-time">
-        <span class="event-date">${event.date || 'TBD'}</span>
-        ${event.time ? `<span class="event-time">${event.time}</span>` : '<span style="color:var(--muted)">All day</span>'}
-      </div>
-      <div class="event-location">
-        <span class="event-distance">${(event.location.distanceMiles || 0).toFixed(1)} mi</span>
-        <span>${escapeHtml(event.location.address)}</span>
-      </div>
-      ${venueHtml}
-      ${calendarLabel}
-      ${weatherHtml}
-      <div class="event-description">${escapeHtml(event.description)}</div>
-      <div class="event-actions">
-        <a href="${escapeHtml(event.sourceUrl)}" target="_blank" rel="noopener">View on ${event.source}</a>
+      ${imageHtml}
+      <div class="event-card-content">
+        <h3 class="event-title">${escapeHtml(event.title)} <span class="event-type-badge">${event.type}</span></h3>
+        ${descriptionPreview ? `<p class="event-description">${escapeHtml(descriptionPreview)}</p>` : ''}
+        <div class="event-meta">
+          <span class="event-date">${event.date || 'TBD'}</span>
+          <span class="event-distance">${(event.location.distanceMiles || 0).toFixed(1)} mi</span>
+        </div>
+        <a href="${escapeHtml(event.sourceUrl)}" target="_blank" rel="noopener" class="event-link">View Details</a>
       </div>
     </div>
   `;
+}
+
+function getEventEmoji(type) {
+  const map = {
+    'concert': '🎵', 'music': '🎵', 'show': '🎭', 'sports': '⚽', 'hike': '🥾',
+    'class': '📚', 'food': '🍽️', 'art': '🎨', 'sale': '🛍️', 'activity': '🎪'
+  };
+  return map[type] || '🎉';
 }
 
 function updateEventsAgeLabel(timestamp) {
