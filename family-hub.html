@@ -28,7 +28,6 @@
 
   <!-- Google API -->
   <script src="https://apis.google.com/js/api.js"></script>
-  <script src="https://accounts.google.com/gsi/client" async defer onload="onGsiLoad()"></script>
 
   <!-- Leaflet (precipitation radar map) -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -1385,5 +1384,7 @@
 -->
 
 <script src="family-hub.js"></script>
+  <!-- Google Sign-In loaded after family-hub.js so onGsiLoad() is defined -->
+  <script src="https://accounts.google.com/gsi/client" async defer onload="onGsiLoad()"></script>
 </body>
 </html>
