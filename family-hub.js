@@ -9401,7 +9401,11 @@ async function saveCategoriesToCache(categories) {
 
 async function fetchCategories() {
   try {
-    const url = `/.netlify/functions/events?categories=true`;
+    const params = new URLSearchParams();
+    params.set('location', eventLocation);
+    params.set('radius', eventMaxDistance);
+    params.set('categories', 'true');
+    const url = `/.netlify/functions/events?${params}`;
     const r = await fetch(url);
     const data = await r.json();
 
