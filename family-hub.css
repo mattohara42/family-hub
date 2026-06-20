@@ -4856,6 +4856,13 @@ body.tv-mode .card:hover { box-shadow: none; }
   flex-direction: column;
 }
 
+.event-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .event-title {
   margin: 0 0 6px 0;
   font-size: var(--text-md);
@@ -4889,20 +4896,27 @@ body.tv-mode .card:hover { box-shadow: none; }
 }
 
 .event-link {
-  align-self: flex-start;
-  padding: 6px 10px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  padding: 5px 9px;
   background: var(--accent);
   color: var(--bg);
   text-decoration: none;
   border-radius: 4px;
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   font-weight: var(--weight-semi);
   transition: opacity 0.1s;
-  margin-top: auto;
 }
 
 .event-link:hover {
   opacity: 0.85;
+}
+
+.event-link-icon {
+  flex-shrink: 0;
 }
 
 /* ── Event Venue Details ── */

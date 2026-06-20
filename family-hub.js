@@ -9773,13 +9773,18 @@ function renderEventCard(event) {
     ? event.description.substring(0, 160) + (event.description.length > 160 ? '…' : '')
     : 'No description available.';
 
+  // External-link icon (feather "external-link")
+  const linkIcon = `<svg class="event-link-icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`;
+
   return `
     <div class="event-card">
       ${imageHtml}
       <div class="event-card-content">
-        <h3 class="event-title">${escapeHtml(event.title)} <span class="event-type-badge">${event.type}</span></h3>
+        <div class="event-card-header">
+          <h3 class="event-title">${escapeHtml(event.title)} <span class="event-type-badge">${event.type}</span></h3>
+          <a href="${escapeHtml(event.sourceUrl)}" target="_blank" rel="noopener" class="event-link">View Details${linkIcon}</a>
+        </div>
         <p class="event-description">${escapeHtml(summary)}</p>
-        <a href="${escapeHtml(event.sourceUrl)}" target="_blank" rel="noopener" class="event-link">View Details</a>
       </div>
     </div>
   `;
