@@ -9537,10 +9537,9 @@ async function openEventsModal() {
   eventsModalOpen = true;
   document.getElementById('eventsModal').style.display = 'flex';
 
-  // 1. Load categories and render filter tabs
-  await loadAndRenderCategories();
+  // Category filter UI was removed — skip the category fetch entirely.
 
-  // 2. Show cached data immediately
+  // Show cached data immediately
   const cached = await getEventsFromCache();
   if (cached?.length > 0) {
     eventsData = cached;
