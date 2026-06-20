@@ -969,11 +969,11 @@ function deduplicateEvents(events) {
 function filterEventsByDistanceAndDate(events, radiusMinutes, searchLat, searchLon) {
   const radiusMiles = radiusMinutes / 60 * 70;  // Rough approximation: ~70 mph
   const today = new Date().toISOString().split('T')[0];
-  const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const nextMonth = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
   return events.filter(e => {
     if (!e.location.lat || !e.location.lon) return false;
-    if (!e.date || e.date < today || e.date > nextWeek) return false;
+    if (!e.date || e.date < today || e.date > nextMonth) return false;
 
     const dist = calculateDistance(
       searchLat, searchLon,
