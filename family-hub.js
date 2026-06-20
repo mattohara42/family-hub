@@ -9750,28 +9750,50 @@ function renderVenueDetails(venue) {
 }
 
 function renderEventCard(event) {
-  // Date + distance overlay, pinned to the top-right of the image
-  const overlayHtml = `
-    <div class="event-overlay">
-      <span class="event-overlay-date">${escapeHtml(event.date || 'Anytime')}</span>
-      <span class="event-overlay-distance">${(event.location.distanceMiles || 0).toFixed(1)} mi</span>
-    </div>`;
-
-  const imageHtml = event.image
-    ? `<div class="event-image" style="background-image: url('${escapeHtml(event.image)}')">${overlayHtml}</div>`
-    : `<div class="event-image event-image-placeholder">${overlayHtml}<span class="event-image-emoji">${getEventEmoji(event.type)}</span></div>`;
-
-  // Short summary for the bottom half of the card
-  const summary = event.description
-    ? event.description.substring(0, 160) + (event.description.length > 160 ? '…' : '')
-    : 'No description available.';
+  const dateLabel = escapeHtml(event.date || 'Anytime');
+  const distLabel = `${(event.location.distanceMiles || 0).toFixed(1)} mi`;
 
   // External-link icon (feather "external-link")
   const linkIcon = `<svg class="event-link-icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`;
 
+  // Compact layout for image-less sources (Things to Do, Library): no image
+  // header — the type emoji becomes a small icon on the right.
+  if (!event.image) {
+    const shortSummary = event.description
+      ? event.description.substring(0, 110) + (event.description.length > 110 ? '…' : '')
+      : '';
+    return `
+      <div class="event-card event-card-compact">
+        <div class="event-card-content">
+          <div class="event-card-header">
+            <h3 class="event-title">${escapeHtml(event.title)}</h3>
+            <span class="event-compact-icon" aria-hidden="true">${getEventEmoji(event.type)}</span>
+          </div>
+          ${shortSummary ? `<p class="event-description">${escapeHtml(shortSummary)}</p>` : ''}
+          <div class="event-compact-foot">
+            <span class="event-compact-meta">${dateLabel} · ${distLabel}</span>
+            <a href="${escapeHtml(event.sourceUrl)}" target="_blank" rel="noopener" class="event-link event-link-sm">Details${linkIcon}</a>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Full layout for image-bearing events (Ticketmaster): image header with
+  // date/distance overlay, then title, summary, and View Details.
+  const overlayHtml = `
+    <div class="event-overlay">
+      <span class="event-overlay-date">${dateLabel}</span>
+      <span class="event-overlay-distance">${distLabel}</span>
+    </div>`;
+
+  const summary = event.description
+    ? event.description.substring(0, 160) + (event.description.length > 160 ? '…' : '')
+    : 'No description available.';
+
   return `
     <div class="event-card">
-      ${imageHtml}
+      <div class="event-image" style="background-image: url('${escapeHtml(event.image)}')">${overlayHtml}</div>
       <div class="event-card-content">
         <div class="event-card-header">
           <h3 class="event-title">${escapeHtml(event.title)} <span class="event-type-badge">${event.type}</span></h3>
