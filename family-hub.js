@@ -9687,7 +9687,7 @@ function selectEventSource(btn) {
 
 // Update the count badge on each source tab from the full result set
 function updateSourceTabCounts(rawEvents) {
-  const counts = { ticketmaster: 0, osm: 0, libraryweb: 0, redwings: 0 };
+  const counts = { ticketmaster: 0, osm: 0, libraryweb: 0, redwings: 0, cityspark: 0 };
   for (const e of (rawEvents || [])) {
     if (counts[e.source] !== undefined) counts[e.source]++;
   }
@@ -9698,7 +9698,7 @@ function updateSourceTabCounts(rawEvents) {
 }
 
 function renderEventsList(events) {
-  const emptyLabels = { ticketmaster: 'live events', osm: 'things to do', libraryweb: 'library events', redwings: 'Red Wings home games' };
+  const emptyLabels = { ticketmaster: 'live events', osm: 'things to do', libraryweb: 'library events', redwings: 'Red Wings home games', cityspark: 'local events' };
   const html = events.length > 0
     ? events.map(e => renderEventCard(e)).join('')
     : `<p style="color:var(--muted);padding:20px;text-align:center">No ${emptyLabels[eventsSourceTab] || 'events'} found nearby. Try expanding your distance or changing your location.</p>`;

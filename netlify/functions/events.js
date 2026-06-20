@@ -23,8 +23,21 @@ const sourceStatus = {
   ticketmaster: { ok: true, count: 0, error: null },
   osm: { ok: true, count: 0, error: null },
   libraryweb: { ok: true, count: 0, error: null },
-  redwings: { ok: true, count: 0, error: null }
+  redwings: { ok: true, count: 0, error: null },
+  cityspark: { ok: true, count: 0, error: null }
 };
+
+// CitySpark local-events aggregator (powers RocCityMag's calendar). Public
+// JSON API, location-based (pass lat/lng), returns rich events with images.
+const CITYSPARK_URL = 'https://portal.cityspark.com/api/events/GetEvents/CITYMagazine';
+const CITYSPARK_RADIUS_MILES = 30;
+// Numeric Tag id → our canonical event type (best-effort; falls back to activity)
+const CITYSPARK_TAG_TYPE = {
+  17: 'concert', 85: 'concert', 87: 'concert', 93: 'concert', 95: 'concert',
+  20: 'show', 18: 'show', 3: 'art', 34: 'art', 74: 'food', 75: 'food', 79: 'activity'
+};
+let citysparkCache = {};  // keyed by rounded lat/lon
+const CITYSPARK_CACHE_TTL = 30 * 60 * 1000;  // 30 minutes
 
 // Rochester Red Wings (AAA baseball) — public MLB Stats API. Region-specific:
 // home games only, at ESL Ballpark. teamId 534, sportId 11 (Triple-A).
@@ -86,11 +99,12 @@ exports.handler = async (event) => {
     }
 
     // Step 2: Fetch from all sources in parallel
-    const [tmEvents, osmEvents, libEvents, rwEvents] = await Promise.allSettled([
+    const [tmEvents, osmEvents, libEvents, rwEvents, csEvents] = await Promise.allSettled([
       fetchTicketmaster(city, state, lat, lon, { keyword, attractionId, venueId }),
       fetchOpenStreetMap(city, state, lat, lon, radiusMinutes),
       fetchLibraryWeb(city, state, lat, lon),
-      fetchRedWings(city, state, lat, lon)
+      fetchRedWings(city, state, lat, lon),
+      fetchCitySpark(city, state, lat, lon)
     ]);
 
     // Collect all results
@@ -98,7 +112,8 @@ exports.handler = async (event) => {
       ...extractSettledValue(tmEvents, 'ticketmaster'),
       ...extractSettledValue(osmEvents, 'osm'),
       ...extractSettledValue(libEvents, 'libraryweb'),
-      ...extractSettledValue(rwEvents, 'redwings')
+      ...extractSettledValue(rwEvents, 'redwings'),
+      ...extractSettledValue(csEvents, 'cityspark')
     ];
 
     // Step 3: Remove duplicates by title + date + venue
@@ -127,7 +142,8 @@ exports.handler = async (event) => {
         ticketmaster: sourceStatus.ticketmaster.count,
         osm: sourceStatus.osm.count,
         libraryweb: sourceStatus.libraryweb.count,
-        redwings: sourceStatus.redwings.count
+        redwings: sourceStatus.redwings.count,
+        cityspark: sourceStatus.cityspark.count
       },
       warnings: Object.entries(sourceStatus)
         .filter(([, status]) => !status.ok)
@@ -739,6 +755,105 @@ async function fetchRedWings(city, state, lat, lon) {
     console.warn('[Events] RedWings error:', err);
     sourceStatus.redwings.ok = false;
     sourceStatus.redwings.error = err.message;
+    return [];
+  }
+}
+
+// ────────────────────────────────────────────────────────────────
+// CITYSPARK (broad local "Around Town" events — RocCityMag calendar)
+// ────────────────────────────────────────────────────────────────
+
+/**
+ * Fetch local events from CitySpark (the aggregator behind RocCityMag's
+ * calendar). Public JSON API, location-based via lat/lng. Rich data with
+ * images. DateStart carries local time tagged with a spurious 'Z', so we
+ * read its components directly without timezone conversion.
+ */
+async function fetchCitySpark(city, state, lat, lon) {
+  try {
+    const cacheKey = `${lat.toFixed(2)}_${lon.toFixed(2)}`;
+    const cached = citysparkCache[cacheKey];
+    if (cached && Date.now() - cached.timestamp < CITYSPARK_CACHE_TTL) {
+      sourceStatus.cityspark.count = cached.events.length;
+      sourceStatus.cityspark.ok = true;
+      return cached.events;
+    }
+
+    const start = new Date().toISOString();
+    const end = new Date(Date.now() + 35 * 24 * 60 * 60 * 1000).toISOString();
+    const body = JSON.stringify({
+      lat, lng: lon, distance: CITYSPARK_RADIUS_MILES,
+      start, end, sort: 'Time', category: [], page: 1  // 'Time' = soonest-first
+    });
+
+    const data = await fetchWithRetry(async () => {
+      const r = await fetch(CITYSPARK_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Referer': 'https://www.roccitymag.com/',
+          'User-Agent': 'FamilyHub/1.0 (event discovery)'
+        },
+        body
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    }, 'CitySpark', 1);
+
+    const seen = new Set();
+    const events = [];
+    for (const e of (data.Value || [])) {
+      try {
+        const name = e.Name;
+        const raw = e.StartLocal || e.DateStart || e.Date;  // local time w/ spurious Z
+        if (!name || !raw) continue;
+
+        const date = raw.slice(0, 10);
+        const time = e.HasTime && !e.AllDay && raw.length >= 16 ? raw.slice(11, 16) : null;
+
+        const id = `cs_${e.PId || e.Id}`;
+        if (seen.has(id)) continue;
+        seen.add(id);
+
+        const tags = Array.isArray(e.Tags) ? e.Tags : [];
+        const type = tags.map(t => CITYSPARK_TAG_TYPE[t]).find(Boolean) || 'activity';
+        const description = (e.Description || '').replace(/\\(.)/g, '$1');
+
+        events.push({
+          id,
+          title: name,
+          type,
+          source: 'cityspark',
+          sourceUrl: e.PrimaryUrl || e.TicketUrl || 'https://www.roccitymag.com/events/',
+          date,
+          time,
+          duration: null,
+          location: {
+            city: (e.CityState || '').split(',')[0] || city,
+            state: (e.CityState || '').split(',')[1]?.trim() || state,
+            address: e.Venue || e.Address || '',
+            lat: e.latitude || lat,
+            lon: e.longitude || lon,
+            distanceMiles: null
+          },
+          description,
+          image: e.LargeImg || e.MediumImg || null,
+          weather: null
+        });
+      } catch (itemErr) {
+        console.warn('[Events] CitySpark item parse error:', itemErr.message);
+      }
+    }
+
+    citysparkCache[cacheKey] = { events, timestamp: Date.now() };
+    sourceStatus.cityspark.count = events.length;
+    sourceStatus.cityspark.ok = true;
+    sourceStatus.cityspark.error = null;
+    return events;
+  } catch (err) {
+    console.warn('[Events] CitySpark error:', err);
+    sourceStatus.cityspark.ok = false;
+    sourceStatus.cityspark.error = err.message;
     return [];
   }
 }
