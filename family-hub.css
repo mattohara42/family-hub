@@ -4794,7 +4794,7 @@ body.tv-mode .card:hover { box-shadow: none; }
   transition: transform 0.1s, box-shadow 0.1s;
   display: flex;
   flex-direction: column;
-  height: 100%;
+  flex-shrink: 0;
 }
 .event-card:hover {
   transform: translateY(-2px);
