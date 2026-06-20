@@ -131,9 +131,11 @@ exports.handler = async (event) => {
 
     // Step 3: Remove duplicates by title + date + venue
     const uniqueEvents = deduplicateEvents(allEvents);
+    console.log(`[Events] After dedup: ${uniqueEvents.length} events (from ${allEvents.length})`);
 
     // Step 4: Filter by distance and date
     const filteredEvents = filterEventsByDistanceAndDate(uniqueEvents, radiusMinutes, lat, lon);
+    console.log(`[Events] After distance/date filter: ${filteredEvents.length} events`);
 
     // Step 5: Add weather context to each event
     const withWeather = await Promise.all(
@@ -359,13 +361,19 @@ async function fetchTicketmaster(city, state, lat, lon, filters = {}) {
     }
 
     const data = await fetchWithRetry(async () => {
+      // Calculate date range: today to 30 days ahead
+      const today = new Date().toISOString().split('T')[0];  // YYYY-MM-DD
+      const in30Days = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
       // Build base params (always included)
       const params = new URLSearchParams({
         apikey: key,
         latlong: `${lat},${lon}`,
         radius: 120,  // km (API default ~100, we expand to 120)
         size: 50,     // Results limit (max 200)
-        sort: 'date,asc'  // Sort by date ascending
+        sort: 'date,asc',  // Sort by date ascending
+        startDateTime: `${today}T00:00:00Z`,  // Start of today
+        endDateTime: `${in30Days}T23:59:59Z`  // End of day 30 days from now
       });
 
       // Add optional advanced filter parameters from query string
@@ -971,9 +979,10 @@ function filterEventsByDistanceAndDate(events, radiusMinutes, searchLat, searchL
   const today = new Date().toISOString().split('T')[0];
   const nextMonth = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-  return events.filter(e => {
-    if (!e.location.lat || !e.location.lon) return false;
-    if (!e.date || e.date < today || e.date > nextMonth) return false;
+  let noCoords = 0, badDates = 0;
+  const result = events.filter(e => {
+    if (!e.location.lat || !e.location.lon) { noCoords++; return false; }
+    if (!e.date || e.date < today || e.date > nextMonth) { badDates++; return false; }
 
     const dist = calculateDistance(
       searchLat, searchLon,
@@ -982,6 +991,14 @@ function filterEventsByDistanceAndDate(events, radiusMinutes, searchLat, searchL
     e.location.distanceMiles = Math.round(dist * 10) / 10;
     return dist <= radiusMiles;
   });
+  if (badDates > 0 && events.length > 0) {
+    const dates = events.filter(e => e.date).map(e => e.date).sort();
+    const minDate = dates[0], maxDate = dates[dates.length - 1];
+    console.log(`[Events] Date range in events: ${minDate} to ${maxDate}`);
+    console.log(`[Events] Filter window: ${today} to ${nextMonth}`);
+  }
+  console.log(`[Events] Filter breakdown: ${noCoords} missing coords, ${badDates} bad dates, ${result.length} passed`);
+  return result;
 }
 
 async function addWeatherContext(event) {
