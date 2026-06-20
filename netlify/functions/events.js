@@ -1,6 +1,6 @@
 /**
  * Netlify Function: Event Discovery Aggregator
- * Fetches from Ticketmaster, Eventbrite APIs + scrapes estatesales.net, Craigslist
+ * Fetches from Ticketmaster, Eventbrite, AllTrails APIs + scrapes estatesales.net
  * Normalizes, geocodes, adds weather context, filters by distance/date
  * Client calls: /.netlify/functions/events?location=<city>&radius=<minutes>&eventTypes=<comma-sep>
  *
@@ -64,7 +64,6 @@ const sourceStatus = {
   ticketmaster: { ok: true, count: 0, error: null },
   eventbrite: { ok: true, count: 0, error: null },
   estatesales: { ok: true, count: 0, error: null },
-  craigslist: { ok: true, count: 0, error: null },
   alltrails: { ok: true, count: 0, error: null }
 };
 
@@ -112,11 +111,10 @@ exports.handler = async (event) => {
     }
 
     // Step 2: Fetch from all sources in parallel
-    const [tmEvents, ebEvents, estateSalesEvents, craigslistEvents, alltrailsEvents] = await Promise.allSettled([
+    const [tmEvents, ebEvents, estateSalesEvents, alltrailsEvents] = await Promise.allSettled([
       fetchTicketmaster(city, state, lat, lon, { keyword, attractionId, venueId }),
       fetchEventbrite(lat, lon),
       scrapeEstateSales(city, state, lat, lon),
-      scrapeCraigslist(city, state, lat, lon),
       scrapeAllTrails(city, state, lat, lon)
     ]);
 
@@ -125,7 +123,6 @@ exports.handler = async (event) => {
       ...extractSettledValue(tmEvents, 'ticketmaster'),
       ...extractSettledValue(ebEvents, 'eventbrite'),
       ...extractSettledValue(estateSalesEvents, 'estatesales'),
-      ...extractSettledValue(craigslistEvents, 'craigslist'),
       ...extractSettledValue(alltrailsEvents, 'alltrails')
     ];
 
@@ -157,7 +154,6 @@ exports.handler = async (event) => {
         ticketmaster: sourceStatus.ticketmaster.count,
         eventbrite: sourceStatus.eventbrite.count,
         estatesales: sourceStatus.estatesales.count,
-        craigslist: sourceStatus.craigslist.count,
         alltrails: sourceStatus.alltrails.count
       },
       warnings: Object.entries(sourceStatus)
@@ -693,133 +689,6 @@ async function scrapeEstateSales(city, state, lat, lon) {
     console.warn('[Events] Estate sales scraping error:', err);
     sourceStatus.estatesales.ok = false;
     sourceStatus.estatesales.error = err.message;
-    return [];
-  }
-}
-
-// ────────────────────────────────────────────────────────────────
-// SCRAPING: CRAIGSLIST
-// ────────────────────────────────────────────────────────────────
-
-// State to Craigslist region mapping
-const STATE_TO_CRAIGSLIST_REGION = {
-  'AL': 'alabama', 'AK': 'anchorage', 'AZ': 'phoenix', 'AR': 'littlerock', 'CA': 'sfbay',
-  'CO': 'denver', 'CT': 'newhaven', 'DE': 'delaware', 'FL': 'miami', 'GA': 'atlanta',
-  'HI': 'honolulu', 'ID': 'boise', 'IL': 'chicago', 'IN': 'indianapolis', 'IA': 'desmoines',
-  'KS': 'kansas', 'KY': 'louisville', 'LA': 'neworleans', 'ME': 'maine', 'MD': 'baltimore',
-  'MA': 'boston', 'MI': 'detroit', 'MN': 'minneapolis', 'MS': 'jackson', 'MO': 'stlouis',
-  'MT': 'missoula', 'NE': 'omaha', 'NV': 'lasvegas', 'NH': 'nh', 'NJ': 'newjersey',
-  'NM': 'albuquerque', 'NY': 'newyork', 'NC': 'raleigh', 'ND': 'northdakota', 'OH': 'columbus',
-  'OK': 'oklahomacity', 'OR': 'portland', 'PA': 'philadelphia', 'RI': 'providence', 'SC': 'charleston',
-  'SD': 'southdakota', 'TN': 'memphis', 'TX': 'dallas', 'UT': 'saltlakecity', 'VT': 'vermont',
-  'VA': 'roanoke', 'WA': 'seattle', 'WV': 'huntington', 'WI': 'madison', 'WY': 'wyoming'
-};
-
-async function scrapeCraigslist(city, state, lat, lon) {
-  try {
-    const cheerio = require('cheerio');
-
-    const region = STATE_TO_CRAIGSLIST_REGION[state];
-    if (!region) {
-      console.warn(`[Events] Craigslist: unmapped state: ${state}`);
-      sourceStatus.craigslist.ok = false;
-      sourceStatus.craigslist.error = `unmapped state: ${state}`;
-      return [];
-    }
-
-    const searchUrl = `https://${region}.craigslist.org/search/eee`;
-
-    const r = await fetchWithRetry(async () => {
-      return fetch(searchUrl, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Family Hub Event Discovery)' }
-      });
-    }, 'Craigslist');
-
-    if (!r.ok) {
-      sourceStatus.craigslist.ok = false;
-      sourceStatus.craigslist.error = r.status === 403 ? 'rate_limited' : `HTTP ${r.status}`;
-      return [];
-    }
-
-    const html = await r.text();
-    const $ = cheerio.load(html);
-
-    const events = [];
-
-    // Parse Craigslist listings (ol#search-results li.cl-search-result)
-    $('li.cl-search-result').each((i, elem) => {
-      try {
-        const titleElem = $(elem).find('a.titlestring');
-        const title = titleElem.text().trim();
-        const url = titleElem.attr('href');
-
-        if (!title || !url) return;
-
-        // Craigslist shows relative posting time
-        const timeElem = $(elem).find('.result-date');
-        const timeText = timeElem.text().trim();
-
-        // Parse relative date (e.g., "3 hours ago", "1 day ago", "yesterday")
-        let date = new Date().toISOString().split('T')[0];
-        if (timeText) {
-          const match = timeText.match(/(\d+)\s*(hour|day|week)s?\s+ago|yesterday|today/i);
-          if (match) {
-            const now = new Date();
-            if (match[0].toLowerCase().includes('hour')) {
-              // Same day
-              date = now.toISOString().split('T')[0];
-            } else if (match[0].toLowerCase().includes('yesterday')) {
-              now.setDate(now.getDate() - 1);
-              date = now.toISOString().split('T')[0];
-            } else if (match[0].toLowerCase().includes('day')) {
-              const days = parseInt(match[1]) || 1;
-              now.setDate(now.getDate() - days);
-              date = now.toISOString().split('T')[0];
-            } else if (match[0].toLowerCase().includes('week')) {
-              const weeks = parseInt(match[1]) || 1;
-              now.setDate(now.getDate() - (weeks * 7));
-              date = now.toISOString().split('T')[0];
-            }
-          }
-        }
-
-        // Extract location (price is optional)
-        const priceElem = $(elem).find('.result-price');
-        const price = priceElem.text().trim();
-
-        events.push({
-          id: `cl_${url.split('/').pop()}`,
-          title: title,
-          type: normalizeEventType(title),
-          source: 'craigslist',
-          sourceUrl: url.startsWith('http') ? url : `https://${region}.craigslist.org${url}`,
-          date: date,
-          time: null,
-          duration: null,
-          location: {
-            city: city,
-            state: state,
-            address: price ? `${title} - ${price}` : title,
-            lat: lat,
-            lon: lon,
-            distanceMiles: null
-          },
-          description: title,
-          weather: null
-        });
-      } catch (itemErr) {
-        console.warn('[Events] Error parsing Craigslist item:', itemErr);
-      }
-    });
-
-    sourceStatus.craigslist.count = events.length;
-    sourceStatus.craigslist.ok = true;
-    sourceStatus.craigslist.error = null;
-    return events;
-  } catch (err) {
-    console.warn('[Events] Craigslist scraping error:', err);
-    sourceStatus.craigslist.ok = false;
-    sourceStatus.craigslist.error = err.message;
     return [];
   }
 }
