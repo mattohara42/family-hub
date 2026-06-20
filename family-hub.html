@@ -1220,8 +1220,13 @@
 
     <div id="eventsAgeLabel" style="font-size:.8rem;color:var(--muted);margin-bottom:8px"></div>
 
-    <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
-      <button class="btn btn-primary btn-sm" onclick="refreshEvents()">🔄 Refresh</button>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <div class="events-source-tabs" style="display:flex;gap:6px;overflow-x:auto;flex:1">
+        <button class="event-tab active" data-source="ticketmaster" onclick="selectEventSource(this)">🎟️ Live Events <span class="event-tab-count" id="count-ticketmaster"></span></button>
+        <button class="event-tab" data-source="osm" onclick="selectEventSource(this)">📍 Things to Do <span class="event-tab-count" id="count-osm"></span></button>
+        <button class="event-tab" data-source="libraryweb" onclick="selectEventSource(this)">📚 Library <span class="event-tab-count" id="count-libraryweb"></span></button>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="refreshEvents()" title="Refresh" style="flex-shrink:0">🔄</button>
     </div>
 
     <div id="eventsList" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding-right:4px"></div>

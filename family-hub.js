@@ -9526,6 +9526,7 @@ let eventsData = [];           // Current displayed events
 let eventsRawData = [];        // Full result set from backend
 let eventsFetchTimestamp = 0;  // When we last fetched
 let eventsSort = 'distance';   // Current sort mode
+let eventsSourceTab = 'ticketmaster';  // Active source tab: ticketmaster | osm | libraryweb
 let eventsTabFilter = 'all';   // Current tab filter
 let eventsCategoryFilter = null;  // Category filter (null = all)
 let eventsCategories = {};     // Category objects from backend: { id: { id, name } }
@@ -9542,9 +9543,10 @@ async function openEventsModal() {
   // Show cached data immediately
   const cached = await getEventsFromCache();
   if (cached?.length > 0) {
-    eventsData = cached;
     eventsRawData = cached;
-    renderEventsList(cached);
+    eventsData = applyFiltersAndSort(eventsRawData);
+    updateSourceTabCounts(eventsRawData);
+    renderEventsList(eventsData);
     updateEventsAgeLabel(cached[0]?.fetchedAt);
   } else {
     document.getElementById('eventsList').innerHTML = '<p style="color:var(--muted)">Loading events…</p>';
@@ -9597,6 +9599,7 @@ async function fetchAndUpdateEvents() {
     if (data.success) {
       eventsRawData = attachCalendarConflictsToEvents(data.events);
       eventsData = applyFiltersAndSort(eventsRawData);
+      updateSourceTabCounts(eventsRawData);
 
       // Save to IndexedDB
       await saveEventsToCache(eventsRawData, {
@@ -9619,50 +9622,18 @@ async function fetchAndUpdateEvents() {
 }
 
 function applyFiltersAndSort(events) {
-  let filtered = [...events];
+  // Show only the active source's events (one tab per source)
+  const filtered = events.filter(e => e.source === eventsSourceTab);
 
-  // Apply category filter
-  if (eventsCategoryFilter !== null) {
-    filtered = filtered.filter(e => e.category?.id === eventsCategoryFilter);
-  }
-
-  // Apply tab filter
-  if (eventsTabFilter !== 'all') {
-    filtered = filtered.filter(e => {
-      const type = e.type.toLowerCase();
-      if (eventsTabFilter === 'sale') {
-        return type.includes('sale') || type.includes('estate');
-      }
-      return type === eventsTabFilter || type.includes(eventsTabFilter);
-    });
-  }
-
-  // Apply keyword search filter (client-side fallback)
-  if (eventsSearchKeyword) {
-    const keywordLower = eventsSearchKeyword.toLowerCase();
-    filtered = filtered.filter(e =>
-      e.title.toLowerCase().includes(keywordLower) ||
-      (e.description && e.description.toLowerCase().includes(keywordLower))
-    );
-  }
-
-  // Apply venue search filter (client-side fallback)
-  if (eventsSearchVenue) {
-    const venueLower = eventsSearchVenue.toLowerCase();
-    filtered = filtered.filter(e =>
-      e.location?.venue?.name &&
-      e.location.venue.name.toLowerCase().includes(venueLower)
-    );
-  }
-
-  // Note: Artist/attractionId filtering is server-side; no client-side fallback available
-
-  // Apply sort (default: distance — sort UI removed)
-  const sortBy = eventsSort || 'distance';
-  if (sortBy === 'distance') {
+  if (eventsSourceTab === 'osm') {
+    // Things to do are dateless — order by distance
     filtered.sort((a, b) => (a.location.distanceMiles || 999) - (b.location.distanceMiles || 999));
-  } else if (sortBy === 'date') {
-    filtered.sort((a, b) => (a.date || '9999').localeCompare(b.date || '9999'));
+  } else {
+    // Dated sources — soonest first, then nearest
+    filtered.sort((a, b) =>
+      (a.date || '9999').localeCompare(b.date || '9999') ||
+      (a.location.distanceMiles || 999) - (b.location.distanceMiles || 999)
+    );
   }
 
   return filtered;
@@ -9705,10 +9676,32 @@ function clearEventSearchFilters() {
   renderEventsList(eventsData);
 }
 
+// Switch the active source tab and re-render
+function selectEventSource(btn) {
+  document.querySelectorAll('.events-source-tabs .event-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  eventsSourceTab = btn.dataset.source;
+  eventsData = applyFiltersAndSort(eventsRawData);
+  renderEventsList(eventsData);
+}
+
+// Update the count badge on each source tab from the full result set
+function updateSourceTabCounts(rawEvents) {
+  const counts = { ticketmaster: 0, osm: 0, libraryweb: 0 };
+  for (const e of (rawEvents || [])) {
+    if (counts[e.source] !== undefined) counts[e.source]++;
+  }
+  for (const source of Object.keys(counts)) {
+    const el = document.getElementById(`count-${source}`);
+    if (el) el.textContent = counts[source] ? `(${counts[source]})` : '';
+  }
+}
+
 function renderEventsList(events) {
+  const emptyLabels = { ticketmaster: 'live events', osm: 'things to do', libraryweb: 'library events' };
   const html = events.length > 0
     ? events.map(e => renderEventCard(e)).join('')
-    : '<p style="color:var(--muted);padding:20px;text-align:center">No events found. Try expanding your distance or changing your location.</p>';
+    : `<p style="color:var(--muted);padding:20px;text-align:center">No ${emptyLabels[eventsSourceTab] || 'events'} found nearby. Try expanding your distance or changing your location.</p>`;
 
   document.getElementById('eventsList').innerHTML = html;
 }

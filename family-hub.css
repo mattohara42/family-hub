@@ -4782,6 +4782,10 @@ body.tv-mode .card:hover { box-shadow: none; }
   color: var(--bg);
   border-color: var(--accent);
 }
+.event-tab-count {
+  opacity: 0.7;
+  font-size: var(--text-xs);
+}
 
 .events-category-filters {
   display: flex;
