@@ -1,6 +1,6 @@
 /**
  * Netlify Function: Event Discovery Aggregator
- * Fetches from Ticketmaster, Eventbrite, AllTrails APIs + scrapes estatesales.net
+ * Fetches and aggregates events from Ticketmaster, Eventbrite, and AllTrails APIs
  * Normalizes, geocodes, adds weather context, filters by distance/date
  * Client calls: /.netlify/functions/events?location=<city>&radius=<minutes>&eventTypes=<comma-sep>
  *
@@ -63,7 +63,6 @@ const FALLBACK_CATEGORIES = {
 const sourceStatus = {
   ticketmaster: { ok: true, count: 0, error: null },
   eventbrite: { ok: true, count: 0, error: null },
-  estatesales: { ok: true, count: 0, error: null },
   alltrails: { ok: true, count: 0, error: null }
 };
 
@@ -111,10 +110,9 @@ exports.handler = async (event) => {
     }
 
     // Step 2: Fetch from all sources in parallel
-    const [tmEvents, ebEvents, estateSalesEvents, alltrailsEvents] = await Promise.allSettled([
+    const [tmEvents, ebEvents, alltrailsEvents] = await Promise.allSettled([
       fetchTicketmaster(city, state, lat, lon, { keyword, attractionId, venueId }),
       fetchEventbrite(lat, lon),
-      scrapeEstateSales(city, state, lat, lon),
       scrapeAllTrails(city, state, lat, lon)
     ]);
 
@@ -122,7 +120,6 @@ exports.handler = async (event) => {
     const allEvents = [
       ...extractSettledValue(tmEvents, 'ticketmaster'),
       ...extractSettledValue(ebEvents, 'eventbrite'),
-      ...extractSettledValue(estateSalesEvents, 'estatesales'),
       ...extractSettledValue(alltrailsEvents, 'alltrails')
     ];
 
@@ -153,7 +150,6 @@ exports.handler = async (event) => {
       sourceStats: {
         ticketmaster: sourceStatus.ticketmaster.count,
         eventbrite: sourceStatus.eventbrite.count,
-        estatesales: sourceStatus.estatesales.count,
         alltrails: sourceStatus.alltrails.count
       },
       warnings: Object.entries(sourceStatus)
@@ -603,92 +599,6 @@ async function fetchEventbrite(lat, lon) {
     console.error('[Events] Eventbrite error:', err);
     sourceStatus.eventbrite.ok = false;
     sourceStatus.eventbrite.error = err.message;
-    return [];
-  }
-}
-
-// ────────────────────────────────────────────────────────────────
-// SCRAPING: ESTATESALES.NET
-// ────────────────────────────────────────────────────────────────
-
-async function scrapeEstateSales(city, state, lat, lon) {
-  try {
-    const cheerio = require('cheerio');
-
-    // Search estatesales.net by city/state
-    const searchUrl = `https://www.estatesales.net/en/search?city=${encodeURIComponent(city)}&state=${state}`;
-
-    const r = await fetch(searchUrl, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Family Hub Event Discovery)' }
-    });
-    if (!r.ok) {
-      sourceStatus.estatesales.ok = false;
-      return [];
-    }
-
-    const html = await r.text();
-    const $ = cheerio.load(html);
-
-    const events = [];
-
-    // Parse estate sale listings
-    $('div.item').each((i, elem) => {
-      try {
-        const titleElem = $(elem).find('a.overlay');
-        const title = titleElem.text().trim();
-        const url = titleElem.attr('href');
-
-        if (!title || !url) return;
-
-        const dateElem = $(elem).find('.dates');
-        const dateText = dateElem.text().trim();
-
-        const addressElem = $(elem).find('.address');
-        const address = addressElem.text().trim();
-
-        // Extract date (format varies; try to parse)
-        let date = null;
-        if (dateText) {
-          const dateMatch = dateText.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-          if (dateMatch) {
-            const [, m, d, y] = dateMatch;
-            date = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
-          }
-        }
-
-        events.push({
-          id: `es_${url.split('/').pop()}`,
-          title: title,
-          type: 'sale',
-          source: 'estatesales',
-          sourceUrl: url.startsWith('http') ? url : `https://www.estatesales.net${url}`,
-          date: date,
-          time: null,
-          duration: null,
-          location: {
-            city: city,
-            state: state,
-            address: address,
-            lat: lat,
-            lon: lon,
-            distanceMiles: null
-          },
-          description: dateText,
-          weather: null
-        });
-      } catch (itemErr) {
-        console.warn('[Events] Error parsing estate sale item:', itemErr);
-      }
-    });
-
-    sourceStatus.estatesales.count = events.length;
-    sourceStatus.estatesales.ok = true;
-    sourceStatus.estatesales.error = null;
-    return events;
-  } catch (err) {
-    console.warn('[Events] Estate sales scraping error:', err);
-    sourceStatus.estatesales.ok = false;
-    sourceStatus.estatesales.error = err.message;
     return [];
   }
 }

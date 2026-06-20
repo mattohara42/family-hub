@@ -2,8 +2,5 @@
   "name": "family-hub",
   "version": "1.0.0",
   "description": "Family dashboard with event discovery",
-  "private": true,
-  "dependencies": {
-    "cheerio": "^1.0.0-rc.12"
-  }
+  "private": true
 }
