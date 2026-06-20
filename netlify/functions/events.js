@@ -20,7 +20,8 @@ const OWM_GEO_BASE = 'https://api.openweathermap.org/geo/1.0';
 
 // Source status tracking for this request
 const sourceStatus = {
-  ticketmaster: { ok: true, count: 0, error: null }
+  ticketmaster: { ok: true, count: 0, error: null },
+  osm: { ok: true, count: 0, error: null }
 };
 
 // Retry configuration
@@ -53,23 +54,23 @@ exports.handler = async (event) => {
       return json(400, { error: `Could not geocode location: ${location}` });
     }
 
-    // Step 2: Fetch events
-    const [tmEvents] = await Promise.allSettled([
-      fetchTicketmaster(city, state, lat, lon, { keyword, attractionId, venueId })
+    // Step 2: Fetch from all sources in parallel
+    const [tmEvents, osmEvents] = await Promise.allSettled([
+      fetchTicketmaster(city, state, lat, lon, { keyword, attractionId, venueId }),
+      fetchOpenStreetMap(city, state, lat, lon, radiusMinutes)
     ]);
 
     // Collect all results
     const allEvents = [
-      ...extractSettledValue(tmEvents, 'ticketmaster')
+      ...extractSettledValue(tmEvents, 'ticketmaster'),
+      ...extractSettledValue(osmEvents, 'osm')
     ];
 
     // Step 3: Remove duplicates by title + date + venue
     const uniqueEvents = deduplicateEvents(allEvents);
-    console.log(`[Events] After dedup: ${uniqueEvents.length} events (from ${allEvents.length})`);
 
     // Step 4: Filter by distance and date
     const filteredEvents = filterEventsByDistanceAndDate(uniqueEvents, radiusMinutes, lat, lon);
-    console.log(`[Events] After distance/date filter: ${filteredEvents.length} events`);
 
     // Step 5: Add weather context to each event
     const withWeather = await Promise.all(
@@ -88,7 +89,8 @@ exports.handler = async (event) => {
       radius: radiusMinutes,
       timestamp: Date.now(),
       sourceStats: {
-        ticketmaster: sourceStatus.ticketmaster.count
+        ticketmaster: sourceStatus.ticketmaster.count,
+        osm: sourceStatus.osm.count
       },
       warnings: Object.entries(sourceStatus)
         .filter(([, status]) => !status.ok)
@@ -321,6 +323,135 @@ async function fetchTicketmaster(city, state, lat, lon, filters = {}) {
 }
 
 // ────────────────────────────────────────────────────────────────
+// OPENSTREETMAP (things to do — museums, parks, galleries, theatres)
+// ────────────────────────────────────────────────────────────────
+
+// Overpass mirrors (try in order on failure)
+const OVERPASS_ENDPOINTS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter'
+];
+
+// Map an OSM tag value to one of our canonical event types + a human label
+function osmCategoryInfo(tags) {
+  const cultural = { museum: 'Museum', gallery: 'Art gallery', arts_centre: 'Arts centre', theatre: 'Theatre', cinema: 'Cinema' };
+  const outdoor = { park: 'Park', nature_reserve: 'Nature reserve', garden: 'Garden', viewpoint: 'Scenic viewpoint' };
+  const fun = { zoo: 'Zoo', aquarium: 'Aquarium', theme_park: 'Theme park' };
+
+  const key = tags.tourism || tags.leisure || tags.amenity;
+  if (cultural[key]) return { type: 'art', label: cultural[key] };
+  if (outdoor[key]) return { type: 'hike', label: outdoor[key] };
+  if (fun[key]) return { type: 'activity', label: fun[key] };
+  return { type: 'activity', label: 'Place of interest' };
+}
+
+/**
+ * Fetch nearby "things to do" from OpenStreetMap via the Overpass API.
+ * Free, keyless, server-reachable. Returns dateless POIs (always-available),
+ * which the distance/date filter keeps (date === null) and trims by distance.
+ */
+async function fetchOpenStreetMap(city, state, lat, lon, radiusMinutes) {
+  try {
+    // Cap the POI search radius — things-to-do are local day-trips, and a huge
+    // Overpass area is slow. Derive from drive radius but cap at 60km.
+    const radiusMiles = (parseInt(radiusMinutes) || 120) / 60 * 70;
+    const radiusMeters = Math.min(Math.round(radiusMiles * 1609), 60000);
+
+    const query = `[out:json][timeout:25];
+(
+  nwr["tourism"~"^(museum|gallery|theme_park|zoo|aquarium|viewpoint)$"]["name"](around:${radiusMeters},${lat},${lon});
+  nwr["leisure"~"^(park|nature_reserve|garden)$"]["name"](around:${radiusMeters},${lat},${lon});
+  nwr["amenity"~"^(theatre|arts_centre|cinema)$"]["name"](around:${radiusMeters},${lat},${lon});
+);
+out center tags 80;`;
+
+    let data = null;
+    for (const endpoint of OVERPASS_ENDPOINTS) {
+      try {
+        const r = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'User-Agent': 'FamilyHub/1.0 (event discovery)'
+          },
+          body: 'data=' + encodeURIComponent(query)
+        });
+        if (r.ok) { data = await r.json(); break; }
+      } catch (endpointErr) {
+        console.warn(`[Events] Overpass endpoint failed (${endpoint}):`, endpointErr.message);
+      }
+    }
+
+    if (!data) {
+      sourceStatus.osm.ok = false;
+      sourceStatus.osm.error = 'all Overpass endpoints failed';
+      return [];
+    }
+
+    const seenNames = new Set();
+    const events = [];
+
+    for (const el of (data.elements || [])) {
+      try {
+        const tags = el.tags || {};
+        const name = tags.name;
+        if (!name) continue;
+
+        // Nodes carry lat/lon directly; ways/relations carry a computed center
+        const pLat = el.lat ?? el.center?.lat;
+        const pLon = el.lon ?? el.center?.lon;
+        if (pLat == null || pLon == null) continue;
+
+        // Dedupe repeated names (e.g. a park mapped as both node and area)
+        const nameKey = name.toLowerCase().trim();
+        if (seenNames.has(nameKey)) continue;
+        seenNames.add(nameKey);
+
+        const { type, label } = osmCategoryInfo(tags);
+        const website = tags.website || tags['contact:website'] || null;
+        const osmType = el.type;  // node | way | relation
+
+        events.push({
+          id: `osm_${osmType}${el.id}`,
+          title: name,
+          type,
+          source: 'osm',
+          sourceUrl: website || `https://www.openstreetmap.org/${osmType}/${el.id}`,
+          date: null,   // always-available "thing to do"
+          time: null,
+          duration: null,
+          location: {
+            city,
+            state,
+            address: tags['addr:street']
+              ? `${tags['addr:housenumber'] || ''} ${tags['addr:street']}`.trim()
+              : label,
+            lat: pLat,
+            lon: pLon,
+            distanceMiles: null
+          },
+          description: tags.description || `${label} in ${tags['addr:city'] || city}`,
+          image: tags.image || null,
+          weather: null
+        });
+      } catch (itemErr) {
+        console.warn('[Events] Error parsing OSM element:', itemErr);
+      }
+    }
+
+    sourceStatus.osm.count = events.length;
+    sourceStatus.osm.ok = true;
+    sourceStatus.osm.error = null;
+    return events;
+  } catch (err) {
+    console.warn('[Events] OpenStreetMap error:', err);
+    sourceStatus.osm.ok = false;
+    sourceStatus.osm.error = err.message;
+    return [];
+  }
+}
+
+// ────────────────────────────────────────────────────────────────
 // HELPERS
 // ────────────────────────────────────────────────────────────────
 
@@ -374,10 +505,12 @@ function filterEventsByDistanceAndDate(events, radiusMinutes, searchLat, searchL
   const today = new Date().toISOString().split('T')[0];
   const nextMonth = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-  let noCoords = 0, badDates = 0;
-  const result = events.filter(e => {
-    if (!e.location.lat || !e.location.lon) { noCoords++; return false; }
-    if (!e.date || e.date < today || e.date > nextMonth) { badDates++; return false; }
+  return events.filter(e => {
+    if (!e.location.lat || !e.location.lon) return false;
+
+    // Dateless items (e.g. OSM "things to do") are always-available — keep them
+    // and let distance decide. Dated events must fall within today..+30 days.
+    if (e.date && (e.date < today || e.date > nextMonth)) return false;
 
     const dist = calculateDistance(
       searchLat, searchLon,
@@ -386,14 +519,6 @@ function filterEventsByDistanceAndDate(events, radiusMinutes, searchLat, searchL
     e.location.distanceMiles = Math.round(dist * 10) / 10;
     return dist <= radiusMiles;
   });
-  if (badDates > 0 && events.length > 0) {
-    const dates = events.filter(e => e.date).map(e => e.date).sort();
-    const minDate = dates[0], maxDate = dates[dates.length - 1];
-    console.log(`[Events] Date range in events: ${minDate} to ${maxDate}`);
-    console.log(`[Events] Filter window: ${today} to ${nextMonth}`);
-  }
-  console.log(`[Events] Filter breakdown: ${noCoords} missing coords, ${badDates} bad dates, ${result.length} passed`);
-  return result;
 }
 
 async function addWeatherContext(event) {

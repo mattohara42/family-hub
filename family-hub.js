@@ -9760,7 +9760,7 @@ function renderEventCard(event) {
   // Date + distance overlay, pinned to the top-right of the image
   const overlayHtml = `
     <div class="event-overlay">
-      <span class="event-overlay-date">${escapeHtml(event.date || 'TBD')}</span>
+      <span class="event-overlay-date">${escapeHtml(event.date || 'Anytime')}</span>
       <span class="event-overlay-distance">${(event.location.distanceMiles || 0).toFixed(1)} mi</span>
     </div>`;
 
