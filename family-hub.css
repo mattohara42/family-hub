@@ -3637,25 +3637,6 @@ body.nautical-mode .assistant-chip:hover { background: var(--accent2); border-co
 }
 .assistant-send:hover { opacity: .82; }
 
-/* ── Claude Remote ── */
-.cr-dot {
-  width: 9px; height: 9px; border-radius: 50%;
-  background: var(--muted); display: inline-block; flex-shrink: 0;
-}
-.cr-dot.cr-ok   { background: #3fb950; }
-.cr-dot.cr-off  { background: var(--muted); }
-.cr-dot.cr-busy { background: var(--accent); animation: assistantPulse 1.1s ease-in-out infinite; }
-.cr-line {
-  font-size: var(--text-xs);
-  line-height: 1.45;
-  word-break: break-word;
-  padding: 1px 2px;
-}
-.cr-tool   { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-.cr-system { color: var(--muted); font-style: italic; text-align: center; }
-.cr-error  { color: #e06c75; }
-.assistant-msg.ai.cr-stream { white-space: pre-wrap; }
-.assistant-send.cr-stop { background: #c0392b; }
 .assistant-mic {
   width: 30px;
   height: 30px;

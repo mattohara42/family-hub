@@ -410,27 +410,6 @@
       </div>
     </div>
 
-    <div class="card" id="claudeRemoteCard">
-      <div class="card-header">
-        <h2>🛰 Claude Remote</h2>
-        <div style="display:flex;align-items:center;gap:8px">
-          <span id="crStatusDot" class="cr-dot cr-off" title="Not configured"></span>
-          <button onclick="clearClaudeRemote()" title="New conversation" aria-label="New conversation" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.6rem;line-height:1">↺</button>
-        </div>
-      </div>
-      <div class="card-body assistant-card-body">
-        <div class="assistant-messages" id="crMessages" aria-live="polite" aria-label="Claude Remote output">
-          <div class="assistant-welcome" id="crWelcome">Send a task to Claude Code on your machine. Set up the bridge in ⚙️ Settings → 🛰 Claude Remote.</div>
-        </div>
-        <div class="assistant-input-row">
-          <input type="text" id="crInput" class="assistant-input"
-                 placeholder="Tell Claude what to do…" aria-label="Task for Claude Code"
-                 onkeydown="if(event.key==='Enter')crSend()" />
-          <button class="assistant-send" id="crSendBtn" onclick="crSend()" title="Send" aria-label="Send task">↑</button>
-          <button class="assistant-send cr-stop" id="crStopBtn" onclick="crStop()" title="Stop" aria-label="Stop" style="display:none">■</button>
-        </div>
-      </div>
-    </div>
 
   </div><!-- /sidebar -->
 
@@ -473,7 +452,6 @@
       <button class="modal-tab"        data-tab="widgets"  onclick="switchSettingsTab('widgets')">🧩 Widgets</button>
       <button class="modal-tab"        data-tab="events"   onclick="switchSettingsTab('events')">💡 Events</button>
       <button class="modal-tab"        data-tab="feeds"    onclick="switchSettingsTab('feeds')">📊 Feeds</button>
-      <button class="modal-tab"        data-tab="claude"   onclick="switchSettingsTab('claude')">🛰 Claude Remote</button>
       <button class="modal-tab"        data-tab="eggs"     onclick="switchSettingsTab('eggs')">🥚 Easter Eggs</button>
     </div>
 
@@ -985,12 +963,6 @@
               <label class="widget-placement-radio"><input type="radio" name="placement_stock" value="bottom"  /><span>Bottom</span></label>
               <label class="widget-placement-radio"><input type="radio" name="placement_stock" value="sidebar" /><span>Sidebar</span></label>
             </div>
-            <div class="widget-toggle-row">
-              <input type="checkbox" id="widget_claudeRemote" />
-              <span>🛰 Claude Remote</span>
-              <label class="widget-placement-radio"><input type="radio" name="placement_claudeRemote" value="bottom"  /><span>Bottom</span></label>
-              <label class="widget-placement-radio"><input type="radio" name="placement_claudeRemote" value="sidebar" /><span>Sidebar</span></label>
-            </div>
 
           </div>
         </div>
@@ -1081,36 +1053,6 @@
           </div>
         </div>
       </div><!-- /eggs -->
-
-      <!-- ── Claude Remote ── -->
-      <div class="settings-panel" data-panel="claude">
-        <div class="field">
-          <label>🛰 Drive Claude Code on your own machine</label>
-          <p style="font-size:var(--text-xs);color:var(--muted);margin:2px 0 10px;line-height:1.55">
-            Start the bridge from the <code>bridge/</code> folder (<code>npm install &amp;&amp; npm start</code>),
-            then paste its URL and token below. It uses your Claude Code login — no API key, no extra billing.
-            Claude is <strong>read-only by default</strong>; widen its tools in <code>bridge/.env</code>.
-          </p>
-        </div>
-        <div class="field">
-          <label for="crBridgeUrl">Bridge URL</label>
-          <input type="url" id="crBridgeUrl" placeholder="http://127.0.0.1:4317" autocomplete="off" />
-        </div>
-        <div class="field">
-          <label for="crBridgeToken">Token</label>
-          <input type="password" id="crBridgeToken" placeholder="Paste the bridge token…" autocomplete="off" />
-        </div>
-        <div class="field">
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-            <button class="btn btn-secondary btn-sm" type="button" onclick="crTestConnection()">Test connection</button>
-            <span id="crTestResult" style="font-size:var(--text-xs)"></span>
-          </div>
-          <p style="font-size:var(--text-xs);color:var(--muted);margin-top:10px;line-height:1.55">
-            ⚠️ Anyone with this URL and token can run Claude Code on your machine. Keep the token secret.
-            For phone access, expose the bridge over HTTPS with a tunnel — see <code>bridge/README.md</code>.
-          </p>
-        </div>
-      </div><!-- /claude -->
 
       <!-- ── Events ── -->
       <div class="settings-panel" data-panel="events">
