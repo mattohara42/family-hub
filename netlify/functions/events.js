@@ -22,8 +22,18 @@ const OWM_GEO_BASE = 'https://api.openweathermap.org/geo/1.0';
 const sourceStatus = {
   ticketmaster: { ok: true, count: 0, error: null },
   osm: { ok: true, count: 0, error: null },
-  libraryweb: { ok: true, count: 0, error: null }
+  libraryweb: { ok: true, count: 0, error: null },
+  redwings: { ok: true, count: 0, error: null }
 };
+
+// Rochester Red Wings (AAA baseball) — public MLB Stats API. Region-specific:
+// home games only, at ESL Ballpark. teamId 534, sportId 11 (Triple-A).
+const REDWINGS_TEAM_ID = 534;
+const REDWINGS_SPORT_ID = 11;
+const REDWINGS_VENUE = { name: 'Innovative Field (ESL Ballpark)', lat: 43.1547, lon: -77.6160 };
+const REDWINGS_MAX_MILES = 90;  // skip for far-away searches
+let redwingsCache = { events: null, timestamp: 0 };
+const REDWINGS_CACHE_TTL = 6 * 60 * 60 * 1000;  // 6 hours (schedule changes rarely)
 
 // Monroe County (Rochester, NY) public library system — LibCal iCal feeds.
 // This is a region-specific source: each branch has its own calendar id.
@@ -76,17 +86,19 @@ exports.handler = async (event) => {
     }
 
     // Step 2: Fetch from all sources in parallel
-    const [tmEvents, osmEvents, libEvents] = await Promise.allSettled([
+    const [tmEvents, osmEvents, libEvents, rwEvents] = await Promise.allSettled([
       fetchTicketmaster(city, state, lat, lon, { keyword, attractionId, venueId }),
       fetchOpenStreetMap(city, state, lat, lon, radiusMinutes),
-      fetchLibraryWeb(city, state, lat, lon)
+      fetchLibraryWeb(city, state, lat, lon),
+      fetchRedWings(city, state, lat, lon)
     ]);
 
     // Collect all results
     const allEvents = [
       ...extractSettledValue(tmEvents, 'ticketmaster'),
       ...extractSettledValue(osmEvents, 'osm'),
-      ...extractSettledValue(libEvents, 'libraryweb')
+      ...extractSettledValue(libEvents, 'libraryweb'),
+      ...extractSettledValue(rwEvents, 'redwings')
     ];
 
     // Step 3: Remove duplicates by title + date + venue
@@ -114,7 +126,8 @@ exports.handler = async (event) => {
       sourceStats: {
         ticketmaster: sourceStatus.ticketmaster.count,
         osm: sourceStatus.osm.count,
-        libraryweb: sourceStatus.libraryweb.count
+        libraryweb: sourceStatus.libraryweb.count,
+        redwings: sourceStatus.redwings.count
       },
       warnings: Object.entries(sourceStatus)
         .filter(([, status]) => !status.ok)
@@ -636,6 +649,96 @@ async function fetchLibraryWeb(city, state, lat, lon) {
     console.warn('[Events] LibraryWeb error:', err);
     sourceStatus.libraryweb.ok = false;
     sourceStatus.libraryweb.error = err.message;
+    return [];
+  }
+}
+
+// ────────────────────────────────────────────────────────────────
+// ROCHESTER RED WINGS (AAA baseball home games — MLB Stats API)
+// ────────────────────────────────────────────────────────────────
+
+// Convert a UTC Date to { date:'YYYY-MM-DD', time:'HH:MM' } in Eastern time
+function dateToEastern(d) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York', year: 'numeric', month: '2-digit',
+    day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
+  }).formatToParts(d).reduce((o, p) => (o[p.type] = p.value, o), {});
+  return {
+    date: `${parts.year}-${parts.month}-${parts.day}`,
+    time: `${parts.hour === '24' ? '00' : parts.hour}:${parts.minute}`
+  };
+}
+
+async function fetchRedWings(city, state, lat, lon) {
+  try {
+    // Region gate — only relevant near Rochester
+    if (calculateDistance(lat, lon, REDWINGS_VENUE.lat, REDWINGS_VENUE.lon) > REDWINGS_MAX_MILES) {
+      sourceStatus.redwings.count = 0;
+      return [];
+    }
+
+    if (redwingsCache.events && Date.now() - redwingsCache.timestamp < REDWINGS_CACHE_TTL) {
+      sourceStatus.redwings.count = redwingsCache.events.length;
+      sourceStatus.redwings.ok = true;
+      return redwingsCache.events;
+    }
+
+    const start = new Date().toISOString().split('T')[0];
+    const end = new Date(Date.now() + 35 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const url = `https://statsapi.mlb.com/api/v1/schedule?sportId=${REDWINGS_SPORT_ID}&teamId=${REDWINGS_TEAM_ID}&startDate=${start}&endDate=${end}&hydrate=team`;
+
+    const data = await fetchWithRetry(async () => {
+      const r = await fetch(url, { headers: { 'User-Agent': 'FamilyHub/1.0 (event discovery)' } });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    }, 'RedWings', 1);
+
+    const events = [];
+    for (const day of (data.dates || [])) {
+      for (const g of (day.games || [])) {
+        try {
+          // Home games only (attendable at ESL Ballpark)
+          if (g.teams?.home?.team?.id !== REDWINGS_TEAM_ID) continue;
+          if (!g.gameDate) continue;
+
+          const opponent = g.teams?.away?.team?.name || 'TBD';
+          const { date, time } = dateToEastern(new Date(g.gameDate));
+
+          events.push({
+            id: `rw_${g.gamePk}`,
+            title: `Red Wings vs ${opponent}`,
+            type: 'sports',
+            source: 'redwings',
+            sourceUrl: `https://www.milb.com/gameday/${g.gamePk}`,
+            date,
+            time,
+            duration: null,
+            location: {
+              city, state,
+              address: REDWINGS_VENUE.name,
+              lat: REDWINGS_VENUE.lat,
+              lon: REDWINGS_VENUE.lon,
+              distanceMiles: null
+            },
+            description: `AAA baseball — Rochester Red Wings vs ${opponent} at ${REDWINGS_VENUE.name}`,
+            image: null,
+            weather: null
+          });
+        } catch (gErr) {
+          console.warn('[Events] RedWings game parse error:', gErr.message);
+        }
+      }
+    }
+
+    redwingsCache = { events, timestamp: Date.now() };
+    sourceStatus.redwings.count = events.length;
+    sourceStatus.redwings.ok = true;
+    sourceStatus.redwings.error = null;
+    return events;
+  } catch (err) {
+    console.warn('[Events] RedWings error:', err);
+    sourceStatus.redwings.ok = false;
+    sourceStatus.redwings.error = err.message;
     return [];
   }
 }

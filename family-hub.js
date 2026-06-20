@@ -9687,7 +9687,7 @@ function selectEventSource(btn) {
 
 // Update the count badge on each source tab from the full result set
 function updateSourceTabCounts(rawEvents) {
-  const counts = { ticketmaster: 0, osm: 0, libraryweb: 0 };
+  const counts = { ticketmaster: 0, osm: 0, libraryweb: 0, redwings: 0 };
   for (const e of (rawEvents || [])) {
     if (counts[e.source] !== undefined) counts[e.source]++;
   }
@@ -9698,7 +9698,7 @@ function updateSourceTabCounts(rawEvents) {
 }
 
 function renderEventsList(events) {
-  const emptyLabels = { ticketmaster: 'live events', osm: 'things to do', libraryweb: 'library events' };
+  const emptyLabels = { ticketmaster: 'live events', osm: 'things to do', libraryweb: 'library events', redwings: 'Red Wings home games' };
   const html = events.length > 0
     ? events.map(e => renderEventCard(e)).join('')
     : `<p style="color:var(--muted);padding:20px;text-align:center">No ${emptyLabels[eventsSourceTab] || 'events'} found nearby. Try expanding your distance or changing your location.</p>`;
@@ -9762,6 +9762,10 @@ function renderEventCard(event) {
     const shortSummary = event.description
       ? event.description.substring(0, 110) + (event.description.length > 110 ? '…' : '')
       : '';
+    const timeLabel = event.time ? ` ${formatTime12(event.time)}` : '';
+    const rightMeta = event.source === 'libraryweb'
+      ? escapeHtml(event.location.address || 'Library')
+      : distLabel;
     return `
       <div class="event-card event-card-compact">
         <div class="event-card-content">
@@ -9771,7 +9775,7 @@ function renderEventCard(event) {
           </div>
           ${shortSummary ? `<p class="event-description">${escapeHtml(shortSummary)}</p>` : ''}
           <div class="event-compact-foot">
-            <span class="event-compact-meta">${dateLabel} · ${event.source === 'libraryweb' ? escapeHtml(event.location.address || 'Library') : distLabel}</span>
+            <span class="event-compact-meta">${dateLabel}${timeLabel} · ${rightMeta}</span>
             <a href="${escapeHtml(event.sourceUrl)}" target="_blank" rel="noopener" class="event-link event-link-sm">Details${linkIcon}</a>
           </div>
         </div>
@@ -9807,10 +9811,19 @@ function renderEventCard(event) {
 
 function getEventEmoji(type) {
   const map = {
-    'concert': '🎵', 'music': '🎵', 'show': '🎭', 'sports': '⚽', 'hike': '🥾',
+    'concert': '🎵', 'music': '🎵', 'show': '🎭', 'sports': '⚾', 'hike': '🥾',
     'class': '📚', 'food': '🍽️', 'art': '🎨', 'sale': '🛍️', 'activity': '🎪'
   };
   return map[type] || '🎉';
+}
+
+// "18:45" → "6:45 PM"
+function formatTime12(t) {
+  if (!t || !/^\d{1,2}:\d{2}/.test(t)) return '';
+  const [h, m] = t.split(':').map(Number);
+  const ap = h >= 12 ? 'PM' : 'AM';
+  const h12 = ((h + 11) % 12) + 1;
+  return `${h12}:${String(m).padStart(2, '0')} ${ap}`;
 }
 
 function updateEventsAgeLabel(timestamp) {
