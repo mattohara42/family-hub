@@ -146,8 +146,6 @@ let wxActivityEnabled   = lsGet('fh_wxActivity', true);    // activity tags stri
 // ── Event Discovery ──
 let eventLocation       = lsGet('fh_eventLocation', 'Rochester');  // City name for event search
 let eventMaxDistance    = lsGet('fh_eventMaxDistance', 120);       // Minutes: 30, 60, or 120
-let eventShowOnCalendar = lsGet('fh_eventShowOnCalendar', false);  // Show event indicators on calendar
-let eventCalendarTypes  = lsGet('fh_eventCalendarTypes', []);      // Event types to show on calendar
 let userName        = localStorage.getItem('fh_name') || 'Someone';
 let appTitle        = localStorage.getItem('fh_appTitle') || 'Family Hub';
 let appTitleEmoji   = localStorage.getItem('fh_appTitleEmoji') || '🏠';
@@ -2932,14 +2930,18 @@ function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
   if (!googleToken) return;
   evtEditing = ev || null;
 
-  document.getElementById('eventEditorTitle').textContent = ev ? '✏️ Edit Event' : '📅 New Event';
+  document.getElementById('eventEditorTitle').textContent =
+    ev?.eventId ? '✏️ Edit Event' : (ev ? '📅 Add to Calendar' : '📅 New Event');
   document.getElementById('evtEdTitle').value      = ev?.summary     || '';
   document.getElementById('evtEdDesc').value       = ev?.description || '';
-  document.getElementById('evtEdDeleteBtn').style.display = ev ? '' : 'none';
+  // Delete only applies to an existing calendar event
+  document.getElementById('evtEdDeleteBtn').style.display = ev?.eventId ? '' : 'none';
   document.getElementById('evtEdStatus').style.display = 'none';
 
-  // Date
-  const dk = dateKey || ev?.startDate || ev?.startDT?.slice(0,10) || new Date().toISOString().slice(0,10);
+  // Date — an explicit empty dateKey ('') means "no date known, require one"
+  const dk = (dateKey !== undefined && dateKey !== null)
+    ? dateKey
+    : (ev?.startDate || ev?.startDT?.slice(0,10) || new Date().toISOString().slice(0,10));
   document.getElementById('evtEdDate').value = dk;
 
   // All-day
@@ -3006,6 +3008,7 @@ async function saveCalEvent() {
   if (!title) { evtEdStatus('Please enter a title.', true); return; }
 
   const date    = document.getElementById('evtEdDate').value;
+  if (!date) { evtEdStatus('Please choose a date.', true); return; }
   const isAllDay = document.getElementById('evtEdAllDay').checked;
   const startT  = document.getElementById('evtEdStart').value;
   const endT    = document.getElementById('evtEdEnd').value;
@@ -8754,10 +8757,6 @@ function openSettings() {
   // ── Event settings ──
   document.getElementById('eventLocation').value = eventLocation;
   document.querySelector(`input[name="eventDistance"][value="${eventMaxDistance}"]`).checked = true;
-  document.getElementById('eventShowOnCalendar').checked = eventShowOnCalendar;
-  document.querySelectorAll('.eventTypeCheckbox').forEach(cb => {
-    cb.checked = eventCalendarTypes.includes(cb.value);
-  });
   // Render diet checkboxes
   const dietGrid = document.getElementById('mealDietGrid');
   dietGrid.innerHTML = '';
@@ -8881,12 +8880,8 @@ function saveSettings() {
   // ── Event settings ──
   eventLocation = document.getElementById('eventLocation').value.trim() || 'Portland';
   eventMaxDistance = parseInt(document.querySelector(`input[name="eventDistance"]:checked`).value) || 120;
-  eventShowOnCalendar = document.getElementById('eventShowOnCalendar').checked;
-  eventCalendarTypes = Array.from(document.querySelectorAll('.eventTypeCheckbox:checked')).map(cb => cb.value);
   localStorage.setItem('fh_eventLocation', eventLocation);
   localStorage.setItem('fh_eventMaxDistance', String(eventMaxDistance));
-  localStorage.setItem('fh_eventShowOnCalendar', JSON.stringify(eventShowOnCalendar));
-  localStorage.setItem('fh_eventCalendarTypes', JSON.stringify(eventCalendarTypes));
   const hncEl = document.getElementById('newsHeadlineCount');
   if (hncEl) { newsHeadlineCount = parseInt(hncEl.value) || 5; saveNewsFeeds(); }
   if (widgetVisibility.news)  loadNewsFeeds();
@@ -9610,7 +9605,6 @@ async function fetchAndUpdateEvents() {
 
       // Re-render
       renderEventsList(eventsData);
-      renderEventCalendarOverlay();  // Update calendar with event indicators
       updateEventsAgeLabel(Date.now());
     } else {
       showEventsError(`Unable to fetch events: ${data.error}`);
@@ -9756,6 +9750,9 @@ function renderEventCard(event) {
   // External-link icon (feather "external-link")
   const linkIcon = `<svg class="event-link-icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`;
 
+  // "Add to Calendar" button (opens the verify-and-add editor)
+  const addBtn = `<button class="event-add-btn" onclick="addEventToCalendar('${encodeURIComponent(event.id)}')" title="Add to calendar">📅 Add</button>`;
+
   // Compact layout for image-less sources (Things to Do, Library): no image
   // header — the type emoji becomes a small icon on the right.
   if (!event.image) {
@@ -9776,7 +9773,10 @@ function renderEventCard(event) {
           ${shortSummary ? `<p class="event-description">${escapeHtml(shortSummary)}</p>` : ''}
           <div class="event-compact-foot">
             <span class="event-compact-meta">${dateLabel}${timeLabel} · ${rightMeta}</span>
-            <a href="${escapeHtml(event.sourceUrl)}" target="_blank" rel="noopener" class="event-link event-link-sm">Details${linkIcon}</a>
+            <span class="event-card-actions">
+              ${addBtn}
+              <a href="${escapeHtml(event.sourceUrl)}" target="_blank" rel="noopener" class="event-link event-link-sm">Details${linkIcon}</a>
+            </span>
           </div>
         </div>
       </div>
@@ -9801,7 +9801,10 @@ function renderEventCard(event) {
       <div class="event-card-content">
         <div class="event-card-header">
           <h3 class="event-title">${escapeHtml(event.title)} <span class="event-type-badge">${event.type}</span></h3>
-          <a href="${escapeHtml(event.sourceUrl)}" target="_blank" rel="noopener" class="event-link">View Details${linkIcon}</a>
+          <span class="event-card-actions">
+            ${addBtn}
+            <a href="${escapeHtml(event.sourceUrl)}" target="_blank" rel="noopener" class="event-link">View Details${linkIcon}</a>
+          </span>
         </div>
         <p class="event-description">${escapeHtml(summary)}</p>
       </div>
@@ -9815,6 +9818,39 @@ function getEventEmoji(type) {
     'class': '📚', 'food': '🍽️', 'art': '🎨', 'sale': '🛍️', 'activity': '🎪'
   };
   return map[type] || '🎉';
+}
+
+// Add a discovered event to the family (Google) calendar via the event editor.
+// Pre-fills the date when known; leaves it empty (required) when not.
+function addEventToCalendar(encodedId) {
+  if (!googleToken) {
+    showToast('Sign in with Google in Settings to add events to your calendar.');
+    return;
+  }
+  const id = decodeURIComponent(encodedId);
+  const ev = (eventsRawData || []).find(e => e.id === id);
+  if (!ev) return;
+
+  // Build a description with venue and source link
+  const lines = [];
+  if (ev.description) lines.push(ev.description);
+  if (ev.location?.address) lines.push(`📍 ${ev.location.address}`);
+  if (ev.sourceUrl) lines.push(ev.sourceUrl);
+
+  const pseudo = { summary: ev.title, description: lines.join('\n\n') };
+  const hasTime = !!ev.time;
+  const endTime = hasTime ? addHoursToTime(ev.time, 2) : '';
+
+  // dateKey '' → no date known → editor requires one. forceAllDay when no time.
+  openEventEditor(pseudo, ev.date || '', ev.time || '', endTime, !hasTime);
+}
+
+// "18:45" + 2 → "20:45"
+function addHoursToTime(t, h) {
+  const [hh, mm] = t.split(':').map(Number);
+  const d = new Date(2000, 0, 1, hh, mm);
+  d.setHours(d.getHours() + h);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
 // "18:45" → "6:45 PM"
@@ -9933,29 +9969,4 @@ function attachCalendarConflictsToEvents(events) {
   }));
 }
 
-function renderEventCalendarOverlay() {
-  if (!eventShowOnCalendar || !eventsRawData?.length) return;
-
-  const eventsToShow = eventsRawData.filter(e =>
-    eventCalendarTypes.includes(e.type.toLowerCase()) && !e.calendarConflict
-  );
-
-  // Render indicators on calendar grid
-  eventsToShow.forEach(event => {
-    const dateKey = event.date;  // 'YYYY-MM-DD'
-    const dayCell = document.querySelector(`[data-date="${dateKey}"]`);
-    if (dayCell) {
-      const indicator = document.createElement('div');
-      indicator.className = `event-overlay-indicator event-type-${event.type.toLowerCase().replace(/[^a-z]/g, '')}`;
-      indicator.textContent = getWeatherEmoji(event.type);  // Use type-specific emoji
-      indicator.title = event.title;
-      indicator.style.cursor = 'pointer';
-      indicator.onclick = (e) => {
-        e.stopPropagation();
-        openEventsModal();
-      };
-      dayCell.appendChild(indicator);
-    }
-  });
-}
 
