@@ -21,8 +21,31 @@ const OWM_GEO_BASE = 'https://api.openweathermap.org/geo/1.0';
 // Source status tracking for this request
 const sourceStatus = {
   ticketmaster: { ok: true, count: 0, error: null },
-  osm: { ok: true, count: 0, error: null }
+  osm: { ok: true, count: 0, error: null },
+  libraryweb: { ok: true, count: 0, error: null }
 };
+
+// Monroe County (Rochester, NY) public library system — LibCal iCal feeds.
+// This is a region-specific source: each branch has its own calendar id.
+// iCal carries no coordinates, so each branch is tagged with its location
+// (approx) — the distance filter then includes it only for nearby searches.
+const LIBRARYWEB_BRANCHES = [
+  { name: 'Rochester Public Library', cid: 6825, lat: 43.1556, lon: -77.6064 },
+  { name: 'Brighton Memorial Library', cid: 6814, lat: 43.1182, lon: -77.5673 },
+  { name: 'East Rochester Public Library', cid: 6816, lat: 43.1126, lon: -77.4869 },
+  { name: 'Fairport Public Library', cid: 7670, lat: 43.0987, lon: -77.4425 },
+  { name: 'Penfield Public Library', cid: 5054, lat: 43.1490, lon: -77.4803 },
+  { name: 'Pittsford Community Library', cid: 6821, lat: 43.0905, lon: -77.5152 },
+  { name: 'Henrietta Public Library', cid: 5053, lat: 43.0640, lon: -77.6220 },
+  { name: 'Webster Public Library', cid: 6824, lat: 43.2284, lon: -77.4297 }
+];
+const LIBRARYWEB_CENTER = { lat: 43.1566, lon: -77.6088 };  // Rochester, NY
+const LIBRARYWEB_MAX_MILES = 90;  // skip the whole source for far-away searches
+const LIBRARYWEB_PER_BRANCH_LIMIT = 8;  // soonest N per branch, so libraries don't flood
+
+// In-memory cache for parsed library events (LibCal feeds change slowly)
+let librarywebCache = { events: null, timestamp: 0 };
+const LIBRARYWEB_CACHE_TTL = 30 * 60 * 1000;  // 30 minutes
 
 // Retry configuration
 const RETRY_CONFIG = {
@@ -55,15 +78,17 @@ exports.handler = async (event) => {
     }
 
     // Step 2: Fetch from all sources in parallel
-    const [tmEvents, osmEvents] = await Promise.allSettled([
+    const [tmEvents, osmEvents, libEvents] = await Promise.allSettled([
       fetchTicketmaster(city, state, lat, lon, { keyword, attractionId, venueId }),
-      fetchOpenStreetMap(city, state, lat, lon, radiusMinutes)
+      fetchOpenStreetMap(city, state, lat, lon, radiusMinutes),
+      fetchLibraryWeb(city, state, lat, lon)
     ]);
 
     // Collect all results
     const allEvents = [
       ...extractSettledValue(tmEvents, 'ticketmaster'),
-      ...extractSettledValue(osmEvents, 'osm')
+      ...extractSettledValue(osmEvents, 'osm'),
+      ...extractSettledValue(libEvents, 'libraryweb')
     ];
 
     // Step 3: Remove duplicates by title + date + venue
@@ -90,7 +115,8 @@ exports.handler = async (event) => {
       timestamp: Date.now(),
       sourceStats: {
         ticketmaster: sourceStatus.ticketmaster.count,
-        osm: sourceStatus.osm.count
+        osm: sourceStatus.osm.count,
+        libraryweb: sourceStatus.libraryweb.count
       },
       warnings: Object.entries(sourceStatus)
         .filter(([, status]) => !status.ok)
@@ -447,6 +473,172 @@ out center tags 80;`;
     console.warn('[Events] OpenStreetMap error:', err);
     sourceStatus.osm.ok = false;
     sourceStatus.osm.error = err.message;
+    return [];
+  }
+}
+
+// ────────────────────────────────────────────────────────────────
+// LIBRARYWEB (Monroe County public library events — LibCal iCal feeds)
+// ────────────────────────────────────────────────────────────────
+
+// Unescape an iCal text value (\, \; \n \\)
+function icalUnescape(s) {
+  return (s || '')
+    .replace(/\\n/gi, ' ')
+    .replace(/\\,/g, ',')
+    .replace(/\\;/g, ';')
+    .replace(/\\\\/g, '\\')
+    .trim();
+}
+
+// Convert an iCal DTSTART value to { date: 'YYYY-MM-DD', time: 'HH:MM'|null }
+// in America/New_York (the library system's local time).
+function icalToLocal(value) {
+  // All-day form: YYYYMMDD (no time)
+  const allDay = value.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (allDay) return { date: `${allDay[1]}-${allDay[2]}-${allDay[3]}`, time: null };
+
+  const m = value.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z)?$/);
+  if (!m) return { date: null, time: null };
+
+  // UTC (Z) → convert to Eastern; local (no Z) → take as-is
+  let d;
+  if (m[7] === 'Z') {
+    d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]));
+  } else {
+    return { date: `${m[1]}-${m[2]}-${m[3]}`, time: `${m[4]}:${m[5]}` };
+  }
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York', year: 'numeric', month: '2-digit',
+    day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
+  }).formatToParts(d).reduce((o, p) => (o[p.type] = p.value, o), {});
+  return {
+    date: `${parts.year}-${parts.month}-${parts.day}`,
+    time: `${parts.hour === '24' ? '00' : parts.hour}:${parts.minute}`
+  };
+}
+
+// Parse an iCal document into raw VEVENT field maps (handles line folding)
+function parseICal(text) {
+  // Unfold: continuation lines begin with a space or tab
+  const unfolded = text.replace(/\r?\n[ \t]/g, '');
+  const lines = unfolded.split(/\r?\n/);
+  const events = [];
+  let cur = null;
+  for (const line of lines) {
+    if (line === 'BEGIN:VEVENT') { cur = {}; continue; }
+    if (line === 'END:VEVENT') { if (cur) events.push(cur); cur = null; continue; }
+    if (!cur) continue;
+    const idx = line.indexOf(':');
+    if (idx === -1) return events.length ? events : [];
+    const rawKey = line.slice(0, idx);     // e.g. DTSTART;TZID=... or SUMMARY
+    const value = line.slice(idx + 1);
+    const key = rawKey.split(';')[0];       // strip parameters
+    cur[key] = value;
+  }
+  return events;
+}
+
+/**
+ * Fetch upcoming events from the Monroe County (Rochester) public library
+ * system via LibCal per-branch iCal feeds. Region-specific: skipped entirely
+ * when the search location is far from Rochester. Cached 30 min in memory.
+ */
+async function fetchLibraryWeb(city, state, lat, lon) {
+  try {
+    // Gate: only relevant near Rochester, NY
+    const distToRochester = calculateDistance(lat, lon, LIBRARYWEB_CENTER.lat, LIBRARYWEB_CENTER.lon);
+    if (distToRochester > LIBRARYWEB_MAX_MILES) {
+      sourceStatus.libraryweb.ok = true;
+      sourceStatus.libraryweb.count = 0;
+      return [];
+    }
+
+    // Serve from cache when warm
+    if (librarywebCache.events && Date.now() - librarywebCache.timestamp < LIBRARYWEB_CACHE_TTL) {
+      sourceStatus.libraryweb.count = librarywebCache.events.length;
+      sourceStatus.libraryweb.ok = true;
+      return librarywebCache.events;
+    }
+
+    const results = await Promise.allSettled(
+      LIBRARYWEB_BRANCHES.map(branch =>
+        fetchWithRetry(async () => {
+          const r = await fetch(`https://calendar.libraryweb.org/ical_subscribe.php?cid=${branch.cid}`, {
+            headers: { 'User-Agent': 'FamilyHub/1.0 (event discovery)' }
+          });
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return { branch, text: await r.text() };
+        }, `LibraryWeb ${branch.name}`, 1)
+      )
+    );
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const events = [];
+    for (const settled of results) {
+      if (settled.status !== 'fulfilled') continue;
+      const { branch, text } = settled.value;
+
+      const branchEvents = [];
+      for (const ve of parseICal(text)) {
+        try {
+          const title = icalUnescape(ve.SUMMARY);
+          if (!title || !ve.DTSTART) continue;
+
+          const { date, time } = icalToLocal(ve.DTSTART);
+          if (!date || date < todayStr) continue;  // skip past occurrences
+
+          // Duration from DTEND if present
+          let duration = null;
+          if (ve.DTEND) {
+            const s = icalToLocal(ve.DTSTART), e = icalToLocal(ve.DTEND);
+            if (s.time && e.time && s.date && e.date) {
+              duration = Math.round((new Date(`${e.date}T${e.time}`) - new Date(`${s.date}T${s.time}`)) / 60000) || null;
+            }
+          }
+
+          const eventId = (ve.URL || '').match(/\/event\/(\d+)/)?.[1] || `${branch.cid}_${title}_${date}`;
+          const branchLabel = icalUnescape(ve.LOCATION) || branch.name;
+
+          branchEvents.push({
+            id: `lw_${eventId}`,
+            title,
+            type: 'class',
+            source: 'libraryweb',
+            sourceUrl: ve.URL || 'https://calendar.libraryweb.org/',
+            date,
+            time,
+            duration,
+            location: {
+              city, state,
+              address: branchLabel,
+              lat: branch.lat,
+              lon: branch.lon,
+              distanceMiles: null
+            },
+            description: icalUnescape(ve.DESCRIPTION) || `Library event at ${branch.name}`,
+            image: null,
+            weather: null
+          });
+        } catch (veErr) {
+          console.warn('[Events] Error parsing LibraryWeb VEVENT:', veErr.message);
+        }
+      }
+
+      // Keep only the soonest few per branch so libraries don't flood results
+      branchEvents.sort((a, b) => `${a.date}${a.time || ''}`.localeCompare(`${b.date}${b.time || ''}`));
+      events.push(...branchEvents.slice(0, LIBRARYWEB_PER_BRANCH_LIMIT));
+    }
+
+    librarywebCache = { events, timestamp: Date.now() };
+    sourceStatus.libraryweb.count = events.length;
+    sourceStatus.libraryweb.ok = true;
+    sourceStatus.libraryweb.error = null;
+    return events;
+  } catch (err) {
+    console.warn('[Events] LibraryWeb error:', err);
+    sourceStatus.libraryweb.ok = false;
+    sourceStatus.libraryweb.error = err.message;
     return [];
   }
 }
