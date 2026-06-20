@@ -144,7 +144,7 @@ const snarkyCache       = {};                              // { cacheKey: text }
 let wxTickerEnabled     = lsGet('fh_wxTicker', true);      // weather info ticker
 let wxActivityEnabled   = lsGet('fh_wxActivity', true);    // activity tags strip
 // ── Event Discovery ──
-let eventLocation       = lsGet('fh_eventLocation', 'Portland');   // City name for event search
+let eventLocation       = lsGet('fh_eventLocation', 'Rochester');  // City name for event search
 let eventMaxDistance    = lsGet('fh_eventMaxDistance', 120);       // Minutes: 30, 60, or 120
 let eventShowOnCalendar = lsGet('fh_eventShowOnCalendar', false);  // Show event indicators on calendar
 let eventCalendarTypes  = lsGet('fh_eventCalendarTypes', []);      // Event types to show on calendar
