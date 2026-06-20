@@ -9522,6 +9522,7 @@ let eventsRawData = [];        // Full result set from backend
 let eventsFetchTimestamp = 0;  // When we last fetched
 let eventsSort = 'distance';   // Current sort mode
 let eventsSourceTab = 'ticketmaster';  // Active source tab: ticketmaster | osm | libraryweb
+let eventsSubTab = 'all';              // Active category sub-tab within the source
 let eventsTabFilter = 'all';   // Current tab filter
 let eventsCategoryFilter = null;  // Category filter (null = all)
 let eventsCategories = {};     // Category objects from backend: { id: { id, name } }
@@ -9541,6 +9542,7 @@ async function openEventsModal() {
     eventsRawData = cached;
     eventsData = applyFiltersAndSort(eventsRawData);
     updateSourceTabCounts(eventsRawData);
+    rebuildSubTabs();
     renderEventsList(eventsData);
     updateEventsAgeLabel(cached[0]?.fetchedAt);
   } else {
@@ -9595,6 +9597,7 @@ async function fetchAndUpdateEvents() {
       eventsRawData = attachCalendarConflictsToEvents(data.events);
       eventsData = applyFiltersAndSort(eventsRawData);
       updateSourceTabCounts(eventsRawData);
+      rebuildSubTabs();
 
       // Save to IndexedDB
       await saveEventsToCache(eventsRawData, {
@@ -9615,9 +9618,29 @@ async function fetchAndUpdateEvents() {
   }
 }
 
+// Sources that support category sub-tabs, and how each event is grouped
+const SUBTAB_SOURCES = ['ticketmaster', 'libraryweb', 'cityspark'];
+const TM_TYPE_LABELS = {
+  concert: 'Concerts', sports: 'Sports', show: 'Theater & Shows', comedy: 'Comedy',
+  art: 'Arts', food: 'Food', hike: 'Outdoors', class: 'Classes', sale: 'Sales', activity: 'Other'
+};
+function eventCategoryOf(e) {
+  if (e.source === 'cityspark') return e.category || 'Other';
+  if (e.source === 'ticketmaster') return TM_TYPE_LABELS[e.type] || 'Other';
+  if (e.source === 'libraryweb') {
+    return (e.location.address || 'Library').replace(/ (Public|Memorial|Community) Library$/i, '');
+  }
+  return null;
+}
+
 function applyFiltersAndSort(events) {
   // Show only the active source's events (one tab per source)
-  const filtered = events.filter(e => e.source === eventsSourceTab);
+  let filtered = events.filter(e => e.source === eventsSourceTab);
+
+  // Category sub-tab filter (within a source)
+  if (eventsSubTab !== 'all' && SUBTAB_SOURCES.includes(eventsSourceTab)) {
+    filtered = filtered.filter(e => eventCategoryOf(e) === eventsSubTab);
+  }
 
   if (eventsSourceTab === 'osm') {
     // Things to do are dateless — order by distance
@@ -9675,6 +9698,54 @@ function selectEventSource(btn) {
   document.querySelectorAll('.events-source-tabs .event-tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   eventsSourceTab = btn.dataset.source;
+  eventsSubTab = 'all';
+  rebuildSubTabs();
+  eventsData = applyFiltersAndSort(eventsRawData);
+  renderEventsList(eventsData);
+}
+
+// Rebuild the category sub-tab row for the current source (hidden if unsupported)
+function rebuildSubTabs() {
+  const bar = document.getElementById('eventsSubTabs');
+  if (!bar) return;
+
+  if (!SUBTAB_SOURCES.includes(eventsSourceTab)) {
+    bar.style.display = 'none';
+    bar.innerHTML = '';
+    return;
+  }
+
+  // Count events per category within the current source
+  const counts = {};
+  let total = 0;
+  for (const e of (eventsRawData || [])) {
+    if (e.source !== eventsSourceTab) continue;
+    const cat = eventCategoryOf(e);
+    if (!cat) continue;
+    counts[cat] = (counts[cat] || 0) + 1;
+    total++;
+  }
+
+  const cats = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+  if (cats.length < 2) {  // nothing meaningful to split on
+    bar.style.display = 'none';
+    bar.innerHTML = '';
+    return;
+  }
+
+  const mkBtn = (key, label, n, active) =>
+    `<button class="event-subtab${active ? ' active' : ''}" onclick="selectEventSubTab(this)" data-cat="${escapeHtml(key)}">${escapeHtml(label)} <span class="event-tab-count">(${n})</span></button>`;
+
+  bar.innerHTML = mkBtn('all', 'All', total, eventsSubTab === 'all') +
+    cats.map(c => mkBtn(c, c, counts[c], eventsSubTab === c)).join('');
+  bar.style.display = 'flex';
+}
+
+// Switch the active category sub-tab and re-render
+function selectEventSubTab(btn) {
+  document.querySelectorAll('#eventsSubTabs .event-subtab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  eventsSubTab = btn.dataset.cat;
   eventsData = applyFiltersAndSort(eventsRawData);
   renderEventsList(eventsData);
 }

@@ -4787,6 +4787,31 @@ body.tv-mode .card:hover { box-shadow: none; }
   font-size: var(--text-xs);
 }
 
+/* Category sub-tabs (within a source) — smaller, pill-style */
+.events-sub-tabs {
+  padding-bottom: 4px;
+}
+.event-subtab {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: var(--text-xs);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.event-subtab:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.event-subtab.active {
+  background: var(--accent2);
+  color: var(--bg);
+  border-color: var(--accent2);
+}
+
 .events-category-filters {
   display: flex;
 }

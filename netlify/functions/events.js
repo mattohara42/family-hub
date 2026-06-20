@@ -36,6 +36,19 @@ const CITYSPARK_TAG_TYPE = {
   17: 'concert', 85: 'concert', 87: 'concert', 93: 'concert', 95: 'concert',
   20: 'show', 18: 'show', 3: 'art', 34: 'art', 74: 'food', 75: 'food', 79: 'activity'
 };
+
+// Numeric Tag id → display category (for the "Around Town" sub-tabs). Music
+// sub-genres roll up to Music, arts variants to Arts, food/drink together.
+const CITYSPARK_CATEGORIES = {
+  17: 'Music', 85: 'Music', 86: 'Music', 87: 'Music', 93: 'Music', 94: 'Music',
+  95: 'Music', 96: 'Music', 99: 'Music', 206: 'Music', 270: 'Music',
+  3: 'Arts', 4: 'Arts', 25: 'Arts', 32: 'Arts', 350: 'Arts',
+  19: 'Theater', 18: 'Dance', 20: 'Comedy', 26: 'Film',
+  74: 'Food & Drink', 75: 'Food & Drink', 10252: 'Food & Drink', 10268: 'Food & Drink',
+  79: 'Family', 6: 'Sports & Outdoors', 38: 'Sports & Outdoors',
+  31: 'Festivals', 386: 'Festivals', 390: 'Holidays', 400: 'Holidays',
+  14: 'Nightlife', 7: 'Learning', 70: 'Civic'
+};
 let citysparkCache = {};  // keyed by rounded lat/lon
 const CITYSPARK_CACHE_TTL = 30 * 60 * 1000;  // 30 minutes
 
@@ -817,12 +830,14 @@ async function fetchCitySpark(city, state, lat, lon) {
 
         const tags = Array.isArray(e.Tags) ? e.Tags : [];
         const type = tags.map(t => CITYSPARK_TAG_TYPE[t]).find(Boolean) || 'activity';
+        const category = tags.map(t => CITYSPARK_CATEGORIES[t]).find(Boolean) || 'Other';
         const description = (e.Description || '').replace(/\\(.)/g, '$1');
 
         events.push({
           id,
           title: name,
           type,
+          category,   // display category for "Around Town" sub-tabs
           source: 'cityspark',
           sourceUrl: e.PrimaryUrl || e.TicketUrl || 'https://www.roccitymag.com/events/',
           date,
