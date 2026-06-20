@@ -696,7 +696,14 @@ async function scrapeCraigslist(city, state, lat, lon) {
   try {
     const cheerio = require('cheerio');
 
-    const region = STATE_TO_CRAIGSLIST_REGION[state] || 'craigslist';
+    const region = STATE_TO_CRAIGSLIST_REGION[state];
+    if (!region) {
+      console.warn(`[Events] Craigslist: unmapped state: ${state}`);
+      sourceStatus.craigslist.ok = false;
+      sourceStatus.craigslist.error = `unmapped state: ${state}`;
+      return [];
+    }
+
     const searchUrl = `https://${region}.craigslist.org/search/eee`;
 
     const r = await fetchWithRetry(async () => {
