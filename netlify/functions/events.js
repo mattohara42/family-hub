@@ -36,6 +36,11 @@ let categoryCache = {
 // 24 hours in milliseconds
 const CATEGORY_CACHE_TTL = 24 * 60 * 60 * 1000;
 
+// AllTrails cache: store results per location to stretch free API tier
+// TTL: 48 hours (trails don't change frequently)
+let alltrailsCache = {};
+const ALLTRAILS_CACHE_TTL = 48 * 60 * 60 * 1000;
+
 // Hardcoded fallback categories (top-level Eventbrite categories)
 // Used if API fetch fails, ensures graceful degradation
 const FALLBACK_CATEGORIES = {
@@ -791,6 +796,17 @@ async function scrapeAllTrails(city, state, lat, lon) {
       return [];
     }
 
+    // Check cache first (48 hour TTL to stretch free API tier)
+    const cacheKey = `${lat.toFixed(2)}_${lon.toFixed(2)}`;
+    const cached = alltrailsCache[cacheKey];
+    if (cached && Date.now() - cached.timestamp < ALLTRAILS_CACHE_TTL) {
+      console.log('[Events] AllTrails cache hit for', cacheKey);
+      sourceStatus.alltrails.count = cached.events.length;
+      sourceStatus.alltrails.ok = true;
+      sourceStatus.alltrails.error = null;
+      return cached.events;
+    }
+
     const searchUrl = `https://www.alltrails.com/api/v1/trails`;
     const params = new URLSearchParams({
       latitude: lat,
@@ -864,6 +880,12 @@ async function scrapeAllTrails(city, state, lat, lon) {
         console.warn('[Events] Error parsing AllTrails trail:', trailErr);
       }
     });
+
+    // Cache results
+    alltrailsCache[cacheKey] = {
+      events: events,
+      timestamp: Date.now()
+    };
 
     sourceStatus.alltrails.count = events.length;
     sourceStatus.alltrails.ok = true;
