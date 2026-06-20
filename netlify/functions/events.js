@@ -436,6 +436,19 @@ async function fetchTicketmaster(city, state, lat, lon, filters = {}) {
         }
       } : null;
 
+      // Ticketmaster Discovery API rarely returns `description`; it uses
+      // `info`/`pleaseNote`. When all are absent, synthesize a short blurb
+      // from genre + venue so the card isn't blank.
+      const tmGenre = e.classifications?.[0]?.genre?.name;
+      const tmSegment = e.classifications?.[0]?.segment?.name;
+      const tmGenreLabel = (tmGenre && tmGenre !== 'Undefined') ? tmGenre
+        : (tmSegment && tmSegment !== 'Undefined') ? tmSegment : null;
+      const tmFallbackDesc = [
+        tmGenreLabel,
+        venueData?.name ? `at ${venueData.name}` : null,
+        e._embedded?.venues?.[0]?.city?.name ? `in ${e._embedded.venues[0].city.name}` : null
+      ].filter(Boolean).join(' ');
+
       return {
         id: `tm_${e.id}`,
         title: e.name,
@@ -454,7 +467,7 @@ async function fetchTicketmaster(city, state, lat, lon, filters = {}) {
           distanceMiles: null,  // Will calculate
           venue: venueData  // Enrich with venue details
         },
-        description: e.description || '',
+        description: e.description || e.info || e.pleaseNote || tmFallbackDesc || '',
         image: e.images?.[0]?.url || null,
         weather: null
       };
