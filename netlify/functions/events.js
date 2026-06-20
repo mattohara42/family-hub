@@ -1,13 +1,12 @@
 /**
  * Netlify Function: Event Discovery Aggregator
- * Fetches and aggregates events from the Ticketmaster and AllTrails APIs
+ * Fetches and aggregates events from the Ticketmaster Discovery API
  * Normalizes, geocodes, adds weather context, filters by distance/date
  * Client calls: /.netlify/functions/events?location=<city>&radius=<minutes>&eventTypes=<comma-sep>
  *
  * API Integration Notes:
  * - Ticketmaster: Uses /events.json endpoint (Discovery v2 API). Available params include
  *   keyword, attractionId, venueId for advanced filtering. See docs/API_RESEARCH.md for details.
- * - AllTrails: Location-based trail search (48h cached to protect the free tier).
  * - OpenWeatherMap: Geocoding (direct API) + Forecast (data.2.5/forecast for weather context)
  * - Retry strategy: Exponential backoff (1s, 2s, 4s max). Gracefully handles partial source failures.
  *
@@ -19,15 +18,9 @@ const TM_API_BASE = 'https://app.ticketmaster.com/discovery/v2';
 const OWM_API_BASE = 'https://api.openweathermap.org/data/2.5';
 const OWM_GEO_BASE = 'https://api.openweathermap.org/geo/1.0';
 
-// AllTrails cache: store results per location to stretch free API tier
-// TTL: 48 hours (trails don't change frequently)
-let alltrailsCache = {};
-const ALLTRAILS_CACHE_TTL = 48 * 60 * 60 * 1000;
-
 // Source status tracking for this request
 const sourceStatus = {
-  ticketmaster: { ok: true, count: 0, error: null },
-  alltrails: { ok: true, count: 0, error: null }
+  ticketmaster: { ok: true, count: 0, error: null }
 };
 
 // Retry configuration
@@ -60,16 +53,14 @@ exports.handler = async (event) => {
       return json(400, { error: `Could not geocode location: ${location}` });
     }
 
-    // Step 2: Fetch from all sources in parallel
-    const [tmEvents, alltrailsEvents] = await Promise.allSettled([
-      fetchTicketmaster(city, state, lat, lon, { keyword, attractionId, venueId }),
-      scrapeAllTrails(city, state, lat, lon)
+    // Step 2: Fetch events
+    const [tmEvents] = await Promise.allSettled([
+      fetchTicketmaster(city, state, lat, lon, { keyword, attractionId, venueId })
     ]);
 
     // Collect all results
     const allEvents = [
-      ...extractSettledValue(tmEvents, 'ticketmaster'),
-      ...extractSettledValue(alltrailsEvents, 'alltrails')
+      ...extractSettledValue(tmEvents, 'ticketmaster')
     ];
 
     // Step 3: Remove duplicates by title + date + venue
@@ -97,8 +88,7 @@ exports.handler = async (event) => {
       radius: radiusMinutes,
       timestamp: Date.now(),
       sourceStats: {
-        ticketmaster: sourceStatus.ticketmaster.count,
-        alltrails: sourceStatus.alltrails.count
+        ticketmaster: sourceStatus.ticketmaster.count
       },
       warnings: Object.entries(sourceStatus)
         .filter(([, status]) => !status.ok)
@@ -326,123 +316,6 @@ async function fetchTicketmaster(city, state, lat, lon, filters = {}) {
     console.error('[Events] Ticketmaster error:', err);
     sourceStatus.ticketmaster.ok = false;
     sourceStatus.ticketmaster.error = err.message;
-    return [];
-  }
-}
-
-// ────────────────────────────────────────────────────────────────
-// ALLTRAILS API
-// ────────────────────────────────────────────────────────────────
-
-async function scrapeAllTrails(city, state, lat, lon) {
-  try {
-    const apiKey = process.env.ALLTRAILS_API_KEY;
-    if (!apiKey) {
-      sourceStatus.alltrails.ok = false;
-      sourceStatus.alltrails.error = 'API key not configured';
-      return [];
-    }
-
-    // Check cache first (48 hour TTL to stretch free API tier)
-    const cacheKey = `${lat.toFixed(2)}_${lon.toFixed(2)}`;
-    const cached = alltrailsCache[cacheKey];
-    if (cached && Date.now() - cached.timestamp < ALLTRAILS_CACHE_TTL) {
-      console.log('[Events] AllTrails cache hit for', cacheKey);
-      sourceStatus.alltrails.count = cached.events.length;
-      sourceStatus.alltrails.ok = true;
-      sourceStatus.alltrails.error = null;
-      return cached.events;
-    }
-
-    const searchUrl = `https://www.alltrails.com/api/v1/trails`;
-    const params = new URLSearchParams({
-      latitude: lat,
-      longitude: lon,
-      radius: '50',
-      sort: 'distance',
-      limit: '25'
-    });
-
-    const r = await fetchWithRetry(async () => {
-      return fetch(`${searchUrl}?${params}`, {
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'User-Agent': 'Mozilla/5.0 (Family Hub Event Discovery)'
-        }
-      });
-    }, 'AllTrails');
-
-    if (!r.ok) {
-      if (r.status === 401) {
-        sourceStatus.alltrails.error = 'invalid_api_key';
-      } else if (r.status === 429) {
-        sourceStatus.alltrails.error = 'rate_limit';
-      } else {
-        sourceStatus.alltrails.error = `HTTP ${r.status}`;
-      }
-      sourceStatus.alltrails.ok = false;
-      return [];
-    }
-
-    const data = await r.json();
-    const trails = data.data || [];
-
-    const events = [];
-
-    trails.forEach((trail) => {
-      try {
-        if (!trail.name || !trail.id) return;
-
-        // Estimate duration from distance (assume 2 mph average hiking speed)
-        const distance = parseFloat(trail.distance) || 0;
-        const duration = distance > 0 ? Math.ceil((distance / 2) * 60) : null;
-
-        // Build description with difficulty and elevation
-        const difficulty = trail.difficulty_rating ? trail.difficulty_rating.toUpperCase() : 'MODERATE';
-        const elevation = trail.elevation_gain ? ` +${Math.round(trail.elevation_gain)} ft` : '';
-        const miles = distance > 0 ? ` ${trail.distance} mi` : '';
-        const description = `${difficulty}${miles}${elevation}`;
-
-        events.push({
-          id: `at_${trail.id}`,
-          title: trail.name,
-          type: 'hike',
-          source: 'alltrails',
-          sourceUrl: `https://www.alltrails.com/trail/${trail.id}`,
-          date: null, // Trails are recurring, no specific event date
-          time: null,
-          duration: duration,
-          location: {
-            city: city,
-            state: state,
-            address: trail.location ? trail.location : trail.name,
-            lat: trail.latitude || lat,
-            lon: trail.longitude || lon,
-            distanceMiles: distance > 0 ? distance : null
-          },
-          description: description,
-          image: trail.image_url || null,
-          weather: null
-        });
-      } catch (trailErr) {
-        console.warn('[Events] Error parsing AllTrails trail:', trailErr);
-      }
-    });
-
-    // Cache results
-    alltrailsCache[cacheKey] = {
-      events: events,
-      timestamp: Date.now()
-    };
-
-    sourceStatus.alltrails.count = events.length;
-    sourceStatus.alltrails.ok = true;
-    sourceStatus.alltrails.error = null;
-    return events;
-  } catch (err) {
-    console.warn('[Events] AllTrails scraping error:', err);
-    sourceStatus.alltrails.ok = false;
-    sourceStatus.alltrails.error = err.message;
     return [];
   }
 }
