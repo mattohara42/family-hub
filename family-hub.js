@@ -9450,17 +9450,20 @@ async function loadAndRenderCategories() {
     renderCategoryTabs(categories);
   } else {
     // No categories available; hide the category filter section
-    document.getElementById('eventsCategoryFilters').style.display = 'none';
+    document.getElementById('eventsCategoryFilters')?.style.setProperty('display', 'none');
   }
 }
 
 function renderCategoryTabs(categories) {
+  const container = document.getElementById('eventsCategoryFilters');
+  // Category filter UI removed from the modal — nothing to render
+  if (!container) return;
+
   if (!categories || categories.length === 0) {
-    document.getElementById('eventsCategoryFilters').style.display = 'none';
+    container.style.display = 'none';
     return;
   }
 
-  const container = document.getElementById('eventsCategoryFilters');
   container.innerHTML = '';
 
   // Add "All" tab
@@ -9635,12 +9638,6 @@ function applyFiltersAndSort(events) {
     });
   }
 
-  // Apply type filter if specified
-  const typeFilter = document.getElementById('eventsFilterType').value.toLowerCase().trim();
-  if (typeFilter) {
-    filtered = filtered.filter(e => e.type.toLowerCase().includes(typeFilter));
-  }
-
   // Apply keyword search filter (client-side fallback)
   if (eventsSearchKeyword) {
     const keywordLower = eventsSearchKeyword.toLowerCase();
@@ -9661,8 +9658,8 @@ function applyFiltersAndSort(events) {
 
   // Note: Artist/attractionId filtering is server-side; no client-side fallback available
 
-  // Apply sort
-  const sortBy = document.getElementById('eventsSortBy').value || eventsSort;
+  // Apply sort (default: distance — sort UI removed)
+  const sortBy = eventsSort || 'distance';
   if (sortBy === 'distance') {
     filtered.sort((a, b) => (a.location.distanceMiles || 999) - (b.location.distanceMiles || 999));
   } else if (sortBy === 'date') {

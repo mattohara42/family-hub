@@ -1220,35 +1220,8 @@
 
     <div id="eventsAgeLabel" style="font-size:.8rem;color:var(--muted);margin-bottom:8px"></div>
 
-    <div id="eventsCategoryFilters" class="events-category-filters" style="display:none;gap:4px;margin-bottom:12px;overflow-x:auto;padding-bottom:8px;min-height:32px"></div>
-
-    <div class="events-tabs" style="display:flex;gap:4px;margin-bottom:12px;overflow-x:auto;padding-bottom:8px;min-height:32px">
-      <button class="event-tab active" data-type="all" onclick="filterEventsByTab(this)">All</button>
-      <button class="event-tab" data-type="concert" onclick="filterEventsByTab(this)">Concerts</button>
-      <button class="event-tab" data-type="show" onclick="filterEventsByTab(this)">Shows</button>
-      <button class="event-tab" data-type="sports" onclick="filterEventsByTab(this)">Sports</button>
-      <button class="event-tab" data-type="hike" onclick="filterEventsByTab(this)">Hikes</button>
-      <button class="event-tab" data-type="class" onclick="filterEventsByTab(this)">Classes</button>
-      <button class="event-tab" data-type="food" onclick="filterEventsByTab(this)">Food</button>
-      <button class="event-tab" data-type="art" onclick="filterEventsByTab(this)">Art</button>
-      <button class="event-tab" data-type="sale" onclick="filterEventsByTab(this)">Sales</button>
-    </div>
-
-    <div class="events-search-bar" style="margin-bottom:12px;display:flex;gap:6px;flex-wrap:wrap;flex-direction:column">
-      <div style="display:flex;gap:6px;flex-wrap:wrap">
-        <input type="text" id="eventsFilterType" placeholder="Filter by type (optional)…" style="flex:1;min-width:150px" />
-        <select id="eventsSortBy" style="min-width:100px" onchange="sortAndRenderEvents()">
-          <option value="distance">Sort by distance</option>
-          <option value="date">Sort by date</option>
-        </select>
-        <button class="btn btn-primary btn-sm" onclick="refreshEvents()">🔄 Refresh</button>
-      </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-        <input type="text" id="eventsKeywordSearch" placeholder="Search by event name…" style="flex:1;min-width:150px" oninput="handleEventSearchInput()" />
-        <input type="text" id="eventsArtistSearch" placeholder="Search by artist…" style="flex:1;min-width:150px" oninput="handleEventSearchInput()" />
-        <input type="text" id="eventsVenueSearch" placeholder="Search by venue…" style="flex:1;min-width:150px" oninput="handleEventSearchInput()" />
-        <button class="btn btn-secondary btn-sm" onclick="clearEventSearchFilters()" style="white-space:nowrap">Clear</button>
-      </div>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+      <button class="btn btn-primary btn-sm" onclick="refreshEvents()">🔄 Refresh</button>
     </div>
 
     <div id="eventsList" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding-right:4px"></div>
