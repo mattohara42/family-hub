@@ -82,7 +82,17 @@ exports.handler = async (event) => {
   }
 
   const qs = event.queryStringParameters || {};
-  const { location, radius, eventTypes, keyword, attractionId, venueId } = qs;
+  const { location, radius, eventTypes, keyword, attractionId, venueId, categories } = qs;
+
+  // Handle category-only request (for event discovery UI)
+  if (categories === 'true') {
+    await ensureCategoryCache();
+    return json(200, {
+      success: true,
+      categories: categoryCache.categories,
+      timestamp: Date.now()
+    });
+  }
 
   if (!location) {
     return json(400, { error: 'location parameter required' });
