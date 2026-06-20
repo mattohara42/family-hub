@@ -1,14 +1,13 @@
 /**
  * Netlify Function: Event Discovery Aggregator
- * Fetches and aggregates events from Ticketmaster, Eventbrite, and AllTrails APIs
+ * Fetches and aggregates events from the Ticketmaster and AllTrails APIs
  * Normalizes, geocodes, adds weather context, filters by distance/date
  * Client calls: /.netlify/functions/events?location=<city>&radius=<minutes>&eventTypes=<comma-sep>
  *
  * API Integration Notes:
- * - Eventbrite: Uses /events/search endpoint (v3 API). Could leverage categories, venues,
- *   subcategories endpoints for enhanced filtering. See docs/API_RESEARCH.md for full endpoint list.
  * - Ticketmaster: Uses /events.json endpoint (Discovery v2 API). Available params include
  *   keyword, attractionId, venueId for advanced filtering. See docs/API_RESEARCH.md for details.
+ * - AllTrails: Location-based trail search (48h cached to protect the free tier).
  * - OpenWeatherMap: Geocoding (direct API) + Forecast (data.2.5/forecast for weather context)
  * - Retry strategy: Exponential backoff (1s, 2s, 4s max). Gracefully handles partial source failures.
  *
@@ -17,52 +16,17 @@
  */
 
 const TM_API_BASE = 'https://app.ticketmaster.com/discovery/v2';
-const EB_API_BASE = 'https://www.eventbriteapi.com/v3';
 const OWM_API_BASE = 'https://api.openweathermap.org/data/2.5';
 const OWM_GEO_BASE = 'https://api.openweathermap.org/geo/1.0';
-
-// ────────────────────────────────────────────────────────────────
-// EVENTBRITE CATEGORY CACHE
-// ────────────────────────────────────────────────────────────────
-
-// In-memory cache for Eventbrite categories/subcategories.
-// TTL: 24 hours. Memoized to avoid repeated API calls.
-let categoryCache = {
-  categories: {},      // { id: "name" } mapping
-  subcategories: {},   // { id: "name" } mapping
-  timestamp: null      // when cache was populated
-};
-
-// 24 hours in milliseconds
-const CATEGORY_CACHE_TTL = 24 * 60 * 60 * 1000;
 
 // AllTrails cache: store results per location to stretch free API tier
 // TTL: 48 hours (trails don't change frequently)
 let alltrailsCache = {};
 const ALLTRAILS_CACHE_TTL = 48 * 60 * 60 * 1000;
 
-// Hardcoded fallback categories (top-level Eventbrite categories)
-// Used if API fetch fails, ensures graceful degradation
-const FALLBACK_CATEGORIES = {
-  '1': 'Music',
-  '6': 'Food & Drink',
-  '11': 'Business & Professional',
-  '13': 'Charity & Causes',
-  '19': 'Classes & Workshops',
-  '21': 'Community & Culture',
-  '22': 'Family & Education',
-  '25': 'Film, Media & Entertainment',
-  '31': 'Hobbies & Special Interests',
-  '34': 'Performing & Visual Arts',
-  '40': 'Science & Technology',
-  '41': 'Sports & Fitness',
-  '114': 'Travel & Outdoor'
-};
-
 // Source status tracking for this request
 const sourceStatus = {
   ticketmaster: { ok: true, count: 0, error: null },
-  eventbrite: { ok: true, count: 0, error: null },
   alltrails: { ok: true, count: 0, error: null }
 };
 
@@ -80,17 +44,7 @@ exports.handler = async (event) => {
   }
 
   const qs = event.queryStringParameters || {};
-  const { location, radius, eventTypes, keyword, attractionId, venueId, categories } = qs;
-
-  // Handle category-only request (for event discovery UI)
-  if (categories === 'true') {
-    await ensureCategoryCache();
-    return json(200, {
-      success: true,
-      categories: categoryCache.categories,
-      timestamp: Date.now()
-    });
-  }
+  const { location, radius, eventTypes, keyword, attractionId, venueId } = qs;
 
   if (!location) {
     return json(400, { error: 'location parameter required' });
@@ -100,9 +54,6 @@ exports.handler = async (event) => {
   const eventTypesList = eventTypes ? eventTypes.split(',').map(t => t.trim().toLowerCase()) : [];
 
   try {
-    // Step 0: Ensure category cache is populated (lazy initialization)
-    await ensureCategoryCache();
-
     // Step 1: Geocode location (city → lat/lon)
     const { lat, lon, city, state } = await geocodeLocation(location);
     if (!lat || !lon) {
@@ -110,16 +61,14 @@ exports.handler = async (event) => {
     }
 
     // Step 2: Fetch from all sources in parallel
-    const [tmEvents, ebEvents, alltrailsEvents] = await Promise.allSettled([
+    const [tmEvents, alltrailsEvents] = await Promise.allSettled([
       fetchTicketmaster(city, state, lat, lon, { keyword, attractionId, venueId }),
-      fetchEventbrite(lat, lon),
       scrapeAllTrails(city, state, lat, lon)
     ]);
 
     // Collect all results
     const allEvents = [
       ...extractSettledValue(tmEvents, 'ticketmaster'),
-      ...extractSettledValue(ebEvents, 'eventbrite'),
       ...extractSettledValue(alltrailsEvents, 'alltrails')
     ];
 
@@ -149,7 +98,6 @@ exports.handler = async (event) => {
       timestamp: Date.now(),
       sourceStats: {
         ticketmaster: sourceStatus.ticketmaster.count,
-        eventbrite: sourceStatus.eventbrite.count,
         alltrails: sourceStatus.alltrails.count
       },
       warnings: Object.entries(sourceStatus)
@@ -191,101 +139,6 @@ async function geocodeLocation(location) {
     console.error('[Events] Geocoding failed:', err);
     throw err;
   }
-}
-
-// ────────────────────────────────────────────────────────────────
-// CATEGORY FETCHING & CACHING
-// ────────────────────────────────────────────────────────────────
-
-/**
- * Fetch and cache Eventbrite categories and subcategories.
- * Called on startup (via first event search) and refreshed every 24 hours.
- *
- * Pattern: Mirrors fetchWithRetry() for consistency. On failure, gracefully
- * falls back to hardcoded category list. Categories are memoized in memory
- * to avoid repeated API calls within the 24-hour window.
- */
-async function ensureCategoryCache() {
-  // Check if cache is still valid (within TTL)
-  if (categoryCache.timestamp && Date.now() - categoryCache.timestamp < CATEGORY_CACHE_TTL) {
-    return categoryCache;
-  }
-
-  try {
-    const key = process.env.EVENTBRITE_KEY;
-    if (!key) {
-      console.warn('[Events] EVENTBRITE_KEY not set, using fallback categories');
-      categoryCache.categories = FALLBACK_CATEGORIES;
-      categoryCache.timestamp = Date.now();
-      return categoryCache;
-    }
-
-    // Fetch both categories and subcategories in parallel
-    const [categoriesResult, subcategoriesResult] = await Promise.allSettled([
-      fetchWithRetry(async () => {
-        const params = new URLSearchParams({ token: key });
-        const r = await fetch(`${EB_API_BASE}/categories/?${params}`);
-        if (!r.ok) {
-          throw new Error(`HTTP ${r.status}: ${r.statusText}`);
-        }
-        return r.json();
-      }, 'Eventbrite Categories', 1),  // Single retry for reference data
-      fetchWithRetry(async () => {
-        const params = new URLSearchParams({ token: key });
-        const r = await fetch(`${EB_API_BASE}/subcategories/?${params}`);
-        if (!r.ok) {
-          throw new Error(`HTTP ${r.status}: ${r.statusText}`);
-        }
-        return r.json();
-      }, 'Eventbrite Subcategories', 1)
-    ]);
-
-    // Process categories
-    if (categoriesResult.status === 'fulfilled' && categoriesResult.value?.categories) {
-      categoriesResult.value.categories.forEach(cat => {
-        categoryCache.categories[cat.id] = cat.name;
-      });
-    }
-
-    // Process subcategories
-    if (subcategoriesResult.status === 'fulfilled' && subcategoriesResult.value?.subcategories) {
-      subcategoriesResult.value.subcategories.forEach(subcat => {
-        categoryCache.subcategories[subcat.id] = subcat.name;
-      });
-    }
-
-    // If either fetch failed but we got some data, that's ok
-    if (Object.keys(categoryCache.categories).length === 0) {
-      console.warn('[Events] Category fetch returned no data, using fallback');
-      categoryCache.categories = FALLBACK_CATEGORIES;
-    }
-
-    categoryCache.timestamp = Date.now();
-    console.log('[Events] Categories cached:', {
-      categories: Object.keys(categoryCache.categories).length,
-      subcategories: Object.keys(categoryCache.subcategories).length
-    });
-
-    return categoryCache;
-  } catch (err) {
-    console.warn('[Events] Category caching failed, using fallback:', err.message);
-    categoryCache.categories = FALLBACK_CATEGORIES;
-    categoryCache.timestamp = Date.now();
-    return categoryCache;
-  }
-}
-
-/**
- * Look up category name by ID.
- * Returns the official Eventbrite category/subcategory name if found,
- * otherwise returns the ID as a fallback.
- */
-function getCategoryName(categoryId) {
-  if (!categoryId) return null;
-  // Check subcategories first (more specific), then top-level categories
-  return categoryCache.subcategories[categoryId] ||
-         categoryCache.categories[categoryId] ||
-         null;
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -478,133 +331,7 @@ async function fetchTicketmaster(city, state, lat, lon, filters = {}) {
 }
 
 // ────────────────────────────────────────────────────────────────
-// API: EVENTBRITE
-// ────────────────────────────────────────────────────────────────
-
-/**
- * Eventbrite event fetching with venue enrichment.
- * Fetches events from Eventbrite API v3 with expand=venue to include venue details inline.
- *
- * Venue enrichment strategy:
- * - Eventbrite /events/search endpoint supports expand=venue parameter
- * - This includes full venue object in each event response (no separate call needed)
- * - We extract: name, address, capacity, website, accessibility fields
- * - Gracefully handles missing/null venue fields (won't break event display)
- * - Single API call per request (no bulk venue enrichment needed)
- *
- * See docs/API_RESEARCH.md for full Eventbrite endpoint catalog (61 endpoints across 13 resources).
- */
-async function fetchEventbrite(lat, lon) {
-  // Eventbrite API v3: /events/search endpoint with expand=venue
-  // Currently using location/date filters with venue expansion. Could enhance with:
-  //   - GET /categories, /subcategories: improved event type taxonomy (U1 completed)
-  //   - GET /venues/{id}: separate venue detail calls (not needed; using expand instead)
-  //   - Advanced filters: price range, ticket availability, free vs. paid
-  // See docs/API_RESEARCH.md for full endpoint catalog (61 endpoints across 13 resources).
-
-  try {
-    const key = process.env.EVENTBRITE_KEY;
-    if (!key) {
-      console.warn('[Events] EVENTBRITE_KEY not set');
-      sourceStatus.eventbrite.ok = false;
-      sourceStatus.eventbrite.error = 'API key not configured';
-      return [];
-    }
-
-    const data = await fetchWithRetry(async () => {
-      const params = new URLSearchParams({
-        token: key,
-        'location.latitude': lat,
-        'location.longitude': lon,
-        'location.within': '120km',  // Search radius
-        'start_date.range_start': new Date().toISOString().split('T')[0],  // Today
-        'start_date.range_end': new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],  // +7 days
-        'sort_by': 'date',
-        'expand': 'venue'  // Include venue data in response
-      });
-
-      const r = await fetch(`${EB_API_BASE}/events/search/?${params}`);
-      if (!r.ok) {
-        throw new Error(`HTTP ${r.status}: ${r.statusText}`);
-      }
-      return r.json();
-    }, 'Eventbrite');
-
-    const events = data.events || [];
-
-    const results = events.map(e => {
-      // Enrich with Eventbrite official category/subcategory if available
-      let category = null;
-      if (e.category_id) {
-        category = {
-          id: e.category_id,
-          name: getCategoryName(e.category_id) || 'Activity'
-        };
-      }
-      if (e.subcategory_id) {
-        category = {
-          id: e.subcategory_id,
-          name: getCategoryName(e.subcategory_id) || 'Activity'
-        };
-      }
-
-      // Enrich venue data from Eventbrite's expand=venue response
-      // Eventbrite includes venue details in e.venue when expand=venue is used
-      // Extract capacity, ratings, and accessibility info if available; graceful fallback if missing
-      const ebVenue = e.venue ? {
-        name: e.venue.name || null,
-        address: e.venue.address?.address_1 || null,
-        city: e.venue.address?.city || '',
-        state: e.venue.address?.region || '',
-        capacity: e.venue.capacity || null,  // May be null; graceful handling
-        website: e.venue.address?.website || null,
-        // Accessibility: Eventbrite may include in venue.address or separate field
-        accessibility: {
-          wheelchairAccess: e.venue.address?.wheelchair_access ?? false,
-          parking: e.venue.address?.parking || false,
-          transit: e.venue.address?.public_transit_info || null
-        }
-      } : null;
-
-      return {
-        id: `eb_${e.id}`,
-        title: e.name?.text || 'Event',
-        type: 'activity',  // Eventbrite doesn't always categorize clearly
-        source: 'eventbrite',
-        sourceUrl: e.url,
-        date: e.start?.local?.split('T')[0] || null,
-        time: e.start?.local?.split('T')[1] || null,
-        duration: null,
-        location: {
-          city: e.venue?.address?.city || '',
-          state: e.venue?.address?.region || '',
-          address: e.venue?.address?.address_1 || '',
-          lat: parseFloat(e.venue?.address?.latitude) || lat,
-          lon: parseFloat(e.venue?.address?.longitude) || lon,
-          distanceMiles: null,
-          venue: ebVenue  // Enrich with venue details
-        },
-        description: e.description?.text || '',
-        image: e.logo?.url || null,
-        weather: null,
-        category: category  // Official Eventbrite category metadata (optional)
-      };
-    });
-
-    sourceStatus.eventbrite.count = results.length;
-    sourceStatus.eventbrite.ok = true;
-    sourceStatus.eventbrite.error = null;
-    return results;
-  } catch (err) {
-    console.error('[Events] Eventbrite error:', err);
-    sourceStatus.eventbrite.ok = false;
-    sourceStatus.eventbrite.error = err.message;
-    return [];
-  }
-}
-
-// ────────────────────────────────────────────────────────────────
-// SCRAPING: ALLTRAILS API
+// ALLTRAILS API
 // ────────────────────────────────────────────────────────────────
 
 async function scrapeAllTrails(city, state, lat, lon) {
