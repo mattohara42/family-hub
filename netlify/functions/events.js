@@ -59,7 +59,8 @@ const sourceStatus = {
   ticketmaster: { ok: true, count: 0, error: null },
   eventbrite: { ok: true, count: 0, error: null },
   estatesales: { ok: true, count: 0, error: null },
-  craigslist: { ok: true, count: 0, error: null }
+  craigslist: { ok: true, count: 0, error: null },
+  alltrails: { ok: true, count: 0, error: null }
 };
 
 // Retry configuration
@@ -96,11 +97,12 @@ exports.handler = async (event) => {
     }
 
     // Step 2: Fetch from all sources in parallel
-    const [tmEvents, ebEvents, estateSalesEvents, craigslistEvents] = await Promise.allSettled([
+    const [tmEvents, ebEvents, estateSalesEvents, craigslistEvents, alltrailsEvents] = await Promise.allSettled([
       fetchTicketmaster(city, state, lat, lon, { keyword, attractionId, venueId }),
       fetchEventbrite(lat, lon),
       scrapeEstateSales(city, state, lat, lon),
-      scrapeCraigslist(city, state, lat, lon)
+      scrapeCraigslist(city, state, lat, lon),
+      scrapeAllTrails(city, state, lat, lon)
     ]);
 
     // Collect all results
@@ -108,7 +110,8 @@ exports.handler = async (event) => {
       ...extractSettledValue(tmEvents, 'ticketmaster'),
       ...extractSettledValue(ebEvents, 'eventbrite'),
       ...extractSettledValue(estateSalesEvents, 'estatesales'),
-      ...extractSettledValue(craigslistEvents, 'craigslist')
+      ...extractSettledValue(craigslistEvents, 'craigslist'),
+      ...extractSettledValue(alltrailsEvents, 'alltrails')
     ];
 
     // Step 3: Remove duplicates by title + date + venue
@@ -659,15 +662,217 @@ async function scrapeEstateSales(city, state, lat, lon) {
 // SCRAPING: CRAIGSLIST
 // ────────────────────────────────────────────────────────────────
 
+// State to Craigslist region mapping
+const STATE_TO_CRAIGSLIST_REGION = {
+  'AL': 'alabama', 'AK': 'anchorage', 'AZ': 'phoenix', 'AR': 'littlerock', 'CA': 'sfbay',
+  'CO': 'denver', 'CT': 'newhaven', 'DE': 'delaware', 'FL': 'miami', 'GA': 'atlanta',
+  'HI': 'honolulu', 'ID': 'boise', 'IL': 'chicago', 'IN': 'indianapolis', 'IA': 'desmoines',
+  'KS': 'kansas', 'KY': 'louisville', 'LA': 'neworleans', 'ME': 'maine', 'MD': 'baltimore',
+  'MA': 'boston', 'MI': 'detroit', 'MN': 'minneapolis', 'MS': 'jackson', 'MO': 'stlouis',
+  'MT': 'missoula', 'NE': 'omaha', 'NV': 'lasvegas', 'NH': 'nh', 'NJ': 'newjersey',
+  'NM': 'albuquerque', 'NY': 'newyork', 'NC': 'raleigh', 'ND': 'northdakota', 'OH': 'columbus',
+  'OK': 'oklahomacity', 'OR': 'portland', 'PA': 'philadelphia', 'RI': 'providence', 'SC': 'charleston',
+  'SD': 'southdakota', 'TN': 'memphis', 'TX': 'dallas', 'UT': 'saltlakecity', 'VT': 'vermont',
+  'VA': 'roanoke', 'WA': 'seattle', 'WV': 'huntington', 'WI': 'madison', 'WY': 'wyoming'
+};
+
 async function scrapeCraigslist(city, state, lat, lon) {
   try {
-    // Placeholder: would scrape Craigslist activities section
-    // For now, return empty; to be implemented with HTML parsing
-    sourceStatus.craigslist.count = 0;
-    return [];
+    const cheerio = require('cheerio');
+
+    const region = STATE_TO_CRAIGSLIST_REGION[state] || 'craigslist';
+    const searchUrl = `https://${region}.craigslist.org/search/eee`;
+
+    const r = await fetchWithRetry(async () => {
+      return fetch(searchUrl, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Family Hub Event Discovery)' }
+      });
+    }, 'Craigslist');
+
+    if (!r.ok) {
+      sourceStatus.craigslist.ok = false;
+      sourceStatus.craigslist.error = r.status === 403 ? 'rate_limited' : `HTTP ${r.status}`;
+      return [];
+    }
+
+    const html = await r.text();
+    const $ = cheerio.load(html);
+
+    const events = [];
+
+    // Parse Craigslist listings (ol#search-results li.cl-search-result)
+    $('li.cl-search-result').each((i, elem) => {
+      try {
+        const titleElem = $(elem).find('a.titlestring');
+        const title = titleElem.text().trim();
+        const url = titleElem.attr('href');
+
+        if (!title || !url) return;
+
+        // Craigslist shows relative posting time
+        const timeElem = $(elem).find('.result-date');
+        const timeText = timeElem.text().trim();
+
+        // Parse relative date (e.g., "3 hours ago", "1 day ago", "yesterday")
+        let date = new Date().toISOString().split('T')[0];
+        if (timeText) {
+          const match = timeText.match(/(\d+)\s*(hour|day|week)s?\s+ago|yesterday|today/i);
+          if (match) {
+            const now = new Date();
+            if (match[0].toLowerCase().includes('hour')) {
+              // Same day
+              date = now.toISOString().split('T')[0];
+            } else if (match[0].toLowerCase().includes('yesterday')) {
+              now.setDate(now.getDate() - 1);
+              date = now.toISOString().split('T')[0];
+            } else if (match[0].toLowerCase().includes('day')) {
+              const days = parseInt(match[1]) || 1;
+              now.setDate(now.getDate() - days);
+              date = now.toISOString().split('T')[0];
+            } else if (match[0].toLowerCase().includes('week')) {
+              const weeks = parseInt(match[1]) || 1;
+              now.setDate(now.getDate() - (weeks * 7));
+              date = now.toISOString().split('T')[0];
+            }
+          }
+        }
+
+        // Extract location (price is optional)
+        const priceElem = $(elem).find('.result-price');
+        const price = priceElem.text().trim();
+
+        events.push({
+          id: `cl_${url.split('/').pop()}`,
+          title: title,
+          type: normalizeEventType(title),
+          source: 'craigslist',
+          sourceUrl: url.startsWith('http') ? url : `https://${region}.craigslist.org${url}`,
+          date: date,
+          time: null,
+          duration: null,
+          location: {
+            city: city,
+            state: state,
+            address: price ? `${title} - ${price}` : title,
+            lat: lat,
+            lon: lon,
+            distanceMiles: null
+          },
+          description: title,
+          weather: null
+        });
+      } catch (itemErr) {
+        console.warn('[Events] Error parsing Craigslist item:', itemErr);
+      }
+    });
+
+    sourceStatus.craigslist.count = events.length;
+    sourceStatus.craigslist.ok = true;
+    sourceStatus.craigslist.error = null;
+    return events;
   } catch (err) {
     console.warn('[Events] Craigslist scraping error:', err);
     sourceStatus.craigslist.ok = false;
+    sourceStatus.craigslist.error = err.message;
+    return [];
+  }
+}
+
+// ────────────────────────────────────────────────────────────────
+// SCRAPING: ALLTRAILS API
+// ────────────────────────────────────────────────────────────────
+
+async function scrapeAllTrails(city, state, lat, lon) {
+  try {
+    const apiKey = process.env.ALLTRAILS_API_KEY;
+    if (!apiKey) {
+      sourceStatus.alltrails.ok = false;
+      sourceStatus.alltrails.error = 'API key not configured';
+      return [];
+    }
+
+    const searchUrl = `https://www.alltrails.com/api/v1/trails`;
+    const params = new URLSearchParams({
+      latitude: lat,
+      longitude: lon,
+      radius: '50',
+      sort: 'distance',
+      limit: '25'
+    });
+
+    const r = await fetchWithRetry(async () => {
+      return fetch(`${searchUrl}?${params}`, {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'User-Agent': 'Mozilla/5.0 (Family Hub Event Discovery)'
+        }
+      });
+    }, 'AllTrails');
+
+    if (!r.ok) {
+      if (r.status === 401) {
+        sourceStatus.alltrails.error = 'invalid_api_key';
+      } else if (r.status === 429) {
+        sourceStatus.alltrails.error = 'rate_limit';
+      } else {
+        sourceStatus.alltrails.error = `HTTP ${r.status}`;
+      }
+      sourceStatus.alltrails.ok = false;
+      return [];
+    }
+
+    const data = await r.json();
+    const trails = data.data || [];
+
+    const events = [];
+
+    trails.forEach((trail) => {
+      try {
+        if (!trail.name || !trail.id) return;
+
+        // Estimate duration from distance (assume 2 mph average hiking speed)
+        const distance = parseFloat(trail.distance) || 0;
+        const duration = distance > 0 ? Math.ceil((distance / 2) * 60) : null;
+
+        // Build description with difficulty and elevation
+        const difficulty = trail.difficulty_rating ? trail.difficulty_rating.toUpperCase() : 'MODERATE';
+        const elevation = trail.elevation_gain ? ` +${Math.round(trail.elevation_gain)} ft` : '';
+        const miles = distance > 0 ? ` ${trail.distance} mi` : '';
+        const description = `${difficulty}${miles}${elevation}`;
+
+        events.push({
+          id: `at_${trail.id}`,
+          title: trail.name,
+          type: 'hike',
+          source: 'alltrails',
+          sourceUrl: `https://www.alltrails.com/trail/${trail.id}`,
+          date: null, // Trails are recurring, no specific event date
+          time: null,
+          duration: duration,
+          location: {
+            city: city,
+            state: state,
+            address: trail.location ? trail.location : trail.name,
+            lat: trail.latitude || lat,
+            lon: trail.longitude || lon,
+            distanceMiles: distance > 0 ? distance : null
+          },
+          description: description,
+          weather: null
+        });
+      } catch (trailErr) {
+        console.warn('[Events] Error parsing AllTrails trail:', trailErr);
+      }
+    });
+
+    sourceStatus.alltrails.count = events.length;
+    sourceStatus.alltrails.ok = true;
+    sourceStatus.alltrails.error = null;
+    return events;
+  } catch (err) {
+    console.warn('[Events] AllTrails scraping error:', err);
+    sourceStatus.alltrails.ok = false;
+    sourceStatus.alltrails.error = err.message;
     return [];
   }
 }
