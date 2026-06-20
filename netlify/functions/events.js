@@ -30,14 +30,12 @@ const sourceStatus = {
 // iCal carries no coordinates, so each branch is tagged with its location
 // (approx) — the distance filter then includes it only for nearby searches.
 const LIBRARYWEB_BRANCHES = [
-  { name: 'Rochester Public Library', cid: 6825, lat: 43.1556, lon: -77.6064 },
   { name: 'Brighton Memorial Library', cid: 6814, lat: 43.1182, lon: -77.5673 },
   { name: 'East Rochester Public Library', cid: 6816, lat: 43.1126, lon: -77.4869 },
   { name: 'Fairport Public Library', cid: 7670, lat: 43.0987, lon: -77.4425 },
   { name: 'Penfield Public Library', cid: 5054, lat: 43.1490, lon: -77.4803 },
   { name: 'Pittsford Community Library', cid: 6821, lat: 43.0905, lon: -77.5152 },
-  { name: 'Henrietta Public Library', cid: 5053, lat: 43.0640, lon: -77.6220 },
-  { name: 'Webster Public Library', cid: 6824, lat: 43.2284, lon: -77.4297 }
+  { name: 'Henrietta Public Library', cid: 5053, lat: 43.0640, lon: -77.6220 }
 ];
 const LIBRARYWEB_CENTER = { lat: 43.1566, lon: -77.6088 };  // Rochester, NY
 const LIBRARYWEB_MAX_MILES = 90;  // skip the whole source for far-away searches
