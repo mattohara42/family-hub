@@ -9757,24 +9757,28 @@ function renderVenueDetails(venue) {
 }
 
 function renderEventCard(event) {
-  const imageHtml = event.image
-    ? `<div class="event-image" style="background-image: url('${escapeHtml(event.image)}')"></div>`
-    : `<div class="event-image event-image-placeholder">${getEventEmoji(event.type)}</div>`;
+  // Date + distance overlay, pinned to the top-right of the image
+  const overlayHtml = `
+    <div class="event-overlay">
+      <span class="event-overlay-date">${escapeHtml(event.date || 'TBD')}</span>
+      <span class="event-overlay-distance">${(event.location.distanceMiles || 0).toFixed(1)} mi</span>
+    </div>`;
 
-  const descriptionPreview = event.description
-    ? event.description.substring(0, 100) + (event.description.length > 100 ? '…' : '')
-    : '';
+  const imageHtml = event.image
+    ? `<div class="event-image" style="background-image: url('${escapeHtml(event.image)}')">${overlayHtml}</div>`
+    : `<div class="event-image event-image-placeholder">${overlayHtml}<span class="event-image-emoji">${getEventEmoji(event.type)}</span></div>`;
+
+  // Short summary for the bottom half of the card
+  const summary = event.description
+    ? event.description.substring(0, 160) + (event.description.length > 160 ? '…' : '')
+    : 'No description available.';
 
   return `
     <div class="event-card">
       ${imageHtml}
       <div class="event-card-content">
         <h3 class="event-title">${escapeHtml(event.title)} <span class="event-type-badge">${event.type}</span></h3>
-        ${descriptionPreview ? `<p class="event-description">${escapeHtml(descriptionPreview)}</p>` : ''}
-        <div class="event-meta">
-          <span class="event-date">${event.date || 'TBD'}</span>
-          <span class="event-distance">${(event.location.distanceMiles || 0).toFixed(1)} mi</span>
-        </div>
+        <p class="event-description">${escapeHtml(summary)}</p>
         <a href="${escapeHtml(event.sourceUrl)}" target="_blank" rel="noopener" class="event-link">View Details</a>
       </div>
     </div>
