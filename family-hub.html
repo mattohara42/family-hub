@@ -15,7 +15,7 @@
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self';
                  script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com https://accounts.google.com https://unpkg.com;
-                 connect-src https:;
+                 connect-src https: http://localhost:8888;
                  img-src 'self' https: blob: data:;
                  style-src 'self' 'unsafe-inline' https://unpkg.com;
                  font-src 'self' data:;
@@ -28,7 +28,6 @@
 
   <!-- Google API -->
   <script src="https://apis.google.com/js/api.js"></script>
-  <script src="https://accounts.google.com/gsi/client" async defer onload="onGsiLoad()"></script>
 
   <!-- Leaflet (precipitation radar map) -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -95,12 +94,15 @@
           <span id="calendarStatus"></span>
           <button onclick="changeCalPeriod(1)" aria-label="Next period">&#8250;</button>
         </div>
-        <!-- Right: view tabs -->
-        <div class="cal-view-tabs">
-          <button class="cal-view-tab" id="viewTab_month"  onclick="switchCalView('month')">Month</button>
-          <button class="cal-view-tab" id="viewTab_week"   onclick="switchCalView('week')">Week</button>
-          <button class="cal-view-tab" id="viewTab_day"    onclick="switchCalView('day')">Day</button>
-          <button class="cal-view-tab" id="viewTab_agenda" onclick="switchCalView('agenda')">Agenda</button>
+        <!-- Right: event discovery + view tabs -->
+        <div style="display:flex;align-items:center;gap:12px">
+          <button id="eventsDiscoverBtn" class="cal-event-discover-btn" onclick="openEventsModal()" title="Discover nearby events" aria-label="Discover events">💡</button>
+          <div class="cal-view-tabs">
+            <button class="cal-view-tab" id="viewTab_month"  onclick="switchCalView('month')">Month</button>
+            <button class="cal-view-tab" id="viewTab_week"   onclick="switchCalView('week')">Week</button>
+            <button class="cal-view-tab" id="viewTab_day"    onclick="switchCalView('day')">Day</button>
+            <button class="cal-view-tab" id="viewTab_agenda" onclick="switchCalView('agenda')">Agenda</button>
+          </div>
         </div>
       </div>
       <div class="card-body">
@@ -408,27 +410,6 @@
       </div>
     </div>
 
-    <div class="card" id="claudeRemoteCard">
-      <div class="card-header">
-        <h2>🛰 Claude Remote</h2>
-        <div style="display:flex;align-items:center;gap:8px">
-          <span id="crStatusDot" class="cr-dot cr-off" title="Not configured"></span>
-          <button onclick="clearClaudeRemote()" title="New conversation" aria-label="New conversation" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.6rem;line-height:1">↺</button>
-        </div>
-      </div>
-      <div class="card-body assistant-card-body">
-        <div class="assistant-messages" id="crMessages" aria-live="polite" aria-label="Claude Remote output">
-          <div class="assistant-welcome" id="crWelcome">Send a task to Claude Code on your machine. Set up the bridge in ⚙️ Settings → 🛰 Claude Remote.</div>
-        </div>
-        <div class="assistant-input-row">
-          <input type="text" id="crInput" class="assistant-input"
-                 placeholder="Tell Claude what to do…" aria-label="Task for Claude Code"
-                 onkeydown="if(event.key==='Enter')crSend()" />
-          <button class="assistant-send" id="crSendBtn" onclick="crSend()" title="Send" aria-label="Send task">↑</button>
-          <button class="assistant-send cr-stop" id="crStopBtn" onclick="crStop()" title="Stop" aria-label="Stop" style="display:none">■</button>
-        </div>
-      </div>
-    </div>
 
   </div><!-- /sidebar -->
 
@@ -469,8 +450,8 @@
       <button class="modal-tab"        data-tab="chores"   onclick="switchSettingsTab('chores')">⭐ Chores</button>
       <button class="modal-tab"        data-tab="meals"    onclick="switchSettingsTab('meals')">🍽 Meals</button>
       <button class="modal-tab"        data-tab="widgets"  onclick="switchSettingsTab('widgets')">🧩 Widgets</button>
+      <button class="modal-tab"        data-tab="events"   onclick="switchSettingsTab('events')">💡 Events</button>
       <button class="modal-tab"        data-tab="feeds"    onclick="switchSettingsTab('feeds')">📊 Feeds</button>
-      <button class="modal-tab"        data-tab="claude"   onclick="switchSettingsTab('claude')">🛰 Claude Remote</button>
       <button class="modal-tab"        data-tab="eggs"     onclick="switchSettingsTab('eggs')">🥚 Easter Eggs</button>
     </div>
 
@@ -982,12 +963,6 @@
               <label class="widget-placement-radio"><input type="radio" name="placement_stock" value="bottom"  /><span>Bottom</span></label>
               <label class="widget-placement-radio"><input type="radio" name="placement_stock" value="sidebar" /><span>Sidebar</span></label>
             </div>
-            <div class="widget-toggle-row">
-              <input type="checkbox" id="widget_claudeRemote" />
-              <span>🛰 Claude Remote</span>
-              <label class="widget-placement-radio"><input type="radio" name="placement_claudeRemote" value="bottom"  /><span>Bottom</span></label>
-              <label class="widget-placement-radio"><input type="radio" name="placement_claudeRemote" value="sidebar" /><span>Sidebar</span></label>
-            </div>
 
           </div>
         </div>
@@ -1079,35 +1054,65 @@
         </div>
       </div><!-- /eggs -->
 
-      <!-- ── Claude Remote ── -->
-      <div class="settings-panel" data-panel="claude">
+      <!-- ── Events ── -->
+      <div class="settings-panel" data-panel="events">
         <div class="field">
-          <label>🛰 Drive Claude Code on your own machine</label>
-          <p style="font-size:var(--text-xs);color:var(--muted);margin:2px 0 10px;line-height:1.55">
-            Start the bridge from the <code>bridge/</code> folder (<code>npm install &amp;&amp; npm start</code>),
-            then paste its URL and token below. It uses your Claude Code login — no API key, no extra billing.
-            Claude is <strong>read-only by default</strong>; widen its tools in <code>bridge/.env</code>.
-          </p>
+          <label>Location</label>
+          <input type="text" id="eventLocation" placeholder="e.g. Portland, OR" />
         </div>
         <div class="field">
-          <label for="crBridgeUrl">Bridge URL</label>
-          <input type="url" id="crBridgeUrl" placeholder="http://127.0.0.1:4317" autocomplete="off" />
-        </div>
-        <div class="field">
-          <label for="crBridgeToken">Token</label>
-          <input type="password" id="crBridgeToken" placeholder="Paste the bridge token…" autocomplete="off" />
-        </div>
-        <div class="field">
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-            <button class="btn btn-secondary btn-sm" type="button" onclick="crTestConnection()">Test connection</button>
-            <span id="crTestResult" style="font-size:var(--text-xs)"></span>
+          <label>Max distance</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:6px">
+              <input type="radio" name="eventDistance" value="30" />
+              <span>30 min</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:6px">
+              <input type="radio" name="eventDistance" value="60" />
+              <span>1 hour</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:6px">
+              <input type="radio" name="eventDistance" value="120" />
+              <span>2 hours</span>
+            </label>
           </div>
-          <p style="font-size:var(--text-xs);color:var(--muted);margin-top:10px;line-height:1.55">
-            ⚠️ Anyone with this URL and token can run Claude Code on your machine. Keep the token secret.
-            For phone access, expose the bridge over HTTPS with a tunnel — see <code>bridge/README.md</code>.
-          </p>
         </div>
-      </div><!-- /claude -->
+        <div class="toggle-row" style="margin-top:10px;border-top:1px solid rgba(128,128,128,.12);padding-top:12px">
+          <label class="toggle-switch">
+            <input type="checkbox" id="eventShowOnCalendar" />
+            <span class="toggle-track"></span>
+          </label>
+          <div>
+            <div class="toggle-label">Show events on calendar</div>
+            <div class="toggle-sub">Display event indicators on calendar grid (by type)</div>
+          </div>
+        </div>
+        <div class="field" style="margin-top:12px;border-top:1px solid rgba(128,128,128,.12);padding-top:12px">
+          <label>Event types to show on calendar</label>
+          <div style="display:flex;flex-wrap:wrap;gap:8px">
+            <label style="display:flex;align-items:center;gap:4px">
+              <input type="checkbox" value="concert" class="eventTypeCheckbox" />
+              <span>Concerts</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:4px">
+              <input type="checkbox" value="hike" class="eventTypeCheckbox" />
+              <span>Hikes</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:4px">
+              <input type="checkbox" value="class" class="eventTypeCheckbox" />
+              <span>Classes</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:4px">
+              <input type="checkbox" value="estate" class="eventTypeCheckbox" />
+              <span>Estate Sales</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:4px">
+              <input type="checkbox" value="activity" class="eventTypeCheckbox" />
+              <span>Activities</span>
+            </label>
+          </div>
+        </div>
+      </div><!-- /events -->
 
       <!-- ── Home Calendars ── -->
     </div><!-- /settings-panels -->
@@ -1205,6 +1210,55 @@
   </div>
 </div>
 
+<!-- Event Discovery Modal -->
+<div class="modal-overlay" id="eventsModal" onclick="if(event.target===this)closeEventsModal()" style="display:none">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="eventsModalTitle" style="max-width:600px;max-height:80vh;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <h2 id="eventsModalTitle" style="margin:0">💡 Discover Events</h2>
+      <button onclick="closeEventsModal()" title="Close" aria-label="Close events modal" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.3rem;line-height:1">✕</button>
+    </div>
+
+    <div id="eventsAgeLabel" style="font-size:.8rem;color:var(--muted);margin-bottom:8px"></div>
+
+    <div id="eventsCategoryFilters" class="events-category-filters" style="display:none;gap:4px;margin-bottom:12px;overflow-x:auto;padding-bottom:8px;min-height:32px"></div>
+
+    <div class="events-tabs" style="display:flex;gap:4px;margin-bottom:12px;overflow-x:auto;padding-bottom:8px;min-height:32px">
+      <button class="event-tab active" data-type="all" onclick="filterEventsByTab(this)">All</button>
+      <button class="event-tab" data-type="concert" onclick="filterEventsByTab(this)">Concerts</button>
+      <button class="event-tab" data-type="show" onclick="filterEventsByTab(this)">Shows</button>
+      <button class="event-tab" data-type="sports" onclick="filterEventsByTab(this)">Sports</button>
+      <button class="event-tab" data-type="hike" onclick="filterEventsByTab(this)">Hikes</button>
+      <button class="event-tab" data-type="class" onclick="filterEventsByTab(this)">Classes</button>
+      <button class="event-tab" data-type="food" onclick="filterEventsByTab(this)">Food</button>
+      <button class="event-tab" data-type="art" onclick="filterEventsByTab(this)">Art</button>
+      <button class="event-tab" data-type="sale" onclick="filterEventsByTab(this)">Sales</button>
+    </div>
+
+    <div class="events-search-bar" style="margin-bottom:12px;display:flex;gap:6px;flex-wrap:wrap;flex-direction:column">
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <input type="text" id="eventsFilterType" placeholder="Filter by type (optional)…" style="flex:1;min-width:150px" />
+        <select id="eventsSortBy" style="min-width:100px" onchange="sortAndRenderEvents()">
+          <option value="distance">Sort by distance</option>
+          <option value="date">Sort by date</option>
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="refreshEvents()">🔄 Refresh</button>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        <input type="text" id="eventsKeywordSearch" placeholder="Search by event name…" style="flex:1;min-width:150px" oninput="handleEventSearchInput()" />
+        <input type="text" id="eventsArtistSearch" placeholder="Search by artist…" style="flex:1;min-width:150px" oninput="handleEventSearchInput()" />
+        <input type="text" id="eventsVenueSearch" placeholder="Search by venue…" style="flex:1;min-width:150px" oninput="handleEventSearchInput()" />
+        <button class="btn btn-secondary btn-sm" onclick="clearEventSearchFilters()" style="white-space:nowrap">Clear</button>
+      </div>
+    </div>
+
+    <div id="eventsList" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding-right:4px"></div>
+
+    <div class="modal-actions" style="margin-top:12px">
+      <button class="btn btn-secondary" onclick="closeEventsModal()">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- Event Editor Modal -->
 <div class="modal-overlay" id="eventEditorModal" onclick="if(event.target===this)closeEventEditor()" style="display:none">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="eventEditorTitle">
@@ -1272,5 +1326,7 @@
 -->
 
 <script src="family-hub.js"></script>
+  <!-- Google Sign-In loaded after family-hub.js so onGsiLoad() is defined -->
+  <script src="https://accounts.google.com/gsi/client" async defer onload="onGsiLoad()"></script>
 </body>
 </html>

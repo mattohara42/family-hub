@@ -143,6 +143,11 @@ let wxEnabledViews      = lsGet('fh_wxEnabledViews', { '5day': true, 'hourly': t
 const snarkyCache       = {};                              // { cacheKey: text } — in-memory per session
 let wxTickerEnabled     = lsGet('fh_wxTicker', true);      // weather info ticker
 let wxActivityEnabled   = lsGet('fh_wxActivity', true);    // activity tags strip
+// ── Event Discovery ──
+let eventLocation       = lsGet('fh_eventLocation', 'Rochester');  // City name for event search
+let eventMaxDistance    = lsGet('fh_eventMaxDistance', 120);       // Minutes: 30, 60, or 120
+let eventShowOnCalendar = lsGet('fh_eventShowOnCalendar', false);  // Show event indicators on calendar
+let eventCalendarTypes  = lsGet('fh_eventCalendarTypes', []);      // Event types to show on calendar
 let userName        = localStorage.getItem('fh_name') || 'Someone';
 let appTitle        = localStorage.getItem('fh_appTitle') || 'Family Hub';
 let appTitleEmoji   = localStorage.getItem('fh_appTitleEmoji') || '🏠';
@@ -275,7 +280,7 @@ const ASSISTANT_QUICK_PROMPTS = [
   "Add a $60 internet bill monthly",
 ];
 // ── Widget visibility & placement ────────────────────────────────────────────
-const WIDGET_DEFAULTS = { shopping: true, todo: true, budget: true, chores: true, wotd: true, quote: true, dadjoke: true, yearstrip: true, assistant: true, countdown: true, news: false, stock: false, claudeRemote: false };
+const WIDGET_DEFAULTS = { shopping: true, todo: true, budget: true, chores: true, wotd: true, quote: true, dadjoke: true, yearstrip: true, assistant: true, countdown: true, news: false, stock: false };
 let widgetVisibility = { ...WIDGET_DEFAULTS, ...lsGet('fh_widgets', {}) };
 
 // Placement: 'sidebar' (right column) or 'bottom' (full-width strip below layout)
@@ -283,7 +288,7 @@ const WIDGET_PLACEMENT_DEFAULTS = {
   shopping: 'sidebar', todo: 'sidebar', budget: 'sidebar', chores: 'sidebar',
   wotd: 'sidebar', quote: 'sidebar', dadjoke: 'sidebar',
   yearstrip: 'bottom', assistant: 'sidebar', countdown: 'sidebar',
-  news: 'sidebar', stock: 'sidebar', claudeRemote: 'sidebar',
+  news: 'sidebar', stock: 'sidebar',
 };
 let widgetPlacement = { ...WIDGET_PLACEMENT_DEFAULTS, ...lsGet('fh_widget_placement', {}) };
 
@@ -301,7 +306,6 @@ const WIDGET_ORDER = [
   { key: 'countdown', id: 'countdownCard' },
   { key: 'news',      id: 'newsCard'      },
   { key: 'stock',     id: 'stockCard'     },
-  { key: 'claudeRemote', id: 'claudeRemoteCard' },
 ];
 
 // User-defined widget order (keys only). Persisted in fh_widget_order.
@@ -877,7 +881,6 @@ window.addEventListener('load', () => {
   renderAssistantMessages();   // render empty-state welcome + quick-prompt chips
   // Briefing is now on-demand via the pill button in the assistant header
   renderCountdownCard(); // generate after page settles + weather/cal data loads
-  initClaudeRemote();
   // Close SMS popover on outside click
   document.addEventListener('click', e => {
     const pop = document.getElementById('smsPopover');
@@ -7027,192 +7030,6 @@ function useQuickPrompt(text) {
   sendAssistantMessage();
 }
 
-// ── Claude Remote ──────────────────────────────────────────────
-// Drives Claude Code on your own machine through the local bridge in /bridge.
-// Config (bridge URL + bearer token) lives in localStorage; the token is your
-// machine's secret, never sent anywhere but the bridge you point it at.
-let crConfig    = lsGet('fh_claude_remote', { url: '', token: '' });
-let crSessionId = null;     // resume id from the last run — threads follow-ups
-let crController = null;    // AbortController for the in-flight run
-
-/** Set the header status dot. state: 'ok' | 'off' | 'busy'. */
-function crSetStatus(state, title) {
-  const dot = document.getElementById('crStatusDot');
-  if (!dot) return;
-  dot.className = 'cr-dot cr-' + state;
-  dot.title = title || '';
-}
-
-function crScroll() {
-  const wrap = document.getElementById('crMessages');
-  if (wrap) wrap.scrollTop = wrap.scrollHeight;
-}
-
-/** Append a line/bubble to the transcript and return the element (for live updates). */
-function crAppend(kind, text) {
-  const wrap = document.getElementById('crMessages');
-  if (!wrap) return null;
-  const welcome = document.getElementById('crWelcome');
-  if (welcome) welcome.remove();
-  const el = document.createElement('div');
-  if (kind === 'user')        el.className = 'assistant-msg user';
-  else if (kind === 'assistant') el.className = 'assistant-msg ai cr-stream';
-  else                        el.className = 'cr-line cr-' + kind;   // tool | error | system
-  el.textContent = text;
-  wrap.appendChild(el);
-  crScroll();
-  return el;
-}
-
-/** Short, safe hint of what a tool call is touching. */
-function crToolHint(input) {
-  if (!input || typeof input !== 'object') return '';
-  const v = input.file_path || input.path || input.pattern || input.command || input.query || input.url;
-  return v ? ' — ' + String(v).slice(0, 80) : '';
-}
-
-/** Parse one SSE record ("event: x\ndata: {...}"). Returns {event, data} or null. */
-function crParseEvent(raw) {
-  let event = 'message', data = '';
-  for (const line of raw.split('\n')) {
-    if (line.startsWith('event:'))     event = line.slice(6).trim();
-    else if (line.startsWith('data:')) data += line.slice(5).trim();
-    // lines beginning ':' are heartbeat comments — ignored
-  }
-  if (!data) return null;
-  try { return { event, data: JSON.parse(data) }; }
-  catch { return null; }
-}
-
-function crSetSending(sending) {
-  const send = document.getElementById('crSendBtn');
-  const stop = document.getElementById('crStopBtn');
-  const input = document.getElementById('crInput');
-  if (send)  send.style.display  = sending ? 'none' : '';
-  if (stop)  stop.style.display  = sending ? '' : 'none';
-  if (input) input.disabled = sending;
-  crSetStatus(sending ? 'busy' : (crConfig.url && crConfig.token ? 'ok' : 'off'),
-              sending ? 'Working…' : (crConfig.url ? 'Ready' : 'Not configured'));
-}
-
-async function crSend() {
-  const input = document.getElementById('crInput');
-  const prompt = (input?.value || '').trim();
-  if (!prompt) return;
-  if (!crConfig.url || !crConfig.token) {
-    crAppend('error', 'Set the bridge URL and token in ⚙️ Settings → 🛰 Claude Remote first.');
-    return;
-  }
-  input.value = '';
-  crAppend('user', prompt);
-  crSetSending(true);
-  const bubble = crAppend('assistant', '');   // live-updating assistant bubble
-  let assembled = '';
-  crController = new AbortController();
-
-  try {
-    const res = await fetch(crConfig.url.replace(/\/+$/, '') + '/run', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + crConfig.token },
-      body: JSON.stringify({ prompt, sessionId: crSessionId || undefined }),
-      signal: crController.signal,
-    });
-    if (!res.ok || !res.body) {
-      crAppend('error', res.status === 401 ? 'Unauthorized — check the token.' : `Bridge error ${res.status}.`);
-      return;
-    }
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = '';
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      let idx;
-      while ((idx = buf.indexOf('\n\n')) >= 0) {
-        const ev = crParseEvent(buf.slice(0, idx));
-        buf = buf.slice(idx + 2);
-        if (!ev) continue;
-        switch (ev.event) {
-          case 'session':
-            crSessionId = ev.data.sessionId || crSessionId;
-            break;
-          case 'text':
-            assembled += ev.data.text;
-            bubble.textContent = assembled;
-            crScroll();
-            break;
-          case 'tool':
-            crAppend('tool', '🔧 ' + ev.data.name + crToolHint(ev.data.input));
-            break;
-          case 'result':
-            crSessionId = ev.data.sessionId || crSessionId;
-            if (ev.data.isError) crAppend('error', ev.data.text || 'Run ended with an error.');
-            else if (!assembled && ev.data.text) bubble.textContent = ev.data.text;
-            break;
-          case 'error':
-            crAppend('error', ev.data.message || 'Bridge error.');
-            break;
-          case 'aborted':
-            crAppend('system', 'Stopped.');
-            break;
-        }
-      }
-    }
-  } catch (e) {
-    if (crController?.signal.aborted) crAppend('system', 'Stopped.');
-    else crAppend('error', 'Could not reach the bridge — is it running? ' + (e.message || ''));
-  } finally {
-    crSetSending(false);
-    crController = null;
-    if (bubble && !bubble.textContent) bubble.remove();   // drop empty assistant bubble
-  }
-}
-
-function crStop() {
-  if (crController) crController.abort();
-}
-
-function clearClaudeRemote() {
-  crSessionId = null;
-  const wrap = document.getElementById('crMessages');
-  if (wrap) {
-    wrap.innerHTML = '<div class="assistant-welcome" id="crWelcome">New conversation. Send a task to Claude Code on your machine.</div>';
-  }
-}
-
-/** Settings → Test button: GET /health to verify reachability + token. */
-async function crTestConnection() {
-  const url   = document.getElementById('crBridgeUrl').value.trim();
-  const token = document.getElementById('crBridgeToken').value.trim();
-  const out   = document.getElementById('crTestResult');
-  if (!url || !token) { if (out) { out.textContent = 'Enter a URL and token first.'; out.style.color = 'var(--muted)'; } return; }
-  if (out) { out.textContent = 'Testing…'; out.style.color = 'var(--muted)'; }
-  try {
-    const res = await fetch(url.replace(/\/+$/, '') + '/health', {
-      headers: { 'Authorization': 'Bearer ' + token },
-    });
-    if (res.ok) {
-      const info = await res.json().catch(() => ({}));
-      if (out) {
-        out.textContent = `✓ Connected — ${info.permissionMode || '?'} mode, cwd ${info.cwd || '?'}`;
-        out.style.color = 'var(--accent)';
-      }
-    } else if (res.status === 401) {
-      if (out) { out.textContent = '✗ Reached the bridge, but the token was rejected.'; out.style.color = '#e06c75'; }
-    } else {
-      if (out) { out.textContent = `✗ Bridge responded ${res.status}.`; out.style.color = '#e06c75'; }
-    }
-  } catch (e) {
-    if (out) { out.textContent = '✗ Could not reach the bridge. Is it running? Mixed content? '; out.style.color = '#e06c75'; }
-  }
-}
-
-function initClaudeRemote() {
-  crSetStatus(crConfig.url && crConfig.token ? 'ok' : 'off',
-              crConfig.url ? 'Ready' : 'Not configured');
-}
-
 // ── Easter eggs ────────────────────────────────────────────────
 const EGG_CATEGORY_DEFAULTS = { phrases: true, calendar: true, ui: true, weather: true };
 let eggCategories = JSON.parse(localStorage.getItem('fh_eggCategories') || 'null') || { ...EGG_CATEGORY_DEFAULTS };
@@ -8934,6 +8751,13 @@ function openSettings() {
   renderLoadingMsgList();
   renderFamilyMemberList();
   renderMealTemplateList();
+  // ── Event settings ──
+  document.getElementById('eventLocation').value = eventLocation;
+  document.querySelector(`input[name="eventDistance"][value="${eventMaxDistance}"]`).checked = true;
+  document.getElementById('eventShowOnCalendar').checked = eventShowOnCalendar;
+  document.querySelectorAll('.eventTypeCheckbox').forEach(cb => {
+    cb.checked = eventCalendarTypes.includes(cb.value);
+  });
   // Render diet checkboxes
   const dietGrid = document.getElementById('mealDietGrid');
   dietGrid.innerHTML = '';
@@ -8977,10 +8801,6 @@ function openSettings() {
     if (radio) radio.checked = true;
   });
   renderChoreRewardList();
-  // Claude Remote
-  document.getElementById('crBridgeUrl').value   = crConfig.url || '';
-  document.getElementById('crBridgeToken').value = crConfig.token || '';
-  const crTest = document.getElementById('crTestResult'); if (crTest) crTest.textContent = '';
   lcOpenSettings();
   document.getElementById('safePaletteToggle').checked = safePaletteMode;
   document.querySelector(`input[name="assistantWelcome"][value="${assistantWelcomeMode}"]`).checked = true;
@@ -9058,6 +8878,15 @@ function saveSettings() {
   localStorage.setItem('fh_widgets',          JSON.stringify(widgetVisibility));
   localStorage.setItem('fh_widget_placement', JSON.stringify(widgetPlacement));
   applyWidgetPlacement();
+  // ── Event settings ──
+  eventLocation = document.getElementById('eventLocation').value.trim() || 'Portland';
+  eventMaxDistance = parseInt(document.querySelector(`input[name="eventDistance"]:checked`).value) || 120;
+  eventShowOnCalendar = document.getElementById('eventShowOnCalendar').checked;
+  eventCalendarTypes = Array.from(document.querySelectorAll('.eventTypeCheckbox:checked')).map(cb => cb.value);
+  localStorage.setItem('fh_eventLocation', eventLocation);
+  localStorage.setItem('fh_eventMaxDistance', String(eventMaxDistance));
+  localStorage.setItem('fh_eventShowOnCalendar', JSON.stringify(eventShowOnCalendar));
+  localStorage.setItem('fh_eventCalendarTypes', JSON.stringify(eventCalendarTypes));
   const hncEl = document.getElementById('newsHeadlineCount');
   if (hncEl) { newsHeadlineCount = parseInt(hncEl.value) || 5; saveNewsFeeds(); }
   if (widgetVisibility.news)  loadNewsFeeds();
@@ -9072,13 +8901,6 @@ function saveSettings() {
     localStorage.setItem('fh_bills_on_cal', JSON.stringify(showBillsOnCal));
   }
   saveChoreRewards();
-  // Claude Remote
-  crConfig = {
-    url:   document.getElementById('crBridgeUrl').value.trim(),
-    token: document.getElementById('crBridgeToken').value.trim(),
-  };
-  localStorage.setItem('fh_claude_remote', JSON.stringify(crConfig));
-  initClaudeRemote();
   applyTvMode(document.getElementById('tvModeToggle').checked);
   // Easter egg categories
   Object.keys(EGG_CATEGORY_DEFAULTS).forEach(cat => {
@@ -9406,5 +9228,701 @@ function showBgPhoto(url) {
     el.classList.add('visible');
     document.body.classList.add('has-bg');
   }, 300);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  🎫 EVENT DISCOVERY — IndexedDB caching layer
+// ═══════════════════════════════════════════════════════════════════
+
+const EVENTS_DB_NAME = 'fh_events';
+const EVENTS_DB_VERSION = 2;
+const EVENTS_STORE_NAME = 'events';
+const EVENTS_CACHE_STORE_NAME = 'eventCache';
+const EVENTS_CATEGORIES_STORE_NAME = 'eventCategories';
+
+async function initEventsDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(EVENTS_DB_NAME, EVENTS_DB_VERSION);
+
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => resolve(req.result);
+
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+
+      // Events store
+      if (!db.objectStoreNames.contains(EVENTS_STORE_NAME)) {
+        const evStore = db.createObjectStore(EVENTS_STORE_NAME, { keyPath: 'id' });
+        evStore.createIndex('byDate', 'date');
+        evStore.createIndex('byType', 'type');
+        evStore.createIndex('byDistance', 'location.distanceMiles');
+      }
+
+      // Cache metadata store
+      if (!db.objectStoreNames.contains(EVENTS_CACHE_STORE_NAME)) {
+        db.createObjectStore(EVENTS_CACHE_STORE_NAME, { keyPath: 'key' });
+      }
+
+      // Categories store (new in v2)
+      if (!db.objectStoreNames.contains(EVENTS_CATEGORIES_STORE_NAME)) {
+        db.createObjectStore(EVENTS_CATEGORIES_STORE_NAME, { keyPath: 'key' });
+      }
+    };
+  });
+}
+
+async function getEventsFromCache() {
+  try {
+    const db = await initEventsDB();
+    const tx = db.transaction(EVENTS_STORE_NAME, 'readonly');
+    const store = tx.objectStore(EVENTS_STORE_NAME);
+
+    return new Promise((resolve, reject) => {
+      const req = store.getAll();
+      req.onsuccess = () => {
+        const events = req.result;
+        if (!events || events.length === 0) {
+          resolve(null);
+        } else {
+          resolve(events);
+        }
+      };
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) {
+    console.warn('[Events] Cache read failed:', err);
+    return null;
+  }
+}
+
+async function saveEventsToCache(events, meta) {
+  try {
+    const db = await initEventsDB();
+    const tx = db.transaction([EVENTS_STORE_NAME, EVENTS_CACHE_STORE_NAME], 'readwrite');
+
+    // Clear old events
+    const clearReq = tx.objectStore(EVENTS_STORE_NAME).clear();
+
+    // Write new events with timestamp
+    events.forEach(e => {
+      tx.objectStore(EVENTS_STORE_NAME).add({
+        ...e,
+        fetchedAt: Date.now()
+      });
+    });
+
+    // Write metadata
+    tx.objectStore(EVENTS_CACHE_STORE_NAME).put({
+      key: 'current',
+      timestamp: Date.now(),
+      ...meta
+    });
+
+    return new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (err) {
+    console.warn('[Events] Cache write failed:', err);
+  }
+}
+
+async function shouldRefreshCache() {
+  try {
+    const db = await initEventsDB();
+    const tx = db.transaction(EVENTS_CACHE_STORE_NAME, 'readonly');
+    const store = tx.objectStore(EVENTS_CACHE_STORE_NAME);
+
+    return new Promise((resolve) => {
+      const req = store.get('current');
+      req.onsuccess = () => {
+        const meta = req.result;
+        if (!meta) {
+          resolve(true);  // No cache
+        } else {
+          const ageMinutes = (Date.now() - meta.timestamp) / 60000;
+          resolve(ageMinutes > 240);  // Refresh if > 4 hours old
+        }
+      };
+      req.onerror = () => resolve(true);  // Error = refresh
+    });
+  } catch (err) {
+    console.warn('[Events] Cache age check failed:', err);
+    return true;  // Error = refresh
+  }
+}
+
+// ── Category filtering ──
+
+async function getCategoriesFromCache() {
+  try {
+    const db = await initEventsDB();
+    const tx = db.transaction(EVENTS_CATEGORIES_STORE_NAME, 'readonly');
+    const store = tx.objectStore(EVENTS_CATEGORIES_STORE_NAME);
+
+    return new Promise((resolve, reject) => {
+      const req = store.get('current');
+      req.onsuccess = () => {
+        const data = req.result;
+        if (!data) {
+          resolve(null);
+        } else {
+          resolve(data);
+        }
+      };
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) {
+    console.warn('[Events] Category cache read failed:', err);
+    return null;
+  }
+}
+
+async function saveCategoriesToCache(categories) {
+  try {
+    const db = await initEventsDB();
+    const tx = db.transaction(EVENTS_CATEGORIES_STORE_NAME, 'readwrite');
+    const store = tx.objectStore(EVENTS_CATEGORIES_STORE_NAME);
+
+    tx.objectStore(EVENTS_CATEGORIES_STORE_NAME).put({
+      key: 'current',
+      categories: categories,
+      timestamp: Date.now()
+    });
+
+    return new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (err) {
+    console.warn('[Events] Category cache write failed:', err);
+  }
+}
+
+async function fetchCategories() {
+  try {
+    const params = new URLSearchParams();
+    params.set('location', eventLocation);
+    params.set('radius', eventMaxDistance);
+    params.set('categories', 'true');
+    const url = `/.netlify/functions/events?${params}`;
+    const r = await fetch(url);
+    const data = await r.json();
+
+    if (data.success && data.categories) {
+      return data.categories;
+    } else {
+      console.warn('[Events] Backend returned no categories:', data.error);
+      return null;
+    }
+  } catch (err) {
+    console.warn('[Events] Category fetch failed:', err);
+    return null;
+  }
+}
+
+async function loadAndRenderCategories() {
+  // Check IndexedDB cache
+  const cached = await getCategoriesFromCache();
+  let categories = null;
+
+  if (cached) {
+    const ageMinutes = (Date.now() - cached.timestamp) / 60000;
+    if (ageMinutes < 1440) {  // 24 hours
+      categories = cached.categories;
+    }
+  }
+
+  // If no valid cache, fetch from backend
+  if (!categories) {
+    categories = await fetchCategories();
+    if (categories) {
+      await saveCategoriesToCache(categories);
+    }
+  }
+
+  // Update module state
+  if (categories && Array.isArray(categories)) {
+    eventsCategories = {};
+    categories.forEach(cat => {
+      eventsCategories[cat.id] = cat;
+    });
+    renderCategoryTabs(categories);
+  } else {
+    // No categories available; hide the category filter section
+    document.getElementById('eventsCategoryFilters').style.display = 'none';
+  }
+}
+
+function renderCategoryTabs(categories) {
+  if (!categories || categories.length === 0) {
+    document.getElementById('eventsCategoryFilters').style.display = 'none';
+    return;
+  }
+
+  const container = document.getElementById('eventsCategoryFilters');
+  container.innerHTML = '';
+
+  // Add "All" tab
+  const allBtn = document.createElement('button');
+  allBtn.className = 'event-tab active';
+  allBtn.dataset.category = 'all';
+  allBtn.textContent = 'All';
+  allBtn.onclick = () => filterEventsByCategory(null);
+  container.appendChild(allBtn);
+
+  // Add category tabs
+  categories.forEach(cat => {
+    const btn = document.createElement('button');
+    btn.className = 'event-tab';
+    btn.dataset.category = cat.id;
+    btn.textContent = cat.name;
+    btn.onclick = () => filterEventsByCategory(cat.id);
+    container.appendChild(btn);
+  });
+
+  container.style.display = 'flex';
+}
+
+function filterEventsByCategory(categoryId) {
+  // Update state
+  eventsCategoryFilter = categoryId;
+
+  // Update active tab
+  document.querySelectorAll('#eventsCategoryFilters .event-tab').forEach(btn => {
+    btn.classList.remove('active');
+  });
+
+  const selector = categoryId === null
+    ? '#eventsCategoryFilters .event-tab[data-category="all"]'
+    : `#eventsCategoryFilters .event-tab[data-category="${categoryId}"]`;
+  document.querySelector(selector)?.classList.add('active');
+
+  // Re-render
+  eventsData = applyFiltersAndSort(eventsRawData);
+  renderEventsList(eventsData);
+}
+
+// ───────────────────────────────────────────────────────────────────
+// EVENT DISCOVERY MODAL
+// ───────────────────────────────────────────────────────────────────
+
+// Debounce utility for search inputs
+function debounce(func, delay) {
+  let timeoutId;
+  return function(...args) {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => func(...args), delay);
+  };
+}
+
+const debouncedEventSearch = debounce(fetchAndUpdateEvents, 300);
+
+let eventsModalOpen = false;
+let eventsData = [];           // Current displayed events
+let eventsRawData = [];        // Full result set from backend
+let eventsFetchTimestamp = 0;  // When we last fetched
+let eventsSort = 'distance';   // Current sort mode
+let eventsTabFilter = 'all';   // Current tab filter
+let eventsCategoryFilter = null;  // Category filter (null = all)
+let eventsCategories = {};     // Category objects from backend: { id: { id, name } }
+let eventsSearchKeyword = '';  // Keyword search filter
+let eventsSearchArtist = '';   // Artist/performer search filter
+let eventsSearchVenue = '';    // Venue search filter
+
+async function openEventsModal() {
+  eventsModalOpen = true;
+  document.getElementById('eventsModal').style.display = 'flex';
+
+  // 1. Load categories and render filter tabs
+  await loadAndRenderCategories();
+
+  // 2. Show cached data immediately
+  const cached = await getEventsFromCache();
+  if (cached?.length > 0) {
+    eventsData = cached;
+    eventsRawData = cached;
+    renderEventsList(cached);
+    updateEventsAgeLabel(cached[0]?.fetchedAt);
+  } else {
+    document.getElementById('eventsList').innerHTML = '<p style="color:var(--muted)">Loading events…</p>';
+  }
+
+  // 3. Fetch fresh in background
+  fetchAndUpdateEvents();
+
+  trapFocus(document.querySelector('#eventsModal .modal'), null, closeEventsModal);
+}
+
+function closeEventsModal() {
+  eventsModalOpen = false;
+  document.getElementById('eventsModal').style.display = 'none';
+  eventsCategoryFilter = null;  // Reset category filter on close
+  // Clear search filters
+  eventsSearchKeyword = '';
+  eventsSearchArtist = '';
+  eventsSearchVenue = '';
+  releaseFocusTrap();
+}
+
+function handleEventSearchInput() {
+  // Update state from input values
+  eventsSearchKeyword = document.getElementById('eventsKeywordSearch')?.value || '';
+  eventsSearchArtist = document.getElementById('eventsArtistSearch')?.value || '';
+  eventsSearchVenue = document.getElementById('eventsVenueSearch')?.value || '';
+
+  // Debounced fetch
+  debouncedEventSearch();
+}
+
+async function fetchAndUpdateEvents() {
+  const location = eventLocation;
+  const radius = eventMaxDistance;
+
+  try {
+    // Build query params with filters
+    const params = new URLSearchParams();
+    params.set('location', location);
+    params.set('radius', radius);
+    if (eventsSearchKeyword) params.set('keyword', eventsSearchKeyword);
+    if (eventsSearchArtist) params.set('attractionId', eventsSearchArtist);
+    if (eventsSearchVenue) params.set('venueId', eventsSearchVenue);
+
+    const url = `/.netlify/functions/events?${params}`;
+    const r = await fetch(url);
+    const data = await r.json();
+
+    if (data.success) {
+      eventsRawData = attachCalendarConflictsToEvents(data.events);
+      eventsData = applyFiltersAndSort(eventsRawData);
+
+      // Save to IndexedDB
+      await saveEventsToCache(eventsRawData, {
+        timestamp: Date.now(),
+        location,
+        radius
+      });
+
+      // Re-render
+      renderEventsList(eventsData);
+      renderEventCalendarOverlay();  // Update calendar with event indicators
+      updateEventsAgeLabel(Date.now());
+    } else {
+      showEventsError(`Unable to fetch events: ${data.error}`);
+    }
+  } catch (err) {
+    console.warn('[Events] Fetch failed:', err);
+    showEventsError('Unable to fetch events. Using cached data.');
+  }
+}
+
+function applyFiltersAndSort(events) {
+  let filtered = [...events];
+
+  // Apply category filter
+  if (eventsCategoryFilter !== null) {
+    filtered = filtered.filter(e => e.category?.id === eventsCategoryFilter);
+  }
+
+  // Apply tab filter
+  if (eventsTabFilter !== 'all') {
+    filtered = filtered.filter(e => {
+      const type = e.type.toLowerCase();
+      if (eventsTabFilter === 'sale') {
+        return type.includes('sale') || type.includes('estate');
+      }
+      return type === eventsTabFilter || type.includes(eventsTabFilter);
+    });
+  }
+
+  // Apply type filter if specified
+  const typeFilter = document.getElementById('eventsFilterType').value.toLowerCase().trim();
+  if (typeFilter) {
+    filtered = filtered.filter(e => e.type.toLowerCase().includes(typeFilter));
+  }
+
+  // Apply keyword search filter (client-side fallback)
+  if (eventsSearchKeyword) {
+    const keywordLower = eventsSearchKeyword.toLowerCase();
+    filtered = filtered.filter(e =>
+      e.title.toLowerCase().includes(keywordLower) ||
+      (e.description && e.description.toLowerCase().includes(keywordLower))
+    );
+  }
+
+  // Apply venue search filter (client-side fallback)
+  if (eventsSearchVenue) {
+    const venueLower = eventsSearchVenue.toLowerCase();
+    filtered = filtered.filter(e =>
+      e.location?.venue?.name &&
+      e.location.venue.name.toLowerCase().includes(venueLower)
+    );
+  }
+
+  // Note: Artist/attractionId filtering is server-side; no client-side fallback available
+
+  // Apply sort
+  const sortBy = document.getElementById('eventsSortBy').value || eventsSort;
+  if (sortBy === 'distance') {
+    filtered.sort((a, b) => (a.location.distanceMiles || 999) - (b.location.distanceMiles || 999));
+  } else if (sortBy === 'date') {
+    filtered.sort((a, b) => (a.date || '9999').localeCompare(b.date || '9999'));
+  }
+
+  return filtered;
+}
+
+function sortAndRenderEvents() {
+  eventsData = applyFiltersAndSort(eventsRawData);
+  renderEventsList(eventsData);
+}
+
+function filterEventsByTab(tabButton) {
+  // Update active tab
+  document.querySelectorAll('.event-tab').forEach(btn => btn.classList.remove('active'));
+  tabButton.classList.add('active');
+
+  // Update filter state
+  eventsTabFilter = tabButton.dataset.type;
+
+  // Re-render with new filter
+  eventsData = applyFiltersAndSort(eventsRawData);
+  renderEventsList(eventsData);
+}
+
+function clearEventSearchFilters() {
+  // Clear state
+  eventsSearchKeyword = '';
+  eventsSearchArtist = '';
+  eventsSearchVenue = '';
+
+  // Clear inputs
+  const keywordEl = document.getElementById('eventsKeywordSearch');
+  const artistEl = document.getElementById('eventsArtistSearch');
+  const venueEl = document.getElementById('eventsVenueSearch');
+  if (keywordEl) keywordEl.value = '';
+  if (artistEl) artistEl.value = '';
+  if (venueEl) venueEl.value = '';
+
+  // Re-render
+  eventsData = applyFiltersAndSort(eventsRawData);
+  renderEventsList(eventsData);
+}
+
+function renderEventsList(events) {
+  const html = events.length > 0
+    ? events.map(e => renderEventCard(e)).join('')
+    : '<p style="color:var(--muted);padding:20px;text-align:center">No events found. Try expanding your distance or changing your location.</p>';
+
+  document.getElementById('eventsList').innerHTML = html;
+}
+
+function renderVenueDetails(venue) {
+  // Return empty string if no venue data
+  if (!venue) return '';
+
+  // Build venue section HTML
+  let venueHtml = '<div class="event-venue">';
+
+  // Venue name (always shown if venue exists)
+  if (venue.name) {
+    venueHtml += `<span class="venue-name">${escapeHtml(venue.name)}</span>`;
+  }
+
+  // Capacity (show if > 0)
+  if (venue.capacity && venue.capacity > 0) {
+    const formattedCapacity = venue.capacity.toLocaleString();
+    venueHtml += `<span class="venue-capacity">(${formattedCapacity} capacity)</span>`;
+  }
+
+  // Website link (show if exists)
+  if (venue.website) {
+    venueHtml += `<a href="${escapeHtml(venue.website)}" class="venue-website" target="_blank" rel="noopener">Venue Website →</a>`;
+  }
+
+  // Accessibility badges
+  const accessibilityBadges = [];
+  if (venue.wheelchairAccessible) {
+    accessibilityBadges.push('<span>♿ Wheelchair accessible</span>');
+  }
+  if (venue.parkingAvailable) {
+    accessibilityBadges.push('<span>🅿️ Parking available</span>');
+  }
+  if (venue.transitInfo) {
+    accessibilityBadges.push(`<span>🚌 ${escapeHtml(venue.transitInfo)}</span>`);
+  }
+
+  if (accessibilityBadges.length > 0) {
+    venueHtml += `<div class="venue-accessibility">${accessibilityBadges.join('')}</div>`;
+  }
+
+  venueHtml += '</div>';
+  return venueHtml;
+}
+
+function renderEventCard(event) {
+  const calendarLabel = event.calendarConflict
+    ? '<span class="event-calendar-indicator calendar-conflict">⚠ You\'re busy</span>'
+    : '<span class="event-calendar-indicator">✓ You\'re free</span>';
+
+  const weatherHtml = event.weather
+    ? `<div class="event-weather"><span class="weather-icon">${getWeatherEmoji(event.weather.condition)}</span><span class="weather-text">${event.weather.temp}°F, ${event.weather.condition}</span></div>`
+    : '';
+
+  const venueHtml = renderVenueDetails(event.location?.venue);
+
+  return `
+    <div class="event-card">
+      <h3>${escapeHtml(event.title)} <span class="event-type-badge">${event.type}</span></h3>
+      <div class="event-date-time">
+        <span class="event-date">${event.date || 'TBD'}</span>
+        ${event.time ? `<span class="event-time">${event.time}</span>` : '<span style="color:var(--muted)">All day</span>'}
+      </div>
+      <div class="event-location">
+        <span class="event-distance">${(event.location.distanceMiles || 0).toFixed(1)} mi</span>
+        <span>${escapeHtml(event.location.address)}</span>
+      </div>
+      ${venueHtml}
+      ${calendarLabel}
+      ${weatherHtml}
+      <div class="event-description">${escapeHtml(event.description)}</div>
+      <div class="event-actions">
+        <a href="${escapeHtml(event.sourceUrl)}" target="_blank" rel="noopener">View on ${event.source}</a>
+      </div>
+    </div>
+  `;
+}
+
+function updateEventsAgeLabel(timestamp) {
+  const el = document.getElementById('eventsAgeLabel');
+  if (!timestamp) {
+    el.textContent = '';
+    return;
+  }
+
+  const ageMs = Date.now() - timestamp;
+  const minutes = Math.round(ageMs / 60000);
+
+  let label = '';
+  if (minutes <= 2) {
+    label = '🟢 Fresh — just now';
+  } else if (minutes < 60) {
+    label = `From ${minutes} minutes ago`;
+  } else if (minutes < 1440) {
+    const hours = Math.round(minutes / 60);
+    label = `From ${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+  } else {
+    label = '⚠️ Cached — may be outdated. Tap Refresh.';
+  }
+
+  el.textContent = label;
+}
+
+function refreshEvents() {
+  document.getElementById('eventsList').innerHTML = '<p style="color:var(--muted)">Refreshing…</p>';
+  fetchAndUpdateEvents();
+}
+
+function showEventsError(msg) {
+  const el = document.getElementById('eventsList');
+  el.innerHTML = `<div style="color:var(--red);padding:20px;text-align:center">${escapeHtml(msg)}<br><button class="btn btn-sm" onclick="refreshEvents()" style="margin-top:10px">Retry</button></div>`;
+}
+
+function getWeatherEmoji(condition) {
+  const map = {
+    'sunny': '☀️', 'clear': '☀️',
+    'rainy': '🌧️', 'rain': '🌧️',
+    'cloudy': '☁️', 'clouds': '☁️',
+    'snowy': '❄️', 'snow': '❄️',
+    'stormy': '⛈️', 'thunderstorm': '⛈️',
+    'windy': '💨'
+  };
+  const key = (condition || '').toLowerCase();
+  return map[key] || '🌤️';
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ───────────────────────────────────────────────────────────────────
+// CALENDAR INTEGRATION — Conflict detection & overlay
+// ───────────────────────────────────────────────────────────────────
+
+function checkCalendarConflict(eventDate, eventStartTime, eventEndTime) {
+  // eventDate: 'YYYY-MM-DD'
+  // eventStartTime, eventEndTime: 'HH:MM' or null (all-day)
+
+  // If event is all-day, mark as busy if any calendar has events
+  if (!eventStartTime) {
+    for (const calId of Object.keys(calEventCache || {})) {
+      const dayEvents = (calEventCache[calId] || {})[eventDate] || [];
+      if (dayEvents.length > 0) return true;  // Busy
+    }
+    return false;  // Free all day
+  }
+
+  // Timed event: check for overlap
+  const eventStart = timeStringToMinutes(eventStartTime);
+  const eventEnd = eventEndTime ? timeStringToMinutes(eventEndTime) : eventStart + 60;
+
+  for (const calId of Object.keys(calEventCache || {})) {
+    const dayEvents = (calEventCache[calId] || {})[eventDate] || [];
+    for (const calEvent of dayEvents) {
+      if (calEvent.allDay) {
+        return true;  // Calendar busy all day; event conflicts
+      }
+      const calStart = timeStringToMinutes(calEvent.startDT || calEvent.start);
+      const calEnd = timeStringToMinutes(calEvent.endDT || calEvent.end);
+
+      // Check for overlap
+      if (!(eventEnd <= calStart || eventStart >= calEnd)) {
+        return true;  // Overlap detected
+      }
+    }
+  }
+  return false;  // Free
+}
+
+function timeStringToMinutes(timeStr) {
+  if (!timeStr) return 0;
+  const [h, m] = timeStr.split(':').map(Number);
+  return h * 60 + (m || 0);
+}
+
+function attachCalendarConflictsToEvents(events) {
+  return events.map(e => ({
+    ...e,
+    calendarConflict: checkCalendarConflict(e.date, e.time, null)
+  }));
+}
+
+function renderEventCalendarOverlay() {
+  if (!eventShowOnCalendar || !eventsRawData?.length) return;
+
+  const eventsToShow = eventsRawData.filter(e =>
+    eventCalendarTypes.includes(e.type.toLowerCase()) && !e.calendarConflict
+  );
+
+  // Render indicators on calendar grid
+  eventsToShow.forEach(event => {
+    const dateKey = event.date;  // 'YYYY-MM-DD'
+    const dayCell = document.querySelector(`[data-date="${dateKey}"]`);
+    if (dayCell) {
+      const indicator = document.createElement('div');
+      indicator.className = `event-overlay-indicator event-type-${event.type.toLowerCase().replace(/[^a-z]/g, '')}`;
+      indicator.textContent = getWeatherEmoji(event.type);  // Use type-specific emoji
+      indicator.title = event.title;
+      indicator.style.cursor = 'pointer';
+      indicator.onclick = (e) => {
+        e.stopPropagation();
+        openEventsModal();
+      };
+      dayCell.appendChild(indicator);
+    }
+  });
 }
 
