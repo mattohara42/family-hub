@@ -3466,11 +3466,11 @@ async function fetchWeather() {
 // Detect location via browser geolocation + OWM reverse geocode
 async function fetchWeatherByGeolocation() {
   if (!navigator.geolocation) {
-    alert('Geolocation is not supported by your browser.');
+    showWxError('Geolocation is not supported by your browser.');
     return;
   }
   if (!weatherKey) {
-    alert('Add your OpenWeatherMap API key in ⚙️ Settings → Weather first.');
+    showWxError('Add your OpenWeatherMap API key in ⚙️ Settings → Weather first.');
     return;
   }
   const btn = document.getElementById('geoLocBtn');
@@ -3484,7 +3484,7 @@ async function fetchWeatherByGeolocation() {
         const r = await owmFetch('reverse', { lat, lon, limit: 1 });
         const d = await r.json();
         const place = d?.[0];
-        if (!place) { alert('Could not resolve your location to a city.'); restore(); return; }
+        if (!place) { showWxError('Could not resolve your location to a city.'); restore(); return; }
 
         // Build a readable city label: "City, State" (US) or "City, Country"
         const city = place.name + (place.state ? `, ${place.state}` : place.country ? `, ${place.country}` : '');
@@ -3497,7 +3497,7 @@ async function fetchWeatherByGeolocation() {
         restore();
         await showWeatherLocation(weatherLocIdx);
       } catch (e) {
-        alert('Location lookup failed: ' + e.message);
+        showWxError('Location lookup failed: ' + e.message);
         restore();
       }
     },
@@ -3507,7 +3507,7 @@ async function fetchWeatherByGeolocation() {
         2: 'Location unavailable.',
         3: 'Location request timed out.',
       };
-      alert(msgs[err.code] || 'Geolocation error.');
+      showWxError(msgs[err.code] || 'Geolocation error.');
       restore();
     },
     { timeout: 10000 }
@@ -3613,7 +3613,7 @@ async function loadWeatherByCity(city) {
     const cur   = await curR.json();
     const fcast = await fcastR.json();
 
-    if (cur.cod !== 200) { alert('Weather error: ' + cur.message); return; }
+    if (cur.cod !== 200) { showWxError(cur.message, city); return; }
 
     // Fetch air quality + reverse geocode (state) + severe-weather alerts using lat/lon
     const { lat, lon } = cur.coord || {};
@@ -3745,7 +3745,23 @@ async function loadWeatherByCity(city) {
 
   } catch(e) {
     console.error(e);
-    alert('Could not load weather. Check your API key in Settings.');
+    showWxError('Could not load weather — check your API key in Settings.');
+  }
+}
+
+function showWxError(msg, badCity) {
+  const errEl = document.getElementById('wxCityError');
+  const setup  = document.getElementById('weatherSetup');
+  const display = document.getElementById('weatherDisplay');
+  if (setup)   setup.style.display   = '';
+  if (display) display.style.display = 'none';
+  if (errEl) {
+    errEl.textContent = msg;
+    errEl.style.display = 'block';
+  }
+  if (badCity) {
+    const input = document.getElementById('cityInput');
+    if (input) input.value = badCity;
   }
 }
 
@@ -3942,6 +3958,8 @@ function renderWeatherData(data) {
   if (fcastToggle) fcastToggle.style.display = '';
   document.getElementById('weatherSetup').style.display  = 'none';
   document.getElementById('weatherDisplay').style.display = 'block';
+  const wxErr = document.getElementById('wxCityError');
+  if (wxErr) { wxErr.textContent = ''; wxErr.style.display = 'none'; }
   applyWxViewToggles();
 }
 
