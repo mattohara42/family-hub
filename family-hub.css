@@ -629,6 +629,13 @@ body.has-bg .card {
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
 }
+/* During a photo crossfade, drop the per-frame backdrop blur — recomputing it
+   for every card while the photo fades stalls the main thread and drops clicks.
+   Cards keep their semi-transparent background; blur returns once the fade ends. */
+body.bg-fading .card {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
 /* Calendar card specifically */
 body.has-bg .card.cal-card {
   background: var(--cal-card-bg-photo);

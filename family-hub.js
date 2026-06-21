@@ -9215,14 +9215,21 @@ function startSlideshow() {
   }, slideInterval * 1000);
 }
 
+let _bgFadeTimer = null;
 function showBgPhoto(url) {
   const el = document.getElementById('bgPhoto');
+  // Suppress every card's backdrop-filter blur during the crossfade. Recomputing
+  // 15+ blurs each frame while the photo's opacity animates stalls the main
+  // thread and drops clicks; we restore the blur once the fade settles.
+  document.body.classList.add('bg-fading');
+  clearTimeout(_bgFadeTimer);
   el.classList.remove('visible');
   setTimeout(() => {
     el.style.backgroundImage = `url("${url}")`;
     el.classList.add('visible');
     document.body.classList.add('has-bg');
   }, 300);
+  _bgFadeTimer = setTimeout(() => document.body.classList.remove('bg-fading'), 1700);
 }
 
 // ═══════════════════════════════════════════════════════════════════
