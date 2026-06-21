@@ -4073,19 +4073,24 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
 
   /* Weather tab: show only weather card full-width */
   body[data-mobile-tab="weather"] .cal-column { display: none; }
-  body[data-mobile-tab="weather"] .sidebar {
+  /* Base rule + compound selectors to beat portrait-mode's 0,3,1 specificity */
+  body[data-mobile-tab="weather"] .sidebar,
+  body[data-mobile-tab="weather"].portrait-mode .sidebar,
+  body[data-mobile-tab="weather"].auto-portrait .sidebar {
     display: flex !important;
-    flex-direction: column;
+    flex-direction: column !important;
     align-items: stretch;
-    overflow-y: auto;
+    overflow-y: auto !important;
     flex: 1;
     min-height: 0;
     width: 100%;
   }
-  body[data-mobile-tab="weather"] .sidebar > .card {
+  body[data-mobile-tab="weather"] .sidebar > .card,
+  body[data-mobile-tab="weather"].portrait-mode .sidebar > .card,
+  body[data-mobile-tab="weather"].auto-portrait .sidebar > .card {
     width: 100%;
     box-sizing: border-box;
-    flex: none;
+    flex: 1 !important;
   }
   body[data-mobile-tab="weather"] .sidebar > #todoCard,
   body[data-mobile-tab="weather"] .sidebar > #shopCard,
@@ -4156,7 +4161,7 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
   }
 
   /* Hamburger button — lives in the bottom nav as a regular nav item */
-  .hamburger-btn { font-size: 1.5rem; }
+  .hamburger-btn { font-size: inherit; }
 
   /* Menu drawer */
   .menu-drawer {
