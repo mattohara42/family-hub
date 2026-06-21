@@ -4008,15 +4008,13 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
 .menu-backdrop { display: none; }
 
 @media (max-width: 640px) {
-  /* Override portrait-mode's flex-direction:row for ALL mobile tabs */
-  body[data-mobile-tab].portrait-mode .sidebar,
-  body[data-mobile-tab].auto-portrait .sidebar {
+  /* Mobile tabs always use column layout regardless of portrait-mode class */
+  body[data-mobile-tab] .sidebar {
     flex-direction: column !important;
     flex-wrap: nowrap !important;
     overflow-y: auto !important;
   }
-  body[data-mobile-tab].portrait-mode .sidebar > .card,
-  body[data-mobile-tab].auto-portrait .sidebar > .card {
+  body[data-mobile-tab] .sidebar > .card {
     flex: 1 !important;
   }
 
