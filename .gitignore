@@ -6,9 +6,15 @@ Thumbs.db
 .vscode/
 .idea/
 
-# No secrets should be committed — API keys live only in family-hub.js (local copy)
-# If you ever extract keys to a separate config file, add it here:
-# config.local.js
+# Secrets — never commit. Backend keys live in .env.local (local dev) and
+# in the Netlify dashboard env vars (production).
+.env
+.env.local
+.env.*.local
+
+# Node
+node_modules/
+package-lock.json
 
 # Local Netlify folder
 .netlify
