@@ -608,25 +608,22 @@ Categories: `phrases` (assistant triggers), `calendar` (date-based), `ui` (inter
 
 **State:**
 ```js
-let eventLocation       = lsGet('fh_eventLocation', 'Portland');
+let eventLocation       = lsGet('fh_eventLocation', 'Rochester');
 let eventMaxDistance    = lsGet('fh_eventMaxDistance', 120);  // minutes driving time (converted to radius)
-let eventShowOnCalendar = lsGet('fh_eventShowOnCalendar', false);
-let eventCalendarTypes  = lsGet('fh_eventCalendarTypes', []);
 let eventsData          = [];         // filtered/sorted for display
 let eventsRawData       = [];         // raw from API + calendar conflicts
 let eventsSort          = 'distance'; // or 'date'
-let eventsCacheTimestamp = 0;        // for age label
+let eventsFetchTimestamp = 0;        // for age label
 let eventsModalOpen     = false;
 ```
 
 **Key functions:**
 - `openEventsModal()` — reads cached events from IndexedDB, shows immediately; fetches fresh data in background
-- `fetchEventsData()` — calls `/.netlify/functions/events?location=<>&radius=<>`, aggregates all sources, adds weather context
-- `cacheEventsData()` — saves to IndexedDB with timestamp for `stale-while-revalidate` pattern
+- `fetchAndUpdateEvents()` — calls `/.netlify/functions/events?location=<>&radius=<>`, saves to IndexedDB, re-renders modal (caching is inline here, not a separate function)
 - `addEventToCalendar(event)` — opens event editor modal; reuses `saveCalEvent()` for Google Calendar write
 - `openEventsModal()` / `closeEventsModal()` — modal state
 - `applyFiltersAndSort()` — filters by distance, date window (30 days), type; sorts by distance or date
-- `renderEventCards()` — builds card DOM for display
+- `renderEventsList()` / `renderEventCard(event)` — builds card DOM for display
 
 **Netlify backend function:** `netlify/functions/events.js` (400+ lines)
 - `geocodeLocation()` — city name → lat/lon via OpenWeatherMap
@@ -641,7 +638,7 @@ let eventsModalOpen     = false;
 
 **CSS classes:** `.event-card`, `.event-type-badge`, `.event-weather`, `.event-calendar-indicator`, `.event-age-label`, `.event-distance-pill`
 
-**localStorage:** `fh_eventLocation`, `fh_eventMaxDistance`, `fh_eventShowOnCalendar`, `fh_eventCalendarTypes`
+**localStorage:** `fh_eventLocation`, `fh_eventMaxDistance`
 
 **IndexedDB:** Database `fh_events` (v1)
 - Object store `events` (keyPath: id) with indexes: byDate, byType, byDistance
@@ -694,10 +691,8 @@ Netlify environment variables:
 | `fh_assistantTTS` | bool | Assistant | Read replies aloud via TTS (default off) |
 | `fh_tvMode` | bool | TV Mode | TV / Display Mode on/off (default false) |
 | `fh_eggCategories` | JSON object | Easter Eggs | `{ phrases, calendar, ui, weather }` — all true by default |
-| `fh_eventLocation` | string | Event Discovery | Default search location (default `'Portland'`) |
+| `fh_eventLocation` | string | Event Discovery | Default search location (default `'Rochester'`) |
 | `fh_eventMaxDistance` | number | Event Discovery | Max distance in minutes driving time (default 120) |
-| `fh_eventShowOnCalendar` | bool | Event Discovery | Show events as calendar overlay (default false) |
-| `fh_eventCalendarTypes` | JSON array | Event Discovery | Filtered event types to show on calendar overlay |
 | `fh_mobileTab` | string | Mobile (U1) | Current mobile tab `'cal'` \| `'todo'` \| `'shop'` \| `'weather'` \| menu items |
 | `fh_mobileTabDate` | string | Mobile (U3) | YYYY-MM-DD of last mobile tab switch (for time-based defaults) |
 

@@ -849,6 +849,7 @@ window.addEventListener('load', () => {
   if (new URLSearchParams(location.search).get('tv') === '1') tvMode = true;
   applyTvMode();
   setMobileTab(mobileTab);
+  lockPortraitOrientation();
   updateStatusPill();
   if (weatherLocations.length) showWeatherLocation(0);
   else if (weatherCity) { weatherLocations = [weatherCity]; showWeatherLocation(0); }
@@ -8514,8 +8515,11 @@ function closeMenu() {
 }
 
 function navigateToMenuItem(item) {
-  previousTab = mobileTab;
-  let tabToShow = null;
+  if (item === 'members') {
+    closeMenu();
+    openSettings();
+    return;
+  }
   const menuItemMap = {
     'budget': 'budget',
     'wotd': 'wotd',
@@ -8525,9 +8529,8 @@ function navigateToMenuItem(item) {
     'news': 'news',
     'stock': 'stock',
     'assistant': 'assistant',
-    'members': 'members',
   };
-  tabToShow = menuItemMap[item];
+  const tabToShow = menuItemMap[item];
   if (tabToShow) {
     setMobileTab(tabToShow);
     closeMenu();
