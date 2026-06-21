@@ -1005,7 +1005,8 @@ body:not(.force-landscape).auto-portrait #bottomStrip {
   .layout { gap: 10px; }
 
   .cal-view-tab { padding: 4px 10px; font-size: var(--text-sm); }
-  #calMonthLabel { font-size: 1.2rem; }
+  #calMonthLabel { font-size: 1.2rem; min-width: 0; }
+
 
   /* Month grid: shorter cells */
   .cal-day { min-height: 54px; font-size: var(--text-xs); }
@@ -1180,6 +1181,23 @@ body.nautical-mode .cal-month-nav button {
 }
 .cal-card-header .cal-view-tabs {
   justify-self: end;
+}
+
+/* Mobile: 2-row header — title+nav on row 1, view tabs full-width on row 2.
+   Must be after the base .cal-card-header rule (which sets display:grid) so
+   the lower specificity flex override wins via source order. */
+@media (max-width: 640px) {
+  .cal-card-header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+  }
+  .cal-card-header .cal-title-zone { flex: 0 0 auto; }
+  .cal-card-header .cal-month-nav  { flex: 1; justify-content: center; min-width: 0; flex-wrap: nowrap; }
+  .cal-card-header > div:last-child { flex: 0 0 100%; justify-content: flex-end; }
+  #calMonthLabel { overflow: hidden; text-overflow: ellipsis; }
+  .cal-app-title-text { display: none; }
 }
 
 .cal-grid {
