@@ -4003,7 +4003,7 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
 
 /* Hidden on desktop — shown only inside the 640px media query below */
 .mobile-bottom-nav { display: none; }
-.hamburger-btn { display: none; }
+.hamburger-btn { display: none; } /* shown only via .mobile-bottom-nav on mobile */
 .menu-drawer { display: none; }
 .menu-backdrop { display: none; }
 
@@ -4087,11 +4087,6 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
     box-sizing: border-box;
     flex: none;
   }
-  /* Push card top below the fixed hamburger button (44px + 12px body-padding + 8px gap) */
-  body[data-mobile-tab="weather"] .sidebar,
-  body[data-mobile-tab="todo"] .sidebar,
-  body[data-mobile-tab="shop"] .sidebar { padding-top: 64px; }
-
   body[data-mobile-tab="weather"] .sidebar > #todoCard,
   body[data-mobile-tab="weather"] .sidebar > #shopCard,
   body[data-mobile-tab="weather"] .sidebar > #budgetCard,
@@ -4160,26 +4155,8 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
     font-size: max(16px, 1em);
   }
 
-  /* Hamburger button */
-  .hamburger-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: fixed;
-    top: 12px;
-    left: 12px;
-    width: 44px;
-    height: 44px;
-    background: var(--surface);
-    border: none;
-    border-radius: 8px;
-    color: var(--text);
-    font-size: 1.5rem;
-    cursor: pointer;
-    z-index: 300;
-    touch-action: manipulation;
-  }
-  .hamburger-btn:active { background: var(--surface2); }
+  /* Hamburger button — lives in the bottom nav as a regular nav item */
+  .hamburger-btn { font-size: 1.5rem; }
 
   /* Menu drawer */
   .menu-drawer {
