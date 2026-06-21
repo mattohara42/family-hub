@@ -52,6 +52,9 @@ Shared state (shopping, todo, budget) lives in Firebase Firestore. Photos are bl
 | WOTD cache requires definition | Cache entry rejected if `definition` is empty |
 | Nautical mode migration | `localStorage 'fh_mode' === 'amazing'` auto-upgrades to `'nautical'` on load |
 | Browser caches JS during dev | Keep DevTools open with "Disable cache" or hard-reload (Cmd+Shift+R) after edits |
+| Event Discovery keys | Ticketmaster, OpenWeatherMap, LibraryWeb (per-branch), Red Wings (keyless), CitySpark (keyless) — set via Netlify env vars in production |
+| Event Discovery backend | Runs on `/.netlify/functions/events`; geocoding via OWM; exponential backoff retry (2x, 1s→4s) for API failures |
+| CitySpark sort parameter | MUST use `sort:'Time'` (soonest-first); `'Date'` returns the tail of future events and fails the 30-day filter |
 
 ---
 
@@ -91,4 +94,10 @@ When checking that a change worked in the browser, **default to `javascript_tool
 
 ## Project Files
 
-`family-hub.{html,css,js}` (the app) · `FEATURES.md` (detailed feature/reference map) · `family-hub-setup.md` (end-user setup) · `RETROSPECTIVE.md` (lessons learned) · `WEATHER_BACKLOG.md` (weather enhancement backlog) · `ASSISTANT_BACKLOG.md` (Family Assistant enhancement backlog) · `MEALS_BACKLOG.md` (meal planning enhancement backlog) · `CLAUDE.md` (this file).
+**App:** `family-hub.{html,css,js}` · `manifest.json` · `sw.js` (service worker)
+
+**Documentation:** `FEATURES.md` (detailed feature/reference map) · `family-hub-setup.md` (end-user setup) · `RETROSPECTIVE.md` (lessons learned) · `CLAUDE.md` (this file)
+
+**Backlogs & Plans:** `WEATHER_BACKLOG.md` · `ASSISTANT_BACKLOG.md` · `MEALS_BACKLOG.md` · `EVENT_DISCOVERY_BACKLOG.md` (optional) · `docs/brainstorms/` · `docs/plans/`
+
+**Backend:** `netlify/functions/events.js` (event discovery multi-API aggregation)
