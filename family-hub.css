@@ -4087,6 +4087,11 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
     box-sizing: border-box;
     flex: none;
   }
+  /* Push card top below the fixed hamburger button (44px + 12px body-padding + 8px gap) */
+  body[data-mobile-tab="weather"] .sidebar,
+  body[data-mobile-tab="todo"] .sidebar,
+  body[data-mobile-tab="shop"] .sidebar { padding-top: 64px; }
+
   body[data-mobile-tab="weather"] .sidebar > #todoCard,
   body[data-mobile-tab="weather"] .sidebar > #shopCard,
   body[data-mobile-tab="weather"] .sidebar > #budgetCard,
