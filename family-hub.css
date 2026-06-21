@@ -4408,6 +4408,23 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
   body[data-mobile-tab="assistant"] .sidebar > #choreCard,
   body[data-mobile-tab="assistant"] .sidebar > #yearCard,
   body[data-mobile-tab="assistant"] .sidebar > #controlCard { display: none; }
+
+  /* More tab: show only the moreCard */
+  body[data-mobile-tab="more"] .cal-column { display: none; }
+  body[data-mobile-tab="more"] .sidebar > #weatherCard,
+  body[data-mobile-tab="more"] .sidebar > #todoCard,
+  body[data-mobile-tab="more"] .sidebar > #shopCard,
+  body[data-mobile-tab="more"] .sidebar > #budgetCard,
+  body[data-mobile-tab="more"] .sidebar > #choreCard,
+  body[data-mobile-tab="more"] .sidebar > #yearCard,
+  body[data-mobile-tab="more"] .sidebar > #wotdCard,
+  body[data-mobile-tab="more"] .sidebar > #dadjokeCard,
+  body[data-mobile-tab="more"] .sidebar > #quoteCard,
+  body[data-mobile-tab="more"] .sidebar > #countdownCard,
+  body[data-mobile-tab="more"] .sidebar > #newsCard,
+  body[data-mobile-tab="more"] .sidebar > #stockCard,
+  body[data-mobile-tab="more"] .sidebar > #assistantCard,
+  body[data-mobile-tab="more"] .sidebar > #controlCard { display: none; }
 }
 
 /* ≤400px: re-apply bottom padding (that breakpoint resets padding shorthand) */
@@ -5145,4 +5162,56 @@ body.tv-mode .card:hover { box-shadow: none; }
 .event-overlay-indicator:hover {
   transform: scale(1.2);
   box-shadow: 0 2px 8px rgba(108,142,245,0.3);
+}
+
+/* ── More Tab (mobile) ── */
+#moreCard { display: none; }
+@media (max-width: 640px) {
+  body[data-mobile-tab="more"] #moreCard { display: flex; flex-direction: column; }
+
+  .more-section-label {
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semi);
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    margin-bottom: 8px;
+  }
+
+  .more-theme-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .more-theme-btn {
+    flex: 1 1 calc(33% - 8px);
+    min-width: 80px;
+  }
+  .more-theme-btn.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+
+  .more-nav-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .more-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 10px 4px;
+    background: var(--surface2);
+    border: none;
+    border-radius: 10px;
+    color: var(--text);
+    cursor: pointer;
+    font-size: var(--text-sm);
+    transition: background .15s;
+  }
+  .more-nav-item:active { background: rgba(108,142,245,.18); }
+  .more-nav-icon { font-size: 1.4rem; line-height: 1; }
 }

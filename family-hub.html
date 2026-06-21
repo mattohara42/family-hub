@@ -409,6 +409,50 @@
     </div>
 
 
+    <!-- More tab: appearance quick-settings + secondary feature navigation -->
+    <div class="card" id="moreCard">
+      <div class="card-header">
+        <h2>⚙️ Settings</h2>
+      </div>
+      <div class="card-body" style="overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:18px">
+
+        <section>
+          <div class="more-section-label">Appearance</div>
+          <div class="more-theme-grid">
+            <button class="btn btn-sm more-theme-btn" id="moreModeDark"        onclick="setAppMode('dark')">🌙 Dark</button>
+            <button class="btn btn-sm more-theme-btn" id="moreModeLight"       onclick="setAppMode('light')">☀️ Light</button>
+            <button class="btn btn-sm more-theme-btn" id="moreModeNautical"    onclick="setAppMode('nautical')">⚓ Nautical</button>
+            <button class="btn btn-sm more-theme-btn" id="moreModeAurora"      onclick="setAppMode('aurora')">🌌 Aurora</button>
+            <button class="btn btn-sm more-theme-btn" id="moreModeColorblind"  onclick="setAppMode('colorblind')">👁 Accessible</button>
+          </div>
+        </section>
+
+        <section>
+          <div class="more-section-label">More Features</div>
+          <div class="more-nav-grid">
+            <button class="more-nav-item" onclick="navigateToMenuItem('budget')"><span class="more-nav-icon">💰</span><span>Budget</span></button>
+            <button class="more-nav-item" onclick="navigateToMenuItem('wotd')"><span class="more-nav-icon">📖</span><span>Word</span></button>
+            <button class="more-nav-item" onclick="navigateToMenuItem('dadjoke')"><span class="more-nav-icon">😄</span><span>Joke</span></button>
+            <button class="more-nav-item" onclick="navigateToMenuItem('quotes')"><span class="more-nav-icon">💭</span><span>Quotes</span></button>
+            <button class="more-nav-item" onclick="navigateToMenuItem('countdown')"><span class="more-nav-icon">⏱️</span><span>Countdown</span></button>
+            <button class="more-nav-item" onclick="navigateToMenuItem('news')"><span class="more-nav-icon">📰</span><span>News</span></button>
+            <button class="more-nav-item" onclick="navigateToMenuItem('stock')"><span class="more-nav-icon">📈</span><span>Stock</span></button>
+            <button class="more-nav-item" onclick="navigateToMenuItem('assistant')"><span class="more-nav-icon">🤖</span><span>Assistant</span></button>
+            <button class="more-nav-item" onclick="navigateToMenuItem('members')"><span class="more-nav-icon">👥</span><span>Family</span></button>
+          </div>
+        </section>
+
+        <section style="display:flex;flex-direction:column;gap:8px">
+          <div class="more-section-label">Account</div>
+          <button id="moreSignInBtn"  class="btn btn-sm" onclick="signIn()"   style="width:100%;display:none">Sign in with Google</button>
+          <button id="moreSignOutBtn" class="btn btn-sm" onclick="signOut()"  style="width:100%;display:none">Sign out</button>
+        </section>
+
+        <button class="btn btn-sm" onclick="openSettings()" style="width:100%;margin-top:auto">⚙️ Full Settings</button>
+
+      </div>
+    </div>
+
   </div><!-- /sidebar -->
 
 </div><!-- /layout -->
@@ -431,7 +475,7 @@
     <span class="mobile-nav-icon">🌤️</span>
     <span>Weather</span>
   </button>
-  <button class="mobile-nav-btn hamburger-btn" id="hamburgerBtn" onclick="toggleMenu()" aria-label="Open menu">
+  <button class="mobile-nav-btn hamburger-btn" id="hamburgerBtn" onclick="setMobileTab('more')" aria-label="Open more / settings">
     <span class="mobile-nav-icon">☰</span>
     <span>More</span>
   </button>

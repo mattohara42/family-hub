@@ -8465,14 +8465,31 @@ function setMobileTab(tab) {
   mobileTab = tab;
   localStorage.setItem('fh_mobileTab', tab);
   document.body.setAttribute('data-mobile-tab', tab);
-  const calBtn = document.getElementById('mobileNavCal');
-  const todoBtn = document.getElementById('mobileNavTodo');
-  const shopBtn = document.getElementById('mobileNavShop');
+  const calBtn     = document.getElementById('mobileNavCal');
+  const todoBtn    = document.getElementById('mobileNavTodo');
+  const shopBtn    = document.getElementById('mobileNavShop');
   const weatherBtn = document.getElementById('mobileNavWeather');
-  if (calBtn) calBtn.classList.toggle('active', tab === 'cal');
-  if (todoBtn) todoBtn.classList.toggle('active', tab === 'todo');
-  if (shopBtn) shopBtn.classList.toggle('active', tab === 'shop');
+  const moreBtn    = document.getElementById('hamburgerBtn');
+  if (calBtn)     calBtn.classList.toggle('active', tab === 'cal');
+  if (todoBtn)    todoBtn.classList.toggle('active', tab === 'todo');
+  if (shopBtn)    shopBtn.classList.toggle('active', tab === 'shop');
   if (weatherBtn) weatherBtn.classList.toggle('active', tab === 'weather');
+  if (moreBtn)    moreBtn.classList.toggle('active', tab === 'more');
+  if (tab === 'more') updateMoreCard();
+}
+
+function updateMoreCard() {
+  // Highlight active theme button
+  const modeMap = { dark: 'moreModeDark', light: 'moreModeLight', nautical: 'moreModeNautical', aurora: 'moreModeAurora', colorblind: 'moreModeColorblind' };
+  Object.entries(modeMap).forEach(([mode, id]) => {
+    const btn = document.getElementById(id);
+    if (btn) btn.classList.toggle('active', appMode === mode);
+  });
+  // Show/hide sign-in / sign-out
+  const signInBtn  = document.getElementById('moreSignInBtn');
+  const signOutBtn = document.getElementById('moreSignOutBtn');
+  if (signInBtn)  signInBtn.style.display  = googleToken ? 'none' : '';
+  if (signOutBtn) signOutBtn.style.display = googleToken ? '' : 'none';
 }
 
 function toggleMenu() {
