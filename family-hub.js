@@ -3329,13 +3329,15 @@ function renderYearStrip() {
   const today = new Date();
   grid.innerHTML = '';
 
+  const numMonths = isMobile ? 3 : 6;
+
   // Range label  e.g. "Jun 2026 – Nov 2026"
-  const endDate = new Date(stripStart.getFullYear(), stripStart.getMonth() + 5, 1);
+  const endDate = new Date(stripStart.getFullYear(), stripStart.getMonth() + numMonths - 1, 1);
   document.getElementById('stripRangeLabel').textContent =
     stripStart.toLocaleDateString([], { month: 'short', year: 'numeric' }) + ' – ' +
     endDate.toLocaleDateString([], { month: 'short', year: 'numeric' });
 
-  for (let offset = 0; offset < 6; offset++) {
+  for (let offset = 0; offset < numMonths; offset++) {
     const yr = stripStart.getFullYear();
     const mo = stripStart.getMonth() + offset;
     // normalise (handles year rollover)
