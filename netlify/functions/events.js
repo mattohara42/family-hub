@@ -1003,3 +1003,16 @@ function json(status, obj) {
     body: JSON.stringify(obj)
   };
 }
+
+// ────────────────────────────────────────────────────────────────
+// Test-only exports (Netlify uses exports.handler; these are extra and
+// harmless in production — they let tests/ unit-test the pure helpers).
+// ────────────────────────────────────────────────────────────────
+exports._test = {
+  normalizeEventType,
+  calculateDistance,
+  icalUnescape,
+  icalToLocal,
+  parseICal,
+  dateToEastern
+};

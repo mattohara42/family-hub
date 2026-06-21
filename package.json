@@ -2,5 +2,8 @@
   "name": "family-hub",
   "version": "1.0.0",
   "description": "Family dashboard with event discovery",
-  "private": true
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  }
 }
