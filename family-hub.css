@@ -4008,6 +4008,18 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
 .menu-backdrop { display: none; }
 
 @media (max-width: 640px) {
+  /* Override portrait-mode's flex-direction:row for ALL mobile tabs */
+  body[data-mobile-tab].portrait-mode .sidebar,
+  body[data-mobile-tab].auto-portrait .sidebar {
+    flex-direction: column !important;
+    flex-wrap: nowrap !important;
+    overflow-y: auto !important;
+  }
+  body[data-mobile-tab].portrait-mode .sidebar > .card,
+  body[data-mobile-tab].auto-portrait .sidebar > .card {
+    flex: 1 !important;
+  }
+
   /* Calendar tab: show calendar, hide sidebar */
   body[data-mobile-tab="cal"] .sidebar { display: none; }
 
@@ -4073,24 +4085,19 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
 
   /* Weather tab: show only weather card full-width */
   body[data-mobile-tab="weather"] .cal-column { display: none; }
-  /* Base rule + compound selectors to beat portrait-mode's 0,3,1 specificity */
-  body[data-mobile-tab="weather"] .sidebar,
-  body[data-mobile-tab="weather"].portrait-mode .sidebar,
-  body[data-mobile-tab="weather"].auto-portrait .sidebar {
+  body[data-mobile-tab="weather"] .sidebar {
     display: flex !important;
-    flex-direction: column !important;
+    flex-direction: column;
     align-items: stretch;
-    overflow-y: auto !important;
+    overflow-y: auto;
     flex: 1;
     min-height: 0;
     width: 100%;
   }
-  body[data-mobile-tab="weather"] .sidebar > .card,
-  body[data-mobile-tab="weather"].portrait-mode .sidebar > .card,
-  body[data-mobile-tab="weather"].auto-portrait .sidebar > .card {
+  body[data-mobile-tab="weather"] .sidebar > .card {
     width: 100%;
     box-sizing: border-box;
-    flex: 1 !important;
+    flex: 1;
   }
   body[data-mobile-tab="weather"] .sidebar > #todoCard,
   body[data-mobile-tab="weather"] .sidebar > #shopCard,
