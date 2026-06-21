@@ -23,9 +23,9 @@ test('normalizeEventType maps Ticketmaster segments to canonical types', () => {
   assert.equal(normalizeEventType('Sports'), 'sports');
   assert.equal(normalizeEventType('Theater'), 'show');
   assert.equal(normalizeEventType('Comedy'), 'comedy');
-  // Quirk: TM's segment is "Arts & Theatre" (British spelling); the matcher
-  // looks for "theater"/"show", so it falls through to the art match.
-  assert.equal(normalizeEventType('Arts & Theatre'), 'art');
+  // TM's segment is "Arts & Theatre" (British spelling) — matcher handles
+  // both "theater" and "theatre", so it maps to 'show'.
+  assert.equal(normalizeEventType('Arts & Theatre'), 'show');
   assert.equal(normalizeEventType(undefined), 'activity'); // missing → safe default
   assert.equal(normalizeEventType('Something Unknown'), 'activity');
 });

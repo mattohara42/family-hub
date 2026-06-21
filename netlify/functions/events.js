@@ -891,7 +891,7 @@ function normalizeEventType(tmType) {
   const type = tmType.toLowerCase();
   if (type.includes('music') || type.includes('concert')) return 'concert';
   if (type.includes('sport')) return 'sports';
-  if (type.includes('theater') || type.includes('show') || type.includes('performing')) return 'show';
+  if (type.includes('theater') || type.includes('theatre') || type.includes('show') || type.includes('performing')) return 'show';
   if (type.includes('comedy')) return 'comedy';
   if (type.includes('sale') || type.includes('estate') || type.includes('garage')) return 'sale';
   if (type.includes('hike') || type.includes('trail') || type.includes('outdoor') || type.includes('nature')) return 'hike';
