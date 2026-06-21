@@ -178,8 +178,11 @@ async function geocodeLocation(location) {
     const key = process.env.OWM_KEY;
     if (!key) throw new Error('OWM_KEY not set');
 
+    // OWM geocoding rejects "City, ST" (space after comma) — normalize to "City,ST,US"
+    const q = location.replace(/,\s+([A-Za-z]{2})$/, ',$1,US');
+
     const data = await fetchWithRetry(async () => {
-      const params = new URLSearchParams({ q: location, limit: 1, appid: key });
+      const params = new URLSearchParams({ q, limit: 1, appid: key });
       const r = await fetch(`${OWM_GEO_BASE}/direct?${params}`);
       if (!r.ok) {
         throw new Error(`HTTP ${r.status}: ${r.statusText}`);
