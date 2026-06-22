@@ -1274,13 +1274,20 @@
     </div>
 
     <div class="field">
-      <label>Date</label>
+      <label>Start date</label>
       <input type="date" id="evtEdDate" />
     </div>
 
     <div class="evt-editor-allday-row">
       <input type="checkbox" id="evtEdAllDay" onchange="toggleEvtEdAllDay()" />
       <label for="evtEdAllDay" style="cursor:pointer;font-size:.9rem">All-day event</label>
+    </div>
+
+    <div id="evtEdEndDateSection" style="display:none">
+      <div class="field">
+        <label>End date</label>
+        <input type="date" id="evtEdEndDate" />
+      </div>
     </div>
 
     <div id="evtEdTimeSection">

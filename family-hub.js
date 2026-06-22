@@ -2949,6 +2949,16 @@ function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
   document.getElementById('evtEdAllDay').checked = isAllDay;
   document.getElementById('evtEdTimeSection').style.display = isAllDay ? 'none' : '';
 
+  // End date (all-day multi-day events; ev.endDate is exclusive per Google Calendar API)
+  document.getElementById('evtEdEndDateSection').style.display = isAllDay ? '' : 'none';
+  if (isAllDay && ev?.endDate) {
+    const excl = new Date(ev.endDate + 'T00:00:00');
+    excl.setDate(excl.getDate() - 1);
+    document.getElementById('evtEdEndDate').value = excl.toISOString().slice(0,10);
+  } else {
+    document.getElementById('evtEdEndDate').value = dk;
+  }
+
   // Times
   if (ev?.startDT) {
     document.getElementById('evtEdStart').value = ev.startDT.slice(11,16);
@@ -2994,6 +3004,12 @@ function closeEventEditor() {
 function toggleEvtEdAllDay() {
   const isAllDay = document.getElementById('evtEdAllDay').checked;
   document.getElementById('evtEdTimeSection').style.display = isAllDay ? 'none' : '';
+  document.getElementById('evtEdEndDateSection').style.display = isAllDay ? '' : 'none';
+  if (isAllDay) {
+    const startVal = document.getElementById('evtEdDate').value;
+    const endInput = document.getElementById('evtEdEndDate');
+    if (!endInput.value || endInput.value < startVal) endInput.value = startVal;
+  }
 }
 
 function evtEdStatus(msg, isError) {
@@ -3021,10 +3037,12 @@ async function saveCalEvent() {
   let start, end;
   if (isAllDay) {
     start = { date };
-    // Google Calendar: end date for all-day is exclusive (next day)
-    const nextDay = new Date(date + 'T00:00:00');
-    nextDay.setDate(nextDay.getDate() + 1);
-    end = { date: nextDay.toISOString().slice(0,10) };
+    // End date input is inclusive; Google Calendar end.date is exclusive
+    const endDateVal = document.getElementById('evtEdEndDate').value;
+    const lastDay = (endDateVal && endDateVal >= date) ? endDateVal : date;
+    const exclusiveEnd = new Date(lastDay + 'T00:00:00');
+    exclusiveEnd.setDate(exclusiveEnd.getDate() + 1);
+    end = { date: exclusiveEnd.toISOString().slice(0,10) };
   } else {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     start = { dateTime: `${date}T${startT || '09:00'}:00`, timeZone: tz };
