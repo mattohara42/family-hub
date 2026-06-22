@@ -4,7 +4,7 @@
  * Bump CACHE_VERSION whenever app files change to force clients to update.
  */
 
-const CACHE_VERSION = 'fh-v1';
+const CACHE_VERSION = 'fh-v2';
 const CACHE_NAME    = `family-hub-${CACHE_VERSION}`;
 
 // App shell files to pre-cache on install
