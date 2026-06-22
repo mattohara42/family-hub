@@ -226,16 +226,10 @@ function lockPortraitOrientation() {
 })();
 let layoutMode      = localStorage.getItem('fh_layoutMode') || 'auto'; // 'auto' | 'portrait' | 'landscape'
 let tvMode          = lsGet('fh_tvMode', false);
-let smsContacts     = lsGet('fh_smsContacts', []);
-// migrate legacy single-number setting
-(function(){
-  const old = localStorage.getItem('fh_smsRecipient');
-  if (old && !smsContacts.length) {
-    smsContacts = [{ nick: 'Contact', phone: old }];
-    localStorage.setItem('fh_smsContacts', JSON.stringify(smsContacts));
-    localStorage.removeItem('fh_smsRecipient');
-  }
-})();
+// SMS recipients are derived from family members with a phone number
+function getSmsContacts() {
+  return familyMembers.filter(m => m.phone).map(m => ({ nick: m.name, phone: m.phone }));
+}
 
 // ── Meal Planning state ────────────────────────────────────────
 let mealPlan        = lsGet('fh_mealPlan', {});
@@ -4679,7 +4673,7 @@ function setupListeners() {
 
   // Family members — real-time sync so every device shares the same list
   db.collection('familyMembers').orderBy('order').onSnapshot(snap => {
-    familyMembers = snap.docs.map(doc => ({ id: doc.id, name: doc.data().name, order: doc.data().order ?? 0, gender: doc.data().gender || 'neutral', color: doc.data().color || null, points: doc.data().points || 0, rewardName: doc.data().rewardName || '', rewardThreshold: doc.data().rewardThreshold || 100 }));
+    familyMembers = snap.docs.map(doc => ({ id: doc.id, name: doc.data().name, order: doc.data().order ?? 0, gender: doc.data().gender || 'neutral', color: doc.data().color || null, phone: doc.data().phone || '', points: doc.data().points || 0, rewardName: doc.data().rewardName || '', rewardThreshold: doc.data().rewardThreshold || 100 }));
     // Back-fill missing order fields (e.g. docs created before this field existed)
     const needsOrder = familyMembers.filter(m => m.order === 0 && familyMembers.indexOf(m) > 0);
     if (snap.docs.some(d => d.data().order == null)) {
@@ -4982,29 +4976,38 @@ function renderFamilyMemberList() {
     const last = familyMembers.length - 1;
     familyMembers.forEach((m, i) => {
       const row = document.createElement('div');
-      row.style.cssText = 'display:flex;align-items:center;gap:6px;background:var(--surface2);border-radius:8px;padding:6px 10px;font-size:.84rem;margin-bottom:6px';
+      row.style.cssText = 'background:var(--surface2);border-radius:8px;padding:8px 10px;font-size:.84rem;margin-bottom:6px';
       const removeArg = db ? `'${m.id}'` : i;
       const genderArg = db ? `'${m.id}'` : i;
       const colorArg  = db ? `'${m.id}'` : i;
+      const phoneArg  = db ? `'${m.id}'` : i;
       const btnStyle = 'background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem;line-height:1;padding:0 3px';
       row.innerHTML = `
-        <span style="flex:1">👤 ${esc(m.name)}</span>
-        <input type="color" value="${m.color || '#6c8ef5'}"
-               title="Calendar event color for ${esc(m.name)}"
-               class="lc-color"
-               onchange="setFamilyMemberColor(${colorArg},this.value)"
-               style="width:24px;height:24px;border:none;border-radius:4px;cursor:pointer;padding:0;background:none;flex-shrink:0;opacity:${m.color ? '1' : '0.4'}"
-               oninput="this.style.opacity='1'">
-        <select onchange="setFamilyMemberGender(${genderArg},this.value)"
-                style="font-size:.75rem;padding:2px 4px;border-radius:5px;background:var(--surface);border:1px solid rgba(255,255,255,.15);color:var(--text);cursor:pointer"
-                title="Pronouns used by the assistant">
-          <option value="neutral" ${(m.gender||'neutral')==='neutral'?'selected':''}>they/them</option>
-          <option value="male"    ${m.gender==='male'   ?'selected':''}>he/him</option>
-          <option value="female"  ${m.gender==='female' ?'selected':''}>she/her</option>
-        </select>
-        <button onclick="moveFamilyMember(${i},-1)" ${i === 0 ? 'disabled' : ''} style="${btnStyle};opacity:${i === 0 ? '.25' : '1'}" title="Move up">▲</button>
-        <button onclick="moveFamilyMember(${i}, 1)" ${i === last ? 'disabled' : ''} style="${btnStyle};opacity:${i === last ? '.25' : '1'}" title="Move down">▼</button>
-        <button onclick="removeFamilyMember(${removeArg})" style="${btnStyle};font-size:1rem" title="Remove">✕</button>`;
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="flex:1">👤 ${esc(m.name)}</span>
+          <input type="color" value="${m.color || '#6c8ef5'}"
+                 title="Calendar event color for ${esc(m.name)}"
+                 class="lc-color"
+                 onchange="setFamilyMemberColor(${colorArg},this.value)"
+                 style="width:24px;height:24px;border:none;border-radius:4px;cursor:pointer;padding:0;background:none;flex-shrink:0;opacity:${m.color ? '1' : '0.4'}"
+                 oninput="this.style.opacity='1'">
+          <select onchange="setFamilyMemberGender(${genderArg},this.value)"
+                  style="font-size:.75rem;padding:2px 4px;border-radius:5px;background:var(--surface);border:1px solid rgba(255,255,255,.15);color:var(--text);cursor:pointer"
+                  title="Pronouns used by the assistant">
+            <option value="neutral" ${(m.gender||'neutral')==='neutral'?'selected':''}>they/them</option>
+            <option value="male"    ${m.gender==='male'   ?'selected':''}>he/him</option>
+            <option value="female"  ${m.gender==='female' ?'selected':''}>she/her</option>
+          </select>
+          <button onclick="moveFamilyMember(${i},-1)" ${i === 0 ? 'disabled' : ''} style="${btnStyle};opacity:${i === 0 ? '.25' : '1'}" title="Move up">▲</button>
+          <button onclick="moveFamilyMember(${i}, 1)" ${i === last ? 'disabled' : ''} style="${btnStyle};opacity:${i === last ? '.25' : '1'}" title="Move down">▼</button>
+          <button onclick="removeFamilyMember(${removeArg})" style="${btnStyle};font-size:1rem" title="Remove">✕</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
+          <span style="font-size:.75rem;color:var(--muted);flex-shrink:0">📱 SMS</span>
+          <input type="tel" placeholder="Phone number" value="${esc(m.phone || '')}"
+                 style="flex:1;font-size:.78rem;padding:3px 6px;border-radius:5px;background:var(--surface);border:1px solid rgba(255,255,255,.15);color:var(--text)"
+                 onchange="setFamilyMemberPhone(${phoneArg},this.value)" />
+        </div>`;
       el.appendChild(row);
     });
   }
@@ -5024,6 +5027,19 @@ async function setFamilyMemberGender(idOrIndex, gender) {
   } else {
     localStorage.setItem('fh_familyMembers', JSON.stringify(familyMembers));
     renderFamilyMemberList();
+  }
+}
+
+async function setFamilyMemberPhone(idOrIndex, phone) {
+  const m = typeof idOrIndex === 'string'
+    ? familyMembers.find(m => m.id === idOrIndex)
+    : familyMembers[idOrIndex];
+  if (!m) return;
+  m.phone = phone;
+  if (db) {
+    await db.collection('familyMembers').doc(m.id).update({ phone });
+  } else {
+    localStorage.setItem('fh_familyMembers', JSON.stringify(familyMembers));
   }
 }
 
@@ -8190,18 +8206,19 @@ function toggleSmsPopover(event) {
   title.textContent = 'Send list to…';
   pop.appendChild(title);
 
-  if (!smsContacts.length) {
+  const contacts = getSmsContacts();
+  if (!contacts.length) {
     const empty = document.createElement('div');
     empty.className = 'sms-popover-empty';
-    empty.innerHTML = 'No recipients saved.<br><span style="color:var(--accent);cursor:pointer" onclick="openSettings();switchSettingsTab(\'shopping\')">Add in Settings ↗</span>';
+    empty.innerHTML = 'No recipients.<br><span style="color:var(--accent);cursor:pointer" onclick="openSettings();switchSettingsTab(\'family\')">Add phones in Settings → Family ↗</span>';
     pop.appendChild(empty);
   } else {
-    smsContacts.forEach(c => {
+    contacts.forEach(c => {
       const row = document.createElement('div');
       row.className = 'sms-contact-row';
       row.innerHTML = `<span>👤</span>
-                       <span class="sms-contact-nick">${c.nick}</span>
-                       <span class="sms-contact-phone">${c.phone}</span>`;
+                       <span class="sms-contact-nick">${esc(c.nick)}</span>
+                       <span class="sms-contact-phone">${esc(c.phone)}</span>`;
       row.onclick = () => sendToContact(c.phone);
       pop.appendChild(row);
     });
@@ -8231,53 +8248,6 @@ function sendToContact(phone) {
   const uri      = number ? `sms:${number}?&body=${encoded}` : `sms:?&body=${encoded}`;
   const a        = document.createElement('a');
   a.href = uri; a.click();
-}
-
-// ── SMS contacts management (Settings) ────────────────────────
-function renderSmsContactsList() {
-  const list = document.getElementById('smsContactsList');
-  if (!list) return;
-  list.innerHTML = '';
-  if (!smsContacts.length) {
-    list.innerHTML = '<p style="font-size:.8rem;color:var(--muted);padding:4px 0 8px">No recipients yet.</p>';
-    return;
-  }
-  smsContacts.forEach((c, i) => {
-    const row = document.createElement('div');
-    row.className = 'sms-setting-row';
-    const nick  = document.createElement('span');
-    nick.className = 'sms-setting-nick';
-    nick.textContent = c.nick;
-    const phone = document.createElement('span');
-    phone.className = 'sms-setting-phone';
-    phone.textContent = c.phone;
-    const del = document.createElement('button');
-    del.className = 'cal-remove-btn';
-    del.style.opacity = '1';
-    del.textContent = '✕';
-    del.title = 'Remove';
-    del.onclick = () => removeSmsContact(i);
-    row.appendChild(nick); row.appendChild(phone); row.appendChild(del);
-    list.appendChild(row);
-  });
-}
-
-function addSmsContact() {
-  const nickEl  = document.getElementById('smsNewNick');
-  const phoneEl = document.getElementById('smsNewPhone');
-  const nick    = nickEl.value.trim();
-  const phone   = phoneEl.value.trim();
-  if (!nick || !phone) return;
-  smsContacts.push({ nick, phone });
-  localStorage.setItem('fh_smsContacts', JSON.stringify(smsContacts));
-  nickEl.value = ''; phoneEl.value = '';
-  renderSmsContactsList();
-}
-
-function removeSmsContact(idx) {
-  smsContacts.splice(idx, 1);
-  localStorage.setItem('fh_smsContacts', JSON.stringify(smsContacts));
-  renderSmsContactsList();
 }
 
 // ── Local Calendars ────────────────────────────────────────────
@@ -8906,7 +8876,6 @@ function openSettings() {
   document.getElementById('wxViewRadar').checked  = !!wxEnabledViews['radar'];
   document.getElementById('wxViewSnarky').checked = !!wxEnabledViews['snarky'];
   renderWeatherLocationsList();
-  renderSmsContactsList();
   renderShopCategorySettings();
   document.getElementById('settingSlideInterval').value = slideInterval;
   document.getElementById('settingMealAiKey').value     = mealAiKey;
@@ -9019,7 +8988,7 @@ function saveSettings() {
     localStorage.setItem('fh_assistantWelcome', assistantWelcomeMode);
     renderAssistantMessages();
   }
-  // smsContacts and familyMembers saved immediately on add/remove — nothing to save here
+  // familyMembers saved immediately on add/remove — nothing to save here
   slideInterval = parseInt(document.getElementById('settingSlideInterval').value) || 30;
   mealAiKey     = document.getElementById('settingMealAiKey').value.trim();
   mealPantryDef = document.getElementById('settingMealPantry').value.trim();
