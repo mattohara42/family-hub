@@ -2526,6 +2526,19 @@ body.nautical-mode #eventEditorModal .modal {
 .evt-editor-allday-row {
   display: flex; align-items: center; gap: 8px; margin: 8px 0;
 }
+.evt-editor-members { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.evt-member-chip {
+  padding: 4px 12px; border-radius: 20px; border: 2px solid rgba(255,255,255,.18);
+  font-size: .8rem; cursor: pointer; transition: all .15s;
+  background: var(--surface2); color: var(--text);
+}
+.evt-member-chip.selected { border-color: transparent; color: #fff; font-weight: 600; }
+.evt-member-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 14px; height: 14px; border-radius: 50%;
+  font-size: .58rem; font-weight: 700; color: #fff;
+  margin-left: 3px; flex-shrink: 0; vertical-align: middle;
+}
 .week-day-col { cursor: default; }
 .week-day-body-add {
   cursor: pointer;

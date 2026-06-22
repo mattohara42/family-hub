@@ -1322,6 +1322,7 @@ function renderWeekGrid() {
         const s = document.createElement('span');
         s.textContent = (ev.holiday ? '🎉 ' : '') + ev.summary;
         pill.appendChild(s);
+        appendMemberBadges(pill, ev.members);
         if (!ev.holiday && ev.eventId) {
           pill.onclick = e => { e.stopPropagation(); openEventEditor(ev); };
           pill.draggable = true;
@@ -1466,6 +1467,7 @@ function renderDayGrid() {
       p.className = 'day-event-pill';
       p.style.background = ev.color;
       p.innerHTML = `<span class="evt-title">${(ev.holiday ? '🎉 ' : '') + esc(ev.summary)}</span>`;
+      appendMemberBadges(p, ev.members);
       if (!ev.holiday && ev.eventId) {
         p.style.cursor = 'pointer';
         p.onclick = () => openEventEditor(ev);
@@ -1564,6 +1566,7 @@ function renderDayGrid() {
       pill.style.background = ev.color;
       pill.innerHTML = `<span class="evt-title">${esc(ev.summary)}</span>
                         <span class="evt-time">${startStr}${endStr ? ' – ' + endStr : ''}</span>`;
+      appendMemberBadges(pill, ev.members);
       if (!ev.holiday && ev.eventId) {
         pill.style.cursor = 'pointer';
         pill.onclick = () => openEventEditor(ev);
@@ -2020,6 +2023,7 @@ async function loadAllCalendars() {
         endDT:     ev.end?.dateTime   || null,
         startDate: ev.start?.date     || null,
         endDate:   ev.end?.date       || null,
+        members:   (ev.extendedProperties?.private?.fhMembers || '').split(',').map(s => s.trim()).filter(Boolean),
       };
       // Multi-day all-day events: cache on every date in their range
       if (base.allDay && base.startDate && base.endDate && base.endDate > base.startDate) {
@@ -2133,7 +2137,12 @@ function renderAgendaView() {
 
       const title = document.createElement('div');
       title.className = 'agenda-title';
-      title.textContent = (ev.holiday ? '🎉 ' : '') + ev.summary;
+      title.style.display = 'flex';
+      title.style.alignItems = 'center';
+      const titleText = document.createElement('span');
+      titleText.textContent = (ev.holiday ? '🎉 ' : '') + ev.summary;
+      title.appendChild(titleText);
+      appendMemberBadges(title, ev.members);
 
       info.appendChild(timeEl);
       info.appendChild(title);
@@ -2926,6 +2935,20 @@ function renderCountdownCard() {
 // ── Calendar Event Editor ─────────────────────────────────────
 let evtEditing = null; // { ev, calId } when editing; null when creating
 
+function appendMemberBadges(container, members) {
+  if (!members?.length) return;
+  members.forEach(name => {
+    const m = familyMembers.find(fm => fm.name === name);
+    if (!m?.color) return;
+    const badge = document.createElement('span');
+    badge.className = 'evt-member-badge';
+    badge.style.background = m.color;
+    badge.title = name;
+    badge.textContent = name[0].toUpperCase();
+    container.appendChild(badge);
+  });
+}
+
 function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
   if (!googleToken) return;
   evtEditing = ev || null;
@@ -2991,6 +3014,33 @@ function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
     });
   }
 
+  // Member picker
+  const membersSection = document.getElementById('evtEdMembersSection');
+  const membersContainer = document.getElementById('evtEdMembers');
+  membersContainer.innerHTML = '';
+  if (familyMembers.length) {
+    membersSection.style.display = '';
+    familyMembers.forEach(m => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'evt-member-chip';
+      chip.dataset.memberName = m.name;
+      chip.textContent = m.name;
+      const selected = ev?.members?.includes(m.name) || false;
+      if (selected) {
+        chip.classList.add('selected');
+        chip.style.background = m.color || 'var(--accent)';
+      }
+      chip.onclick = () => {
+        chip.classList.toggle('selected');
+        chip.style.background = chip.classList.contains('selected') ? (m.color || 'var(--accent)') : '';
+      };
+      membersContainer.appendChild(chip);
+    });
+  } else {
+    membersSection.style.display = 'none';
+  }
+
   document.getElementById('eventEditorModal').style.display = 'flex';
   trapFocus(document.querySelector('#eventEditorModal .modal'), null, closeEventEditor);
 }
@@ -3049,7 +3099,14 @@ async function saveCalEvent() {
     end   = { dateTime: `${date}T${endT   || '10:00'}:00`, timeZone: tz };
   }
 
-  const body = { summary: title, description: desc, start, end };
+  const selectedMembers = Array.from(
+    document.querySelectorAll('#evtEdMembers .evt-member-chip.selected')
+  ).map(c => c.dataset.memberName);
+
+  const body = {
+    summary: title, description: desc, start, end,
+    extendedProperties: { private: { fhMembers: selectedMembers.join(',') } },
+  };
   evtEdStatus('Saving…', false);
 
   try {
@@ -4840,6 +4897,11 @@ function applyMemberColors() {
     Object.values(byDate).forEach(evts => {
       evts.forEach(ev => {
         if (ev.holiday) return;
+        // Explicit member assignment wins over title-based matching
+        if (ev.members?.length) {
+          const match = colored.find(m => ev.members.includes(m.name));
+          if (match) { ev.color = match.color; return; }
+        }
         const title = (ev.summary || '').toLowerCase();
         const match = colored.find(m => title.includes(m.name.toLowerCase()));
         if (match) ev.color = match.color;
