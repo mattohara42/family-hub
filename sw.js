@@ -1,13 +1,12 @@
 /**
  * Family Hub — Service Worker
- * Strategy: cache-first for app shell files, network-only for all external APIs.
- * Bump CACHE_VERSION whenever app files change to force clients to update.
+ * Strategy: network-first for app shell (edits show immediately; cache is
+ * offline fallback only), network-only for all external APIs.
  */
 
-const CACHE_VERSION = 'fh-v2';
+const CACHE_VERSION = 'fh-v3';
 const CACHE_NAME    = `family-hub-${CACHE_VERSION}`;
 
-// App shell files to pre-cache on install
 const APP_SHELL = [
   '/family-hub.html',
   '/family-hub.css',
@@ -27,7 +26,7 @@ self.addEventListener('install', event => {
   );
 });
 
-// ── Activate: delete old caches ────────────────────────────────
+// ── Activate: delete old caches ───────────────────────────────
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
@@ -39,7 +38,7 @@ self.addEventListener('activate', event => {
   );
 });
 
-// ── Fetch: cache-first for same-origin, network-only for external ──
+// ── Fetch: network-first for same-origin, passthrough for external ──
 self.addEventListener('fetch', event => {
   const { request } = event;
   const url = new URL(request.url);
@@ -48,24 +47,15 @@ self.addEventListener('fetch', event => {
   if (request.method !== 'GET' || url.origin !== self.location.origin) return;
 
   event.respondWith(
-    caches.match(request).then(cached => {
-      if (cached) {
-        // Serve from cache; refresh in background (stale-while-revalidate)
-        const networkFetch = fetch(request).then(response => {
-          if (response.ok) {
-            caches.open(CACHE_NAME).then(cache => cache.put(request, response.clone()));
-          }
-          return response;
-        }).catch(() => {});
-        return cached;
-      }
-      // Not in cache — fetch and cache it
-      return fetch(request).then(response => {
+    fetch(request)
+      .then(response => {
+        // Network succeeded — update cache and return fresh response
         if (response.ok) {
-          caches.open(CACHE_NAME).then(cache => cache.put(request, response.clone()));
+          caches.open(CACHE_NAME)
+            .then(cache => cache.put(request, response.clone()));
         }
         return response;
-      });
-    })
+      })
+      .catch(() => caches.match(request)) // Offline fallback
   );
 });
