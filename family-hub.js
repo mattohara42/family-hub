@@ -1320,7 +1320,7 @@ function renderWeekGrid() {
           pill.appendChild(t);
         }
         const s = document.createElement('span');
-        s.textContent = (ev.holiday ? '🎉 ' : '') + ev.summary;
+        s.textContent = (ev.holiday ? '🎉 ' : '') + ev.summary + (ev.recurringEventId ? ' ↻' : '');
         pill.appendChild(s);
         appendMemberBadges(pill, ev.members);
         if (!ev.holiday && ev.eventId) {
@@ -1466,7 +1466,7 @@ function renderDayGrid() {
       const p = document.createElement('div');
       p.className = 'day-event-pill';
       p.style.background = ev.color;
-      p.innerHTML = `<span class="evt-title">${(ev.holiday ? '🎉 ' : '') + esc(ev.summary)}</span>`;
+      p.innerHTML = `<span class="evt-title">${(ev.holiday ? '🎉 ' : '') + esc(ev.summary) + (ev.recurringEventId ? ' ↻' : '')}</span>`;
       appendMemberBadges(p, ev.members);
       if (!ev.holiday && ev.eventId) {
         p.style.cursor = 'pointer';
@@ -1564,7 +1564,7 @@ function renderDayGrid() {
       const pill = document.createElement('div');
       pill.className = 'day-event-pill';
       pill.style.background = ev.color;
-      pill.innerHTML = `<span class="evt-title">${esc(ev.summary)}</span>
+      pill.innerHTML = `<span class="evt-title">${esc(ev.summary) + (ev.recurringEventId ? ' ↻' : '')}</span>
                         <span class="evt-time">${startStr}${endStr ? ' – ' + endStr : ''}</span>`;
       appendMemberBadges(pill, ev.members);
       if (!ev.holiday && ev.eventId) {
@@ -2021,9 +2021,10 @@ async function loadAllCalendars() {
         allDay:    !!ev.start?.date,
         startDT:   ev.start?.dateTime || null,
         endDT:     ev.end?.dateTime   || null,
-        startDate: ev.start?.date     || null,
-        endDate:   ev.end?.date       || null,
-        members:   (ev.extendedProperties?.private?.fhMembers || '').split(',').map(s => s.trim()).filter(Boolean),
+        startDate:        ev.start?.date     || null,
+        endDate:          ev.end?.date       || null,
+        members:          (ev.extendedProperties?.private?.fhMembers || '').split(',').map(s => s.trim()).filter(Boolean),
+        recurringEventId: ev.recurringEventId || null,
       };
       // Multi-day all-day events: cache on every date in their range
       if (base.allDay && base.startDate && base.endDate && base.endDate > base.startDate) {
@@ -2140,7 +2141,7 @@ function renderAgendaView() {
       title.style.display = 'flex';
       title.style.alignItems = 'center';
       const titleText = document.createElement('span');
-      titleText.textContent = (ev.holiday ? '🎉 ' : '') + ev.summary;
+      titleText.textContent = (ev.holiday ? '🎉 ' : '') + ev.summary + (ev.recurringEventId ? ' ↻' : '');
       title.appendChild(titleText);
       appendMemberBadges(title, ev.members);
 
@@ -2949,6 +2950,22 @@ function appendMemberBadges(container, members) {
   });
 }
 
+const _RRULE_DAYS = ['SU','MO','TU','WE','TH','FR','SA'];
+function buildRRule(freq, date) {
+  if (!freq || freq === 'none') return null;
+  if (freq === 'daily')    return 'RRULE:FREQ=DAILY';
+  if (freq === 'weekdays') return 'RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR';
+  if (freq === 'weekly')   return `RRULE:FREQ=WEEKLY;BYDAY=${_RRULE_DAYS[new Date(date + 'T00:00:00').getDay()]}`;
+  if (freq === 'monthly')  return 'RRULE:FREQ=MONTHLY';
+  if (freq === 'yearly')   return 'RRULE:FREQ=YEARLY';
+  return null;
+}
+
+function selectEvtScope(btn) {
+  btn.closest('.evt-editor-scope-row').querySelectorAll('.evt-scope-btn')
+    .forEach(b => b.classList.toggle('selected', b === btn));
+}
+
 function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
   if (!googleToken) return;
   evtEditing = ev || null;
@@ -3041,6 +3058,20 @@ function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
     membersSection.style.display = 'none';
   }
 
+  // Repeat / recurring scope
+  const repeatSection    = document.getElementById('evtEdRepeatSection');
+  const recurringSection = document.getElementById('evtEdRecurringSection');
+  if (ev?.recurringEventId) {
+    repeatSection.style.display    = 'none';
+    recurringSection.style.display = '';
+    recurringSection.querySelectorAll('.evt-scope-btn')
+      .forEach(b => b.classList.toggle('selected', b.dataset.scope === 'this'));
+  } else {
+    repeatSection.style.display    = '';
+    recurringSection.style.display = 'none';
+    document.getElementById('evtEdRepeat').value = 'none';
+  }
+
   document.getElementById('eventEditorModal').style.display = 'flex';
   trapFocus(document.querySelector('#eventEditorModal .modal'), null, closeEventEditor);
 }
@@ -3103,16 +3134,25 @@ async function saveCalEvent() {
     document.querySelectorAll('#evtEdMembers .evt-member-chip.selected')
   ).map(c => c.dataset.memberName);
 
+  const rrule = buildRRule(document.getElementById('evtEdRepeat').value, date);
+
   const body = {
     summary: title, description: desc, start, end,
     extendedProperties: { private: { fhMembers: selectedMembers.join(',') } },
   };
+  if (rrule) body.recurrence = [rrule];
   evtEdStatus('Saving…', false);
+
+  // For recurring event instances, respect the user's scope choice
+  const editScope = document.querySelector('.evt-scope-btn.selected')?.dataset.scope || 'this';
 
   try {
     if (evtEditing?.eventId) {
-      // PATCH existing event
-      const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(evtEditing.eventId)}`;
+      // PATCH existing event (or its series when scope === 'all')
+      const targetId = (editScope === 'all' && evtEditing.recurringEventId)
+        ? evtEditing.recurringEventId
+        : evtEditing.eventId;
+      const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(targetId)}`;
       const r = await fetch(url, {
         method: 'PATCH',
         headers: { 'Authorization': `Bearer ${googleToken}`, 'Content-Type': 'application/json' },
@@ -3144,14 +3184,22 @@ async function saveCalEvent() {
 
 async function deleteCalEvent() {
   if (!evtEditing?.eventId) return;
-  if (!confirm(`Delete "${evtEditing.summary}"?`)) return;
+
+  const deleteScope = document.querySelector('.evt-scope-btn.selected')?.dataset.scope || 'this';
+  const deleteAll   = deleteScope === 'all' && !!evtEditing.recurringEventId;
+  const confirmMsg  = deleteAll
+    ? `Delete ALL events in the "${evtEditing.summary}" series?`
+    : `Delete "${evtEditing.summary}"?`;
+  if (!confirm(confirmMsg)) return;
 
   const selectedCalBtn = document.getElementById('evtEdCalSelect').querySelector('.selected');
   const calId = selectedCalBtn?.dataset.calId || evtEditing.calId;
 
+  const targetId = deleteAll ? evtEditing.recurringEventId : evtEditing.eventId;
+
   evtEdStatus('Deleting…', false);
   try {
-    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(evtEditing.eventId)}`;
+    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(targetId)}`;
     const r = await fetch(url, {
       method: 'DELETE',
       headers: { 'Authorization': `Bearer ${googleToken}` },

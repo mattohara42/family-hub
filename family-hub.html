@@ -1301,6 +1301,26 @@
       </div>
     </div>
 
+    <div id="evtEdRepeatSection" class="field">
+      <label>Repeat</label>
+      <select id="evtEdRepeat" class="evt-editor-select">
+        <option value="none">Does not repeat</option>
+        <option value="daily">Daily</option>
+        <option value="weekdays">Every weekday (Mon–Fri)</option>
+        <option value="weekly">Weekly</option>
+        <option value="monthly">Monthly</option>
+        <option value="yearly">Yearly</option>
+      </select>
+    </div>
+
+    <div id="evtEdRecurringSection" class="field" style="display:none">
+      <label>Edit</label>
+      <div class="evt-editor-scope-row">
+        <button type="button" class="evt-scope-btn selected" data-scope="this" onclick="selectEvtScope(this)">This event</button>
+        <button type="button" class="evt-scope-btn" data-scope="all" onclick="selectEvtScope(this)">All events</button>
+      </div>
+    </div>
+
     <div class="field">
       <label>Calendar</label>
       <div class="evt-editor-cal-select" id="evtEdCalSelect"></div>

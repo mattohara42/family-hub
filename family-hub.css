@@ -2539,6 +2539,21 @@ body.nautical-mode #eventEditorModal .modal {
   font-size: .58rem; font-weight: 700; color: #fff;
   margin-left: 3px; flex-shrink: 0; vertical-align: middle;
 }
+.evt-editor-select {
+  background: var(--surface2); color: var(--text);
+  border: 1px solid rgba(255,255,255,.15); border-radius: 8px;
+  padding: 6px 10px; font-size: .9rem; cursor: pointer; width: 100%; margin-top: 4px;
+}
+.evt-editor-scope-row { display: flex; gap: 6px; margin-top: 6px; }
+.evt-scope-btn {
+  padding: 5px 14px; border-radius: 20px; border: 2px solid rgba(255,255,255,.18);
+  font-size: .82rem; cursor: pointer; transition: all .15s;
+  background: var(--surface2); color: var(--text);
+}
+.evt-scope-btn.selected {
+  border-color: var(--accent); background: rgba(108,142,245,.2);
+  color: var(--accent); font-weight: 600;
+}
 .week-day-col { cursor: default; }
 .week-day-body-add {
   cursor: pointer;
