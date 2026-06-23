@@ -2458,20 +2458,30 @@ const ICS_TTL_MS = 4 * 60 * 60 * 1000;        // refresh every 4 hours
 /** Parse an ICS text string into a flat array of event objects compatible with cacheEvents(). */
 function parseIcs(text) {
   const events = [];
-  const lines  = text.replace(/\r\n?/g, '\n').replace(/\n /g, '').split('\n');
+  // Unfold folded lines (continuation lines start with a space OR tab), per RFC 5545.
+  const lines  = text.replace(/\r\n?/g, '\n').replace(/\n[ \t]/g, '').split('\n');
   let cur = null;
 
   const val    = line => line.slice(line.indexOf(':') + 1).trim();
-  const dtPart = prop => { // returns {date, dateTime} compatible with GCal format
-    const raw = prop.replace(/;[^:]+/g, ''); // strip params like TZID=...
-    const v   = val(raw);
+  const dtParse = prop => { // returns {date} | {dateTime} (ISO; UTC 'Z' when zone is known)
+    const head = prop.slice(0, prop.indexOf(':'));
+    const v    = prop.slice(prop.indexOf(':') + 1).trim();
+    const tzMatch = head.match(/TZID=([^;:]+)/i);
+    const tzid = tzMatch ? tzMatch[1] : null;
     if (/^\d{8}$/.test(v)) { // all-day: 20250901
       return { date: `${v.slice(0,4)}-${v.slice(4,6)}-${v.slice(6,8)}` };
     }
-    // datetime: 20250901T120000Z or 20250901T120000
-    const y=v.slice(0,4),mo=v.slice(4,6),d=v.slice(6,8),h=v.slice(9,11),mi=v.slice(11,13),s=v.slice(13,15)||'00';
-    const iso = `${y}-${mo}-${d}T${h}:${mi}:${s}${v.endsWith('Z')?'Z':''}`;
-    return { dateTime: iso };
+    // datetime: 20250901T120000Z (UTC) | 20250901T120000 (+TZID or floating)
+    const y=+v.slice(0,4), mo=+v.slice(4,6), d=+v.slice(6,8),
+          h=+v.slice(9,11), mi=+v.slice(11,13), s=+(v.slice(13,15)||'0');
+    if (v.endsWith('Z')) {
+      return { dateTime: `${pad(y,4)}-${pad(mo)}-${pad(d)}T${pad(h)}:${pad(mi)}:${pad(s)}Z` };
+    }
+    if (tzid) {
+      return { dateTime: tzWallToUTCISO(y, mo, d, h, mi, s, tzid) };
+    }
+    // Floating (no zone): treat as the viewer's local time.
+    return { dateTime: `${pad(y,4)}-${pad(mo)}-${pad(d)}T${pad(h)}:${pad(mi)}:${pad(s)}` };
   };
 
   for (const line of lines) {
@@ -2483,25 +2493,138 @@ function parseIcs(text) {
     if (!cur) continue;
     if (line.startsWith('SUMMARY'))     cur.summary     = val(line);
     if (line.startsWith('DESCRIPTION')) cur.description = val(line).replace(/\\n/g, '\n').replace(/\\,/g, ',');
-    if (line.startsWith('DTSTART'))     cur.start       = dtPart(line);
-    if (line.startsWith('DTEND'))       cur.end         = dtPart(line);
+    if (line.startsWith('DTSTART'))     cur.start       = dtParse(line);
+    if (line.startsWith('DTEND'))       cur.end         = dtParse(line);
     if (line.startsWith('UID'))         cur.id          = val(line);
+    if (line.startsWith('RRULE'))       cur.rrule       = val(line);
+    if (line.startsWith('EXDATE')) {
+      val(line).split(',').forEach(part => {
+        const stamp = part.trim();
+        if (stamp.length >= 8) (cur.exdates ||= []).push(
+          `${stamp.slice(0,4)}-${stamp.slice(4,6)}-${stamp.slice(6,8)}`);
+      });
+    }
   }
   return events;
 }
 
-/** Fetch one ICS URL (via a CORS proxy if needed), parse, and cache it. */
+// Zero-pad a number to `len` digits (default 2).
+function pad(n, len = 2) { return String(n).padStart(len, '0'); }
+
+// Format a Date as a local YYYY-MM-DD key (NOT UTC — avoids day-shift bugs).
+function localDateKey(d) {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+// Convert a wall-clock time in a named IANA zone to a UTC ISO string. Falls
+// back to a floating (zoneless) ISO if the zone is unknown to Intl.
+function tzWallToUTCISO(y, mo, d, h, mi, s, tzid) {
+  try {
+    const guess = Date.UTC(y, mo - 1, d, h, mi, s);
+    const dtf = new Intl.DateTimeFormat('en-US', {
+      timeZone: tzid, hourCycle: 'h23',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+    });
+    const p = dtf.formatToParts(new Date(guess)).reduce((a, x) => (a[x.type] = x.value, a), {});
+    const asTz = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
+    return new Date(guess - (asTz - guess)).toISOString();
+  } catch {
+    return `${pad(y,4)}-${pad(mo)}-${pad(d)}T${pad(h)}:${pad(mi)}:${pad(s)}`;
+  }
+}
+
+// Parse an ICS stamp (20251231 | 20251231T235900Z | 20251231T235900) to a Date.
+function icsStampToDate(v) {
+  const y = +v.slice(0,4), mo = +v.slice(4,6), d = +v.slice(6,8);
+  if (v.length <= 8) return new Date(y, mo - 1, d);
+  const h = +v.slice(9,11), mi = +v.slice(11,13), s = +(v.slice(13,15) || '0');
+  return v.endsWith('Z') ? new Date(Date.UTC(y, mo-1, d, h, mi, s)) : new Date(y, mo-1, d, h, mi, s);
+}
+
+/** Expand a parsed event into concrete instances within [winStart, winEnd].
+ *  Non-recurring events return [ev]. Supports FREQ DAILY/WEEKLY/MONTHLY/YEARLY
+ *  with INTERVAL, COUNT, UNTIL, BYDAY (weekly) and EXDATE. Returns events in the
+ *  same {start,end} shape parseIcs produces, so injection is identical.
+ */
+function expandRecurrence(ev, winStart, winEnd) {
+  if (!ev.rrule) return [ev];
+  const rule = {};
+  ev.rrule.split(';').forEach(kv => { const [k, v] = kv.split('='); if (k) rule[k.toUpperCase()] = v; });
+  const freq = (rule.FREQ || '').toUpperCase();
+  if (!['DAILY','WEEKLY','MONTHLY','YEARLY'].includes(freq)) return [ev];
+
+  const interval = Math.max(1, parseInt(rule.INTERVAL || '1', 10));
+  const count    = rule.COUNT ? parseInt(rule.COUNT, 10) : null;
+  const until    = rule.UNTIL ? icsStampToDate(rule.UNTIL) : null;
+  const DOW      = { SU:0, MO:1, TU:2, WE:3, TH:4, FR:5, SA:6 };
+  const byday    = rule.BYDAY ? rule.BYDAY.split(',').map(b => DOW[b.replace(/^[+-]?\d+/, '')]).filter(n => n != null) : null;
+
+  const isAllDay  = !!ev.start.date;
+  const baseStart = isAllDay ? new Date(ev.start.date + 'T00:00:00') : new Date(ev.start.dateTime);
+  if (isNaN(baseStart)) return [ev];
+  const baseEnd   = ev.end ? (isAllDay ? new Date(ev.end.date + 'T00:00:00') : new Date(ev.end.dateTime)) : null;
+  const durationMs = baseEnd && !isNaN(baseEnd) ? (baseEnd - baseStart) : (isAllDay ? 86400000 : 3600000);
+  const exdates = ev.exdates || [];
+
+  // Lazily yield candidate start Dates in chronological order.
+  function* candidates() {
+    if (freq === 'WEEKLY' && byday && byday.length) {
+      const days = [...new Set(byday)].sort((a,b) => a - b);
+      let weekStart = new Date(baseStart); weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+      while (true) {
+        for (const dow of days) {
+          const c = new Date(weekStart); c.setDate(weekStart.getDate() + dow);
+          c.setHours(baseStart.getHours(), baseStart.getMinutes(), baseStart.getSeconds(), 0);
+          yield c;
+        }
+        weekStart.setDate(weekStart.getDate() + 7 * interval);
+      }
+    } else {
+      const c = new Date(baseStart);
+      while (true) {
+        yield new Date(c);
+        if (freq === 'DAILY')        c.setDate(c.getDate() + interval);
+        else if (freq === 'WEEKLY')  c.setDate(c.getDate() + 7 * interval);
+        else if (freq === 'MONTHLY') c.setMonth(c.getMonth() + interval);
+        else                         c.setFullYear(c.getFullYear() + interval); // YEARLY
+      }
+    }
+  }
+
+  const out = [];
+  let emitted = 0, iter = 0;
+  for (const c of candidates()) {
+    if (++iter > 2000) break;                       // safety cap
+    if (c < baseStart) continue;                    // BYDAY days before DTSTART aren't generated
+    if (until && c > until) break;
+    if (count != null && emitted >= count) break;
+    emitted++;                                       // counts toward COUNT before EXDATE/window removal
+    if (exdates.includes(localDateKey(c))) continue;
+    if (c > winEnd) break;                           // chronological → safe to stop
+    if (c < winStart) continue;
+    const endD = new Date(c.getTime() + durationMs);
+    out.push({
+      summary: ev.summary, description: ev.description, id: ev.id,
+      start: isAllDay ? { date: localDateKey(c) }    : { dateTime: c.toISOString() },
+      end:   isAllDay ? { date: localDateKey(endD) } : { dateTime: endD.toISOString() },
+    });
+  }
+  return out;
+}
+
+/** Fetch one ICS URL (direct, falling back to the same-origin Netlify proxy),
+ *  parse, and return its events. The proxy keeps private feed URLs in your own
+ *  infra (only available on a Netlify deploy; local dev relies on direct fetch). */
 async function fetchIcsSub(sub) {
-  // Try direct fetch first; many ICS feeds are CORS-friendly
-  const CORS_PROXY = 'https://corsproxy.io/?';
   let text = null;
   try {
     const r = await fetch(sub.url, { cache: 'no-store' });
     if (r.ok) text = await r.text();
   } catch {}
-  if (!text) {
+  if (!text || !text.includes('BEGIN:VCALENDAR')) {
     try {
-      const r = await fetch(CORS_PROXY + encodeURIComponent(sub.url), { cache: 'no-store' });
+      const r = await fetch(`/.netlify/functions/ics?url=${encodeURIComponent(sub.url)}`, { cache: 'no-store' });
       if (r.ok) text = await r.text();
     } catch {}
   }
@@ -2509,10 +2632,43 @@ async function fetchIcsSub(sub) {
   return parseIcs(text);
 }
 
+/** Inject one concrete ICS event instance into calEventCache under its sub id. */
+function injectIcsEvent(sub, ev) {
+  const cache = calEventCache[sub.id] || (calEventCache[sub.id] = {});
+  const entry = {
+    eventId:     ev.id || null,
+    calId:       sub.id,
+    summary:     ev.summary || '(No title)',
+    description: ev.description || '',
+    color:       sub.color,
+    holiday:     false,
+    allDay:      !!ev.start?.date,
+    startDT:     ev.start?.dateTime || null,
+    endDT:       ev.end?.dateTime   || null,
+    startDate:   ev.start?.date     || null,
+    endDate:     ev.end?.date       || null,
+  };
+  // Multi-day all-day events: cache on every date in their range (end is exclusive).
+  if (entry.allDay && entry.startDate && entry.endDate && entry.endDate > entry.startDate) {
+    const endD = new Date(entry.endDate + 'T00:00:00');
+    for (let d = new Date(entry.startDate + 'T00:00:00'); d < endD; d.setDate(d.getDate() + 1)) {
+      (cache[localDateKey(d)] ||= []).push(entry);
+    }
+  } else {
+    // Date key from the actual local instant (handles UTC/zoned/floating uniformly).
+    const key = entry.allDay ? entry.startDate : localDateKey(new Date(entry.startDT));
+    (cache[key] ||= []).push(entry);
+  }
+}
+
 /** Load all ICS subscriptions, using cache when fresh; inject into calEventCache. */
 async function loadIcsSubs() {
   if (!icsSubs.length) return;
   const now = Date.now();
+  // Recurrence expansion window: ~2 months back to ~14 months forward.
+  const winStart = new Date(); winStart.setMonth(winStart.getMonth() - 2); winStart.setHours(0,0,0,0);
+  const winEnd   = new Date(); winEnd.setMonth(winEnd.getMonth()   + 14); winEnd.setHours(23,59,59,999);
+
   const fetches = icsSubs.map(async sub => {
     const cached = icsCache[sub.id];
     let events = cached && (now - cached.fetchedAt < ICS_TTL_MS) ? cached.events : null;
@@ -2520,41 +2676,15 @@ async function loadIcsSubs() {
       events = await fetchIcsSub(sub);
       if (events) {
         icsCache[sub.id] = { fetchedAt: now, events };
-        localStorage.setItem('fh_icsCache', JSON.stringify(icsCache));
+        try { localStorage.setItem('fh_icsCache', JSON.stringify(icsCache)); } catch {}
       } else {
         events = cached?.events || []; // fall back to stale cache
       }
     }
-    // Inject into calEventCache under the sub's id
-    if (!calEventCache[sub.id]) calEventCache[sub.id] = {};
-    events.forEach(ev => {
-      const startDate = ev.start?.date || ev.start?.dateTime?.slice(0,10);
-      if (!startDate) return;
-      const entry = {
-        eventId:     ev.id || null,
-        calId:       sub.id,
-        summary:     ev.summary || '(No title)',
-        description: ev.description || '',
-        color:       sub.color,
-        holiday:     false,
-        allDay:      !!ev.start?.date,
-        startDT:     ev.start?.dateTime || null,
-        endDT:       ev.end?.dateTime   || null,
-        startDate:   ev.start?.date     || null,
-        endDate:     ev.end?.date       || null,
-      };
-      // Multi-day all-day
-      if (entry.allDay && entry.startDate && entry.endDate && entry.endDate > entry.startDate) {
-        const endD = new Date(entry.endDate + 'T00:00:00');
-        for (let d = new Date(entry.startDate + 'T00:00:00'); d < endD; d.setDate(d.getDate() + 1)) {
-          const key = d.toISOString().slice(0, 10);
-          if (!calEventCache[sub.id][key]) calEventCache[sub.id][key] = [];
-          calEventCache[sub.id][key].push(entry);
-        }
-      } else {
-        if (!calEventCache[sub.id][startDate]) calEventCache[sub.id][startDate] = [];
-        calEventCache[sub.id][startDate].push(entry);
-      }
+    // Rebuild this sub's slice from scratch so repeated loads never duplicate.
+    calEventCache[sub.id] = {};
+    events.forEach(raw => {
+      expandRecurrence(raw, winStart, winEnd).forEach(inst => injectIcsEvent(sub, inst));
     });
   });
   await Promise.all(fetches);

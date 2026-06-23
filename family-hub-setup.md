@@ -107,6 +107,14 @@ const GOOGLE_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com";
 
 Replace it with your actual Client ID.
 
+> **Don't want to set up Google OAuth?** You can skip Step 1 entirely and still
+> see your calendars: in ⚙️ **Settings → 📅 Calendar → 📡 ICS Subscriptions**,
+> paste a calendar's **public or secret `.ics` URL** (Google, Outlook, school or
+> sports feeds all provide one). These are **read-only** — you won't be able to
+> add/edit events from the app — but they need no sign-in. Recurring events and
+> time zones are handled automatically. *(On local dev without Netlify, feeds
+> that block cross-origin requests — like Google's — only load once deployed.)*
+
 ---
 
 ## Step 2 — Firebase (Shared Real-Time Data)

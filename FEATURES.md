@@ -161,6 +161,29 @@ let disabledCals = new Set(); // calendar IDs toggled off by user
 
 **localStorage:** `fh_calView`, `fh_calIds` (array of calendar IDs), `fh_calMeta` (labels/colors)
 
+#### ICS Subscriptions (no-OAuth read-only calendars)
+
+Subscribe to any public/secret `.ics` URL (Google, Outlook, school/sports feeds)
+without signing into Google — events inject into the same `calEventCache` and
+render in every calendar view, the countdown picker, and conflict detection.
+
+**State:** `icsSubs` = `lsGet('fh_icsSubs', [])` (`[{id,url,label,color,weekdaysOnly}]`); `icsCache` = `lsGet('fh_icsCache', {})` (`{id:{fetchedAt,events}}`, 4 h TTL).
+
+**Key functions:**
+- `parseIcs(text)` — VEVENT parser: summary/description, all-day vs timed, **TZID** (→ UTC via `tzWallToUTCISO`), **RRULE** + **EXDATE**, RFC line unfolding.
+- `expandRecurrence(ev, winStart, winEnd)` — expands `FREQ=DAILY/WEEKLY/MONTHLY/YEARLY` with `INTERVAL`/`COUNT`/`UNTIL`/`BYDAY`(weekly)/`EXDATE` across the load window (~2 mo back → ~14 mo forward). Non-recurring events pass through unchanged.
+- `fetchIcsSub(sub)` — direct fetch, falling back to the same-origin `/.netlify/functions/ics` proxy (keeps private feed URLs in your own infra; only on a Netlify deploy).
+- `loadIcsSubs()` — rebuilds each sub's `calEventCache` slice from scratch (no duplicate injection); `injectIcsEvent()` keys events by **local** date (no UTC day-shift).
+- `addIcsSub()` / `removeIcsSub(id)` / `renderIcsSubList()` — Settings → Calendar UI.
+
+**HTML anchors:** `#icsSubList`, `#icsUrlInput`, `#icsLabelInput`, `#icsColorInput`, `#icsSubStatus` (Settings → Calendar → 📡 ICS Subscriptions)
+
+**localStorage:** `fh_icsSubs`, `fh_icsCache`
+
+**Server:** `netlify/functions/ics.js` proxies a single feed URL server-side (keyless; SSRF-guards loopback/private hosts).
+
+**Gotchas:** Recurrence is pragmatic — no `BYMONTHDAY`/nth-weekday/`RDATE`/`RECURRENCE-ID` overrides. `TZID` resolves via `Intl` (unknown zones fall back to floating/local). Local dev without Netlify can't use the proxy, so CORS-restricted feeds (e.g. Google's `.ics`) only load when deployed.
+
 ---
 
 ### 2. Google Authentication
