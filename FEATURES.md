@@ -115,7 +115,11 @@ const GEMINI_MODEL     = 'gemini-2.5-flash';      // pinned 2026-05-31
 const GEMINI_API_BASE  = 'https://generativelanguage.googleapis.com/v1beta/models';
 const OPENAI_MODEL     = 'gpt-4o-mini';            // pinned 2026-05-31
 const OPENAI_API_BASE  = 'https://api.openai.com/v1';
-const OWM_API_BASE     = 'https://api.openweathermap.org/data/2.5';
+// Weather: all keyless — no signup, no activation delay, no proxy
+const OM_FORECAST_BASE     = 'https://api.open-meteo.com/v1/forecast';
+const OM_GEOCODE_BASE      = 'https://geocoding-api.open-meteo.com/v1/search';
+const OM_AIRQUALITY_BASE   = 'https://air-quality-api.open-meteo.com/v1/air-quality';
+const REVERSE_GEOCODE_BASE = 'https://api.bigdatacloud.net/data/reverse-geocode-client';
 const DICT_API_BASE    = 'https://api.dictionaryapi.dev/api/v2/entries/en';
 const DADJOKE_API_BASE = 'https://icanhazdadjoke.com';
 ```
@@ -186,12 +190,11 @@ let gsiReady = false;
 
 ### 3. Weather Widget
 
-**API:** OpenWeatherMap v2.5 (free tier) via `OWM_API_BASE`
+**API:** **Keyless** — Open-Meteo for forecast (`OM_FORECAST_BASE`), geocoding (`OM_GEOCODE_BASE`), and US AQI (`OM_AIRQUALITY_BASE`); RainViewer for radar tiles; BigDataCloud for reverse geocoding (`REVERSE_GEOCODE_BASE`, geolocation button); NWS for US severe-weather alerts. No signup, no activation delay, no Netlify proxy. (The separate `netlify/functions/events.js` event-discovery feature still uses an OWM key.)
 **Multi-location:** Supports any number of saved cities; nav arrows and dot indicators appear when >1 location.
 
 **State:**
 ```js
-let weatherKey          = WEATHER_API_KEY || localStorage.getItem('fh_wkey') || '';
 let weatherLocations    = lsGet('fh_wlocations', []);  // array of city strings
 let weatherLocIdx       = 0;                           // currently-displayed index
 const weatherCache      = {};                          // { cityKey: { ts, data } } — in-memory
@@ -201,7 +204,12 @@ let sunArcEnabled       = lsGet('fh_sunArc', true);   // sun-path arc on/off
 
 **Key functions:**
 - `showWeatherLocation(idx)` — loads (or restores from cache) weather for `weatherLocations[idx]`
-- `loadWeatherByCity(city)` — fetches current + forecast from OWM, builds data object, caches it
+- `loadWeatherByCity(city)` — geocodes the city (Open-Meteo), fetches current+hourly+daily forecast + US AQI, builds the normalized `data` object, caches it
+- `geocodeCity(city)` — Open-Meteo forward geocode; parses `"City, ST"` / `"City, Country"` hints to pick the best match
+- `wmoToCondition(code)` / `wmoDescription(code)` — map WMO weather codes to OWM-style condition strings / human descriptions
+- `usAqiToBucket(aqi)` — US AQI (0-500) → `{ bucket 1-5, label }` for the ticker's color + text
+- `omEpoch(isoLocal, offsetSec)` — convert an Open-Meteo location-local ISO time to a real UTC epoch
+- `addRainViewerLayer(map)` — fetches RainViewer's latest radar frame and adds it as a Leaflet tile layer (keyless)
 - `renderWeatherData(data)` — populates all weather DOM elements from a data object
 - `renderSunArc(data)` — draws the optional sun-path arc (SVG): sun position between sunrise/sunset, daylight-remaining readout, golden-hour + day/night states. Gated by `sunArcEnabled`. Pure local compute (uses `sunriseTs`/`sunsetTs` epochs, no extra API call).
 - `renderWeatherTicker(data)` — scrolling ticker; shows severe-weather **alerts first** (bold, severity-colored), then precip/humidity/wind/visibility/sunrise/sunset/AQI.
@@ -215,13 +223,17 @@ let sunArcEnabled       = lsGet('fh_sunArc', true);   // sun-path arc on/off
 
 **HTML anchors:** `#weatherDisplay`, `#weatherSetup`, `#wTemp`, `#wDesc`, `#wIcon`, `#wHigh`, `#wLow`, `#wRain`, `#wForecast`, `#wxSunArc`, `#wxLocNav`, `#wxLocDots`, `#weatherCity`, `#wxLocationsList`, `#sunArcToggle` (Settings → Weather)
 
-**localStorage:** `fh_wkey`, `fh_wlocations` (array), `fh_wcity` (legacy, kept in sync with first location), `fh_sunArc` (bool — sun-path arc visibility)
+**localStorage:** `fh_wlocations` (array), `fh_wcity` (legacy, kept in sync with first location), `fh_sunArc` (bool — sun-path arc visibility). *(`fh_wkey` removed — weather is keyless now.)*
 
 **Migration:** On first run, any existing `fh_wcity` value is auto-migrated into `fh_wlocations[0]`.
 
-**External:** NWS `api.weather.gov/alerts/active?point=` (keyless) for severe-weather alerts — covered by CSP `connect-src https:`. US-only; browsers can't set the `User-Agent` NWS requests, but calls still succeed with permissive CORS.
+**External (all keyless, covered by CSP `connect-src https:` / `img-src https:`):**
+- Open-Meteo `api.open-meteo.com`, `geocoding-api.open-meteo.com`, `air-quality-api.open-meteo.com`
+- RainViewer `api.rainviewer.com` (frame index) + `tilecache.rainviewer.com` (tiles)
+- BigDataCloud `api.bigdatacloud.net` (reverse geocode for the 📍 geolocation button)
+- NWS `api.weather.gov/alerts/active?point=` for severe-weather alerts. US-only; calls succeed with permissive CORS.
 
-**Gotcha:** New OWM API keys take up to 2 hours to activate.
+**Gotcha:** Open-Meteo returns conditions as integer **WMO codes** (mapped via `wmoToCondition`) and times as **location-local ISO** strings without a zone suffix (convert with `omEpoch`). Open-Meteo has no map tiles — radar uses RainViewer instead.
 
 ---
 

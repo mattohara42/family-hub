@@ -40,12 +40,13 @@ Shared state (shopping, todo, budget) lives in Firebase Firestore. Photos are bl
 | Gemini free tier disabled | Happens when GCP billing is enabled — use an AI Studio key from a billing-free project |
 | Gemini model deprecated | Update `GEMINI_MODEL` constant; watch for `404 NOT_FOUND` |
 | `generative-language` OAuth scope | Doesn't exist — `invalid_scope`. API key only for Gemini |
-| OWM keys take 2 hours | New OpenWeatherMap keys need up to 2h to activate |
+| Weather is keyless | Widget uses **Open-Meteo** (forecast/geocode/AQI) + **RainViewer** (radar) + **NWS** (US alerts) — no key, no signup. `loadWeatherByCity()` geocodes then fetches. Note: `netlify/functions/events.js` (event discovery) still uses an OWM key — separate feature |
+| Open-Meteo uses WMO codes | Conditions are integer WMO codes, not strings. `wmoToCondition()` maps them to the OWM-style strings (`Clear`/`Rain`/…) the renderer keys on |
+| Open-Meteo times are location-local | ISO strings have no zone suffix (`timezone=auto`); use `omEpoch(iso, utc_offset_seconds)` to get a real UTC epoch |
 | Touch tap-target CSS leak | Larger button/list padding MUST be inside `@media (hover: none)` |
 | SMS popover transparency | Use a solid opaque color — `var(--surface)` is semi-transparent over bg photos |
 | SMS popover clipping | `backdrop-filter` on `.card` traps `position: fixed`; append popover to `<body>` then position via `getBoundingClientRect()` |
 | Sidebar card compression | `.sidebar > *` must have `flex-shrink: 0` |
-| Weather `fcast.list` may be null | Use `fcast.list \|\| []` — some API error responses omit it |
 | `budgetDatesInRange()` returns strings | Returns `YYYY-MM-DD` strings, not Date objects — don't call Date methods on them |
 | Budget pill hidden by default | `#budgetTotalCard` starts `display:none`; `renderBudgetCard()` shows it when items exist |
 | Budget uses Firestore | Collection `budget` ordered by `createdAt`; `onSnapshot` keeps `budgetItems[]` live |
