@@ -765,13 +765,11 @@
 
       <!-- ── Weather ── -->
       <div class="settings-panel" data-panel="weather">
-        <div class="field">
-          <label>OpenWeatherMap API Key
-            <a href="https://openweathermap.org/api" target="_blank"
-               style="font-size:.75rem;color:var(--accent);margin-left:6px;font-weight:400">Get a free key ↗</a>
-          </label>
-          <input type="text" id="settingWeatherKey" placeholder="Paste your free API key…" />
-        </div>
+        <p style="font-size:.8rem;color:var(--muted);margin:0 0 12px;line-height:1.5">
+          🌤️ Weather is powered by <a href="https://open-meteo.com/" target="_blank"
+          style="color:var(--accent)">Open-Meteo</a> — free and keyless, no signup required.
+          Just add a location below.
+        </p>
         <div class="field">
           <label>Locations</label>
           <div id="wxLocationsList" style="margin-bottom:8px"></div>

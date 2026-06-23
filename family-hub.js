@@ -14,7 +14,7 @@ const FIREBASE_CONFIG = {
 const GOOGLE_CLIENT_ID = "1023822683234-e0pslac1cag5ju2o26gl5c9kq36udr7q.apps.googleusercontent.com";
 const GOOGLE_SCOPES    = "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly";
 
-const WEATHER_API_KEY  = "a8f8bb29d46ba4fab174544439d4a849";   // ← paste your OpenWeatherMap key here
+// Weather needs NO API key — it uses keyless Open-Meteo (see helpers below).
 const WEATHER_CITY     = "";   // ← e.g. "Rochester, US"  (optional — can also set in ⚙️)
 
 // ── Pinned API versions & model names ─────────────────────────
@@ -23,31 +23,108 @@ const GEMINI_MODEL          = 'gemini-2.5-flash';            // pinned 2026-05-3
 const GEMINI_API_BASE       = 'https://generativelanguage.googleapis.com/v1beta/models';
 const OPENAI_MODEL          = 'gpt-4o-mini';                 // pinned 2026-05-31
 const OPENAI_API_BASE       = 'https://api.openai.com/v1';
-const OWM_API_BASE          = 'https://api.openweathermap.org/data/2.5'; // v2.5 free tier
+// Weather: Open-Meteo (forecast/geocode/air quality) + RainViewer (radar tiles)
+// + NWS (US alerts). All keyless — no signup, no activation delay, no proxy.
+const OM_FORECAST_BASE      = 'https://api.open-meteo.com/v1/forecast';
+const OM_GEOCODE_BASE       = 'https://geocoding-api.open-meteo.com/v1/search';
+const OM_AIRQUALITY_BASE    = 'https://air-quality-api.open-meteo.com/v1/air-quality';
+const REVERSE_GEOCODE_BASE  = 'https://api.bigdatacloud.net/data/reverse-geocode-client';
 const DICT_API_BASE         = 'https://api.dictionaryapi.dev/api/v2/entries/en';
 const DADJOKE_API_BASE      = 'https://icanhazdadjoke.com';
 
-// ── Netlify proxy helpers ──────────────────────────────────────
-// When a client-side API key is blank (production Netlify deploy), requests
-// are routed through /.netlify/functions/* which holds the key server-side.
-// When the key is set in the config block above (local dev), calls go direct.
+// ── Netlify proxy helper (AI only) ─────────────────────────────
+// Weather is keyless now, so the only server-side proxy left is for the AI
+// key: when mealAiKey is blank (production), geminiFetch() routes through
+// /.netlify/functions/ai which holds the key server-side.
 
-const OWM_ENDPOINTS = {
-  weather:       `${OWM_API_BASE}/weather`,
-  forecast:      `${OWM_API_BASE}/forecast`,
-  air_pollution: `${OWM_API_BASE}/air_pollution`,
-  reverse:       'https://api.openweathermap.org/geo/1.0/reverse',
+// ── Weather helpers (Open-Meteo, keyless) ──────────────────────
+// Open-Meteo reports conditions as WMO codes (integers). Map them to the
+// OWM-style condition strings the renderer already keys on (WX_ICONS,
+// animClass, tints — all use 'Clear'/'Rain'/'Snow'/…) so nothing downstream
+// has to change.
+function wmoToCondition(code) {
+  if (code == null)               return 'Clouds';
+  if (code <= 1)                  return 'Clear';
+  if (code <= 3)                  return 'Clouds';
+  if (code === 45 || code === 48) return 'Fog';
+  if (code >= 51 && code <= 57)   return 'Drizzle';
+  if (code >= 71 && code <= 77)   return 'Snow';
+  if (code === 85 || code === 86) return 'Snow';
+  if (code >= 95)                 return 'Thunderstorm';
+  return 'Rain'; // 61-67 rain, 80-82 rain showers
+}
+
+const WMO_DESC = {
+  0:'clear sky', 1:'mainly clear', 2:'partly cloudy', 3:'overcast',
+  45:'fog', 48:'rime fog', 51:'light drizzle', 53:'drizzle', 55:'dense drizzle',
+  56:'freezing drizzle', 57:'freezing drizzle', 61:'light rain', 63:'rain', 65:'heavy rain',
+  66:'freezing rain', 67:'freezing rain', 71:'light snow', 73:'snow', 75:'heavy snow',
+  77:'snow grains', 80:'light showers', 81:'showers', 82:'violent showers',
+  85:'snow showers', 86:'snow showers', 95:'thunderstorm', 96:'thunderstorm w/ hail',
+  99:'thunderstorm w/ hail',
+};
+function wmoDescription(code) { return WMO_DESC[code] || 'unknown'; }
+
+// US AQI (0-500) → { bucket 1-5 for the color lookup, human label }.
+function usAqiToBucket(aqi) {
+  if (aqi == null)  return { bucket: null, label: '' };
+  if (aqi <= 50)    return { bucket: 1, label: 'Good' };
+  if (aqi <= 100)   return { bucket: 2, label: 'Moderate' };
+  if (aqi <= 150)   return { bucket: 3, label: 'Unhealthy (Sensitive)' };
+  if (aqi <= 200)   return { bucket: 4, label: 'Unhealthy' };
+  if (aqi <= 300)   return { bucket: 5, label: 'Very Unhealthy' };
+  return { bucket: 5, label: 'Hazardous' };
+}
+
+// US state/territory abbreviation → full name, so a "City, NY" hint can match
+// Open-Meteo's full-name admin1 ("New York").
+const US_STATES = {
+  al:'alabama', ak:'alaska', az:'arizona', ar:'arkansas', ca:'california',
+  co:'colorado', ct:'connecticut', de:'delaware', fl:'florida', ga:'georgia',
+  hi:'hawaii', id:'idaho', il:'illinois', in:'indiana', ia:'iowa', ks:'kansas',
+  ky:'kentucky', la:'louisiana', me:'maine', md:'maryland', ma:'massachusetts',
+  mi:'michigan', mn:'minnesota', ms:'mississippi', mo:'missouri', mt:'montana',
+  ne:'nebraska', nv:'nevada', nh:'new hampshire', nj:'new jersey', nm:'new mexico',
+  ny:'new york', nc:'north carolina', nd:'north dakota', oh:'ohio', ok:'oklahoma',
+  or:'oregon', pa:'pennsylvania', ri:'rhode island', sc:'south carolina',
+  sd:'south dakota', tn:'tennessee', tx:'texas', ut:'utah', vt:'vermont',
+  va:'virginia', wa:'washington', wv:'west virginia', wi:'wisconsin', wy:'wyoming',
+  dc:'district of columbia',
 };
 
-function owmFetch(endpoint, params) {
-  if (weatherKey) {
-    const url = new URL(OWM_ENDPOINTS[endpoint]);
-    Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-    url.searchParams.set('appid', weatherKey);
-    return fetch(url.toString());
+// Forward geocode "City" / "City, ST" / "City, Country" → best match
+// { latitude, longitude, name, admin1, country, country_code } or null.
+async function geocodeCity(city) {
+  const [namePart, ...rest] = String(city).split(',');
+  const hint = rest.join(',').trim().toLowerCase();
+  const stateName = US_STATES[hint] || null;   // expand "ny" → "new york"
+  const url = new URL(OM_GEOCODE_BASE);
+  url.searchParams.set('name', namePart.trim());
+  url.searchParams.set('count', hint ? '10' : '1');
+  url.searchParams.set('language', 'en');
+  url.searchParams.set('format', 'json');
+  const r = await fetch(url.toString());
+  const d = await r.json();
+  const results = d?.results || [];
+  if (!results.length) return null;
+  if (hint) {
+    const m = results.find(g => {
+      const admin1 = (g.admin1 || '').toLowerCase();
+      return admin1 === hint ||
+             (stateName && admin1 === stateName) ||
+             (g.country_code && g.country_code.toLowerCase() === hint) ||
+             (g.country && g.country.toLowerCase() === hint);
+    });
+    if (m) return m;
   }
-  const qs = new URLSearchParams({ endpoint, ...params });
-  return fetch(`/.netlify/functions/weather?${qs}`);
+  return results[0];
+}
+
+// Open-Meteo times come back as location-local ISO strings with no zone suffix
+// (because timezone=auto). Convert one to a real UTC epoch (seconds) using the
+// location's UTC offset, so it can be compared against Date.now().
+function omEpoch(isoLocal, offsetSec) {
+  return Math.round(Date.parse(isoLocal + 'Z') / 1000) - offsetSec;
 }
 
 function geminiFetch(body) {
@@ -122,7 +199,6 @@ let showHolidays  = localStorage.getItem('fh_holidays') === 'true';
 let holidaysColor = localStorage.getItem('fh_holidaysColor') || '#e8a838';
 const HOLIDAYS_ID = 'en.usa#holiday@group.v.calendar.google.com';
 // File-level constants win; localStorage is the fallback for values set via ⚙️ Settings
-let weatherKey      = WEATHER_API_KEY  || localStorage.getItem('fh_wkey')  || '';
 let weatherCity     = WEATHER_CITY     || localStorage.getItem('fh_wcity') || ''; // kept for compat
 // Multi-location weather
 // Migrate legacy single-city to array on first run
@@ -989,7 +1065,7 @@ function updateStatusPill() {
   const firebaseOk = isConfigured && db !== null;
   const googleOk   = !!currentUser;
   const calOk      = googleOk && (typeof calendarMeta !== 'undefined') && calendarMeta.length > 0;
-  const weatherOk  = !!(typeof weatherKey !== 'undefined' && weatherKey);
+  const weatherOk  = !!(typeof weatherLocations !== 'undefined' && weatherLocations.length > 0);
   const allOk      = firebaseOk && googleOk && calOk && weatherOk;
 
   const pill = document.getElementById('statusPill');
@@ -1036,7 +1112,7 @@ function renderCtrlStatusView() {
   const firebaseOk = isConfigured && db !== null;
   const googleOk   = !!currentUser;
   const calOk      = googleOk && (typeof calendarMeta !== 'undefined') && calendarMeta.length > 0;
-  const weatherOk  = !!(typeof weatherKey !== 'undefined' && weatherKey);
+  const weatherOk  = !!(typeof weatherLocations !== 'undefined' && weatherLocations.length > 0);
   const aiOk       = !!(typeof mealAiKey !== 'undefined' && mealAiKey);
 
   const checks = [
@@ -1060,8 +1136,8 @@ function renderCtrlStatusView() {
       ok: calOk
     },
     {
-      label: 'Weather API',
-      desc:  weatherOk ? 'OpenWeatherMap key active' : 'Add your free API key in ⚙️ Weather',
+      label: 'Weather',
+      desc:  weatherOk ? 'Open-Meteo (no key needed) — locations set' : 'Add a location in ⚙️ Weather',
       ok: weatherOk
     },
     {
@@ -2382,20 +2458,30 @@ const ICS_TTL_MS = 4 * 60 * 60 * 1000;        // refresh every 4 hours
 /** Parse an ICS text string into a flat array of event objects compatible with cacheEvents(). */
 function parseIcs(text) {
   const events = [];
-  const lines  = text.replace(/\r\n?/g, '\n').replace(/\n /g, '').split('\n');
+  // Unfold folded lines (continuation lines start with a space OR tab), per RFC 5545.
+  const lines  = text.replace(/\r\n?/g, '\n').replace(/\n[ \t]/g, '').split('\n');
   let cur = null;
 
   const val    = line => line.slice(line.indexOf(':') + 1).trim();
-  const dtPart = prop => { // returns {date, dateTime} compatible with GCal format
-    const raw = prop.replace(/;[^:]+/g, ''); // strip params like TZID=...
-    const v   = val(raw);
+  const dtParse = prop => { // returns {date} | {dateTime} (ISO; UTC 'Z' when zone is known)
+    const head = prop.slice(0, prop.indexOf(':'));
+    const v    = prop.slice(prop.indexOf(':') + 1).trim();
+    const tzMatch = head.match(/TZID=([^;:]+)/i);
+    const tzid = tzMatch ? tzMatch[1] : null;
     if (/^\d{8}$/.test(v)) { // all-day: 20250901
       return { date: `${v.slice(0,4)}-${v.slice(4,6)}-${v.slice(6,8)}` };
     }
-    // datetime: 20250901T120000Z or 20250901T120000
-    const y=v.slice(0,4),mo=v.slice(4,6),d=v.slice(6,8),h=v.slice(9,11),mi=v.slice(11,13),s=v.slice(13,15)||'00';
-    const iso = `${y}-${mo}-${d}T${h}:${mi}:${s}${v.endsWith('Z')?'Z':''}`;
-    return { dateTime: iso };
+    // datetime: 20250901T120000Z (UTC) | 20250901T120000 (+TZID or floating)
+    const y=+v.slice(0,4), mo=+v.slice(4,6), d=+v.slice(6,8),
+          h=+v.slice(9,11), mi=+v.slice(11,13), s=+(v.slice(13,15)||'0');
+    if (v.endsWith('Z')) {
+      return { dateTime: `${pad(y,4)}-${pad(mo)}-${pad(d)}T${pad(h)}:${pad(mi)}:${pad(s)}Z` };
+    }
+    if (tzid) {
+      return { dateTime: tzWallToUTCISO(y, mo, d, h, mi, s, tzid) };
+    }
+    // Floating (no zone): treat as the viewer's local time.
+    return { dateTime: `${pad(y,4)}-${pad(mo)}-${pad(d)}T${pad(h)}:${pad(mi)}:${pad(s)}` };
   };
 
   for (const line of lines) {
@@ -2407,25 +2493,138 @@ function parseIcs(text) {
     if (!cur) continue;
     if (line.startsWith('SUMMARY'))     cur.summary     = val(line);
     if (line.startsWith('DESCRIPTION')) cur.description = val(line).replace(/\\n/g, '\n').replace(/\\,/g, ',');
-    if (line.startsWith('DTSTART'))     cur.start       = dtPart(line);
-    if (line.startsWith('DTEND'))       cur.end         = dtPart(line);
+    if (line.startsWith('DTSTART'))     cur.start       = dtParse(line);
+    if (line.startsWith('DTEND'))       cur.end         = dtParse(line);
     if (line.startsWith('UID'))         cur.id          = val(line);
+    if (line.startsWith('RRULE'))       cur.rrule       = val(line);
+    if (line.startsWith('EXDATE')) {
+      val(line).split(',').forEach(part => {
+        const stamp = part.trim();
+        if (stamp.length >= 8) (cur.exdates ||= []).push(
+          `${stamp.slice(0,4)}-${stamp.slice(4,6)}-${stamp.slice(6,8)}`);
+      });
+    }
   }
   return events;
 }
 
-/** Fetch one ICS URL (via a CORS proxy if needed), parse, and cache it. */
+// Zero-pad a number to `len` digits (default 2).
+function pad(n, len = 2) { return String(n).padStart(len, '0'); }
+
+// Format a Date as a local YYYY-MM-DD key (NOT UTC — avoids day-shift bugs).
+function localDateKey(d) {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+// Convert a wall-clock time in a named IANA zone to a UTC ISO string. Falls
+// back to a floating (zoneless) ISO if the zone is unknown to Intl.
+function tzWallToUTCISO(y, mo, d, h, mi, s, tzid) {
+  try {
+    const guess = Date.UTC(y, mo - 1, d, h, mi, s);
+    const dtf = new Intl.DateTimeFormat('en-US', {
+      timeZone: tzid, hourCycle: 'h23',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+    });
+    const p = dtf.formatToParts(new Date(guess)).reduce((a, x) => (a[x.type] = x.value, a), {});
+    const asTz = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
+    return new Date(guess - (asTz - guess)).toISOString();
+  } catch {
+    return `${pad(y,4)}-${pad(mo)}-${pad(d)}T${pad(h)}:${pad(mi)}:${pad(s)}`;
+  }
+}
+
+// Parse an ICS stamp (20251231 | 20251231T235900Z | 20251231T235900) to a Date.
+function icsStampToDate(v) {
+  const y = +v.slice(0,4), mo = +v.slice(4,6), d = +v.slice(6,8);
+  if (v.length <= 8) return new Date(y, mo - 1, d);
+  const h = +v.slice(9,11), mi = +v.slice(11,13), s = +(v.slice(13,15) || '0');
+  return v.endsWith('Z') ? new Date(Date.UTC(y, mo-1, d, h, mi, s)) : new Date(y, mo-1, d, h, mi, s);
+}
+
+/** Expand a parsed event into concrete instances within [winStart, winEnd].
+ *  Non-recurring events return [ev]. Supports FREQ DAILY/WEEKLY/MONTHLY/YEARLY
+ *  with INTERVAL, COUNT, UNTIL, BYDAY (weekly) and EXDATE. Returns events in the
+ *  same {start,end} shape parseIcs produces, so injection is identical.
+ */
+function expandRecurrence(ev, winStart, winEnd) {
+  if (!ev.rrule) return [ev];
+  const rule = {};
+  ev.rrule.split(';').forEach(kv => { const [k, v] = kv.split('='); if (k) rule[k.toUpperCase()] = v; });
+  const freq = (rule.FREQ || '').toUpperCase();
+  if (!['DAILY','WEEKLY','MONTHLY','YEARLY'].includes(freq)) return [ev];
+
+  const interval = Math.max(1, parseInt(rule.INTERVAL || '1', 10));
+  const count    = rule.COUNT ? parseInt(rule.COUNT, 10) : null;
+  const until    = rule.UNTIL ? icsStampToDate(rule.UNTIL) : null;
+  const DOW      = { SU:0, MO:1, TU:2, WE:3, TH:4, FR:5, SA:6 };
+  const byday    = rule.BYDAY ? rule.BYDAY.split(',').map(b => DOW[b.replace(/^[+-]?\d+/, '')]).filter(n => n != null) : null;
+
+  const isAllDay  = !!ev.start.date;
+  const baseStart = isAllDay ? new Date(ev.start.date + 'T00:00:00') : new Date(ev.start.dateTime);
+  if (isNaN(baseStart)) return [ev];
+  const baseEnd   = ev.end ? (isAllDay ? new Date(ev.end.date + 'T00:00:00') : new Date(ev.end.dateTime)) : null;
+  const durationMs = baseEnd && !isNaN(baseEnd) ? (baseEnd - baseStart) : (isAllDay ? 86400000 : 3600000);
+  const exdates = ev.exdates || [];
+
+  // Lazily yield candidate start Dates in chronological order.
+  function* candidates() {
+    if (freq === 'WEEKLY' && byday && byday.length) {
+      const days = [...new Set(byday)].sort((a,b) => a - b);
+      let weekStart = new Date(baseStart); weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+      while (true) {
+        for (const dow of days) {
+          const c = new Date(weekStart); c.setDate(weekStart.getDate() + dow);
+          c.setHours(baseStart.getHours(), baseStart.getMinutes(), baseStart.getSeconds(), 0);
+          yield c;
+        }
+        weekStart.setDate(weekStart.getDate() + 7 * interval);
+      }
+    } else {
+      const c = new Date(baseStart);
+      while (true) {
+        yield new Date(c);
+        if (freq === 'DAILY')        c.setDate(c.getDate() + interval);
+        else if (freq === 'WEEKLY')  c.setDate(c.getDate() + 7 * interval);
+        else if (freq === 'MONTHLY') c.setMonth(c.getMonth() + interval);
+        else                         c.setFullYear(c.getFullYear() + interval); // YEARLY
+      }
+    }
+  }
+
+  const out = [];
+  let emitted = 0, iter = 0;
+  for (const c of candidates()) {
+    if (++iter > 2000) break;                       // safety cap
+    if (c < baseStart) continue;                    // BYDAY days before DTSTART aren't generated
+    if (until && c > until) break;
+    if (count != null && emitted >= count) break;
+    emitted++;                                       // counts toward COUNT before EXDATE/window removal
+    if (exdates.includes(localDateKey(c))) continue;
+    if (c > winEnd) break;                           // chronological → safe to stop
+    if (c < winStart) continue;
+    const endD = new Date(c.getTime() + durationMs);
+    out.push({
+      summary: ev.summary, description: ev.description, id: ev.id,
+      start: isAllDay ? { date: localDateKey(c) }    : { dateTime: c.toISOString() },
+      end:   isAllDay ? { date: localDateKey(endD) } : { dateTime: endD.toISOString() },
+    });
+  }
+  return out;
+}
+
+/** Fetch one ICS URL (direct, falling back to the same-origin Netlify proxy),
+ *  parse, and return its events. The proxy keeps private feed URLs in your own
+ *  infra (only available on a Netlify deploy; local dev relies on direct fetch). */
 async function fetchIcsSub(sub) {
-  // Try direct fetch first; many ICS feeds are CORS-friendly
-  const CORS_PROXY = 'https://corsproxy.io/?';
   let text = null;
   try {
     const r = await fetch(sub.url, { cache: 'no-store' });
     if (r.ok) text = await r.text();
   } catch {}
-  if (!text) {
+  if (!text || !text.includes('BEGIN:VCALENDAR')) {
     try {
-      const r = await fetch(CORS_PROXY + encodeURIComponent(sub.url), { cache: 'no-store' });
+      const r = await fetch(`/.netlify/functions/ics?url=${encodeURIComponent(sub.url)}`, { cache: 'no-store' });
       if (r.ok) text = await r.text();
     } catch {}
   }
@@ -2433,10 +2632,43 @@ async function fetchIcsSub(sub) {
   return parseIcs(text);
 }
 
+/** Inject one concrete ICS event instance into calEventCache under its sub id. */
+function injectIcsEvent(sub, ev) {
+  const cache = calEventCache[sub.id] || (calEventCache[sub.id] = {});
+  const entry = {
+    eventId:     ev.id || null,
+    calId:       sub.id,
+    summary:     ev.summary || '(No title)',
+    description: ev.description || '',
+    color:       sub.color,
+    holiday:     false,
+    allDay:      !!ev.start?.date,
+    startDT:     ev.start?.dateTime || null,
+    endDT:       ev.end?.dateTime   || null,
+    startDate:   ev.start?.date     || null,
+    endDate:     ev.end?.date       || null,
+  };
+  // Multi-day all-day events: cache on every date in their range (end is exclusive).
+  if (entry.allDay && entry.startDate && entry.endDate && entry.endDate > entry.startDate) {
+    const endD = new Date(entry.endDate + 'T00:00:00');
+    for (let d = new Date(entry.startDate + 'T00:00:00'); d < endD; d.setDate(d.getDate() + 1)) {
+      (cache[localDateKey(d)] ||= []).push(entry);
+    }
+  } else {
+    // Date key from the actual local instant (handles UTC/zoned/floating uniformly).
+    const key = entry.allDay ? entry.startDate : localDateKey(new Date(entry.startDT));
+    (cache[key] ||= []).push(entry);
+  }
+}
+
 /** Load all ICS subscriptions, using cache when fresh; inject into calEventCache. */
 async function loadIcsSubs() {
   if (!icsSubs.length) return;
   const now = Date.now();
+  // Recurrence expansion window: ~2 months back to ~14 months forward.
+  const winStart = new Date(); winStart.setMonth(winStart.getMonth() - 2); winStart.setHours(0,0,0,0);
+  const winEnd   = new Date(); winEnd.setMonth(winEnd.getMonth()   + 14); winEnd.setHours(23,59,59,999);
+
   const fetches = icsSubs.map(async sub => {
     const cached = icsCache[sub.id];
     let events = cached && (now - cached.fetchedAt < ICS_TTL_MS) ? cached.events : null;
@@ -2444,41 +2676,15 @@ async function loadIcsSubs() {
       events = await fetchIcsSub(sub);
       if (events) {
         icsCache[sub.id] = { fetchedAt: now, events };
-        localStorage.setItem('fh_icsCache', JSON.stringify(icsCache));
+        try { localStorage.setItem('fh_icsCache', JSON.stringify(icsCache)); } catch {}
       } else {
         events = cached?.events || []; // fall back to stale cache
       }
     }
-    // Inject into calEventCache under the sub's id
-    if (!calEventCache[sub.id]) calEventCache[sub.id] = {};
-    events.forEach(ev => {
-      const startDate = ev.start?.date || ev.start?.dateTime?.slice(0,10);
-      if (!startDate) return;
-      const entry = {
-        eventId:     ev.id || null,
-        calId:       sub.id,
-        summary:     ev.summary || '(No title)',
-        description: ev.description || '',
-        color:       sub.color,
-        holiday:     false,
-        allDay:      !!ev.start?.date,
-        startDT:     ev.start?.dateTime || null,
-        endDT:       ev.end?.dateTime   || null,
-        startDate:   ev.start?.date     || null,
-        endDate:     ev.end?.date       || null,
-      };
-      // Multi-day all-day
-      if (entry.allDay && entry.startDate && entry.endDate && entry.endDate > entry.startDate) {
-        const endD = new Date(entry.endDate + 'T00:00:00');
-        for (let d = new Date(entry.startDate + 'T00:00:00'); d < endD; d.setDate(d.getDate() + 1)) {
-          const key = d.toISOString().slice(0, 10);
-          if (!calEventCache[sub.id][key]) calEventCache[sub.id][key] = [];
-          calEventCache[sub.id][key].push(entry);
-        }
-      } else {
-        if (!calEventCache[sub.id][startDate]) calEventCache[sub.id][startDate] = [];
-        calEventCache[sub.id][startDate].push(entry);
-      }
+    // Rebuild this sub's slice from scratch so repeated loads never duplicate.
+    calEventCache[sub.id] = {};
+    events.forEach(raw => {
+      expandRecurrence(raw, winStart, winEnd).forEach(inst => injectIcsEvent(sub, inst));
     });
   });
   await Promise.all(fetches);
@@ -3463,14 +3669,10 @@ async function fetchWeather() {
   await showWeatherLocation(weatherLocIdx);
 }
 
-// Detect location via browser geolocation + OWM reverse geocode
+// Detect location via browser geolocation + keyless reverse geocode (BigDataCloud)
 async function fetchWeatherByGeolocation() {
   if (!navigator.geolocation) {
     showWxError('Geolocation is not supported by your browser.');
-    return;
-  }
-  if (!weatherKey) {
-    showWxError('Add your OpenWeatherMap API key in ⚙️ Settings → Weather first.');
     return;
   }
   const btn = document.getElementById('geoLocBtn');
@@ -3481,13 +3683,16 @@ async function fetchWeatherByGeolocation() {
   navigator.geolocation.getCurrentPosition(
     async ({ coords: { latitude: lat, longitude: lon } }) => {
       try {
-        const r = await owmFetch('reverse', { lat, lon, limit: 1 });
+        const r = await fetch(`${REVERSE_GEOCODE_BASE}?latitude=${lat}&longitude=${lon}&localityLanguage=en`);
         const d = await r.json();
-        const place = d?.[0];
-        if (!place) { showWxError('Could not resolve your location to a city.'); restore(); return; }
+        const cityName = d.city || d.locality || d.principalSubdivision;
+        if (!cityName) { showWxError('Could not resolve your location to a city.'); restore(); return; }
 
-        // Build a readable city label: "City, State" (US) or "City, Country"
-        const city = place.name + (place.state ? `, ${place.state}` : place.country ? `, ${place.country}` : '');
+        // Build a readable city label: "City, ST" (US) or "City, Region/Country"
+        const region = (d.countryCode === 'US' && d.principalSubdivisionCode)
+          ? d.principalSubdivisionCode.replace(/^US-/, '')
+          : (d.principalSubdivision || d.countryCode || '');
+        const city = cityName + (region ? `, ${region}` : '');
 
         if (!weatherLocations.includes(city)) {
           weatherLocations.push(city);
@@ -3597,147 +3802,162 @@ async function fetchNwsAlerts(lat, lon) {
 }
 
 async function loadWeatherByCity(city) {
-  if (!weatherKey && !window.location.hostname.includes('netlify')) {
-    document.getElementById('weatherSetup').style.display = '';
-    document.getElementById('weatherDisplay').style.display = 'none';
-    document.getElementById('cityInput').value = city;
-    document.getElementById('cityInput').placeholder = 'Enter city, then add API key in ⚙️ Settings';
-    return;
-  }
-
   try {
-    const [curR, fcastR] = await Promise.all([
-      owmFetch('weather',  { q: city, units: 'imperial' }),
-      owmFetch('forecast', { q: city, units: 'imperial', cnt: 56 }),
-    ]);
-    const cur   = await curR.json();
-    const fcast = await fcastR.json();
+    // 1) Resolve the city name to coordinates (keyless Open-Meteo geocoder).
+    const place = await geocodeCity(city);
+    if (!place) {
+      showWxError(`Couldn't find “${city}”. Try “City, ST” or “City, Country”.`, city);
+      return;
+    }
+    const lat = place.latitude, lon = place.longitude;
 
-    if (cur.cod !== 200) { showWxError(cur.message, city); return; }
+    // 2) Kick off the independent, never-throwing side requests:
+    //    NWS severe-weather alerts (US only) + US air quality.
+    const alertsP = fetchNwsAlerts(lat, lon);   // [] on failure / non-US
+    const aqiP = fetch(`${OM_AIRQUALITY_BASE}?latitude=${lat}&longitude=${lon}&current=us_aqi`)
+      .then(r => r.json()).catch(() => null);
 
-    // Fetch air quality + reverse geocode (state) + severe-weather alerts using lat/lon
-    const { lat, lon } = cur.coord || {};
-    let aqi = null, aqiLabel = '', locationState = '', weatherAlerts = [];
-    if (lat != null && lon != null) {
-      const alertsP = fetchNwsAlerts(lat, lon);   // independent — never throws, [] on failure / non-US
-      try {
-        const [aqiR, geoR] = await Promise.all([
-          owmFetch('air_pollution', { lat, lon }),
-          owmFetch('reverse',       { lat, lon, limit: 1 }),
-        ]);
-        const aqiD = await aqiR.json();
-        aqi = aqiD?.list?.[0]?.main?.aqi ?? null;
-        const aqiLabels = ['', 'Good', 'Fair', 'Moderate', 'Poor', 'Very Poor'];
-        aqiLabel = aqiLabels[aqi] || '';
-
-        const geoD = await geoR.json();
-        const geo  = Array.isArray(geoD) ? geoD[0] : null;
-        // Use state for US; fall back to country code elsewhere
-        locationState = (geo?.country === 'US' && geo?.state) ? geo.state : (cur.sys?.country || '');
-      } catch(e) { locationState = cur.sys?.country || ''; }
-      weatherAlerts = await alertsP;
-    } else {
-      locationState = cur.sys?.country || '';
+    // 3) Main forecast (current + hourly + daily) in imperial units.
+    const fParams = new URLSearchParams({
+      latitude:  lat,
+      longitude: lon,
+      current:   'temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m',
+      hourly:    'temperature_2m,weather_code,precipitation_probability,visibility',
+      daily:     'temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max,sunrise,sunset',
+      temperature_unit:   'fahrenheit',
+      wind_speed_unit:    'mph',
+      precipitation_unit: 'inch',
+      timezone:           'auto',
+      forecast_days:      '7',
+    });
+    const fc = await (await fetch(`${OM_FORECAST_BASE}?${fParams}`)).json();
+    if (!fc || !fc.current || !fc.hourly || !fc.daily) {
+      showWxError('Could not load weather right now — please try again.', city);
+      return;
     }
 
-    // Build processed data object and cache it
-    const todayStr = new Date().toISOString().slice(0, 10);
-    const forecastList = fcast.list || [];
-    const todaySlots = forecastList.filter(s => s.dt_txt.startsWith(todayStr));
+    const off    = fc.utc_offset_seconds ?? 0;
+    const cur    = fc.current;
+    const Hh     = fc.hourly;
+    const Dd     = fc.daily;
+    const nowSec = Date.now() / 1000;
 
-    let todayHi = -999, todayLo = 999, todayRainPct = 0, rainStartTime = null;
-    todaySlots.forEach(s => {
-      if (s.main.temp_max > todayHi) todayHi = s.main.temp_max;
-      if (s.main.temp_min < todayLo) todayLo = s.main.temp_min;
-      const pop = Math.round((s.pop || 0) * 100);
-      if (pop > todayRainPct) todayRainPct = pop;
-      if (pop >= 30 && !rainStartTime)
-        rainStartTime = new Date(s.dt * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    });
-    if (todaySlots.length === 0) { todayHi = cur.main.temp_max; todayLo = cur.main.temp_min; }
+    // Hourly timestamps as real UTC epochs, and the index of the next hour.
+    const hEpoch = Hh.time.map(t => omEpoch(t, off));
+    let startIdx = hEpoch.findIndex(e => e >= nowSec);
+    if (startIdx < 0) startIdx = 0;
 
-    const dayMap = {};
-    forecastList.forEach(s => {
-      const date = s.dt_txt.slice(0, 10);
-      if (date === todayStr) return;
-      if (!dayMap[date]) dayMap[date] = { hi: -999, lo: 999, pop: 0, icon: null };
-      const d = dayMap[date];
-      if (s.main.temp_max > d.hi) d.hi = s.main.temp_max;
-      if (s.main.temp_min < d.lo) d.lo = s.main.temp_min;
-      const pop = Math.round((s.pop || 0) * 100);
-      if (pop > d.pop) d.pop = pop;
-      if (!d.icon || s.dt_txt.includes('12:00')) d.icon = s.weather[0].main;
-    });
+    // ── Today's hi/lo + first meaningful rain time (from daily[0] + hourly) ──
+    const todayStr     = (Dd.time[0] || '').slice(0, 10);
+    const todayHi      = Math.round(Dd.temperature_2m_max[0]);
+    const todayLo      = Math.round(Dd.temperature_2m_min[0]);
+    const todayRainPct = Math.round(Dd.precipitation_probability_max?.[0] ?? 0);
+    let rainStartTime  = null;
+    for (let i = 0; i < Hh.time.length; i++) {
+      if (!Hh.time[i].startsWith(todayStr)) continue;
+      const pop = Math.round(Hh.precipitation_probability[i] ?? 0);
+      if (pop >= 30 && hEpoch[i] >= nowSec && !rainStartTime) {
+        rainStartTime = new Date(hEpoch[i] * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      }
+    }
 
-    // Hourly: first column is the CURRENT 3-hour block (anchored to the mark just
-    // before the next forecast slot, shown with live conditions), then the next 4
-    // forecast slots — e.g. 8·11·2·5·8 in the morning, 11·2·5·8·11 after noon.
-    const SLOT_SECS = 3 * 3600;
-    const futureSlots = forecastList.filter(s => s.dt * 1000 >= Date.now());
-    const hours = [];
-    if (futureSlots.length) {
-      const anchorDt = futureSlots[0].dt - SLOT_SECS;   // start of the in-progress block
+    // ── 5-day outlook (skip today) — same [date, {hi,lo,pop,icon}] shape ──
+    const days = [];
+    for (let i = 1; i < Dd.time.length && days.length < 5; i++) {
+      days.push([Dd.time[i], {
+        hi:   Math.round(Dd.temperature_2m_max[i]),
+        lo:   Math.round(Dd.temperature_2m_min[i]),
+        pop:  Math.round(Dd.precipitation_probability_max?.[i] ?? 0),
+        icon: wmoToCondition(Dd.weather_code[i]),
+      }]);
+    }
+
+    // ── Hourly strip: "Now" + next 4 at 3-hour spacing ──
+    const hours = [{
+      time: 'Now',
+      icon: wmoToCondition(cur.weather_code),
+      temp: Math.round(cur.temperature_2m),
+      pop:  Math.round(Hh.precipitation_probability[startIdx] ?? 0),
+    }];
+    for (let step = 3; hours.length < 5; step += 3) {
+      const i = startIdx + step;
+      if (i >= Hh.time.length) break;
       hours.push({
-        time: new Date(anchorDt * 1000).toLocaleTimeString([], { hour: 'numeric' }),
-        icon: cur.weather[0].main,
-        temp: Math.round(cur.main.temp),
-        pop:  0,
+        time: new Date(hEpoch[i] * 1000).toLocaleTimeString([], { hour: 'numeric' }),
+        icon: wmoToCondition(Hh.weather_code[i]),
+        temp: Math.round(Hh.temperature_2m[i]),
+        pop:  Math.round(Hh.precipitation_probability[i] ?? 0),
       });
-      futureSlots.slice(0, 4).forEach(s => hours.push({
-        time: new Date(s.dt * 1000).toLocaleTimeString([], { hour: 'numeric' }),
-        icon: s.weather[0].main,
-        temp: Math.round(s.main.temp),
-        pop:  Math.round((s.pop || 0) * 100),
-      }));
     }
 
-    // Curve: up to 16 slots (~48h), starting from the current in-progress block
-    const tempSlots = [];
-    if (futureSlots.length) {
-      const anchorDt = futureSlots[0].dt - SLOT_SECS;
-      tempSlots.push({ dt: anchorDt, temp: Math.round(cur.main.temp), pop: 0 });
-      futureSlots.slice(0, 15).forEach(s => tempSlots.push({
-        dt:   s.dt,
-        temp: Math.round(s.main.temp),
-        pop:  Math.round((s.pop || 0) * 100),
-      }));
+    // ── Temp curve: current + up to 15 slots at 3-hour spacing (~48h) ──
+    const tempSlots = [{ dt: Math.round(nowSec), temp: Math.round(cur.temperature_2m), pop: 0 }];
+    for (let step = 3; tempSlots.length < 16; step += 3) {
+      const i = startIdx + step;
+      if (i >= Hh.time.length) break;
+      tempSlots.push({
+        dt:   hEpoch[i],
+        temp: Math.round(Hh.temperature_2m[i]),
+        pop:  Math.round(Hh.precipitation_probability[i] ?? 0),
+      });
     }
 
-    const fmtTime = ts => new Date(ts * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    // ── Visibility (metres at the current hour) → miles ──
+    const visM = Hh.visibility?.[startIdx];
+    const visibility = visM != null ? Math.round(visM / 1609.34 * 10) / 10 : null;
 
-    // Wind direction: degrees → compass label
-    const windDeg = cur.wind?.deg ?? null;
+    // ── Wind direction: degrees → compass label ──
+    const windDeg  = cur.wind_direction_10m ?? null;
     const windDirs = ['N','NE','E','SE','S','SW','W','NW'];
     const windDir  = windDeg != null ? windDirs[Math.round(windDeg / 45) % 8] : '';
 
+    // ── Air quality (US AQI → bucket + label) ──
+    const aqiD = await aqiP;
+    const { bucket: aqi, label: aqiLabel } = usAqiToBucket(aqiD?.current?.us_aqi ?? null);
+
+    // ── Sunrise / sunset — format the location-local ISO directly ──
+    const fmtLocal = iso => {
+      if (!iso) return null;
+      let h = parseInt(iso.slice(11, 13), 10);
+      const m  = iso.slice(14, 16);
+      const ap = h >= 12 ? 'PM' : 'AM';
+      h = h % 12 || 12;
+      return `${h}:${m} ${ap}`;
+    };
+    const srISO = Dd.sunrise?.[0] || null;
+    const ssISO = Dd.sunset?.[0]  || null;
+
+    // ── Location label: "City, Region" ──
+    const region = place.admin1 || place.country || '';
+    const label  = place.name + (region ? `, ${region}` : '');
+
     const data = {
-      label:         cur.name,
-      lat:           cur.coord?.lat ?? null,
-      lon:           cur.coord?.lon ?? null,
-      icon:          cur.weather[0].main,
-      temp:          Math.round(cur.main.temp),
-      feels:         cur.main.feels_like != null ? Math.round(cur.main.feels_like) : null,
-      desc:          cur.weather[0].description,
-      hi:            Math.round(todayHi),
-      lo:            Math.round(todayLo),
+      label,
+      lat, lon,
+      icon:          wmoToCondition(cur.weather_code),
+      temp:          Math.round(cur.temperature_2m),
+      feels:         cur.apparent_temperature != null ? Math.round(cur.apparent_temperature) : null,
+      desc:          wmoDescription(cur.weather_code),
+      hi:            todayHi,
+      lo:            todayLo,
       rain:          todayRainPct,
       rainStartTime: (todayRainPct >= 30 && rainStartTime) ? rainStartTime : null,
-      humidity:      cur.main.humidity ?? null,
-      windSpeed:     cur.wind?.speed != null ? Math.round(cur.wind.speed) : null,
+      humidity:      cur.relative_humidity_2m ?? null,
+      windSpeed:     cur.wind_speed_10m != null ? Math.round(cur.wind_speed_10m) : null,
       windDeg,
       windDir,
-      visibility:    cur.visibility != null ? Math.round(cur.visibility / 1609.34 * 10) / 10 : null, // metres → miles
-      days:          Object.entries(dayMap).sort(([a],[b]) => a < b ? -1 : 1).slice(0, 5),
+      visibility,
+      days,
       hours,
       tempSlots,
-      sunrise:       cur.sys?.sunrise ? fmtTime(cur.sys.sunrise) : null,
-      sunset:        cur.sys?.sunset  ? fmtTime(cur.sys.sunset)  : null,
-      sunriseTs:     cur.sys?.sunrise ?? null,   // raw epoch seconds (for sun-path arc)
-      sunsetTs:      cur.sys?.sunset  ?? null,
-      tzOffset:      cur.timezone ?? 0,          // location's UTC offset in seconds
+      sunrise:       fmtLocal(srISO),
+      sunset:        fmtLocal(ssISO),
+      sunriseTs:     srISO ? omEpoch(srISO, off) : null,   // real epoch seconds (sun-path arc)
+      sunsetTs:      ssISO ? omEpoch(ssISO, off) : null,
+      tzOffset:      off,                                  // location's UTC offset in seconds
       aqi,
       aqiLabel,
-      alerts:        weatherAlerts,   // real NWS severe-weather alerts (US); [] elsewhere
+      alerts:        await alertsP,   // real NWS severe-weather alerts (US); [] elsewhere
     };
 
     weatherCache[city.toLowerCase().trim()] = { ts: Date.now(), data };
@@ -3745,7 +3965,7 @@ async function loadWeatherByCity(city) {
 
   } catch(e) {
     console.error(e);
-    showWxError('Could not load weather — check your API key in Settings.');
+    showWxError('Could not load weather right now — please try again.');
   }
 }
 
@@ -4029,6 +4249,28 @@ let _radarLayer   = null;
 let _radarLat     = null;
 let _radarLon     = null;
 
+/** Fetch RainViewer's latest radar frame and add it as a Leaflet tile layer.
+ *  Keyless. Returns the layer (so callers can track it) or null on failure.
+ */
+async function addRainViewerLayer(map) {
+  try {
+    const j = await (await fetch('https://api.rainviewer.com/public/weather-maps.json')).json();
+    const frames = (j.radar?.past || []).concat(j.radar?.nowcast || []);
+    const last = frames[frames.length - 1];
+    if (!last) return null;
+    const host = j.host || 'https://tilecache.rainviewer.com';
+    // path/{size}/{z}/{x}/{y}/{color}/{options}.png — color 2 (universal blue),
+    // options 1_1 = smoothed + show snow.
+    return L.tileLayer(`${host}${last.path}/256/{z}/{x}/{y}/2/1_1.png`, {
+      opacity: 0.65, maxZoom: 19,
+      attribution: '© <a href="https://www.rainviewer.com/">RainViewer</a>',
+    }).addTo(map);
+  } catch (e) {
+    console.warn('RainViewer radar unavailable', e);
+    return null;
+  }
+}
+
 /** Show/update the Leaflet precipitation radar panel.
  *  #wxRadarMap is a persistent div in the HTML — never recreated — so Leaflet's
  *  internal state stays valid across mode switches.
@@ -4067,11 +4309,9 @@ function renderRadarMap(data) {
         attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       }).addTo(_radarMap);
 
-      // OWM precipitation overlay
-      _radarLayer = L.tileLayer(
-        `https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=${weatherKey}`,
-        { opacity: 0.65, maxZoom: 19 }
-      ).addTo(_radarMap);
+      // RainViewer precipitation overlay (keyless). The tile path for the most
+      // recent radar frame is fetched from RainViewer's index, then added async.
+      addRainViewerLayer(_radarMap).then(layer => { _radarLayer = layer; });
 
       _radarLat = lat; _radarLon = lon;
     } else {
@@ -4336,7 +4576,7 @@ function addWeatherLocation() {
   input.value = '';
   renderWeatherLocationsList();
   // Pre-fetch the new location in the background
-  if (weatherKey) loadWeatherByCity(city);
+  loadWeatherByCity(city);
 }
 
 function removeWeatherLocation(i) {
@@ -8768,7 +9008,6 @@ function openSettings() {
   document.getElementById('settingAppTitle').value       = appTitle;
   document.getElementById('settingAssistantName').value  = assistantName;
   renderEmojiPicker(appTitleEmoji);
-  document.getElementById('settingWeatherKey').value    = weatherKey;
   document.getElementById('sunArcToggle').checked        = sunArcEnabled;
   document.getElementById('wxTickerToggle').checked     = wxTickerEnabled;
   document.getElementById('wxActivityToggle').checked   = wxActivityEnabled;
@@ -8866,7 +9105,6 @@ function saveSettings() {
   const selEmoji = document.querySelector('#emojiPickerGrid .emoji-picker-btn.selected');
   if (selEmoji) { appTitleEmoji = selEmoji.textContent; localStorage.setItem('fh_appTitleEmoji', appTitleEmoji); }
   applyAppTitle();
-  weatherKey    = document.getElementById('settingWeatherKey').value.trim();
   sunArcEnabled     = document.getElementById('sunArcToggle').checked;
   wxTickerEnabled   = document.getElementById('wxTickerToggle').checked;
   wxActivityEnabled = document.getElementById('wxActivityToggle').checked;
@@ -8897,7 +9135,6 @@ function saveSettings() {
   mealPantryDef = document.getElementById('settingMealPantry').value.trim();
   mealDietPrefs = Array.from(document.querySelectorAll('#mealDietGrid input:checked')).map(cb => cb.value);
   localStorage.setItem('fh_name',          userName);
-  localStorage.setItem('fh_wkey',          weatherKey);
   localStorage.setItem('fh_slideInterval', String(slideInterval));
   localStorage.setItem('fh_mealAiKey',      mealAiKey);
   localStorage.setItem('fh_mealAiProvider', mealAiProvider);
@@ -8944,7 +9181,7 @@ function saveSettings() {
   injectLocalEvents();
   renderCurrentView();
   renderCalendarTabs();
-  if (weatherKey && weatherLocations.length) showWeatherLocation(weatherLocIdx);
+  if (weatherLocations.length) showWeatherLocation(weatherLocIdx);
   if (bgPhotos.length) startSlideshow(); // restart with updated interval
 }
 

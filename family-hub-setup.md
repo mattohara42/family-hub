@@ -107,6 +107,14 @@ const GOOGLE_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com";
 
 Replace it with your actual Client ID.
 
+> **Don't want to set up Google OAuth?** You can skip Step 1 entirely and still
+> see your calendars: in ⚙️ **Settings → 📅 Calendar → 📡 ICS Subscriptions**,
+> paste a calendar's **public or secret `.ics` URL** (Google, Outlook, school or
+> sports feeds all provide one). These are **read-only** — you won't be able to
+> add/edit events from the app — but they need no sign-in. Recurring events and
+> time zones are handled automatically. *(On local dev without Netlify, feeds
+> that block cross-origin requests — like Google's — only load once deployed.)*
+
 ---
 
 ## Step 2 — Firebase (Shared Real-Time Data)
@@ -149,27 +157,19 @@ Open `family-hub.js` and find the `FIREBASE_CONFIG` constant near the very top. 
 
 ---
 
-## Step 3 — OpenWeatherMap (Weather Widget)
+## Step 3 — Weather Widget (no setup needed!)
 
-### 3a. Create an account
+The weather widget is **keyless** — it uses [Open-Meteo](https://open-meteo.com/)
+for the forecast, RainViewer for the radar, and the US National Weather Service
+for severe-weather alerts. There's no account to create and no API key to paste.
 
-1. Go to [openweathermap.org](https://openweathermap.org) → **Sign Up** (free)
-2. Verify your email
-
-### 3b. Get your API key
-
-1. Log in → click your username → **My API keys**
-2. Copy the **Default** key (or create a new one)
-
-> **Note:** New keys take up to 2 hours to activate. If you get a 401 error, wait and try again.
-
-### 3c. Enter it in the app
+Just add your locations:
 
 1. Open Family Hub → click ⚙️ **Settings → 🌤 Weather**
-2. Paste your API key
-3. Under **Locations**, type a city name (e.g. `Boston, US` or `London, GB`) and click **Add**
-4. Add as many locations as you like — use the **‹** and **›** arrows in the widget to switch between them
-5. Click **Save**
+2. Under **Locations**, type a city name (e.g. `Boston, US` or `London, GB`) and click **Add**
+   - Or click the 📍 button in the widget to use your current location.
+3. Add as many locations as you like — use the **‹** and **›** arrows in the widget to switch between them
+4. Click **Save**
 
 ---
 
@@ -201,10 +201,10 @@ The API key is stored as a server-side secret in Netlify — you never paste it 
 3. Click **Environment variables → Add a variable**
 4. Add:
    - Key: `GEMINI_KEY` — Value: your Gemini API key — check **Secret**
-   - Key: `OWM_KEY` — Value: your OpenWeatherMap API key — check **Secret**
+   - *(`OWM_KEY` is only needed if you use the optional Event Discovery feature — the weather widget itself is keyless.)*
 5. Click **Save**, then trigger a new deploy (Deploys → **Trigger deploy → Deploy site**)
 
-After deploying, leave the `WEATHER_API_KEY` and AI key fields in `family-hub.js` blank — the app will automatically call the Netlify proxy functions instead.
+After deploying, leave the AI key field in `family-hub.js` blank — the app will automatically call the Netlify proxy function instead. (Weather needs no key at all.)
 
 **If running locally:**
 
@@ -212,8 +212,6 @@ After deploying, leave the `WEATHER_API_KEY` and AI key fields in `family-hub.js
 2. Select **Google Gemini** as the provider
 3. Paste your API key
 4. Click **Save**
-
-You can also paste your OpenWeatherMap key in **Settings → 🌤 Weather** for local use.
 
 ### 4c. Optional: Use OpenAI instead (local only)
 
