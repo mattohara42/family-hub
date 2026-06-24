@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Family Hub — Design Lab · Flavor × Theme</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400;1,9..144,600&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ════════════════════════════════════════════════════════════════
+   FAMILY HUB — DESIGN LAB
+   Two orthogonal axes:
+     THEME  (color identity)  → .theme-dark / .theme-light / .theme-nautical
+     FLAVOR (design system)   → .flavor-basic / .flavor-tactile
+   Theme classes set COLOR tokens only.
+   Flavor classes set how those tokens render into MATERIAL.
+   Both stack on <body>, e.g. body.flavor-tactile.theme-dark
+   ════════════════════════════════════════════════════════════════ */
+
+:root{
+  /* flavor-agnostic primitives */
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  --font-system: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --ease: cubic-bezier(.22,.61,.36,1);
+  --compass: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' fill='none' stroke='%23f0c040' stroke-opacity='0.55' stroke-width='0.7'%3E%3Ccircle cx='50' cy='50' r='45'/%3E%3Ccircle cx='50' cy='50' r='34'/%3E%3Cpath d='M50 3 L57 50 L50 97 L43 50 Z M3 50 L50 43 L97 50 L50 57 Z' stroke-width='0.6'/%3E%3Cpath d='M24 24 L50 50 L76 76 M76 24 L50 50 L24 76' stroke-width='0.35'/%3E%3C/svg%3E");
+}
+@keyframes nauticalWave{
+  0%{transform:translateX(0) scaleY(1)}
+  50%{transform:translateX(-2%) scaleY(1.08)}
+  100%{transform:translateX(2%) scaleY(.94)}
+}
+
+/* ════════════════════════════════════════════════════════════════
+   THEME LAYER — color tokens only (shared by every flavor)
+   ════════════════════════════════════════════════════════════════ */
+.theme-dark{
+  --bg:#14151c; --bg-tint:#1b1d28;
+  --ink:#ecedf6; --ink-soft:#9b9fc0;
+  --accent:#7d9bff; --accent-deep:#4356b8; --accent2:#f5b14d;
+  --green:#5dcaa5; --red:#e06c75;
+  --line:rgba(160,168,220,.16);
+  --surface-solid:#1e2030; --surface-hi:#262a40; --surface-lo:#171823;
+  --surface-glass:rgba(26,29,39,.74);
+  --grain-blend:soft-light; --grain-amt:.05;
+}
+.theme-light{
+  --bg:#efe9df; --bg-tint:#f4efe6;
+  --ink:#2b2a33; --ink-soft:#76726a;
+  --accent:#4a5fd0; --accent-deep:#303f9a; --accent2:#c8801f;
+  --green:#1d9e75; --red:#c2453f;
+  --line:rgba(60,48,30,.14);
+  --surface-solid:#fbf8f1; --surface-hi:#ffffff; --surface-lo:#efe7d7;
+  --surface-glass:rgba(252,249,242,.72);
+  --grain-blend:multiply; --grain-amt:.06;
+}
+.theme-nautical{
+  --bg:#12233f; --bg-tint:#16294a;
+  --ink:#f5f1e6; --ink-soft:#a9bcd8;
+  --accent:#f0c040; --accent-deep:#b7892a; --accent2:#ffe090;
+  --green:#5dcaa5; --red:#e8746a;
+  --line:rgba(240,200,90,.22);
+  --surface-solid:#1d365e; --surface-hi:#28477a; --surface-lo:#152744;
+  --surface-glass:rgba(29,54,94,.62);
+  --grain-blend:soft-light; --grain-amt:.05;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   FLAVOR LAYER — renders the theme tokens into material
+   ════════════════════════════════════════════════════════════════ */
+
+/* ── BASIC: today's flat-glass system ── */
+.flavor-basic{
+  --font-head:var(--font-system); --font-head-weight:600; --font-head-style:normal;
+  --font-body:var(--font-system);
+  --radius:14px;
+  --card-bg:var(--surface-glass);
+  --card-backdrop:blur(13px) saturate(1.25);
+  --card-border:1px solid var(--line);
+  --card-shadow:0 0 22px color-mix(in srgb,var(--accent) 20%,transparent), 0 4px 18px rgba(0,0,0,.45);
+  --grain-show:0;
+  --lift:-1px;
+  --page-grain:0;
+}
+.theme-light.flavor-basic{ --card-shadow:0 0 22px color-mix(in srgb,var(--accent) 14%,transparent), 0 6px 18px rgba(70,55,30,.14); }
+
+/* ── TACTILE: lush / hand-made material system ── */
+.flavor-tactile{
+  --font-head:'Fraunces', Georgia, serif; --font-head-weight:600; --font-head-style:normal;
+  --font-body:'Hanken Grotesk', system-ui, sans-serif;
+  --radius:16px;
+  --card-bg:
+    radial-gradient(120% 80% at 50% -10%, color-mix(in srgb,var(--accent) 16%, transparent), transparent 60%),
+    linear-gradient(180deg, var(--surface-hi) 0%, var(--surface-solid) 18%, var(--surface-solid) 82%, var(--surface-lo) 100%);
+  --card-backdrop:none;
+  --card-border:1px solid var(--line);
+  --card-shadow:
+     0 1px 1px rgba(0,0,0,.45),
+     0 3px 7px rgba(0,0,0,.32),
+     0 14px 32px rgba(0,0,0,.40),
+     inset 0 1px 0 var(--surface-hi),
+     inset 0 -1px 0 var(--surface-lo);
+  --grain-show:1;
+  --lift:-3px;
+  --page-grain:1;
+}
+.theme-light.flavor-tactile{
+  --card-shadow:
+     0 1px 1px rgba(80,60,30,.10),
+     0 3px 6px rgba(80,60,30,.10),
+     0 14px 30px rgba(80,60,30,.12),
+     inset 0 1px 0 var(--surface-hi),
+     inset 0 -1px 0 var(--surface-lo);
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+
+body{
+  font-family:var(--font-body);
+  background:var(--bg); color:var(--ink);
+  min-height:100vh; position:relative; padding:0 0 60px;
+  -webkit-font-smoothing:antialiased;
+  transition:background .5s var(--ease), color .5s var(--ease);
+}
+/* ambient room light (both flavors; basic glass needs something to blur) */
+body::before{
+  content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(80% 60% at 80% -5%, color-mix(in srgb,var(--accent) 16%, transparent), transparent 55%),
+    radial-gradient(70% 50% at -10% 110%, color-mix(in srgb,var(--accent2) 12%, transparent), transparent 55%),
+    var(--bg-tint);
+  transition:background .5s var(--ease);
+}
+/* page grain — tactile only */
+body::after{
+  content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:var(--grain);background-size:160px;
+  opacity:calc(var(--grain-amt) * 1.4 * var(--page-grain));
+  mix-blend-mode:var(--grain-blend);
+}
+
+.shell{position:relative;z-index:1;max-width:1080px;margin:0 auto;padding:26px 26px 0}
+
+/* ── Control bar ── */
+.controls{display:flex;flex-wrap:wrap;gap:22px;align-items:center;margin-bottom:28px}
+.ctl{display:flex;gap:8px;align-items:center}
+.ctl-label{font-family:var(--font-system);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);margin-right:4px}
+.seg{
+  font-family:var(--font-system);font-weight:600;font-size:.8rem;
+  color:var(--ink);background:var(--surface-solid);
+  border:1px solid var(--line);border-radius:999px;
+  padding:7px 15px;cursor:pointer;transition:all .22s var(--ease);
+}
+.seg:hover{transform:translateY(-1px)}
+.seg.on{background:var(--accent);color:var(--bg);border-color:transparent;box-shadow:0 4px 14px color-mix(in srgb,var(--accent) 38%,transparent)}
+.matrix-note{font-family:var(--font-system);font-size:.74rem;color:var(--ink-soft);margin-left:auto}
+.matrix-note b{color:var(--accent);font-weight:600}
+
+/* ── Masthead ── */
+.masthead{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px}
+.brand{font-family:var(--font-head);font-optical-sizing:auto;font-weight:var(--font-head-weight);font-size:2.7rem;letter-spacing:-.02em;line-height:1}
+.brand em{font-style:italic;color:var(--accent)}
+.flavor-basic .brand em{font-style:normal}
+.brand-rule{display:block;margin-top:9px;color:var(--accent)}
+.flavor-basic .brand-rule{opacity:0;height:0;margin:0}
+.greeting{font-family:var(--font-body);font-size:.95rem;color:var(--ink-soft);text-align:right;padding-top:6px}
+.greeting b{color:var(--ink);font-weight:600}
+
+/* ── Card grid ── */
+.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:20px}
+.card{
+  grid-column:span 4;position:relative;
+  background:var(--card-bg);
+  -webkit-backdrop-filter:var(--card-backdrop);backdrop-filter:var(--card-backdrop);
+  border:var(--card-border);border-radius:var(--radius);
+  box-shadow:var(--card-shadow);
+  padding:20px 22px 22px;overflow:hidden;
+  transition:transform .4s var(--ease), box-shadow .4s var(--ease), background .5s var(--ease);
+}
+.card::after{
+  content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;
+  background-image:var(--grain);background-size:160px;
+  opacity:calc(var(--grain-amt) * var(--grain-show));mix-blend-mode:var(--grain-blend);
+}
+.card:hover{transform:translateY(var(--lift))}
+.card.wide{grid-column:span 8}
+
+.card-head{display:flex;align-items:center;gap:11px;margin-bottom:16px;position:relative;z-index:1}
+.card-icon{
+  width:34px;height:34px;border-radius:10px;flex:none;display:grid;place-items:center;font-size:1.05rem;
+  background:color-mix(in srgb,var(--accent) 16%,transparent);
+  color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);
+}
+.flavor-basic .card-icon{border-radius:8px}
+.card-head h2{font-family:var(--font-head);font-weight:var(--font-head-weight);font-size:1.18rem;letter-spacing:-.01em}
+.flavor-basic .card-head h2{font-size:1.02rem;letter-spacing:0}
+.card-head .sub{font-family:var(--font-body);font-size:.74rem;color:var(--ink-soft);margin-top:1px}
+
+/* ── Calendar ── */
+.cal{position:relative;z-index:1}
+.cal-dow{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px}
+.cal-dow span{text-align:center;font-size:.64rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);font-weight:600}
+.cal-days{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal-day{aspect-ratio:1;display:grid;place-items:center;font-size:.82rem;border-radius:9px;color:var(--ink);transition:background .2s}
+.flavor-basic .cal-day{border-radius:7px}
+.cal-day.dim{color:var(--ink-soft);opacity:.4}
+.cal-day:hover{background:var(--line)}
+.cal-day.today{background:var(--accent);color:var(--bg);font-weight:700}
+.flavor-tactile .cal-day.today{box-shadow:0 3px 10px color-mix(in srgb,var(--accent) 45%,transparent)}
+.cal-day.dot{position:relative}
+.cal-day.dot::after{content:"";position:absolute;bottom:5px;width:4px;height:4px;border-radius:50%;background:var(--accent2)}
+
+/* ── Weather ── */
+.wx{position:relative;z-index:1;display:flex;align-items:center;gap:16px}
+.wx-temp{font-family:var(--font-head);font-weight:var(--font-head-weight);font-size:3.4rem;line-height:.9;letter-spacing:-.03em}
+.flavor-basic .wx-temp{font-size:3rem}
+.wx-temp sup{font-size:1.2rem;vertical-align:top;color:var(--ink-soft)}
+.wx-meta{font-family:var(--font-body);font-size:.84rem;color:var(--ink-soft);line-height:1.5}
+.wx-meta b{color:var(--ink);font-weight:600;font-size:.95rem;display:block;margin-bottom:2px}
+.wx-glyph{font-size:2.6rem;margin-left:auto;color:var(--accent2)}
+.wx-strip{display:flex;justify-content:space-between;margin-top:18px;padding-top:16px;border-top:1px solid var(--line);position:relative;z-index:1}
+.wx-strip div{text-align:center;font-size:.72rem;color:var(--ink-soft);font-family:var(--font-body)}
+.wx-strip b{display:block;color:var(--ink);font-weight:600;font-size:.92rem;margin-top:3px}
+
+/* ── Agenda ── */
+.agenda{position:relative;z-index:1;display:flex;flex-direction:column;gap:2px}
+.event{display:flex;gap:14px;align-items:flex-start;padding:11px 6px;border-radius:10px;transition:background .2s}
+.event:hover{background:var(--line)}
+.event .time{font-family:var(--font-body);font-variant-numeric:tabular-nums;font-size:.78rem;color:var(--ink-soft);min-width:58px;padding-top:1px;font-weight:600}
+.event .title{font-family:var(--font-body);font-size:.95rem;font-weight:500}
+.event .where{font-family:var(--font-body);font-size:.76rem;color:var(--ink-soft);margin-top:1px}
+.event .tag{width:9px;height:9px;border-radius:3px;margin-top:5px;flex:none}
+.flavor-tactile .event .tag{transform:rotate(8deg)}
+
+/* ── Shopping ── */
+.list{position:relative;z-index:1;display:flex;flex-direction:column;gap:3px}
+.todo{display:flex;align-items:center;gap:12px;padding:9px 6px;font-family:var(--font-body);font-size:.92rem;border-radius:9px;transition:background .2s}
+.todo:hover{background:var(--line)}
+.tick{width:20px;height:20px;border-radius:7px;border:1.5px solid var(--ink-soft);flex:none;display:grid;place-items:center;color:transparent;transition:all .2s}
+.flavor-basic .tick{border-radius:5px}
+.todo.done .tick{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+.todo.done span{color:var(--ink-soft);text-decoration:line-through}
+.todo .qty{margin-left:auto;font-size:.74rem;color:var(--ink-soft);background:var(--line);padding:2px 9px;border-radius:999px}
+.btn{font-family:var(--font-body);font-weight:600;font-size:.85rem;color:var(--bg);background:var(--accent);border:none;border-radius:11px;padding:10px 18px;cursor:pointer;transition:transform .15s var(--ease)}
+.flavor-tactile .btn{box-shadow:0 4px 14px color-mix(in srgb,var(--accent) 38%,transparent)}
+.flavor-basic .btn{border-radius:9px}
+.btn:active{transform:scale(.97)}
+.add-row{display:flex;gap:10px;margin-top:16px;position:relative;z-index:1}
+.add-row input{flex:1;font-family:var(--font-body);font-size:.9rem;color:var(--ink);background:var(--bg-tint);border:1px solid var(--line);border-radius:11px;padding:10px 14px}
+.flavor-basic .add-row input{border-radius:9px}
+.add-row input::placeholder{color:var(--ink-soft)}
+
+/* ════════════════════════════════════════════════════════════════
+   STATES & EXTRA CARD TYPES — pressure-test the material
+   ════════════════════════════════════════════════════════════════ */
+.grid[hidden]{display:none}
+.body-z{position:relative;z-index:1}
+
+/* empty state */
+.empty{position:relative;z-index:1;text-align:center;padding:26px 10px 18px;color:var(--ink-soft)}
+.empty .glyph{font-size:2.4rem;opacity:.5;margin-bottom:8px}
+.empty .em-title{font-family:var(--font-head);font-weight:var(--font-head-weight);font-size:1.1rem;color:var(--ink);margin-bottom:4px}
+.empty .em-sub{font-size:.82rem;line-height:1.5}
+
+/* skeleton loading */
+@keyframes shimmer{100%{background-position:-200% 0}}
+.sk{position:relative;z-index:1;border-radius:8px;
+  background:linear-gradient(90deg,var(--line) 25%,color-mix(in srgb,var(--ink) 10%,transparent) 37%,var(--line) 63%);
+  background-size:200% 100%;animation:shimmer 1.4s linear infinite}
+.flavor-basic .sk{border-radius:6px}
+.sk-row{display:flex;gap:12px;align-items:center;margin-bottom:14px;position:relative;z-index:1}
+.sk-line{height:11px;border-radius:6px}
+
+/* error state */
+.errbox{position:relative;z-index:1;text-align:center;padding:22px 10px 14px}
+.errbox .glyph{font-size:2rem;color:var(--red);margin-bottom:8px}
+.errbox .er-title{font-family:var(--font-head);font-weight:var(--font-head-weight);font-size:1.05rem;color:var(--ink);margin-bottom:4px}
+.errbox .er-sub{font-size:.82rem;color:var(--ink-soft);line-height:1.5;margin-bottom:14px}
+.btn-ghost{font-family:var(--font-body);font-weight:600;font-size:.82rem;color:var(--accent);background:none;
+  border:1px solid color-mix(in srgb,var(--accent) 45%,transparent);border-radius:11px;padding:8px 16px;cursor:pointer}
+.flavor-basic .btn-ghost{border-radius:9px}
+.err-tint{border-color:color-mix(in srgb,var(--red) 38%,var(--line))}
+
+/* budget */
+.budget{position:relative;z-index:1}
+.budget-total{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px}
+.budget-total .amt{font-family:var(--font-head);font-weight:var(--font-head-weight);font-size:2rem;letter-spacing:-.02em}
+.flavor-basic .budget-total .amt{font-size:1.7rem}
+.budget-total .of{font-size:.8rem;color:var(--ink-soft)}
+.bar{height:9px;border-radius:999px;background:var(--line);overflow:hidden;margin-bottom:16px}
+.bar > i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--accent),var(--accent2))}
+.flavor-basic .bar > i{background:var(--accent)}
+.budget-line{display:flex;justify-content:space-between;font-size:.88rem;padding:7px 0;border-bottom:1px solid var(--line)}
+.budget-line:last-child{border-bottom:none}
+.budget-line .lbl{color:var(--ink)}
+.budget-line .val{font-variant-numeric:tabular-nums;color:var(--ink-soft);font-weight:600}
+
+/* chips (meals / assistant) */
+.chips{position:relative;z-index:1;display:flex;flex-wrap:wrap;gap:8px}
+.chip{font-family:var(--font-body);font-size:.8rem;font-weight:500;color:var(--ink);
+  background:color-mix(in srgb,var(--accent) 10%,transparent);
+  border:1px solid color-mix(in srgb,var(--accent) 28%,transparent);
+  border-radius:999px;padding:7px 13px;cursor:pointer;transition:all .2s var(--ease)}
+.chip:hover{background:color-mix(in srgb,var(--accent) 20%,transparent);transform:translateY(-1px)}
+.chip .k{color:var(--ink-soft);font-weight:600;margin-right:5px}
+.meal-row{display:flex;gap:10px;align-items:center;padding:9px 4px;border-bottom:1px solid var(--line)}
+.meal-row:last-child{border-bottom:none}
+.meal-row .day{font-family:var(--font-body);font-size:.7rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);min-width:38px}
+.meal-row .dish{font-size:.92rem;color:var(--ink)}
+.meal-row.todo-dish .dish{color:var(--ink-soft);font-style:italic}
+
+/* ════════════════════════════════════════════════════════════════
+   NAUTICAL FLOURISHES — belong to the theme; Tactile makes them lush
+   ════════════════════════════════════════════════════════════════ */
+.naut-anchor,.naut-wave{display:none}
+.theme-nautical .naut-anchor{
+  display:block;position:fixed;right:-2vw;bottom:-3vh;font-size:36vmin;line-height:1;
+  opacity:.14;z-index:0;pointer-events:none;user-select:none;color:#f0c040;
+}
+.theme-nautical .naut-wave{
+  display:block;position:fixed;bottom:0;left:-10%;width:120%;height:56px;
+  background:rgba(240,192,64,.07);z-index:0;pointer-events:none;
+  clip-path:polygon(0% 55%,2% 42%,5% 55%,8% 44%,11% 57%,14% 44%,17% 57%,20% 44%,23% 57%,26% 42%,29% 55%,32% 42%,35% 55%,38% 44%,41% 57%,44% 44%,47% 57%,50% 42%,53% 55%,56% 44%,59% 57%,62% 44%,65% 57%,68% 42%,71% 55%,74% 44%,77% 57%,80% 44%,83% 57%,86% 44%,89% 57%,92% 44%,95% 57%,98% 44%,100% 55%,100% 100%,0% 100%);
+  animation:nauticalWave 7s ease-in-out infinite alternate;
+}
+@media(prefers-reduced-motion:reduce){.theme-nautical .naut-wave{animation:none}}
+
+/* rope-style header divider */
+.theme-nautical .card-head{position:relative;padding-bottom:13px;margin-bottom:15px}
+.theme-nautical .card-head::after{
+  content:'';position:absolute;left:0;right:0;bottom:0;height:3px;opacity:.65;
+  background:repeating-linear-gradient(90deg,#f0c040 0 3px,rgba(140,100,0,.4) 3px 6px,#c8a020 6px 9px,rgba(140,100,0,.4) 9px 12px);
+}
+/* compass glow behind calendar */
+.theme-nautical .cal{background:radial-gradient(ellipse 70% 60% at 50% 45%,rgba(240,192,64,.07) 0%,transparent 70%)}
+
+/* ── Tactile makes the nautical flourishes lusher ── */
+.flavor-tactile.theme-nautical .naut-anchor{opacity:.16;text-shadow:0 6px 40px rgba(240,192,64,.3)}
+.flavor-tactile.theme-nautical .naut-wave{
+  height:74px;background:linear-gradient(180deg,rgba(240,192,64,.13),rgba(240,192,64,.04));
+  filter:drop-shadow(0 -2px 10px rgba(240,192,64,.14));
+}
+.flavor-tactile.theme-nautical .naut-wave::before{
+  content:'';position:absolute;inset:0;background:rgba(255,224,144,.10);
+  clip-path:inherit;transform:translateY(8px) scaleY(.7);
+}
+.flavor-tactile.theme-nautical .card-head::after{height:4px;border-radius:2px;opacity:.85;box-shadow:0 1px 3px rgba(0,0,0,.35)}
+.flavor-tactile.theme-nautical .cal{
+  background:radial-gradient(ellipse 70% 60% at 50% 47%,rgba(240,192,64,.08) 0%,transparent 70%), var(--compass) center 54%/74% no-repeat;
+}
+
+/* entrance — tactile only */
+@keyframes rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+.flavor-tactile .card{animation:rise .6s var(--ease) both}
+.flavor-tactile .card:nth-child(1){animation-delay:.05s}
+.flavor-tactile .card:nth-child(2){animation-delay:.12s}
+.flavor-tactile .card:nth-child(3){animation-delay:.19s}
+.flavor-tactile .card:nth-child(4){animation-delay:.26s}
+.flavor-tactile .card:nth-child(5){animation-delay:.33s}
+@media(prefers-reduced-motion:reduce){.flavor-tactile .card{animation:none}}
+
+@media(max-width:880px){
+  .card,.card.wide{grid-column:span 12}
+  .brand{font-size:2.1rem}
+  .matrix-note{width:100%;margin:0}
+}
+
+/* ════════════════════════════════════════════════════════════════
+   MOBILE — single column + fixed bottom tab bar (mirrors real app)
+   ════════════════════════════════════════════════════════════════ */
+.mobile-nav{display:none}
+@media(max-width:640px){
+  body{padding-bottom:78px}
+  .shell{padding:18px 16px 0}
+  .controls{gap:14px;margin-bottom:20px}
+  .matrix-note{margin-left:0}
+  .masthead{margin-bottom:18px}
+  .brand{font-size:1.9rem}
+  .greeting{font-size:.8rem;padding-top:2px}
+  .grid{display:flex;flex-direction:column;gap:14px}
+
+  /* tab filtering — only within the dashboard view */
+  body[data-tab="cal"]     #viewDash .card:not([data-card="cal"]),
+  body[data-tab="today"]   #viewDash .card:not([data-card="today"]),
+  body[data-tab="shop"]    #viewDash .card:not([data-card="shop"]),
+  body[data-tab="weather"] #viewDash .card:not([data-card="weather"]){display:none}
+  .view-states .mobile-nav{display:none}
+  .view-states{padding-bottom:0}
+
+  .mobile-nav{
+    display:flex;position:fixed;left:0;right:0;bottom:0;z-index:5;
+    justify-content:space-around;align-items:stretch;
+    padding:7px 6px calc(7px + env(safe-area-inset-bottom));
+    background:var(--card-bg);
+    -webkit-backdrop-filter:var(--card-backdrop);backdrop-filter:var(--card-backdrop);
+    border-top:1px solid var(--line);
+    box-shadow:0 -6px 22px rgba(0,0,0,.28);
+  }
+  .flavor-tactile .mobile-nav{box-shadow:0 -8px 26px rgba(0,0,0,.40), inset 0 1px 0 var(--surface-hi)}
+  .mobile-nav .nav-btn{
+    flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+    background:none;border:none;cursor:pointer;color:var(--ink-soft);
+    font-family:var(--font-body);font-size:.62rem;font-weight:600;
+    padding:6px 2px;border-radius:13px;transition:color .2s,background .2s;
+  }
+  .mobile-nav .nav-ico{font-size:1.3rem;line-height:1}
+  .mobile-nav .nav-btn.on{color:var(--accent)}
+  .flavor-tactile .mobile-nav .nav-btn.on{background:color-mix(in srgb,var(--accent) 15%,transparent)}
+}
+</style>
+</head>
+<body class="flavor-tactile theme-dark" data-tab="cal">
+<div class="naut-anchor" aria-hidden="true">&#9875;</div>
+<div class="naut-wave" aria-hidden="true"></div>
+<div class="shell">
+
+  <div class="controls">
+    <div class="ctl">
+      <span class="ctl-label">Flavor</span>
+      <button class="seg on" data-axis="flavor" data-val="basic" id="fb">Basic</button>
+      <button class="seg on" data-axis="flavor" data-val="tactile" id="ft">Tactile</button>
+    </div>
+    <div class="ctl">
+      <span class="ctl-label">Theme</span>
+      <button class="seg on" data-axis="theme" data-val="dark">Dark</button>
+      <button class="seg" data-axis="theme" data-val="light">Light</button>
+      <button class="seg" data-axis="theme" data-val="nautical">Nautical</button>
+    </div>
+    <div class="ctl">
+      <span class="ctl-label">View</span>
+      <button class="seg on" data-axis="view" data-val="dash">Dashboard</button>
+      <button class="seg" data-axis="view" data-val="states">States</button>
+    </div>
+    <span class="matrix-note">Showing <b id="now">Tactile · Dark</b></span>
+  </div>
+
+  <header class="masthead">
+    <div>
+      <div class="brand">Family <em>Hub</em>
+        <svg class="brand-rule" viewBox="0 0 180 8" width="172" height="7" fill="none">
+          <path d="M2 5 C40 1 70 7 95 4 S150 1 178 4" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+        </svg>
+      </div>
+    </div>
+    <div class="greeting">Good morning, <b>Matt</b><br>Tuesday, June 23</div>
+  </header>
+
+  <div class="grid" id="viewDash">
+    <section class="card" data-card="cal">
+      <div class="card-head"><div class="card-icon">&#9728;</div><div><h2>June</h2><div class="sub">3 events this week</div></div></div>
+      <div class="cal"><div class="cal-dow"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div><div class="cal-days" id="caldays"></div></div>
+    </section>
+
+    <section class="card" data-card="weather">
+      <div class="card-head"><div class="card-icon">&#9925;</div><div><h2>Weather</h2><div class="sub">Rochester, MI</div></div></div>
+      <div class="wx"><div class="wx-temp">72<sup>&deg;</sup></div><div class="wx-meta"><b>Partly cloudy</b>Feels like 70&deg;<br>Humidity 54%</div><div class="wx-glyph">&#9925;</div></div>
+      <div class="wx-strip"><div>Mon<b>68&deg;</b></div><div>Tue<b>74&deg;</b></div><div>Wed<b>71&deg;</b></div><div>Thu<b>66&deg;</b></div><div>Fri<b>70&deg;</b></div></div>
+    </section>
+
+    <section class="card" data-card="weather">
+      <div class="card-head"><div class="card-icon">&#9997;</div><div><h2>Word of the day</h2><div class="sub">noun</div></div></div>
+      <div style="position:relative;z-index:1">
+        <div class="wotd" style="font-family:var(--font-head);font-weight:600;font-size:1.9rem;letter-spacing:-.01em;margin:2px 0 8px">halcyon</div>
+        <div style="font-family:var(--font-body);font-size:.9rem;color:var(--ink-soft);line-height:1.55">Denoting a period of time in the past that was idyllically happy and peaceful.</div>
+      </div>
+    </section>
+
+    <section class="card wide" data-card="today">
+      <div class="card-head"><div class="card-icon">&#9783;</div><div><h2>Today</h2><div class="sub">Tuesday agenda</div></div></div>
+      <div class="agenda">
+        <div class="event"><span class="tag" style="background:var(--accent)"></span><div><div class="title">School drop-off</div><div class="where">Meadowbrook Elementary</div></div><div class="time" style="margin-left:auto">8:30a</div></div>
+        <div class="event"><span class="tag" style="background:var(--accent2)"></span><div><div class="title">Lunch with Sara</div><div class="where">The Royal Park</div></div><div class="time" style="margin-left:auto">12:00p</div></div>
+        <div class="event"><span class="tag" style="background:var(--accent)"></span><div><div class="title">Soccer practice</div><div class="where">Bloomer Park, field 3</div></div><div class="time" style="margin-left:auto">4:15p</div></div>
+        <div class="event"><span class="tag" style="background:var(--green)"></span><div><div class="title">Family movie night</div><div class="where">Living room</div></div><div class="time" style="margin-left:auto">7:00p</div></div>
+      </div>
+    </section>
+
+    <section class="card" data-card="shop">
+      <div class="card-head"><div class="card-icon">&#128722;</div><div><h2>Shopping</h2><div class="sub">4 items left</div></div></div>
+      <div class="list">
+        <label class="todo"><span class="tick">&#10003;</span><span>Avocados</span><span class="qty">x3</span></label>
+        <label class="todo done"><span class="tick">&#10003;</span><span>Sourdough</span></label>
+        <label class="todo"><span class="tick">&#10003;</span><span>Oat milk</span><span class="qty">x2</span></label>
+        <label class="todo"><span class="tick">&#10003;</span><span>Coffee beans</span></label>
+        <label class="todo done"><span class="tick">&#10003;</span><span>Strawberries</span></label>
+      </div>
+      <div class="add-row"><input placeholder="Add an item&hellip;"><button class="btn">Add</button></div>
+    </section>
+  </div>
+
+  <div class="grid" id="viewStates" hidden>
+    <section class="card">
+      <div class="card-head"><div class="card-icon">&#128722;</div><div><h2>Shopping</h2><div class="sub">empty state</div></div></div>
+      <div class="empty">
+        <div class="glyph">&#127881;</div>
+        <div class="em-title">All caught up</div>
+        <div class="em-sub">Nothing left to buy. Add an item to start a new list.</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><div class="card-icon">&#9925;</div><div><h2>Weather</h2><div class="sub">loading state</div></div></div>
+      <div class="body-z">
+        <div class="sk-row"><div class="sk" style="width:54px;height:54px;border-radius:14px"></div><div style="flex:1"><div class="sk sk-line" style="width:60%;margin-bottom:9px"></div><div class="sk sk-line" style="width:40%"></div></div></div>
+        <div class="sk-row" style="margin:0"><div class="sk sk-line" style="flex:1;height:46px;border-radius:11px"></div></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><div class="card-icon">&#128240;</div><div><h2>News</h2><div class="sub">error state</div></div></div>
+      <div class="errbox">
+        <div class="glyph">&#9888;</div>
+        <div class="er-title">Couldn&rsquo;t load headlines</div>
+        <div class="er-sub">The news feed didn&rsquo;t respond. Check your connection and try again.</div>
+        <button class="btn-ghost err-tint">Retry</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><div class="card-icon">&#128176;</div><div><h2>Budget</h2><div class="sub">June spending</div></div></div>
+      <div class="budget">
+        <div class="budget-total"><span class="amt">$1,840</span><span class="of">of $2,500</span></div>
+        <div class="bar"><i style="width:74%"></i></div>
+        <div class="budget-line"><span class="lbl">Groceries</span><span class="val">$612</span></div>
+        <div class="budget-line"><span class="lbl">Dining out</span><span class="val">$348</span></div>
+        <div class="budget-line"><span class="lbl">Kids &amp; activities</span><span class="val">$505</span></div>
+        <div class="budget-line"><span class="lbl">Household</span><span class="val">$375</span></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><div class="card-icon">&#127869;</div><div><h2>Meals</h2><div class="sub">this week</div></div></div>
+      <div class="body-z">
+        <div class="meal-row"><span class="day">Mon</span><span class="dish">Sheet-pan salmon</span></div>
+        <div class="meal-row"><span class="day">Tue</span><span class="dish">Chicken tacos</span></div>
+        <div class="meal-row"><span class="day">Wed</span><span class="dish">Pasta primavera</span></div>
+        <div class="meal-row todo-dish"><span class="day">Thu</span><span class="dish">Tap to plan&hellip;</span></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><div class="card-icon">&#10024;</div><div><h2>Assistant</h2><div class="sub">suggestions</div></div></div>
+      <div class="chips">
+        <button class="chip"><span class="k">Add</span>umbrella &mdash; rain at 4pm</button>
+        <button class="chip"><span class="k">Plan</span>Thursday dinner</button>
+        <button class="chip"><span class="k">Remind</span>trash night</button>
+        <button class="chip"><span class="k">Draft</span>thank-you to Grandma</button>
+      </div>
+    </section>
+  </div>
+</div>
+
+<nav class="mobile-nav" aria-label="Sections">
+  <button class="nav-btn on" data-tab="cal"><span class="nav-ico">&#9728;</span>Calendar</button>
+  <button class="nav-btn" data-tab="today"><span class="nav-ico">&#9783;</span>Today</button>
+  <button class="nav-btn" data-tab="shop"><span class="nav-ico">&#128722;</span>Shopping</button>
+  <button class="nav-btn" data-tab="weather"><span class="nav-ico">&#9925;</span>Weather</button>
+  <button class="nav-btn" data-tab="more"><span class="nav-ico">&#9776;</span>More</button>
+</nav>
+
+<script>
+const days=document.getElementById('caldays');
+const ev={9:1,12:1,27:1};let h='<div class="cal-day dim">&nbsp;</div>';
+for(let d=1;d<=30;d++){let c='cal-day';if(d===23)c+=' today';else if(ev[d])c+=' dot';h+=`<div class="${c}">${d}</div>`}
+days.innerHTML=h;
+
+const params=new URLSearchParams(location.search);
+let flavor=params.get('flavor')||'tactile', theme=params.get('theme')||'dark', view=params.get('view')||'dash';
+if(params.get('tab')) document.body.dataset.tab=params.get('tab');
+if(params.get('chrome')==='0') document.querySelector('.controls').style.display='none';
+const cap=s=>s[0].toUpperCase()+s.slice(1);
+const sel={flavor:()=>flavor, theme:()=>theme, view:()=>view};
+function apply(){
+  document.body.className=`flavor-${flavor} theme-${theme} view-${view}`;
+  document.getElementById('now').textContent=`${cap(flavor)} · ${cap(theme)}`;
+  document.getElementById('viewDash').hidden = view!=='dash';
+  document.getElementById('viewStates').hidden = view!=='states';
+  document.querySelectorAll('.seg').forEach(s=>s.classList.toggle('on', sel[s.dataset.axis]()===s.dataset.val));
+}
+document.querySelectorAll('.seg').forEach(s=>s.onclick=()=>{
+  if(s.dataset.axis==='flavor') flavor=s.dataset.val;
+  else if(s.dataset.axis==='theme') theme=s.dataset.val;
+  else view=s.dataset.val;
+  apply();
+});
+apply();
+
+// mobile bottom-nav tab switching
+function syncNav(){
+  const t=document.body.dataset.tab;
+  document.querySelectorAll('.mobile-nav .nav-btn').forEach(x=>x.classList.toggle('on',x.dataset.tab===t));
+}
+document.querySelectorAll('.mobile-nav .nav-btn').forEach(b=>b.onclick=()=>{
+  document.body.dataset.tab=b.dataset.tab; syncNav();
+});
+syncNav();
+</script>
+</body>
+</html>
