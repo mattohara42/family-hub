@@ -489,6 +489,7 @@
     <!-- Tab bar -->
     <div class="modal-tabs">
       <button class="modal-tab active" data-tab="look"     onclick="switchSettingsTab('look')">🎨 Look &amp; Feel</button>
+      <button class="modal-tab"        data-tab="family"   onclick="switchSettingsTab('family')">👨‍👩‍👧 Family</button>
       <button class="modal-tab"        data-tab="calendar" onclick="switchSettingsTab('calendar')">📅 Calendar</button>
       <button class="modal-tab"        data-tab="weather"  onclick="switchSettingsTab('weather')">🌤 Weather</button>
       <button class="modal-tab"        data-tab="shopping" onclick="switchSettingsTab('shopping')">🛒 Shopping</button>
@@ -612,6 +613,19 @@
           </div>
         </div>
       </div><!-- /look -->
+
+      <!-- ── Family Members ── -->
+      <div class="settings-panel" data-panel="family">
+        <p style="font-size:.82rem;color:var(--muted);margin:0 0 14px">
+          Family members are shared across Shopping (SMS), To-Do, Chores, and Calendar — set names, colors, and an optional phone number here.
+        </p>
+        <div id="familyMemberList" style="margin-bottom:10px"></div>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="newFamilyMemberInput" placeholder="Name…"
+                 style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();addFamilyMember()}" />
+          <button class="btn btn-sm btn-primary" onclick="addFamilyMember()">+ Add</button>
+        </div>
+      </div><!-- /family -->
 
       <!-- ── Calendar ── -->
       <div class="settings-panel" data-panel="calendar">
@@ -826,23 +840,10 @@
 
       <!-- ── Shopping ── -->
       <div class="settings-panel" data-panel="shopping">
-        <div class="field">
-          <label>SMS Recipients</label>
-          <div style="display:grid;grid-template-columns:1fr 1fr 28px;gap:8px;padding:0 0 5px;font-size:.72rem;color:var(--muted)">
-            <span>Nickname</span><span>Phone Number</span><span></span>
-          </div>
-          <div class="sms-contacts-list" id="smsContactsList"></div>
-          <div class="sms-add-row">
-            <input type="text" id="smsNewNick"  placeholder="Nickname (e.g. Mom)" />
-            <input type="tel"  id="smsNewPhone" placeholder="+1 555 123 4567"
-                   onkeydown="if(event.key==='Enter')addSmsContact()" />
-            <button class="btn btn-primary btn-sm" onclick="addSmsContact()">Add</button>
-          </div>
-        </div>
-        <p style="font-size:.79rem;color:var(--muted);margin-top:8px">
-          Tap <strong>📱 SMS ▾</strong> on the Shopping List and choose a recipient to send unchecked items.
+        <p style="font-size:.82rem;color:var(--muted);margin:0 0 14px">
+          Add phone numbers to family members in <strong style="cursor:pointer;color:var(--accent)" onclick="switchSettingsTab('family')">👨‍👩‍👧 Family</strong> to enable SMS sending.
         </p>
-        <hr style="border:none;border-top:1px solid rgba(255,255,255,.08);margin:14px 0"/>
+        <hr style="border:none;border-top:1px solid rgba(255,255,255,.08);margin:0 0 14px"/>
         <div class="field">
           <label>Aisle Categories</label>
           <p style="font-size:.78rem;color:var(--muted);margin-bottom:8px">Items are grouped by aisle in the shopping list.</p>
@@ -857,17 +858,9 @@
 
       <!-- ── To-Do ── -->
       <div class="settings-panel" data-panel="todo">
-        <div class="field">
-          <label>Family Members
-            <span style="font-weight:400;color:var(--muted)"> — for assigning to-do items</span>
-          </label>
-          <div id="familyMemberList" style="margin-bottom:8px"></div>
-          <div style="display:flex;gap:8px">
-            <input type="text" id="newFamilyMemberInput" placeholder="Name…"
-                   style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();addFamilyMember()}" />
-            <button class="btn btn-sm btn-primary" onclick="addFamilyMember()">+ Add</button>
-          </div>
-        </div>
+        <p style="font-size:.82rem;color:var(--muted);margin:0">
+          Manage family members in <strong style="cursor:pointer;color:var(--accent)" onclick="switchSettingsTab('family')">👨‍👩‍👧 Family</strong>.
+        </p>
       </div><!-- /todo -->
 
       <!-- ── Chores ── -->
@@ -1274,13 +1267,20 @@
     </div>
 
     <div class="field">
-      <label>Date</label>
+      <label>Start date</label>
       <input type="date" id="evtEdDate" />
     </div>
 
     <div class="evt-editor-allday-row">
       <input type="checkbox" id="evtEdAllDay" onchange="toggleEvtEdAllDay()" />
       <label for="evtEdAllDay" style="cursor:pointer;font-size:.9rem">All-day event</label>
+    </div>
+
+    <div id="evtEdEndDateSection" style="display:none">
+      <div class="field">
+        <label>End date</label>
+        <input type="date" id="evtEdEndDate" />
+      </div>
     </div>
 
     <div id="evtEdTimeSection">
@@ -1294,9 +1294,34 @@
       </div>
     </div>
 
+    <div id="evtEdRepeatSection" class="field">
+      <label>Repeat</label>
+      <select id="evtEdRepeat" class="evt-editor-select">
+        <option value="none">Does not repeat</option>
+        <option value="daily">Daily</option>
+        <option value="weekdays">Every weekday (Mon–Fri)</option>
+        <option value="weekly">Weekly</option>
+        <option value="monthly">Monthly</option>
+        <option value="yearly">Yearly</option>
+      </select>
+    </div>
+
+    <div id="evtEdRecurringSection" class="field" style="display:none">
+      <label>Edit</label>
+      <div class="evt-editor-scope-row">
+        <button type="button" class="evt-scope-btn selected" data-scope="this" onclick="selectEvtScope(this)">This event</button>
+        <button type="button" class="evt-scope-btn" data-scope="all" onclick="selectEvtScope(this)">All events</button>
+      </div>
+    </div>
+
     <div class="field">
       <label>Calendar</label>
       <div class="evt-editor-cal-select" id="evtEdCalSelect"></div>
+    </div>
+
+    <div id="evtEdMembersSection" class="field" style="display:none">
+      <label>Members</label>
+      <div class="evt-editor-members" id="evtEdMembers"></div>
     </div>
 
     <div class="evt-editor-footer">
