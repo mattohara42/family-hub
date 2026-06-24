@@ -1,6 +1,6 @@
 # Family Hub — Feature Map
 
-*Last updated: 2026-06-14*
+*Last updated: 2026-06-21*
 
 A living reference of every feature, its key functions, state variables, localStorage keys, and HTML anchor points. Update this file whenever a feature is added or significantly changed.
 
@@ -295,11 +295,14 @@ Three modes, toggled via ⚙️ Settings → Look & Feel:
 
 **State:**
 ```js
-let appMode = localStorage.getItem('fh_mode') || 'dark'; // 'light' | 'dark' | 'nautical'
+let appMode = localStorage.getItem('fh_mode') || 'dark'; // 'light' | 'dark' | 'nautical' | 'aurora' | 'colorblind'
+let appFlavor = localStorage.getItem('fh_flavor') || 'basic'; // 'basic' | 'tactile' — design-system axis, orthogonal to appMode
 ```
 **Key functions:**
 - `applyAppMode(mode)` — removes all mode classes, adds the correct one
 - `setAppMode(mode)` — calls `applyAppMode`, saves to localStorage, updates button highlights
+- `applyFlavor(flavor)` — toggles `body.flavor-tactile` (basic = no class)
+- `setFlavor(flavor)` — calls `applyFlavor`, saves `fh_flavor`, updates button highlights. Tactile reads each theme's color tokens; CSS lives in the `✦ TACTILE FLAVOR` section of `family-hub.css` (self-hosted fonts in `fonts/`)
 
 **Nautical-specific CSS elements:**
 - `body.nautical-mode::before` — large ⚓ watermark (22% opacity), lower-right corner
@@ -628,12 +631,80 @@ Categories: `phrases` (assistant triggers), `calendar` (date-based), `ui` (inter
 
 ---
 
+### 18. Event Discovery
+
+**Overview:** Discover local events (concerts, shows, family activities, library programs, sports) within a configurable radius. Calendar-aware (shows free/busy conflicts), weather-aware, and uses intelligent IndexedDB caching with background refresh.
+
+**UX:** Click 💡 button on calendar header → modal opens with cached events → fresh data fetches in background → modal updates with age label ("Fresh — just now" to "⚠️ Cached — may be outdated").
+
+**Data sources (multi-API aggregation):**
+1. **Ticketmaster Discovery API** — dated ticketed events (concerts, shows, sports)
+2. **OpenStreetMap / Overpass** — keyless POIs (museums, galleries, theatres, parks, zoos, viewpoints)
+3. **LibraryWeb (LibCal)** — free Monroe County (Rochester NY) public library events via iCal feeds
+4. **Red Wings** — Rochester Red Wings (AAA baseball) home games via MLB Stats API
+5. **CitySpark ("Around Town")** — broad local events via aggregator (concerts, festivals, food, art, comedy, family)
+
+**State:**
+```js
+let eventLocation       = lsGet('fh_eventLocation', 'Rochester');
+let eventMaxDistance    = lsGet('fh_eventMaxDistance', 120);  // minutes driving time (converted to radius)
+let eventsData          = [];         // filtered/sorted for display
+let eventsRawData       = [];         // raw from API + calendar conflicts
+let eventsSort          = 'distance'; // or 'date'
+let eventsFetchTimestamp = 0;        // for age label
+let eventsModalOpen     = false;
+```
+
+**Key functions:**
+- `openEventsModal()` — reads cached events from IndexedDB, shows immediately; fetches fresh data in background
+- `fetchAndUpdateEvents()` — calls `/.netlify/functions/events?location=<>&radius=<>`, saves to IndexedDB, re-renders modal (caching is inline here, not a separate function)
+- `addEventToCalendar(event)` — opens event editor modal; reuses `saveCalEvent()` for Google Calendar write
+- `openEventsModal()` / `closeEventsModal()` — modal state
+- `applyFiltersAndSort()` — filters by distance, date window (30 days), type; sorts by distance or date
+- `renderEventsList()` / `renderEventCard(event)` — builds card DOM for display
+
+**Netlify backend function:** `netlify/functions/events.js` (400+ lines)
+- `geocodeLocation()` — city name → lat/lon via OpenWeatherMap
+- `fetchTicketmaster()`, `fetchOpenStreetMap()`, `fetchLibraryWeb()`, `fetchRedWings()`, `fetchCitySpark()` — per-source fetchers
+- `calculateDistance()` — Haversine formula
+- `deduplicateEvents()` — by title + date + venue
+- `filterEventsByDistanceAndDate()` — 30-day window, radius filtering
+- `addWeatherContext()` — enriches with OWM forecast data
+- Error handling with exponential backoff (2 retries, 1s→2s→4s, 10s cap)
+
+**HTML anchors:** `#eventsModal`, `.cal-event-discover-btn` (💡 button in calendar header)
+
+**CSS classes:** `.event-card`, `.event-type-badge`, `.event-weather`, `.event-calendar-indicator`, `.event-age-label`, `.event-distance-pill`
+
+**localStorage:** `fh_eventLocation`, `fh_eventMaxDistance`
+
+**IndexedDB:** Database `fh_events` (v1)
+- Object store `events` (keyPath: id) with indexes: byDate, byType, byDistance
+- Object store `eventCache` (keyPath: key) — stores { key: 'current', timestamp, location, radiusMinutes, eventCount }
+
+**Configuration before production:**
+```
+Netlify environment variables:
+  TICKETMASTER_KEY=<production-key>
+  OWM_KEY=<production-key>
+```
+
+**Gotchas:**
+- Ticketmaster requests pass explicit `startDateTime`/`endDateTime` for 30-day window (was returning past events)
+- CitySpark requires `sort:'Time'` (not `'Date'`) for soonest-first results; `'Date'` returns tail
+- CitySpark `DateStart` is local time with spurious `Z` — read components directly, do NOT tz-convert
+- LibraryWeb: no all-branches feed exists; must fetch per-branch iCal separately + merge
+- Dateless events (OpenStreetMap POIs, some library events) show "Anytime" in modal; require date selection if added to calendar
+
+---
+
 ## localStorage Key Index
 
 | Key | Type | Feature | Notes |
 |---|---|---|---|
 | `fh_name` | string | Settings | Display name |
-| `fh_mode` | string | Theme | `'light'` \| `'dark'` \| `'nautical'` |
+| `fh_mode` | string | Theme | `'light'` \| `'dark'` \| `'nautical'` \| `'aurora'` \| `'colorblind'` |
+| `fh_flavor` | string | Flavor | `'basic'` \| `'tactile'` — design-system axis, orthogonal to theme |
 | `fh_calView` | string | Calendar | `'month'` \| `'week'` \| `'day'` |
 | `fh_calIds` | JSON array | Calendar | Google Calendar IDs |
 | `fh_calMeta` | JSON object | Calendar | `{ calId: { label, color } }` |
@@ -659,6 +730,10 @@ Categories: `phrases` (assistant triggers), `calendar` (date-based), `ui` (inter
 | `fh_assistantTTS` | bool | Assistant | Read replies aloud via TTS (default off) |
 | `fh_tvMode` | bool | TV Mode | TV / Display Mode on/off (default false) |
 | `fh_eggCategories` | JSON object | Easter Eggs | `{ phrases, calendar, ui, weather }` — all true by default |
+| `fh_eventLocation` | string | Event Discovery | Default search location (default `'Rochester'`) |
+| `fh_eventMaxDistance` | number | Event Discovery | Max distance in minutes driving time (default 120) |
+| `fh_mobileTab` | string | Mobile (U1) | Current mobile tab `'cal'` \| `'todo'` \| `'shop'` \| `'weather'` \| menu items |
+| `fh_mobileTabDate` | string | Mobile (U3) | YYYY-MM-DD of last mobile tab switch (for time-based defaults) |
 
 **Firestore collections:**
 

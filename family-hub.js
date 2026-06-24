@@ -240,6 +240,8 @@ if (localStorage.getItem('fh_mode') === 'amazing')        localStorage.setItem('
 if (localStorage.getItem('fh_mode') === 'nautical-light') localStorage.setItem('fh_mode', 'nautical');
 const _savedMode    = localStorage.getItem('fh_mode');
 let appMode         = _savedMode || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');  // 'light' | 'dark' | 'nautical'
+const _savedFlavor  = localStorage.getItem('fh_flavor');
+let appFlavor       = _savedFlavor || 'basic';  // 'basic' | 'tactile' — design-system layer, orthogonal to appMode
 // Compute smart tab default: time-based on first daily visit, saved on return visits
 function getTimeBasedDefaultTab() {
   const hour = new Date().getHours();
@@ -302,16 +304,10 @@ function lockPortraitOrientation() {
 })();
 let layoutMode      = localStorage.getItem('fh_layoutMode') || 'auto'; // 'auto' | 'portrait' | 'landscape'
 let tvMode          = lsGet('fh_tvMode', false);
-let smsContacts     = lsGet('fh_smsContacts', []);
-// migrate legacy single-number setting
-(function(){
-  const old = localStorage.getItem('fh_smsRecipient');
-  if (old && !smsContacts.length) {
-    smsContacts = [{ nick: 'Contact', phone: old }];
-    localStorage.setItem('fh_smsContacts', JSON.stringify(smsContacts));
-    localStorage.removeItem('fh_smsRecipient');
-  }
-})();
+// SMS recipients are derived from family members with a phone number
+function getSmsContacts() {
+  return familyMembers.filter(m => m.phone).map(m => ({ nick: m.name, phone: m.phone }));
+}
 
 // ── Meal Planning state ────────────────────────────────────────
 let mealPlan        = lsGet('fh_mealPlan', {});
@@ -918,6 +914,7 @@ window.addEventListener('load', () => {
     initGoogleAuth();
   }
   applyAppMode(appMode);
+  applyFlavor(appFlavor);
   applyAppTitle();
   applyAssistantName();
   applySafePaletteMode();
@@ -925,6 +922,7 @@ window.addEventListener('load', () => {
   if (new URLSearchParams(location.search).get('tv') === '1') tvMode = true;
   applyTvMode();
   setMobileTab(mobileTab);
+  lockPortraitOrientation();
   updateStatusPill();
   if (weatherLocations.length) showWeatherLocation(0);
   else if (weatherCity) { weatherLocations = [weatherCity]; showWeatherLocation(0); }
@@ -1396,8 +1394,9 @@ function renderWeekGrid() {
           pill.appendChild(t);
         }
         const s = document.createElement('span');
-        s.textContent = (ev.holiday ? '🎉 ' : '') + ev.summary;
+        s.textContent = (ev.holiday ? '🎉 ' : '') + ev.summary + (ev.recurringEventId ? ' ↻' : '');
         pill.appendChild(s);
+        appendMemberBadges(pill, ev.members);
         if (!ev.holiday && ev.eventId) {
           pill.onclick = e => { e.stopPropagation(); openEventEditor(ev); };
           pill.draggable = true;
@@ -1541,7 +1540,8 @@ function renderDayGrid() {
       const p = document.createElement('div');
       p.className = 'day-event-pill';
       p.style.background = ev.color;
-      p.innerHTML = `<span class="evt-title">${(ev.holiday ? '🎉 ' : '') + esc(ev.summary)}</span>`;
+      p.innerHTML = `<span class="evt-title">${(ev.holiday ? '🎉 ' : '') + esc(ev.summary) + (ev.recurringEventId ? ' ↻' : '')}</span>`;
+      appendMemberBadges(p, ev.members);
       if (!ev.holiday && ev.eventId) {
         p.style.cursor = 'pointer';
         p.onclick = () => openEventEditor(ev);
@@ -1638,8 +1638,9 @@ function renderDayGrid() {
       const pill = document.createElement('div');
       pill.className = 'day-event-pill';
       pill.style.background = ev.color;
-      pill.innerHTML = `<span class="evt-title">${esc(ev.summary)}</span>
+      pill.innerHTML = `<span class="evt-title">${esc(ev.summary) + (ev.recurringEventId ? ' ↻' : '')}</span>
                         <span class="evt-time">${startStr}${endStr ? ' – ' + endStr : ''}</span>`;
+      appendMemberBadges(pill, ev.members);
       if (!ev.holiday && ev.eventId) {
         pill.style.cursor = 'pointer';
         pill.onclick = () => openEventEditor(ev);
@@ -2094,8 +2095,10 @@ async function loadAllCalendars() {
         allDay:    !!ev.start?.date,
         startDT:   ev.start?.dateTime || null,
         endDT:     ev.end?.dateTime   || null,
-        startDate: ev.start?.date     || null,
-        endDate:   ev.end?.date       || null,
+        startDate:        ev.start?.date     || null,
+        endDate:          ev.end?.date       || null,
+        members:          (ev.extendedProperties?.private?.fhMembers || '').split(',').map(s => s.trim()).filter(Boolean),
+        recurringEventId: ev.recurringEventId || null,
       };
       // Multi-day all-day events: cache on every date in their range
       if (base.allDay && base.startDate && base.endDate && base.endDate > base.startDate) {
@@ -2209,7 +2212,12 @@ function renderAgendaView() {
 
       const title = document.createElement('div');
       title.className = 'agenda-title';
-      title.textContent = (ev.holiday ? '🎉 ' : '') + ev.summary;
+      title.style.display = 'flex';
+      title.style.alignItems = 'center';
+      const titleText = document.createElement('span');
+      titleText.textContent = (ev.holiday ? '🎉 ' : '') + ev.summary + (ev.recurringEventId ? ' ↻' : '');
+      title.appendChild(titleText);
+      appendMemberBadges(title, ev.members);
 
       info.appendChild(timeEl);
       info.appendChild(title);
@@ -3132,6 +3140,36 @@ function renderCountdownCard() {
 // ── Calendar Event Editor ─────────────────────────────────────
 let evtEditing = null; // { ev, calId } when editing; null when creating
 
+function appendMemberBadges(container, members) {
+  if (!members?.length) return;
+  members.forEach(name => {
+    const m = familyMembers.find(fm => fm.name === name);
+    if (!m?.color) return;
+    const badge = document.createElement('span');
+    badge.className = 'evt-member-badge';
+    badge.style.background = m.color;
+    badge.title = name;
+    badge.textContent = name[0].toUpperCase();
+    container.appendChild(badge);
+  });
+}
+
+const _RRULE_DAYS = ['SU','MO','TU','WE','TH','FR','SA'];
+function buildRRule(freq, date) {
+  if (!freq || freq === 'none') return null;
+  if (freq === 'daily')    return 'RRULE:FREQ=DAILY';
+  if (freq === 'weekdays') return 'RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR';
+  if (freq === 'weekly')   return `RRULE:FREQ=WEEKLY;BYDAY=${_RRULE_DAYS[new Date(date + 'T00:00:00').getDay()]}`;
+  if (freq === 'monthly')  return 'RRULE:FREQ=MONTHLY';
+  if (freq === 'yearly')   return 'RRULE:FREQ=YEARLY';
+  return null;
+}
+
+function selectEvtScope(btn) {
+  btn.closest('.evt-editor-scope-row').querySelectorAll('.evt-scope-btn')
+    .forEach(b => b.classList.toggle('selected', b === btn));
+}
+
 function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
   if (!googleToken) return;
   evtEditing = ev || null;
@@ -3154,6 +3192,16 @@ function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
   const isAllDay = forceAllDay || ev?.allDay || false;
   document.getElementById('evtEdAllDay').checked = isAllDay;
   document.getElementById('evtEdTimeSection').style.display = isAllDay ? 'none' : '';
+
+  // End date (all-day multi-day events; ev.endDate is exclusive per Google Calendar API)
+  document.getElementById('evtEdEndDateSection').style.display = isAllDay ? '' : 'none';
+  if (isAllDay && ev?.endDate) {
+    const excl = new Date(ev.endDate + 'T00:00:00');
+    excl.setDate(excl.getDate() - 1);
+    document.getElementById('evtEdEndDate').value = excl.toISOString().slice(0,10);
+  } else {
+    document.getElementById('evtEdEndDate').value = dk;
+  }
 
   // Times
   if (ev?.startDT) {
@@ -3187,6 +3235,47 @@ function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
     });
   }
 
+  // Member picker
+  const membersSection = document.getElementById('evtEdMembersSection');
+  const membersContainer = document.getElementById('evtEdMembers');
+  membersContainer.innerHTML = '';
+  if (familyMembers.length) {
+    membersSection.style.display = '';
+    familyMembers.forEach(m => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'evt-member-chip';
+      chip.dataset.memberName = m.name;
+      chip.textContent = m.name;
+      const selected = ev?.members?.includes(m.name) || false;
+      if (selected) {
+        chip.classList.add('selected');
+        chip.style.background = m.color || 'var(--accent)';
+      }
+      chip.onclick = () => {
+        chip.classList.toggle('selected');
+        chip.style.background = chip.classList.contains('selected') ? (m.color || 'var(--accent)') : '';
+      };
+      membersContainer.appendChild(chip);
+    });
+  } else {
+    membersSection.style.display = 'none';
+  }
+
+  // Repeat / recurring scope
+  const repeatSection    = document.getElementById('evtEdRepeatSection');
+  const recurringSection = document.getElementById('evtEdRecurringSection');
+  if (ev?.recurringEventId) {
+    repeatSection.style.display    = 'none';
+    recurringSection.style.display = '';
+    recurringSection.querySelectorAll('.evt-scope-btn')
+      .forEach(b => b.classList.toggle('selected', b.dataset.scope === 'this'));
+  } else {
+    repeatSection.style.display    = '';
+    recurringSection.style.display = 'none';
+    document.getElementById('evtEdRepeat').value = 'none';
+  }
+
   document.getElementById('eventEditorModal').style.display = 'flex';
   trapFocus(document.querySelector('#eventEditorModal .modal'), null, closeEventEditor);
 }
@@ -3200,6 +3289,12 @@ function closeEventEditor() {
 function toggleEvtEdAllDay() {
   const isAllDay = document.getElementById('evtEdAllDay').checked;
   document.getElementById('evtEdTimeSection').style.display = isAllDay ? 'none' : '';
+  document.getElementById('evtEdEndDateSection').style.display = isAllDay ? '' : 'none';
+  if (isAllDay) {
+    const startVal = document.getElementById('evtEdDate').value;
+    const endInput = document.getElementById('evtEdEndDate');
+    if (!endInput.value || endInput.value < startVal) endInput.value = startVal;
+  }
 }
 
 function evtEdStatus(msg, isError) {
@@ -3227,23 +3322,41 @@ async function saveCalEvent() {
   let start, end;
   if (isAllDay) {
     start = { date };
-    // Google Calendar: end date for all-day is exclusive (next day)
-    const nextDay = new Date(date + 'T00:00:00');
-    nextDay.setDate(nextDay.getDate() + 1);
-    end = { date: nextDay.toISOString().slice(0,10) };
+    // End date input is inclusive; Google Calendar end.date is exclusive
+    const endDateVal = document.getElementById('evtEdEndDate').value;
+    const lastDay = (endDateVal && endDateVal >= date) ? endDateVal : date;
+    const exclusiveEnd = new Date(lastDay + 'T00:00:00');
+    exclusiveEnd.setDate(exclusiveEnd.getDate() + 1);
+    end = { date: exclusiveEnd.toISOString().slice(0,10) };
   } else {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     start = { dateTime: `${date}T${startT || '09:00'}:00`, timeZone: tz };
     end   = { dateTime: `${date}T${endT   || '10:00'}:00`, timeZone: tz };
   }
 
-  const body = { summary: title, description: desc, start, end };
+  const selectedMembers = Array.from(
+    document.querySelectorAll('#evtEdMembers .evt-member-chip.selected')
+  ).map(c => c.dataset.memberName);
+
+  const rrule = buildRRule(document.getElementById('evtEdRepeat').value, date);
+
+  const body = {
+    summary: title, description: desc, start, end,
+    extendedProperties: { private: { fhMembers: selectedMembers.join(',') } },
+  };
+  if (rrule) body.recurrence = [rrule];
   evtEdStatus('Saving…', false);
+
+  // For recurring event instances, respect the user's scope choice
+  const editScope = document.querySelector('.evt-scope-btn.selected')?.dataset.scope || 'this';
 
   try {
     if (evtEditing?.eventId) {
-      // PATCH existing event
-      const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(evtEditing.eventId)}`;
+      // PATCH existing event (or its series when scope === 'all')
+      const targetId = (editScope === 'all' && evtEditing.recurringEventId)
+        ? evtEditing.recurringEventId
+        : evtEditing.eventId;
+      const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(targetId)}`;
       const r = await fetch(url, {
         method: 'PATCH',
         headers: { 'Authorization': `Bearer ${googleToken}`, 'Content-Type': 'application/json' },
@@ -3275,14 +3388,22 @@ async function saveCalEvent() {
 
 async function deleteCalEvent() {
   if (!evtEditing?.eventId) return;
-  if (!confirm(`Delete "${evtEditing.summary}"?`)) return;
+
+  const deleteScope = document.querySelector('.evt-scope-btn.selected')?.dataset.scope || 'this';
+  const deleteAll   = deleteScope === 'all' && !!evtEditing.recurringEventId;
+  const confirmMsg  = deleteAll
+    ? `Delete ALL events in the "${evtEditing.summary}" series?`
+    : `Delete "${evtEditing.summary}"?`;
+  if (!confirm(confirmMsg)) return;
 
   const selectedCalBtn = document.getElementById('evtEdCalSelect').querySelector('.selected');
   const calId = selectedCalBtn?.dataset.calId || evtEditing.calId;
 
+  const targetId = deleteAll ? evtEditing.recurringEventId : evtEditing.eventId;
+
   evtEdStatus('Deleting…', false);
   try {
-    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(evtEditing.eventId)}`;
+    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(targetId)}`;
     const r = await fetch(url, {
       method: 'DELETE',
       headers: { 'Authorization': `Bearer ${googleToken}` },
@@ -4796,7 +4917,7 @@ function setupListeners() {
 
   // Family members — real-time sync so every device shares the same list
   db.collection('familyMembers').orderBy('order').onSnapshot(snap => {
-    familyMembers = snap.docs.map(doc => ({ id: doc.id, name: doc.data().name, order: doc.data().order ?? 0, gender: doc.data().gender || 'neutral', color: doc.data().color || null, points: doc.data().points || 0, rewardName: doc.data().rewardName || '', rewardThreshold: doc.data().rewardThreshold || 100 }));
+    familyMembers = snap.docs.map(doc => ({ id: doc.id, name: doc.data().name, order: doc.data().order ?? 0, gender: doc.data().gender || 'neutral', color: doc.data().color || null, phone: doc.data().phone || '', points: doc.data().points || 0, rewardName: doc.data().rewardName || '', rewardThreshold: doc.data().rewardThreshold || 100 }));
     // Back-fill missing order fields (e.g. docs created before this field existed)
     const needsOrder = familyMembers.filter(m => m.order === 0 && familyMembers.indexOf(m) > 0);
     if (snap.docs.some(d => d.data().order == null)) {
@@ -5062,6 +5183,11 @@ function applyMemberColors() {
     Object.values(byDate).forEach(evts => {
       evts.forEach(ev => {
         if (ev.holiday) return;
+        // Explicit member assignment wins over title-based matching
+        if (ev.members?.length) {
+          const match = colored.find(m => ev.members.includes(m.name));
+          if (match) { ev.color = match.color; return; }
+        }
         const title = (ev.summary || '').toLowerCase();
         const match = colored.find(m => title.includes(m.name.toLowerCase()));
         if (match) ev.color = match.color;
@@ -5094,29 +5220,38 @@ function renderFamilyMemberList() {
     const last = familyMembers.length - 1;
     familyMembers.forEach((m, i) => {
       const row = document.createElement('div');
-      row.style.cssText = 'display:flex;align-items:center;gap:6px;background:var(--surface2);border-radius:8px;padding:6px 10px;font-size:.84rem;margin-bottom:6px';
+      row.style.cssText = 'background:var(--surface2);border-radius:8px;padding:8px 10px;font-size:.84rem;margin-bottom:6px';
       const removeArg = db ? `'${m.id}'` : i;
       const genderArg = db ? `'${m.id}'` : i;
       const colorArg  = db ? `'${m.id}'` : i;
+      const phoneArg  = db ? `'${m.id}'` : i;
       const btnStyle = 'background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem;line-height:1;padding:0 3px';
       row.innerHTML = `
-        <span style="flex:1">👤 ${esc(m.name)}</span>
-        <input type="color" value="${m.color || '#6c8ef5'}"
-               title="Calendar event color for ${esc(m.name)}"
-               class="lc-color"
-               onchange="setFamilyMemberColor(${colorArg},this.value)"
-               style="width:24px;height:24px;border:none;border-radius:4px;cursor:pointer;padding:0;background:none;flex-shrink:0;opacity:${m.color ? '1' : '0.4'}"
-               oninput="this.style.opacity='1'">
-        <select onchange="setFamilyMemberGender(${genderArg},this.value)"
-                style="font-size:.75rem;padding:2px 4px;border-radius:5px;background:var(--surface);border:1px solid rgba(255,255,255,.15);color:var(--text);cursor:pointer"
-                title="Pronouns used by the assistant">
-          <option value="neutral" ${(m.gender||'neutral')==='neutral'?'selected':''}>they/them</option>
-          <option value="male"    ${m.gender==='male'   ?'selected':''}>he/him</option>
-          <option value="female"  ${m.gender==='female' ?'selected':''}>she/her</option>
-        </select>
-        <button onclick="moveFamilyMember(${i},-1)" ${i === 0 ? 'disabled' : ''} style="${btnStyle};opacity:${i === 0 ? '.25' : '1'}" title="Move up">▲</button>
-        <button onclick="moveFamilyMember(${i}, 1)" ${i === last ? 'disabled' : ''} style="${btnStyle};opacity:${i === last ? '.25' : '1'}" title="Move down">▼</button>
-        <button onclick="removeFamilyMember(${removeArg})" style="${btnStyle};font-size:1rem" title="Remove">✕</button>`;
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="flex:1">👤 ${esc(m.name)}</span>
+          <input type="color" value="${m.color || '#6c8ef5'}"
+                 title="Calendar event color for ${esc(m.name)}"
+                 class="lc-color"
+                 onchange="setFamilyMemberColor(${colorArg},this.value)"
+                 style="width:24px;height:24px;border:none;border-radius:4px;cursor:pointer;padding:0;background:none;flex-shrink:0;opacity:${m.color ? '1' : '0.4'}"
+                 oninput="this.style.opacity='1'">
+          <select onchange="setFamilyMemberGender(${genderArg},this.value)"
+                  style="font-size:.75rem;padding:2px 4px;border-radius:5px;background:var(--surface);border:1px solid rgba(255,255,255,.15);color:var(--text);cursor:pointer"
+                  title="Pronouns used by the assistant">
+            <option value="neutral" ${(m.gender||'neutral')==='neutral'?'selected':''}>they/them</option>
+            <option value="male"    ${m.gender==='male'   ?'selected':''}>he/him</option>
+            <option value="female"  ${m.gender==='female' ?'selected':''}>she/her</option>
+          </select>
+          <button onclick="moveFamilyMember(${i},-1)" ${i === 0 ? 'disabled' : ''} style="${btnStyle};opacity:${i === 0 ? '.25' : '1'}" title="Move up">▲</button>
+          <button onclick="moveFamilyMember(${i}, 1)" ${i === last ? 'disabled' : ''} style="${btnStyle};opacity:${i === last ? '.25' : '1'}" title="Move down">▼</button>
+          <button onclick="removeFamilyMember(${removeArg})" style="${btnStyle};font-size:1rem" title="Remove">✕</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
+          <span style="font-size:.75rem;color:var(--muted);flex-shrink:0">📱 SMS</span>
+          <input type="tel" placeholder="Phone number" value="${esc(m.phone || '')}"
+                 style="flex:1;font-size:.78rem;padding:3px 6px;border-radius:5px;background:var(--surface);border:1px solid rgba(255,255,255,.15);color:var(--text)"
+                 onchange="setFamilyMemberPhone(${phoneArg},this.value)" />
+        </div>`;
       el.appendChild(row);
     });
   }
@@ -5136,6 +5271,19 @@ async function setFamilyMemberGender(idOrIndex, gender) {
   } else {
     localStorage.setItem('fh_familyMembers', JSON.stringify(familyMembers));
     renderFamilyMemberList();
+  }
+}
+
+async function setFamilyMemberPhone(idOrIndex, phone) {
+  const m = typeof idOrIndex === 'string'
+    ? familyMembers.find(m => m.id === idOrIndex)
+    : familyMembers[idOrIndex];
+  if (!m) return;
+  m.phone = phone;
+  if (db) {
+    await db.collection('familyMembers').doc(m.id).update({ phone });
+  } else {
+    localStorage.setItem('fh_familyMembers', JSON.stringify(familyMembers));
   }
 }
 
@@ -8302,18 +8450,19 @@ function toggleSmsPopover(event) {
   title.textContent = 'Send list to…';
   pop.appendChild(title);
 
-  if (!smsContacts.length) {
+  const contacts = getSmsContacts();
+  if (!contacts.length) {
     const empty = document.createElement('div');
     empty.className = 'sms-popover-empty';
-    empty.innerHTML = 'No recipients saved.<br><span style="color:var(--accent);cursor:pointer" onclick="openSettings();switchSettingsTab(\'shopping\')">Add in Settings ↗</span>';
+    empty.innerHTML = 'No recipients.<br><span style="color:var(--accent);cursor:pointer" onclick="openSettings();switchSettingsTab(\'family\')">Add phones in Settings → Family ↗</span>';
     pop.appendChild(empty);
   } else {
-    smsContacts.forEach(c => {
+    contacts.forEach(c => {
       const row = document.createElement('div');
       row.className = 'sms-contact-row';
       row.innerHTML = `<span>👤</span>
-                       <span class="sms-contact-nick">${c.nick}</span>
-                       <span class="sms-contact-phone">${c.phone}</span>`;
+                       <span class="sms-contact-nick">${esc(c.nick)}</span>
+                       <span class="sms-contact-phone">${esc(c.phone)}</span>`;
       row.onclick = () => sendToContact(c.phone);
       pop.appendChild(row);
     });
@@ -8343,53 +8492,6 @@ function sendToContact(phone) {
   const uri      = number ? `sms:${number}?&body=${encoded}` : `sms:?&body=${encoded}`;
   const a        = document.createElement('a');
   a.href = uri; a.click();
-}
-
-// ── SMS contacts management (Settings) ────────────────────────
-function renderSmsContactsList() {
-  const list = document.getElementById('smsContactsList');
-  if (!list) return;
-  list.innerHTML = '';
-  if (!smsContacts.length) {
-    list.innerHTML = '<p style="font-size:.8rem;color:var(--muted);padding:4px 0 8px">No recipients yet.</p>';
-    return;
-  }
-  smsContacts.forEach((c, i) => {
-    const row = document.createElement('div');
-    row.className = 'sms-setting-row';
-    const nick  = document.createElement('span');
-    nick.className = 'sms-setting-nick';
-    nick.textContent = c.nick;
-    const phone = document.createElement('span');
-    phone.className = 'sms-setting-phone';
-    phone.textContent = c.phone;
-    const del = document.createElement('button');
-    del.className = 'cal-remove-btn';
-    del.style.opacity = '1';
-    del.textContent = '✕';
-    del.title = 'Remove';
-    del.onclick = () => removeSmsContact(i);
-    row.appendChild(nick); row.appendChild(phone); row.appendChild(del);
-    list.appendChild(row);
-  });
-}
-
-function addSmsContact() {
-  const nickEl  = document.getElementById('smsNewNick');
-  const phoneEl = document.getElementById('smsNewPhone');
-  const nick    = nickEl.value.trim();
-  const phone   = phoneEl.value.trim();
-  if (!nick || !phone) return;
-  smsContacts.push({ nick, phone });
-  localStorage.setItem('fh_smsContacts', JSON.stringify(smsContacts));
-  nickEl.value = ''; phoneEl.value = '';
-  renderSmsContactsList();
-}
-
-function removeSmsContact(idx) {
-  smsContacts.splice(idx, 1);
-  localStorage.setItem('fh_smsContacts', JSON.stringify(smsContacts));
-  renderSmsContactsList();
 }
 
 // ── Local Calendars ────────────────────────────────────────────
@@ -8754,8 +8856,11 @@ function closeMenu() {
 }
 
 function navigateToMenuItem(item) {
-  previousTab = mobileTab;
-  let tabToShow = null;
+  if (item === 'members') {
+    closeMenu();
+    openSettings();
+    return;
+  }
   const menuItemMap = {
     'budget': 'budget',
     'wotd': 'wotd',
@@ -8765,9 +8870,8 @@ function navigateToMenuItem(item) {
     'news': 'news',
     'stock': 'stock',
     'assistant': 'assistant',
-    'members': 'members',
   };
-  tabToShow = menuItemMap[item];
+  const tabToShow = menuItemMap[item];
   if (tabToShow) {
     setMobileTab(tabToShow);
     closeMenu();
@@ -8884,6 +8988,13 @@ function applyAppMode(mode) {
   if (meta) meta.content = THEME_COLORS[mode] || THEME_COLORS.dark;
 }
 
+// Flavor = design-system layer (Basic | Tactile), orthogonal to the theme/mode.
+// Basic is the default (absence of class), mirroring dark-is-default for themes.
+function applyFlavor(flavor) {
+  appFlavor = flavor;
+  document.body.classList.toggle('flavor-tactile', flavor === 'tactile');
+}
+
 window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', e => {
   if (!localStorage.getItem('fh_mode')) applyAppMode(e.matches ? 'light' : 'dark');
 });
@@ -8938,6 +9049,13 @@ function setAppMode(mode) {
   document.getElementById('modeNautical').className       = 'btn btn-sm' + (mode === 'nautical'       ? ' btn-mode-active' : '');
   document.getElementById('modeAurora').className         = 'btn btn-sm' + (mode === 'aurora'         ? ' btn-mode-active' : '');
   document.getElementById('modeColorblind').className     = 'btn btn-sm' + (mode === 'colorblind'     ? ' btn-mode-active' : '');
+}
+
+function setFlavor(flavor) {
+  applyFlavor(flavor);
+  localStorage.setItem('fh_flavor', flavor);
+  document.getElementById('flavorBasic').className   = 'btn btn-sm' + (flavor === 'basic'   ? ' btn-mode-active' : '');
+  document.getElementById('flavorTactile').className = 'btn btn-sm' + (flavor === 'tactile' ? ' btn-mode-active' : '');
 }
 
 // ── Focus trap ─────────────────────────────────────────────────
@@ -9017,7 +9135,6 @@ function openSettings() {
   document.getElementById('wxViewRadar').checked  = !!wxEnabledViews['radar'];
   document.getElementById('wxViewSnarky').checked = !!wxEnabledViews['snarky'];
   renderWeatherLocationsList();
-  renderSmsContactsList();
   renderShopCategorySettings();
   document.getElementById('settingSlideInterval').value = slideInterval;
   document.getElementById('settingMealAiKey').value     = mealAiKey;
@@ -9052,6 +9169,8 @@ function openSettings() {
   document.getElementById('modeDark').className           = 'btn btn-sm' + (appMode === 'dark'           ? ' btn-mode-active' : '');
   document.getElementById('modeNautical').className       = 'btn btn-sm' + (appMode === 'nautical'       ? ' btn-mode-active' : '');
   document.getElementById('modeColorblind').className     = 'btn btn-sm' + (appMode === 'colorblind'     ? ' btn-mode-active' : '');
+  document.getElementById('flavorBasic').className        = 'btn btn-sm' + (appFlavor === 'basic'        ? ' btn-mode-active' : '');
+  document.getElementById('flavorTactile').className      = 'btn btn-sm' + (appFlavor === 'tactile'      ? ' btn-mode-active' : '');
   renderBgPreview();
   const statusEl = document.getElementById('bgStatus');
   if (statusEl && bgPhotos.length) statusEl.textContent = `✓ ${bgPhotos.length} image(s) loaded`;
@@ -9129,7 +9248,7 @@ function saveSettings() {
     localStorage.setItem('fh_assistantWelcome', assistantWelcomeMode);
     renderAssistantMessages();
   }
-  // smsContacts and familyMembers saved immediately on add/remove — nothing to save here
+  // familyMembers saved immediately on add/remove — nothing to save here
   slideInterval = parseInt(document.getElementById('settingSlideInterval').value) || 30;
   mealAiKey     = document.getElementById('settingMealAiKey').value.trim();
   mealPantryDef = document.getElementById('settingMealPantry').value.trim();

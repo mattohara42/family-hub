@@ -1,3 +1,26 @@
+/* ── Tactile flavor fonts (self-hosted; consumed only under body.flavor-tactile) ── */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('fonts/fraunces-roman.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Fraunces';
+  font-style: italic;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url('fonts/fraunces-italic.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Hanken Grotesk';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('fonts/hanken-grotesk.woff2') format('woff2');
+}
+
 :root {
   --bg: #0f1117;
   --surface: rgba(26,29,39,0.78);
@@ -8,6 +31,15 @@
   --red: #e06c75;
   --text: #e8eaf6;
   --muted: #7b7f96;
+  /* ── Tactile flavor shared tokens (consumed only under body.flavor-tactile) ── */
+  --ink: var(--text);
+  --ink-soft: var(--muted);
+  --line: rgba(160,168,220,0.16);
+  --surface-solid: #1e2030;
+  --surface-hi:    #262a40;
+  --surface-lo:    #171823;
+  --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --font-body:    'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --radius: 14px;
   --shadow: 0 0 22px rgba(108,142,245,0.22), 0 4px 18px rgba(0,0,0,0.55);
   --scrim: rgba(0,0,0,0.45);
@@ -58,6 +90,10 @@ body.nautical-mode {
   --red:                #e07070;
   --text:               #f5f3ee;
   --muted:              #a0b4d4;
+  --line:          rgba(240,200,90,0.22);
+  --surface-solid: #20365f;
+  --surface-hi:    #2c4a82;
+  --surface-lo:    #18294a;
   --radius:             14px;
   --shadow:             0 0 22px rgba(240,192,64,0.20), 0 4px 18px rgba(0,0,0,0.45);
   --scrim:              rgba(10, 22, 56, 0.40);
@@ -308,6 +344,10 @@ body.aurora-mode {
   --red:                #c03030;
   --text:               #1a0e38;
   --muted:              #5a4890;
+  --line:          rgba(120,90,180,0.16);
+  --surface-solid: #fbf9ff;
+  --surface-hi:    #ffffff;
+  --surface-lo:    #ece6fb;
   --radius:             14px;
   --shadow:             0 0 22px rgba(255,140,0,0.14), 0 4px 18px rgba(0,0,0,0.12);
   --scrim:              rgba(200, 180, 255, 0.35);
@@ -546,6 +586,10 @@ body.colorblind-mode {
   --red:                #D55E00;        /* Okabe vermillion — not pure red */
   --text:               #F5F5F5;
   --muted:              #8899bb;
+  --line:          rgba(120,140,180,0.18);
+  --surface-solid: #161c28;
+  --surface-hi:    #1e2636;
+  --surface-lo:    #10141e;
   --radius:             14px;
   --shadow:             0 0 22px rgba(86,180,233,0.22), 0 4px 18px rgba(0,0,0,0.55);
   --scrim:              rgba(0,0,0,0.45);
@@ -578,6 +622,10 @@ body.light-mode {
   --red: #d0404a;
   --text: #1a1d2e;
   --muted: #6b7080;
+  --line: rgba(60,64,90,0.13);
+  --surface-solid: #fbfcfe;
+  --surface-hi:    #ffffff;
+  --surface-lo:    #e9ecf4;
   --shadow: 0 4px 24px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.10);
   --scrim: rgba(255,255,255,0.50);
   --card-bg-photo: rgba(255,255,255,0.82);
@@ -2526,6 +2574,34 @@ body.nautical-mode #eventEditorModal .modal {
 .evt-editor-allday-row {
   display: flex; align-items: center; gap: 8px; margin: 8px 0;
 }
+.evt-editor-members { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.evt-member-chip {
+  padding: 4px 12px; border-radius: 20px; border: 2px solid rgba(255,255,255,.18);
+  font-size: .8rem; cursor: pointer; transition: all .15s;
+  background: var(--surface2); color: var(--text);
+}
+.evt-member-chip.selected { border-color: transparent; color: #fff; font-weight: 600; }
+.evt-member-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 14px; height: 14px; border-radius: 50%;
+  font-size: .58rem; font-weight: 700; color: #fff;
+  margin-left: 3px; flex-shrink: 0; vertical-align: middle;
+}
+.evt-editor-select {
+  background: var(--surface2); color: var(--text);
+  border: 1px solid rgba(255,255,255,.15); border-radius: 8px;
+  padding: 6px 10px; font-size: .9rem; cursor: pointer; width: 100%; margin-top: 4px;
+}
+.evt-editor-scope-row { display: flex; gap: 6px; margin-top: 6px; }
+.evt-scope-btn {
+  padding: 5px 14px; border-radius: 20px; border: 2px solid rgba(255,255,255,.18);
+  font-size: .82rem; cursor: pointer; transition: all .15s;
+  background: var(--surface2); color: var(--text);
+}
+.evt-scope-btn.selected {
+  border-color: var(--accent); background: rgba(108,142,245,.2);
+  color: var(--accent); font-weight: 600;
+}
 .week-day-col { cursor: default; }
 .week-day-body-add {
   cursor: pointer;
@@ -3907,9 +3983,22 @@ a, button, input, select, textarea, label,
 
 /* ── 4. Larger tap targets (touch-only) ── */
 @media (hover: none) {
-  /* Primary & regular buttons: taller */
-  .btn        { padding: 11px 18px; }
-  .btn-sm     { padding: 9px 14px; font-size: 0.82rem; }
+  /* Primary & regular buttons: taller tap targets */
+  .btn        { padding: 12px 18px; }
+  .btn-sm     { padding: 10px 14px; font-size: 0.82rem; }
+
+  /* Bigger tap targets for card header icon buttons (refresh, clear done) */
+  .card-header button {
+    min-width: 36px;
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Widget toggle rows: more height */
+  .widget-toggle-row { padding: 13px 12px; }
+  .widget-toggle-row input[type=checkbox] { width: 20px; height: 20px; }
 
   /* Calendar nav prev/next arrows: 44×44 minimum */
   .cal-month-nav button {
@@ -3978,25 +4067,9 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
 
 /* ── 7. Mobile: full-width inputs & bigger modal panels ── */
 @media (max-width: 640px) {
-  .btn        { padding: 12px 18px; }
-  .btn-sm     { padding: 10px 14px; }
-
   /* Modal fills more vertical space */
   .modal { max-height: 92svh; display: flex; flex-direction: column; }
   .settings-panels { max-height: unset; flex: 1; overflow-y: auto; }
-
-  /* Bigger tap targets for card header icon buttons (refresh, clear done) */
-  .card-header button {
-    min-width: 36px;
-    min-height: 36px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  /* Widget toggle rows: more height */
-  .widget-toggle-row { padding: 13px 12px; }
-  .widget-toggle-row input[type=checkbox] { width: 20px; height: 20px; }
 }
 
 /* ── 8. Mobile bottom navigation ── */
@@ -4261,8 +4334,7 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
   body[data-mobile-tab="countdown"] .cal-column,
   body[data-mobile-tab="news"] .cal-column,
   body[data-mobile-tab="stock"] .cal-column,
-  body[data-mobile-tab="assistant"] .cal-column,
-  body[data-mobile-tab="members"] .cal-column { display: none; }
+  body[data-mobile-tab="assistant"] .cal-column { display: none; }
 
   body[data-mobile-tab="budget"] .sidebar,
   body[data-mobile-tab="wotd"] .sidebar,
@@ -4271,8 +4343,7 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
   body[data-mobile-tab="countdown"] .sidebar,
   body[data-mobile-tab="news"] .sidebar,
   body[data-mobile-tab="stock"] .sidebar,
-  body[data-mobile-tab="assistant"] .sidebar,
-  body[data-mobile-tab="members"] .sidebar {
+  body[data-mobile-tab="assistant"] .sidebar {
     display: flex !important;
     flex-direction: column;
     align-items: stretch;
@@ -4289,8 +4360,7 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
   body[data-mobile-tab="countdown"] .sidebar > .card,
   body[data-mobile-tab="news"] .sidebar > .card,
   body[data-mobile-tab="stock"] .sidebar > .card,
-  body[data-mobile-tab="assistant"] .sidebar > .card,
-  body[data-mobile-tab="members"] .sidebar > .card {
+  body[data-mobile-tab="assistant"] .sidebar > .card {
     width: 100%;
     box-sizing: border-box;
     flex: none;
@@ -5215,3 +5285,143 @@ body.tv-mode .card:hover { box-shadow: none; }
   .more-nav-item:active { background: rgba(108,142,245,.18); }
   .more-nav-icon { font-size: 1.4rem; line-height: 1; }
 }
+
+/* ════════════════════════════════════════════════════════════════
+   ✦  TACTILE FLAVOR — lush / hand-made material system
+   Orthogonal to theme: every rule is scoped under body.flavor-tactile,
+   so Basic (the default, absence of the class) is never touched.
+   Consumes the shared tokens added to each theme block
+   (--surface-solid/-hi/-lo, --line, --ink, --font-display/-body).
+   Color always comes from the active theme — Tactile only changes
+   the *material* (surface, type, shadow, radius, grain).
+   ════════════════════════════════════════════════════════════════ */
+body.flavor-tactile {
+  --radius: 16px;
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  font-family: var(--font-body);
+}
+
+/* ── Display type for headings + app/card titles ── */
+body.flavor-tactile h1,
+body.flavor-tactile h2,
+body.flavor-tactile .cal-app-title,
+body.flavor-tactile .card-header h2 {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-weight: var(--weight-semi);
+  letter-spacing: -0.01em;
+}
+
+/* ── Crafted card material (replaces flat glass) ── */
+body.flavor-tactile .card {
+  background:
+    radial-gradient(120% 80% at 50% -10%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 60%),
+    linear-gradient(180deg, var(--surface-hi) 0%, var(--surface-solid) 18%, var(--surface-solid) 82%, var(--surface-lo) 100%);
+  border: 1px solid var(--line);
+  box-shadow:
+    0 1px 1px rgba(0,0,0,.28),
+    0 3px 7px rgba(0,0,0,.20),
+    0 14px 30px rgba(0,0,0,.28),
+    inset 0 1px 0 var(--surface-hi),
+    inset 0 -1px 0 var(--surface-lo);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  position: relative;
+}
+/* per-card paper grain */
+body.flavor-tactile .card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background-image: var(--grain);
+  background-size: 160px;
+  opacity: 0.05;
+  mix-blend-mode: soft-light;
+  z-index: 0;
+}
+/* keep card content above the grain layer */
+body.flavor-tactile .card > * { position: relative; z-index: 1; }
+
+/* softer, warm shadow + multiply grain for the light themes */
+body.flavor-tactile.light-mode .card,
+body.flavor-tactile.aurora-mode .card {
+  box-shadow:
+    0 1px 1px rgba(70,55,30,.08),
+    0 3px 6px rgba(70,55,30,.08),
+    0 14px 30px rgba(70,55,30,.10),
+    inset 0 1px 0 var(--surface-hi),
+    inset 0 -1px 0 var(--surface-lo);
+}
+body.flavor-tactile.light-mode .card::after,
+body.flavor-tactile.aurora-mode .card::after {
+  mix-blend-mode: multiply;
+  opacity: 0.06;
+}
+
+/* ── Tactile buttons / inputs: a touch more crafted ── */
+body.flavor-tactile .btn { border-radius: 11px; }
+body.flavor-tactile .btn-primary {
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+/* ── Tactile × Nautical: lusher flourishes (theme decorations already
+      exist for both flavors; Tactile only enriches their material) ── */
+body.flavor-tactile.nautical-mode {
+  --compass: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' fill='none' stroke='%23f0c040' stroke-opacity='0.5' stroke-width='0.7'%3E%3Ccircle cx='50' cy='50' r='45'/%3E%3Ccircle cx='50' cy='50' r='34'/%3E%3Cpath d='M50 3 L57 50 L50 97 L43 50 Z M3 50 L50 43 L97 50 L50 57 Z' stroke-width='0.6'/%3E%3Cpath d='M24 24 L50 50 L76 76 M76 24 L50 50 L24 76' stroke-width='0.35'/%3E%3C/svg%3E");
+}
+/* glowing anchor watermark */
+body.flavor-tactile.nautical-mode::before {
+  opacity: 0.17;
+  text-shadow: 0 6px 40px rgba(240,192,64,0.35);
+}
+/* richer cresting wave */
+body.flavor-tactile.nautical-mode::after {
+  height: 66px;
+  background: linear-gradient(180deg, rgba(240,192,64,0.13), rgba(240,192,64,0.04));
+  filter: drop-shadow(0 -2px 10px rgba(240,192,64,0.14));
+}
+/* softened, rounded rope divider */
+body.flavor-tactile.nautical-mode .card-header::after {
+  height: 4px;
+  border-radius: 2px;
+  opacity: 0.85;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.35);
+}
+/* compass-rose watermark behind the calendar (layered over the existing glow) */
+body.flavor-tactile.nautical-mode .cal-card .card-body {
+  background:
+    radial-gradient(ellipse 70% 60% at 50% 42%, rgba(240,192,64,0.07) 0%, transparent 70%),
+    var(--compass) center 52% / 72% no-repeat;
+}
+
+/* ── Tactile: dense components & prominent numerals ── */
+/* big numbers in the display serif for a crafted feel */
+body.flavor-tactile .wx-temp,
+body.flavor-tactile .budget-card-amt,
+body.flavor-tactile .budget-day-amt,
+body.flavor-tactile .countdown-days {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  letter-spacing: -0.02em;
+}
+/* suggestion chips as soft accent-tinted pills */
+body.flavor-tactile .assistant-chip,
+body.flavor-tactile .meal-adjust-chip {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+/* ── KTD-4: accessibility modes keep Tactile *structure* (type, radius,
+      surface depth) but drop decorative texture/glow that can impair
+      color discrimination ── */
+body.flavor-tactile.colorblind-mode .card::after,
+body.safe-palette-on.flavor-tactile .card::after { display: none; }
+body.flavor-tactile.colorblind-mode .card,
+body.safe-palette-on.flavor-tactile .card {
+  background: linear-gradient(180deg, var(--surface-hi) 0%, var(--surface-solid) 20%, var(--surface-solid) 80%, var(--surface-lo) 100%);
+}
+body.flavor-tactile.colorblind-mode.nautical-mode .cal-card .card-body,
+body.safe-palette-on.flavor-tactile.nautical-mode .cal-card .card-body { background: none; }

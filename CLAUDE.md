@@ -26,7 +26,8 @@ Shared state (shopping, todo, budget) lives in Firebase Firestore. Photos are bl
 - **Full-viewport flex.** `body` is `flex-column 100dvh`. `min-height: 0` is required at every flex level to allow shrinking below content size. `.sidebar > *` must keep `flex-shrink: 0` — or cards compress instead of the sidebar scrolling.
 - **Google OAuth = GIS token client** (not code flow). Token is in-memory only (`let googleToken`), never localStorage. `file://` blocks OAuth — must serve from `localhost` or HTTPS. Any new serving origin must be added to Google Cloud Console (Authorized JS Origins) **and** Firebase Console (Authorized Domains). `generative-language` is **not** a valid OAuth scope.
 - **Touch tap-target CSS must stay inside `@media (hover: none)`** — larger button/list padding rules must never leak outside that block.
-- **Three themes:** `'dark'` (default), `'light'`, `'nautical'`. `applyAppMode()` swaps body classes. Nautical uses `body::before`/`::after` pseudo-elements.
+- **Themes (color axis):** `'dark'` (default), `'light'`, `'nautical'`, `'aurora'`, `'colorblind'`. `applyAppMode()` swaps body classes (dark = no class). Nautical/aurora use `body::before`/`::after` pseudo-elements.
+- **Flavor (design-system axis), orthogonal to theme:** `'basic'` (default, flat-glass — absence of class) and `'tactile'` (lush/hand-made material). `applyFlavor()` toggles `body.flavor-tactile`; persisted in `fh_flavor`. Themes set color tokens (`--surface-solid/-hi/-lo`, `--ink`, `--line`, `--accent`…); Tactile reads those tokens and changes only the *material* (surface, type via self-hosted Fraunces/Hanken, shadow, radius, grain). Tactile decoration is suppressed under `colorblind-mode`/`safe-palette-on` (KTD-4). Both axes stack, e.g. `body.flavor-tactile.nautical-mode`.
 
 ---
 
@@ -56,6 +57,9 @@ Shared state (shopping, todo, budget) lives in Firebase Firestore. Photos are bl
 | ICS date keys are local | `injectIcsEvent` keys events by `localDateKey()` (not `toISOString()`) — UTC slicing day-shifts evening events in western zones |
 | Nautical mode migration | `localStorage 'fh_mode' === 'amazing'` auto-upgrades to `'nautical'` on load |
 | Browser caches JS during dev | Keep DevTools open with "Disable cache" or hard-reload (Cmd+Shift+R) after edits |
+| Event Discovery keys | Ticketmaster, OpenWeatherMap, LibraryWeb (per-branch), Red Wings (keyless), CitySpark (keyless) — set via Netlify env vars in production |
+| Event Discovery backend | Runs on `/.netlify/functions/events`; geocoding via OWM; exponential backoff retry (2x, 1s→4s) for API failures |
+| CitySpark sort parameter | MUST use `sort:'Time'` (soonest-first); `'Date'` returns the tail of future events and fails the 30-day filter |
 
 ---
 
@@ -95,4 +99,10 @@ When checking that a change worked in the browser, **default to `javascript_tool
 
 ## Project Files
 
-`family-hub.{html,css,js}` (the app) · `FEATURES.md` (detailed feature/reference map) · `family-hub-setup.md` (end-user setup) · `RETROSPECTIVE.md` (lessons learned) · `WEATHER_BACKLOG.md` (weather enhancement backlog) · `ASSISTANT_BACKLOG.md` (Family Assistant enhancement backlog) · `MEALS_BACKLOG.md` (meal planning enhancement backlog) · `CLAUDE.md` (this file).
+**App:** `family-hub.{html,css,js}` · `manifest.json` · `sw.js` (service worker)
+
+**Documentation:** `FEATURES.md` (detailed feature/reference map) · `family-hub-setup.md` (end-user setup) · `RETROSPECTIVE.md` (lessons learned) · `CLAUDE.md` (this file)
+
+**Backlogs & Plans:** `WEATHER_BACKLOG.md` · `ASSISTANT_BACKLOG.md` · `MEALS_BACKLOG.md` · `EVENT_DISCOVERY_BACKLOG.md` (optional) · `docs/brainstorms/` · `docs/plans/`
+
+**Backend:** `netlify/functions/events.js` (event discovery multi-API aggregation)
