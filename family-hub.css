@@ -5365,3 +5365,33 @@ body.flavor-tactile .btn { border-radius: 11px; }
 body.flavor-tactile .btn-primary {
   box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 30%, transparent);
 }
+
+/* ── Tactile × Nautical: lusher flourishes (theme decorations already
+      exist for both flavors; Tactile only enriches their material) ── */
+body.flavor-tactile.nautical-mode {
+  --compass: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' fill='none' stroke='%23f0c040' stroke-opacity='0.5' stroke-width='0.7'%3E%3Ccircle cx='50' cy='50' r='45'/%3E%3Ccircle cx='50' cy='50' r='34'/%3E%3Cpath d='M50 3 L57 50 L50 97 L43 50 Z M3 50 L50 43 L97 50 L50 57 Z' stroke-width='0.6'/%3E%3Cpath d='M24 24 L50 50 L76 76 M76 24 L50 50 L24 76' stroke-width='0.35'/%3E%3C/svg%3E");
+}
+/* glowing anchor watermark */
+body.flavor-tactile.nautical-mode::before {
+  opacity: 0.17;
+  text-shadow: 0 6px 40px rgba(240,192,64,0.35);
+}
+/* richer cresting wave */
+body.flavor-tactile.nautical-mode::after {
+  height: 66px;
+  background: linear-gradient(180deg, rgba(240,192,64,0.13), rgba(240,192,64,0.04));
+  filter: drop-shadow(0 -2px 10px rgba(240,192,64,0.14));
+}
+/* softened, rounded rope divider */
+body.flavor-tactile.nautical-mode .card-header::after {
+  height: 4px;
+  border-radius: 2px;
+  opacity: 0.85;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.35);
+}
+/* compass-rose watermark behind the calendar (layered over the existing glow) */
+body.flavor-tactile.nautical-mode .cal-card .card-body {
+  background:
+    radial-gradient(ellipse 70% 60% at 50% 42%, rgba(240,192,64,0.07) 0%, transparent 70%),
+    var(--compass) center 52% / 72% no-repeat;
+}
