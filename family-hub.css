@@ -5436,3 +5436,40 @@ body.safe-palette-on.flavor-tactile .card {
 }
 body.flavor-tactile.colorblind-mode.nautical-mode .cal-card .card-body,
 body.safe-palette-on.flavor-tactile.nautical-mode .cal-card .card-body { background: none; }
+
+/* ── Tactile motion — gated on prefers-reduced-motion. Entrance rides on
+      the stable layout columns (never the per-render cards, so it doesn't
+      replay on every refresh); hover lift skips the large calendar card ── */
+@media (prefers-reduced-motion: no-preference) {
+  body.flavor-tactile .cal-column,
+  body.flavor-tactile .sidebar {
+    animation: tactileSettle 0.55s cubic-bezier(.22,.61,.36,1) both;
+  }
+  body.flavor-tactile .sidebar { animation-delay: 0.06s; }
+  @keyframes tactileSettle {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  body.flavor-tactile .card:not(.cal-card) {
+    transition: transform 0.35s cubic-bezier(.22,.61,.36,1), box-shadow 0.35s ease;
+  }
+  body.flavor-tactile .card:not(.cal-card):hover {
+    transform: translateY(-2px);
+    box-shadow:
+      0 2px 3px rgba(0,0,0,.30),
+      0 8px 16px rgba(0,0,0,.24),
+      0 22px 44px rgba(0,0,0,.34),
+      inset 0 1px 0 var(--surface-hi),
+      inset 0 -1px 0 var(--surface-lo);
+  }
+  body.flavor-tactile.light-mode .card:not(.cal-card):hover,
+  body.flavor-tactile.aurora-mode .card:not(.cal-card):hover {
+    box-shadow:
+      0 2px 3px rgba(70,55,30,.10),
+      0 8px 16px rgba(70,55,30,.12),
+      0 22px 40px rgba(70,55,30,.16),
+      inset 0 1px 0 var(--surface-hi),
+      inset 0 -1px 0 var(--surface-lo);
+  }
+}
