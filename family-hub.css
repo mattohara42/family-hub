@@ -5344,6 +5344,17 @@ body.flavor-tactile .card::after {
 /* keep card content above the grain layer */
 body.flavor-tactile .card > * { position: relative; z-index: 1; }
 
+/* calendar card needs an explicit Tactile material rule — per-theme
+   `.card.cal-card` overrides (nautical, aurora) otherwise outrank the
+   generic `.card` selector and leave it glassy under Tactile */
+body.flavor-tactile .card.cal-card {
+  background:
+    radial-gradient(120% 80% at 50% -10%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 60%),
+    linear-gradient(180deg, var(--surface-hi) 0%, var(--surface-solid) 18%, var(--surface-solid) 82%, var(--surface-lo) 100%);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 /* softer, warm shadow + multiply grain for the light themes */
 body.flavor-tactile.light-mode .card,
 body.flavor-tactile.aurora-mode .card {
