@@ -5395,3 +5395,21 @@ body.flavor-tactile.nautical-mode .cal-card .card-body {
     radial-gradient(ellipse 70% 60% at 50% 42%, rgba(240,192,64,0.07) 0%, transparent 70%),
     var(--compass) center 52% / 72% no-repeat;
 }
+
+/* ── Tactile: dense components & prominent numerals ── */
+/* big numbers in the display serif for a crafted feel */
+body.flavor-tactile .wx-temp,
+body.flavor-tactile .budget-card-amt,
+body.flavor-tactile .budget-day-amt,
+body.flavor-tactile .countdown-days {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  letter-spacing: -0.02em;
+}
+/* suggestion chips as soft accent-tinted pills */
+body.flavor-tactile .assistant-chip,
+body.flavor-tactile .meal-adjust-chip {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 28%, transparent);
+}
