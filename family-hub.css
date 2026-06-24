@@ -5371,6 +5371,16 @@ body.flavor-tactile.aurora-mode .card::after {
   opacity: 0.06;
 }
 
+/* Tactile warms the light theme's surfaces to a soft cream paper stock.
+   Scoped to flavor-tactile.light-mode — Basic light stays cool/untouched. */
+body.flavor-tactile.light-mode {
+  --surface-solid: #fbf8f1;
+  --surface-hi:    #fffdf8;
+  --surface-lo:    #efe7d7;
+  --line:          rgba(70,55,30,0.14);
+  --ink-soft:      #7c766a;
+}
+
 /* ── Tactile buttons / inputs: a touch more crafted ── */
 body.flavor-tactile .btn { border-radius: 11px; }
 body.flavor-tactile .btn-primary {
