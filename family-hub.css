@@ -8,6 +8,13 @@
   --red: #e06c75;
   --text: #e8eaf6;
   --muted: #7b7f96;
+  /* ── Tactile flavor shared tokens (consumed only under body.flavor-tactile) ── */
+  --ink: var(--text);
+  --ink-soft: var(--muted);
+  --line: rgba(160,168,220,0.16);
+  --surface-solid: #1e2030;
+  --surface-hi:    #262a40;
+  --surface-lo:    #171823;
   --radius: 14px;
   --shadow: 0 0 22px rgba(108,142,245,0.22), 0 4px 18px rgba(0,0,0,0.55);
   --scrim: rgba(0,0,0,0.45);
@@ -58,6 +65,10 @@ body.nautical-mode {
   --red:                #e07070;
   --text:               #f5f3ee;
   --muted:              #a0b4d4;
+  --line:          rgba(240,200,90,0.22);
+  --surface-solid: #20365f;
+  --surface-hi:    #2c4a82;
+  --surface-lo:    #18294a;
   --radius:             14px;
   --shadow:             0 0 22px rgba(240,192,64,0.20), 0 4px 18px rgba(0,0,0,0.45);
   --scrim:              rgba(10, 22, 56, 0.40);
@@ -308,6 +319,10 @@ body.aurora-mode {
   --red:                #c03030;
   --text:               #1a0e38;
   --muted:              #5a4890;
+  --line:          rgba(120,90,180,0.16);
+  --surface-solid: #fbf9ff;
+  --surface-hi:    #ffffff;
+  --surface-lo:    #ece6fb;
   --radius:             14px;
   --shadow:             0 0 22px rgba(255,140,0,0.14), 0 4px 18px rgba(0,0,0,0.12);
   --scrim:              rgba(200, 180, 255, 0.35);
@@ -546,6 +561,10 @@ body.colorblind-mode {
   --red:                #D55E00;        /* Okabe vermillion — not pure red */
   --text:               #F5F5F5;
   --muted:              #8899bb;
+  --line:          rgba(120,140,180,0.18);
+  --surface-solid: #161c28;
+  --surface-hi:    #1e2636;
+  --surface-lo:    #10141e;
   --radius:             14px;
   --shadow:             0 0 22px rgba(86,180,233,0.22), 0 4px 18px rgba(0,0,0,0.55);
   --scrim:              rgba(0,0,0,0.45);
@@ -578,6 +597,10 @@ body.light-mode {
   --red: #d0404a;
   --text: #1a1d2e;
   --muted: #6b7080;
+  --line: rgba(60,64,90,0.13);
+  --surface-solid: #fbfcfe;
+  --surface-hi:    #ffffff;
+  --surface-lo:    #e9ecf4;
   --shadow: 0 4px 24px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.10);
   --scrim: rgba(255,255,255,0.50);
   --card-bg-photo: rgba(255,255,255,0.82);
