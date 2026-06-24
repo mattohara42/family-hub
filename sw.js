@@ -4,7 +4,7 @@
  * offline fallback only), network-only for all external APIs.
  */
 
-const CACHE_VERSION = 'fh-v3';
+const CACHE_VERSION = 'fh-v4';
 const CACHE_NAME    = `family-hub-${CACHE_VERSION}`;
 
 const APP_SHELL = [
@@ -15,6 +15,9 @@ const APP_SHELL = [
   '/manifest.json',
   '/icon-192.png',
   '/icon-512.png',
+  '/fonts/fraunces-roman.woff2',
+  '/fonts/fraunces-italic.woff2',
+  '/fonts/hanken-grotesk.woff2',
 ];
 
 // ── Install: pre-cache app shell ──────────────────────────────

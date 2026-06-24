@@ -1,3 +1,26 @@
+/* ── Tactile flavor fonts (self-hosted; consumed only under body.flavor-tactile) ── */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('fonts/fraunces-roman.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Fraunces';
+  font-style: italic;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url('fonts/fraunces-italic.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Hanken Grotesk';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('fonts/hanken-grotesk.woff2') format('woff2');
+}
+
 :root {
   --bg: #0f1117;
   --surface: rgba(26,29,39,0.78);
@@ -15,6 +38,8 @@
   --surface-solid: #1e2030;
   --surface-hi:    #262a40;
   --surface-lo:    #171823;
+  --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --font-body:    'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --radius: 14px;
   --shadow: 0 0 22px rgba(108,142,245,0.22), 0 4px 18px rgba(0,0,0,0.55);
   --scrim: rgba(0,0,0,0.45);
