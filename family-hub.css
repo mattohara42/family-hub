@@ -5285,3 +5285,83 @@ body.tv-mode .card:hover { box-shadow: none; }
   .more-nav-item:active { background: rgba(108,142,245,.18); }
   .more-nav-icon { font-size: 1.4rem; line-height: 1; }
 }
+
+/* ════════════════════════════════════════════════════════════════
+   ✦  TACTILE FLAVOR — lush / hand-made material system
+   Orthogonal to theme: every rule is scoped under body.flavor-tactile,
+   so Basic (the default, absence of the class) is never touched.
+   Consumes the shared tokens added to each theme block
+   (--surface-solid/-hi/-lo, --line, --ink, --font-display/-body).
+   Color always comes from the active theme — Tactile only changes
+   the *material* (surface, type, shadow, radius, grain).
+   ════════════════════════════════════════════════════════════════ */
+body.flavor-tactile {
+  --radius: 16px;
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  font-family: var(--font-body);
+}
+
+/* ── Display type for headings + app/card titles ── */
+body.flavor-tactile h1,
+body.flavor-tactile h2,
+body.flavor-tactile .cal-app-title,
+body.flavor-tactile .card-header h2 {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-weight: var(--weight-semi);
+  letter-spacing: -0.01em;
+}
+
+/* ── Crafted card material (replaces flat glass) ── */
+body.flavor-tactile .card {
+  background:
+    radial-gradient(120% 80% at 50% -10%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 60%),
+    linear-gradient(180deg, var(--surface-hi) 0%, var(--surface-solid) 18%, var(--surface-solid) 82%, var(--surface-lo) 100%);
+  border: 1px solid var(--line);
+  box-shadow:
+    0 1px 1px rgba(0,0,0,.28),
+    0 3px 7px rgba(0,0,0,.20),
+    0 14px 30px rgba(0,0,0,.28),
+    inset 0 1px 0 var(--surface-hi),
+    inset 0 -1px 0 var(--surface-lo);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  position: relative;
+}
+/* per-card paper grain */
+body.flavor-tactile .card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background-image: var(--grain);
+  background-size: 160px;
+  opacity: 0.05;
+  mix-blend-mode: soft-light;
+  z-index: 0;
+}
+/* keep card content above the grain layer */
+body.flavor-tactile .card > * { position: relative; z-index: 1; }
+
+/* softer, warm shadow + multiply grain for the light themes */
+body.flavor-tactile.light-mode .card,
+body.flavor-tactile.aurora-mode .card {
+  box-shadow:
+    0 1px 1px rgba(70,55,30,.08),
+    0 3px 6px rgba(70,55,30,.08),
+    0 14px 30px rgba(70,55,30,.10),
+    inset 0 1px 0 var(--surface-hi),
+    inset 0 -1px 0 var(--surface-lo);
+}
+body.flavor-tactile.light-mode .card::after,
+body.flavor-tactile.aurora-mode .card::after {
+  mix-blend-mode: multiply;
+  opacity: 0.06;
+}
+
+/* ── Tactile buttons / inputs: a touch more crafted ── */
+body.flavor-tactile .btn { border-radius: 11px; }
+body.flavor-tactile .btn-primary {
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 30%, transparent);
+}
