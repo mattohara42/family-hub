@@ -260,11 +260,14 @@ Three modes, toggled via ⚙️ Settings → Look & Feel:
 
 **State:**
 ```js
-let appMode = localStorage.getItem('fh_mode') || 'dark'; // 'light' | 'dark' | 'nautical'
+let appMode = localStorage.getItem('fh_mode') || 'dark'; // 'light' | 'dark' | 'nautical' | 'aurora' | 'colorblind'
+let appFlavor = localStorage.getItem('fh_flavor') || 'basic'; // 'basic' | 'tactile' — design-system axis, orthogonal to appMode
 ```
 **Key functions:**
 - `applyAppMode(mode)` — removes all mode classes, adds the correct one
 - `setAppMode(mode)` — calls `applyAppMode`, saves to localStorage, updates button highlights
+- `applyFlavor(flavor)` — toggles `body.flavor-tactile` (basic = no class)
+- `setFlavor(flavor)` — calls `applyFlavor`, saves `fh_flavor`, updates button highlights. Tactile reads each theme's color tokens; CSS lives in the `✦ TACTILE FLAVOR` section of `family-hub.css` (self-hosted fonts in `fonts/`)
 
 **Nautical-specific CSS elements:**
 - `body.nautical-mode::before` — large ⚓ watermark (22% opacity), lower-right corner
@@ -665,7 +668,8 @@ Netlify environment variables:
 | Key | Type | Feature | Notes |
 |---|---|---|---|
 | `fh_name` | string | Settings | Display name |
-| `fh_mode` | string | Theme | `'light'` \| `'dark'` \| `'nautical'` |
+| `fh_mode` | string | Theme | `'light'` \| `'dark'` \| `'nautical'` \| `'aurora'` \| `'colorblind'` |
+| `fh_flavor` | string | Flavor | `'basic'` \| `'tactile'` — design-system axis, orthogonal to theme |
 | `fh_calView` | string | Calendar | `'month'` \| `'week'` \| `'day'` |
 | `fh_calIds` | JSON array | Calendar | Google Calendar IDs |
 | `fh_calMeta` | JSON object | Calendar | `{ calId: { label, color } }` |
