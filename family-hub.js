@@ -246,8 +246,14 @@ if (localStorage.getItem('fh_mode') === 'nautical-light') localStorage.setItem('
 if (localStorage.getItem('fh_mobileTab') === 'members')   localStorage.setItem('fh_mobileTab', 'cal');
 const _savedMode    = localStorage.getItem('fh_mode');
 let appMode         = _savedMode || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');  // 'light' | 'dark' | 'nautical'
+// Flavor registry — to ship a new flavor, add an entry here AND a matching
+// `body.flavor-<id>` section in family-hub.css. Everything else is data-driven.
+const FLAVORS = [
+  { id: 'basic',   label: '◻ Basic' },
+  { id: 'tactile', label: '✦ Tactile' },
+];
 const _savedFlavor  = localStorage.getItem('fh_flavor');
-let appFlavor       = _savedFlavor || 'basic';  // 'basic' | 'tactile' — design-system layer, orthogonal to appMode
+let appFlavor       = FLAVORS.some(f => f.id === _savedFlavor) ? _savedFlavor : 'basic';  // design-system layer, orthogonal to appMode
 // Compute smart tab default: time-based on first daily visit, saved on return visits
 function getTimeBasedDefaultTab() {
   const hour = new Date().getHours();
@@ -941,6 +947,7 @@ window.addEventListener('load', () => {
   }
   applyAppMode(appMode);
   applyFlavor(appFlavor);
+  renderFlavorButtons();
   applyAppTitle();
   applyAssistantName();
   applySafePaletteMode();
@@ -9102,11 +9109,15 @@ function applyAppMode(mode) {
   if (meta) meta.content = THEME_COLORS[mode] || THEME_COLORS.dark;
 }
 
-// Flavor = design-system layer (Basic | Tactile), orthogonal to the theme/mode.
-// Basic is the default (absence of class), mirroring dark-is-default for themes.
+// Flavor = design-system layer, orthogonal to the theme/mode. Basic is the
+// default (absence of class), mirroring dark-is-default for themes. Unknown
+// values fall back to Basic so a stale fh_flavor never wedges the UI.
 function applyFlavor(flavor) {
+  if (!FLAVORS.some(f => f.id === flavor)) flavor = 'basic';
   appFlavor = flavor;
-  document.body.classList.toggle('flavor-tactile', flavor === 'tactile');
+  FLAVORS.forEach(f => {
+    if (f.id !== 'basic') document.body.classList.toggle('flavor-' + f.id, f.id === flavor);
+  });
 }
 
 window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', e => {
@@ -9167,9 +9178,27 @@ function setAppMode(mode) {
 
 function setFlavor(flavor) {
   applyFlavor(flavor);
-  localStorage.setItem('fh_flavor', flavor);
-  document.getElementById('flavorBasic').className   = 'btn btn-sm' + (flavor === 'basic'   ? ' btn-mode-active' : '');
-  document.getElementById('flavorTactile').className = 'btn btn-sm' + (flavor === 'tactile' ? ' btn-mode-active' : '');
+  localStorage.setItem('fh_flavor', appFlavor);  // appFlavor is the validated value
+  highlightFlavorButtons();
+}
+
+// Renders the Settings flavor buttons from the FLAVORS registry, so adding a
+// flavor needs no markup edits.
+function renderFlavorButtons() {
+  const wrap = document.getElementById('flavorButtons');
+  if (!wrap) return;
+  wrap.innerHTML = FLAVORS.map(f =>
+    `<button id="flavorBtn-${f.id}" class="btn btn-sm" onclick="setFlavor('${f.id}')" ` +
+    `style="flex:1;min-width:90px;display:flex;align-items:center;justify-content:center;gap:5px">${f.label}</button>`
+  ).join('');
+  highlightFlavorButtons();
+}
+
+function highlightFlavorButtons() {
+  FLAVORS.forEach(f => {
+    const btn = document.getElementById('flavorBtn-' + f.id);
+    if (btn) btn.className = 'btn btn-sm' + (appFlavor === f.id ? ' btn-mode-active' : '');
+  });
 }
 
 // ── Focus trap ─────────────────────────────────────────────────
@@ -9291,8 +9320,7 @@ function openSettings() {
   document.getElementById('modeDark').className           = 'btn btn-sm' + (appMode === 'dark'           ? ' btn-mode-active' : '');
   document.getElementById('modeNautical').className       = 'btn btn-sm' + (appMode === 'nautical'       ? ' btn-mode-active' : '');
   document.getElementById('modeColorblind').className     = 'btn btn-sm' + (appMode === 'colorblind'     ? ' btn-mode-active' : '');
-  document.getElementById('flavorBasic').className        = 'btn btn-sm' + (appFlavor === 'basic'        ? ' btn-mode-active' : '');
-  document.getElementById('flavorTactile').className      = 'btn btn-sm' + (appFlavor === 'tactile'      ? ' btn-mode-active' : '');
+  highlightFlavorButtons();
   renderBgPreview();
   const statusEl = document.getElementById('bgStatus');
   if (statusEl && bgPhotos.length) {
