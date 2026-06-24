@@ -164,6 +164,8 @@ if (localStorage.getItem('fh_mode') === 'amazing')        localStorage.setItem('
 if (localStorage.getItem('fh_mode') === 'nautical-light') localStorage.setItem('fh_mode', 'nautical');
 const _savedMode    = localStorage.getItem('fh_mode');
 let appMode         = _savedMode || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');  // 'light' | 'dark' | 'nautical'
+const _savedFlavor  = localStorage.getItem('fh_flavor');
+let appFlavor       = _savedFlavor || 'basic';  // 'basic' | 'tactile' — design-system layer, orthogonal to appMode
 // Compute smart tab default: time-based on first daily visit, saved on return visits
 function getTimeBasedDefaultTab() {
   const hour = new Date().getHours();
@@ -836,6 +838,7 @@ window.addEventListener('load', () => {
     initGoogleAuth();
   }
   applyAppMode(appMode);
+  applyFlavor(appFlavor);
   applyAppTitle();
   applyAssistantName();
   applySafePaletteMode();
@@ -8745,6 +8748,13 @@ function applyAppMode(mode) {
   if (meta) meta.content = THEME_COLORS[mode] || THEME_COLORS.dark;
 }
 
+// Flavor = design-system layer (Basic | Tactile), orthogonal to the theme/mode.
+// Basic is the default (absence of class), mirroring dark-is-default for themes.
+function applyFlavor(flavor) {
+  appFlavor = flavor;
+  document.body.classList.toggle('flavor-tactile', flavor === 'tactile');
+}
+
 window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', e => {
   if (!localStorage.getItem('fh_mode')) applyAppMode(e.matches ? 'light' : 'dark');
 });
@@ -8799,6 +8809,13 @@ function setAppMode(mode) {
   document.getElementById('modeNautical').className       = 'btn btn-sm' + (mode === 'nautical'       ? ' btn-mode-active' : '');
   document.getElementById('modeAurora').className         = 'btn btn-sm' + (mode === 'aurora'         ? ' btn-mode-active' : '');
   document.getElementById('modeColorblind').className     = 'btn btn-sm' + (mode === 'colorblind'     ? ' btn-mode-active' : '');
+}
+
+function setFlavor(flavor) {
+  applyFlavor(flavor);
+  localStorage.setItem('fh_flavor', flavor);
+  document.getElementById('flavorBasic').className   = 'btn btn-sm' + (flavor === 'basic'   ? ' btn-mode-active' : '');
+  document.getElementById('flavorTactile').className = 'btn btn-sm' + (flavor === 'tactile' ? ' btn-mode-active' : '');
 }
 
 // ── Focus trap ─────────────────────────────────────────────────
@@ -8913,6 +8930,8 @@ function openSettings() {
   document.getElementById('modeDark').className           = 'btn btn-sm' + (appMode === 'dark'           ? ' btn-mode-active' : '');
   document.getElementById('modeNautical').className       = 'btn btn-sm' + (appMode === 'nautical'       ? ' btn-mode-active' : '');
   document.getElementById('modeColorblind').className     = 'btn btn-sm' + (appMode === 'colorblind'     ? ' btn-mode-active' : '');
+  document.getElementById('flavorBasic').className        = 'btn btn-sm' + (appFlavor === 'basic'        ? ' btn-mode-active' : '');
+  document.getElementById('flavorTactile').className      = 'btn btn-sm' + (appFlavor === 'tactile'      ? ' btn-mode-active' : '');
   renderBgPreview();
   const statusEl = document.getElementById('bgStatus');
   if (statusEl && bgPhotos.length) statusEl.textContent = `✓ ${bgPhotos.length} image(s) loaded`;

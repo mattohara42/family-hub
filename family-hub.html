@@ -554,6 +554,21 @@
           </div>
         </div>
         <div class="field">
+          <label>Flavor</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button id="flavorBasic" class="btn btn-sm"
+                    onclick="setFlavor('basic')"
+                    style="flex:1;min-width:90px;display:flex;align-items:center;justify-content:center;gap:5px">
+              ◻ Basic
+            </button>
+            <button id="flavorTactile" class="btn btn-sm"
+                    onclick="setFlavor('tactile')"
+                    style="flex:1;min-width:90px;display:flex;align-items:center;justify-content:center;gap:5px">
+              ✦ Tactile
+            </button>
+          </div>
+        </div>
+        <div class="field">
           <label>Layout orientation</label>
           <select id="settingLayoutMode">
             <option value="auto">Auto (follow device)</option>
