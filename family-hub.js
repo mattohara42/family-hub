@@ -6077,14 +6077,24 @@ function showAIQuotaError(provider, rawMsg = '') {
 
 // ── News Feed ────────────────────────────────────────────────────────────────
 
-const CORS_PROXY_NEWS = 'https://corsproxy.io/?';
 const NEWS_CACHE_TTL  = 30 * 60 * 1000; // 30 min
 
 let newsFeeds        = lsGet('fh_newsFeeds', [
   { id: 'nf_bbc',  label: 'BBC News', url: 'https://feeds.bbci.co.uk/news/rss.xml' },
-  { id: 'nf_ap',   label: 'AP News',  url: 'https://feeds.apnews.com/rss/apf-topnews' },
+  { id: 'nf_npr',  label: 'NPR News', url: 'https://feeds.npr.org/1001/rss.xml' },
 ]);
 let newsHeadlineCount = lsGet('fh_newsHeadlineCount', 5);
+
+// One-time migration: AP retired feeds.apnews.com (host no longer resolves).
+// Swap any persisted AP feed for the working NPR feed.
+(() => {
+  const ap = newsFeeds.find(f => /apnews\.com/i.test(f.url));
+  if (ap) {
+    ap.id = 'nf_npr'; ap.label = 'NPR News'; ap.url = 'https://feeds.npr.org/1001/rss.xml';
+    localStorage.setItem('fh_newsFeeds', JSON.stringify(newsFeeds));
+    localStorage.removeItem('fh_newsCache'); // drop stale cache so the new feed loads
+  }
+})();
 
 function saveNewsFeeds() {
   localStorage.setItem('fh_newsFeeds',         JSON.stringify(newsFeeds));
@@ -6092,12 +6102,13 @@ function saveNewsFeeds() {
 }
 
 async function fetchFeed(url) {
-  // Try direct first, fall back to CORS proxy
+  // Try direct first (some feeds send CORS headers), then fall back to the
+  // server-side Netlify proxy which avoids CORS entirely.
   try {
     const r = await fetch(url, { cache: 'no-store' });
     if (r.ok) return await r.text();
   } catch {}
-  const r = await fetch(CORS_PROXY_NEWS + encodeURIComponent(url), { cache: 'no-store' });
+  const r = await fetch(`/.netlify/functions/news?url=${encodeURIComponent(url)}`, { cache: 'no-store' });
   return r.ok ? r.text() : '';
 }
 
@@ -6252,7 +6263,7 @@ async function loadStockQuotes(force = false) {
       if (r.ok) data = await r.json();
     } catch {}
     if (!data) {
-      const r = await fetch(CORS_PROXY_NEWS + encodeURIComponent(YAHOO_QUOTE_URL + symbols));
+      const r = await fetch(`/.netlify/functions/news?url=${encodeURIComponent(YAHOO_QUOTE_URL + symbols)}`);
       if (r.ok) data = await r.json();
     }
     const quotes = data?.quoteResponse?.result || [];
