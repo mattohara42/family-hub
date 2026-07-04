@@ -4,9 +4,13 @@
  * offline fallback only), network-only for all external APIs.
  */
 
-const CACHE_VERSION = 'fh-v4';
+const CACHE_VERSION = 'fh-v5';
 const CACHE_NAME    = `family-hub-${CACHE_VERSION}`;
 
+// Tactile fonts (fonts/*.woff2) are deliberately not pre-cached: only the
+// Tactile flavor uses them, and the fetch handler runtime-caches them on
+// first use, so they stay offline-available without a ~184 KB install cost
+// for Basic-flavor clients.
 const APP_SHELL = [
   '/family-hub.html',
   '/family-hub.css',
@@ -15,9 +19,6 @@ const APP_SHELL = [
   '/manifest.json',
   '/icon-192.png',
   '/icon-512.png',
-  '/fonts/fraunces-roman.woff2',
-  '/fonts/fraunces-italic.woff2',
-  '/fonts/hanken-grotesk.woff2',
 ];
 
 // ── Install: pre-cache app shell ──────────────────────────────
@@ -56,8 +57,10 @@ self.addEventListener('fetch', event => {
         if (response.ok) {
           caches.open(CACHE_NAME)
             .then(cache => cache.put(request, response.clone()));
+          return response;
         }
-        return response;
+        // Server error (e.g. mid-deploy 5xx) — prefer the cached copy
+        return caches.match(request).then(cached => cached || response);
       })
       .catch(() => caches.match(request)) // Offline fallback
   );

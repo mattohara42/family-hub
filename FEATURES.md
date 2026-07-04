@@ -389,12 +389,7 @@ const WIDGET_ORDER = [
 
 **HTML anchors:** `#shopList`, `#shopInput`, `#shopEmpty`, `#smsPopover`, `#smsTriggerBtn`
 
-**SMS contacts state:**
-```js
-let smsContacts = JSON.parse(localStorage.getItem('fh_smsContacts') || '[]');
-// each: { nick: string, phone: string }
-```
-**localStorage:** `fh_smsContacts`
+**SMS recipients:** derived from family members with a phone number (Settings → Family) via `getSmsContacts()` — no separate contact list. The legacy `fh_smsContacts` localStorage list is migrated into member phone numbers on load by `migrateSmsContactsToMembers()` (name-matched to existing members; unmatched nicks become new members).
 
 ---
 
@@ -715,7 +710,6 @@ Netlify environment variables:
 | `fh_slideInterval` | string | Photos | Slideshow seconds |
 | `fh_widgets` | JSON object | Widgets | `{ shopping: bool, todo: bool, … }` |
 | `fh_widget_placement` | JSON object | Widgets | `{ shopping: 'sidebar'\|'bottom', … }` |
-| `fh_smsContacts` | JSON array | Shopping | `[{ nick, phone }]` |
 | `fh_mealPlan` | JSON object | Meals | `{ dateKey: { breakfast, lunch, dinner } }` |
 | `fh_mealAiKey` | string | Meals | API key (Gemini or OpenAI) |
 | `fh_mealAiProvider` | string | Meals | `'gemini'` \| `'openai'` |
