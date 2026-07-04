@@ -254,7 +254,7 @@ function getTimeBasedDefaultTab() {
 }
 
 function getInitialMobileTab() {
-  const today = new Date().toISOString().split('T')[0];  // YYYY-MM-DD
+  const today = localDateKey(new Date());  // local YYYY-MM-DD — UTC would roll the day over at ~8 PM Eastern
   const savedDate = localStorage.getItem('fh_mobileTabDate');
   const savedTab = localStorage.getItem('fh_mobileTab');
 
@@ -1983,7 +1983,10 @@ function makeDayCell(year, month, day, otherMonth, isToday) {
     const pill = document.createElement('div');
     pill.className = 'cal-event' + (ev.holiday ? ' cal-event-holiday' : '');
     pill.style.background = ev.color;
-    pill.textContent = (ev.holiday ? '🎉 ' : '') + ev.summary;
+    const pillText = document.createElement('span');
+    pillText.textContent = (ev.holiday ? '🎉 ' : '') + ev.summary + (ev.recurringEventId ? ' ↻' : '');
+    pill.appendChild(pillText);
+    appendMemberBadges(pill, ev.members);
     pill.title = ev.summary;
     if (!ev.holiday && ev.eventId) {
       pill.onclick = e => { e.stopPropagation(); openEventEditor(ev); };
