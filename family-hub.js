@@ -238,6 +238,8 @@ let todoItems       = []; // in-memory mirror of Firestore 'todo' collection for
 // Migrate old mode names
 if (localStorage.getItem('fh_mode') === 'amazing')        localStorage.setItem('fh_mode', 'nautical');
 if (localStorage.getItem('fh_mode') === 'nautical-light') localStorage.setItem('fh_mode', 'nautical');
+// The 'members' mobile tab was replaced by Settings → Family; its CSS is gone
+if (localStorage.getItem('fh_mobileTab') === 'members')   localStorage.setItem('fh_mobileTab', 'cal');
 const _savedMode    = localStorage.getItem('fh_mode');
 let appMode         = _savedMode || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');  // 'light' | 'dark' | 'nautical'
 const _savedFlavor  = localStorage.getItem('fh_flavor');
@@ -269,7 +271,6 @@ function getInitialMobileTab() {
 
 let mobileTab       = getInitialMobileTab();  // 'cal' | 'todo' | 'shop' | 'weather'
 let isMenuOpen      = false;
-let previousTab     = 'cal';  // track previous tab for back navigation from menu
 
 // Compute isMobile boolean for viewport-width-dependent logic
 function updateIsMobile() {
@@ -307,6 +308,27 @@ let tvMode          = lsGet('fh_tvMode', false);
 // SMS recipients are derived from family members with a phone number
 function getSmsContacts() {
   return familyMembers.filter(m => m.phone).map(m => ({ nick: m.name, phone: m.phone }));
+}
+// One-time migration: legacy fh_smsContacts → family member phone numbers.
+// Runs once familyMembers is populated (first Firestore snapshot, or on load
+// when running without Firestore); removing the key makes later calls no-ops.
+function migrateSmsContactsToMembers() {
+  const legacy = lsGet('fh_smsContacts', []);
+  if (!legacy.length) return;
+  legacy.forEach(c => {
+    if (!c?.phone) return;
+    const m = familyMembers.find(m => m.name.toLowerCase() === (c.nick || '').toLowerCase());
+    if (m) {
+      if (!m.phone) setFamilyMemberPhone(db ? m.id : familyMembers.indexOf(m), c.phone);
+    } else if (db) {
+      db.collection('familyMembers').add({ name: c.nick || 'Contact', order: familyMembers.length, gender: 'neutral', color: null, phone: c.phone });
+    } else {
+      familyMembers.push({ name: c.nick || 'Contact', phone: c.phone });
+      localStorage.setItem('fh_familyMembers', JSON.stringify(familyMembers));
+    }
+  });
+  localStorage.removeItem('fh_smsContacts');
+  console.log('[SMS] Migrated', legacy.length, 'legacy SMS contact(s) into family members.');
 }
 
 // ── Meal Planning state ────────────────────────────────────────
@@ -923,6 +945,7 @@ window.addEventListener('load', () => {
   applyTvMode();
   setMobileTab(mobileTab);
   lockPortraitOrientation();
+  if (!db) migrateSmsContactsToMembers(); // with Firestore this runs on the first members snapshot instead
   updateStatusPill();
   if (weatherLocations.length) showWeatherLocation(0);
   else if (weatherCity) { weatherLocations = [weatherCity]; showWeatherLocation(0); }
@@ -3185,7 +3208,7 @@ function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
   // Date — an explicit empty dateKey ('') means "no date known, require one"
   const dk = (dateKey !== undefined && dateKey !== null)
     ? dateKey
-    : (ev?.startDate || ev?.startDT?.slice(0,10) || new Date().toISOString().slice(0,10));
+    : (ev?.startDate || ev?.startDT?.slice(0,10) || localDateKey(new Date()));
   document.getElementById('evtEdDate').value = dk;
 
   // All-day
@@ -3198,7 +3221,7 @@ function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
   if (isAllDay && ev?.endDate) {
     const excl = new Date(ev.endDate + 'T00:00:00');
     excl.setDate(excl.getDate() - 1);
-    document.getElementById('evtEdEndDate').value = excl.toISOString().slice(0,10);
+    document.getElementById('evtEdEndDate').value = localDateKey(excl);
   } else {
     document.getElementById('evtEdEndDate').value = dk;
   }
@@ -3262,9 +3285,11 @@ function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
     membersSection.style.display = 'none';
   }
 
-  // Repeat / recurring scope
+  // Repeat / recurring scope — always reset the select so a value left over
+  // from a previous editor session can't leak into the next save
   const repeatSection    = document.getElementById('evtEdRepeatSection');
   const recurringSection = document.getElementById('evtEdRecurringSection');
+  document.getElementById('evtEdRepeat').value = 'none';
   if (ev?.recurringEventId) {
     repeatSection.style.display    = 'none';
     recurringSection.style.display = '';
@@ -3273,7 +3298,6 @@ function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
   } else {
     repeatSection.style.display    = '';
     recurringSection.style.display = 'none';
-    document.getElementById('evtEdRepeat').value = 'none';
   }
 
   document.getElementById('eventEditorModal').style.display = 'flex';
@@ -3327,7 +3351,7 @@ async function saveCalEvent() {
     const lastDay = (endDateVal && endDateVal >= date) ? endDateVal : date;
     const exclusiveEnd = new Date(lastDay + 'T00:00:00');
     exclusiveEnd.setDate(exclusiveEnd.getDate() + 1);
-    end = { date: exclusiveEnd.toISOString().slice(0,10) };
+    end = { date: localDateKey(exclusiveEnd) };
   } else {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     start = { dateTime: `${date}T${startT || '09:00'}:00`, timeZone: tz };
@@ -3338,24 +3362,31 @@ async function saveCalEvent() {
     document.querySelectorAll('#evtEdMembers .evt-member-chip.selected')
   ).map(c => c.dataset.memberName);
 
-  const rrule = buildRRule(document.getElementById('evtEdRepeat').value, date);
-
-  const body = {
-    summary: title, description: desc, start, end,
-    extendedProperties: { private: { fhMembers: selectedMembers.join(',') } },
-  };
-  if (rrule) body.recurrence = [rrule];
-  evtEdStatus('Saving…', false);
+  // The Repeat select is hidden (and meaningless) when editing an instance of
+  // an existing series — never attach a recurrence rule in that case
+  const rrule = evtEditing?.recurringEventId
+    ? null
+    : buildRRule(document.getElementById('evtEdRepeat').value, date);
 
   // For recurring event instances, respect the user's scope choice
-  const editScope = document.querySelector('.evt-scope-btn.selected')?.dataset.scope || 'this';
+  const editScope  = document.querySelector('.evt-scope-btn.selected')?.dataset.scope || 'this';
+  const seriesEdit = editScope === 'all' && !!evtEditing?.recurringEventId;
+
+  const body = {
+    summary: title, description: desc,
+    extendedProperties: { private: { fhMembers: selectedMembers.join(',') } },
+  };
+  // Editing "All events": PATCHing the master with this instance's start/end
+  // would re-anchor the whole series to this date — only send dates for
+  // single events / single instances
+  if (!seriesEdit) { body.start = start; body.end = end; }
+  if (rrule) body.recurrence = [rrule];
+  evtEdStatus('Saving…', false);
 
   try {
     if (evtEditing?.eventId) {
       // PATCH existing event (or its series when scope === 'all')
-      const targetId = (editScope === 'all' && evtEditing.recurringEventId)
-        ? evtEditing.recurringEventId
-        : evtEditing.eventId;
+      const targetId = seriesEdit ? evtEditing.recurringEventId : evtEditing.eventId;
       const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(targetId)}`;
       const r = await fetch(url, {
         method: 'PATCH',
@@ -4929,6 +4960,7 @@ function setupListeners() {
     }
     renderFamilyMemberList();
     renderChoreCard();
+    migrateSmsContactsToMembers();
   });
 
   // One-time migration: push localStorage family members to Firestore
