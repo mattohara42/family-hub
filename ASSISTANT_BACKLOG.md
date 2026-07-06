@@ -2,7 +2,7 @@
 
 *Expansion ideas for the Family Assistant widget. Constraints: Gemini API (via the Meals API key), three-file no-build architecture, CDN only. The `[ACTION:type:value]` tag system is the primary extension mechanism — the model appends tags to its reply; `extractAssistantActions()` parses them and `executeAssistantActions()` runs them.*
 
-Last updated: 2026-06-06
+Last updated: 2026-07-06
 
 ---
 
@@ -71,6 +71,22 @@ Grew the `[ACTION:...]` vocabulary from 2 to **7 actions**. Multi-arg actions us
 **Verified:** default off; toggle flips icon + persists; text cleaning correct (`**Great**, … ✓ … 🛒` → `Great, … …`); off-state is a true no-op; no new console errors.
 
 **Note:** uses the browser's default system voice (no voice picker). A future tweak could add voice/rate selection.
+
+---
+
+## Priority 3 — Full Event CRUD from the Assistant
+
+**What:** Let the assistant fully manage calendar events — not just create them. Today only `addEvent` exists ("Follow-ups not included" above flagged editing/removing as a future pass). Extend the action vocabulary so the model can **add, edit, and remove** events and their details (title, date/time, all-day, description, location, members, recurrence).
+
+**Approach:** New `[ACTION:...]` tags parsed in `executeAssistantActions()`, reusing the existing event editor's save/delete plumbing (`saveCalEvent()` / `deleteCalEvent()` write to the Google Calendar API) rather than duplicating it:
+- **`editEvent`** — fuzzy-match an existing event (by title + optional date, via `fuzzyTextMatch()`) and PATCH changed fields.
+- **`removeEvent`** — fuzzy-match and delete, with a visible confirmation.
+- Extend `addEvent` (and the new tags) to accept optional detail fields as they ship in the editor (location once that backlog item lands, description, members, recurrence end).
+- For recurring events, respect the "this event vs all events" scope the editor already models.
+
+**Constraints:** requires Google sign-in (degrade gracefully when signed out, like `addEvent`); every write/delete surfaces a confirmation in the chat; add discovery chips to `ASSISTANT_QUICK_PROMPTS` (e.g. "Move soccer to 5pm", "Cancel Friday's dentist appointment"); teach the new tags + relative-date resolution in the system prompt.
+
+**Acceptance:** From chat, the user can reschedule, retitle, relocate, or delete an existing event and see it reflected on the calendar with a confirmation.
 
 ---
 
