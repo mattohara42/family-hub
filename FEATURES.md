@@ -693,6 +693,37 @@ Netlify environment variables:
 
 ---
 
+### 19. Screensaver
+
+**Overview:** Idle-triggered full-screen photo slideshow (SCREENSAVER_BACKLOG.md S1). After N minutes without pointer/key/touch activity, fades to a black overlay cycling the background photo pool (`bgPhotos` — same IndexedDB pool as the background slideshow) with slow Ken Burns pan/zoom and an optional drifting clock (burn-in protection). Any interaction wakes it instantly; the waking tap is swallowed by the overlay. Doesn't activate when the photo pool is empty or the tab is hidden.
+
+**State:**
+```js
+let saverEnabled  = lsGet('fh_saver', false);
+let saverIdleMin  = lsGet('fh_saverIdleMin', 10);   // minutes idle before start
+let saverDwellSec = lsGet('fh_saverDwellSec', 20);  // seconds per photo
+let saverClock    = lsGet('fh_saverClock', true);   // clock overlay on/off
+let saverActive   = false;                          // runtime only
+```
+
+**Key functions:**
+- `resetSaverIdleTimer()` — (re)arms the idle timeout; no-op when disabled or already active
+- `startScreensaver()` — activates overlay; guards: enabled, not active, tab visible, photos exist (else re-arms)
+- `stopScreensaver()` — fades out, clears timers, removes photo layers after the fade, re-arms
+- `advanceSaverPhoto()` — appends the next photo `<img>` (random `kb0–kb3` Ken Burns class, inline `animationDuration` = dwell + 4s), crossfades, retires the previous layer, schedules itself
+- `updateSaverClock()` — time + date text; random ±30/±20px drift every 10s
+- `saverActivity(e)` — global listener (`pointerdown`/`pointermove` throttled 1/s/`keydown`/`touchstart`/`wheel`): wakes if active, else re-arms; `visibilitychange` stops when hidden
+
+**HTML anchors:** `#screensaver` (fixed overlay, `z-index: 20000` — above modals, below easter-egg layers), `#saverClock` / `#saverClockTime` / `#saverClockDate`
+
+**CSS:** `/* ── Screensaver ── */` section — `.saver-img` (crossfade + `saverKb0–3` keyframes), `#screensaver.active`, tactile flavor uses `--font-display` for the clock
+
+**Settings:** Look & Feel → Screensaver (below Background Images): enable toggle, idle minutes (1–240), dwell seconds (5–600), clock toggle. Wired in `openSettings()` / `saveSettings()`; init armed from the `load` handler.
+
+**localStorage:** `fh_saver`, `fh_saverIdleMin`, `fh_saverDwellSec`, `fh_saverClock`
+
+---
+
 ## localStorage Key Index
 
 | Key | Type | Feature | Notes |
@@ -724,6 +755,10 @@ Netlify environment variables:
 | `fh_assistantTTS` | bool | Assistant | Read replies aloud via TTS (default off) |
 | `fh_tvMode` | bool | TV Mode | TV / Display Mode on/off (default false) |
 | `fh_eggCategories` | JSON object | Easter Eggs | `{ phrases, calendar, ui, weather }` — all true by default |
+| `fh_saver` | bool | Screensaver | Idle photo screensaver on/off (default false) |
+| `fh_saverIdleMin` | number | Screensaver | Minutes idle before start (default 10) |
+| `fh_saverDwellSec` | number | Screensaver | Seconds per photo (default 20) |
+| `fh_saverClock` | bool | Screensaver | Clock overlay (default true) |
 | `fh_eventLocation` | string | Event Discovery | Default search location (default `'Rochester'`) |
 | `fh_eventMaxDistance` | number | Event Discovery | Max distance in minutes driving time (default 120) |
 | `fh_mobileTab` | string | Mobile (U1) | Current mobile tab `'cal'` \| `'todo'` \| `'shop'` \| `'weather'` \| menu items |

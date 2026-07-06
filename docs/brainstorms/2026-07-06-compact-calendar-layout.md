@@ -1,7 +1,7 @@
 # Compact Calendar Layout — Brainstorm
 
 **Date:** 2026-07-06 (updated same day with owner answers)
-**Status:** Direction settled — ready for planning
+**Status:** ❌ REJECTED — implemented as a "Density" axis (quadrant layout, 2026-07-06), owner didn't like the look, removed same day. Don't re-propose without a new visual direction; the implementation approach below is preserved for reference (it worked mechanically — 50/50 grid split, conditional half-height via `has-bottom-widgets`, container-query pill→dot degradation).
 **Goal:** A layout variant where the calendar scales proportionally to **50% width × 50% height** (≈25% of its current area), freeing the rest of the screen for other widgets.
 
 ---

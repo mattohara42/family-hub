@@ -14,15 +14,9 @@ Last updated: 2026-07-06
 
 ---
 
-## S1 — Core screensaver (idle → full-screen slideshow)
+## ✅ DONE — S1: Core screensaver (idle → full-screen slideshow)  (shipped 2026-07-06)
 
-After N minutes without pointer/touch/key activity, fade to a full-screen photo layer; any interaction wakes back to the dashboard instantly.
-
-- Idle timer reset on `pointerdown` / `pointermove` (throttled) / `keydown` / `touchstart`; pause when `document.hidden`.
-- Full-viewport overlay (`#screensaver`, `position: fixed`, `z-index` above everything, opacity fade in/out) cycling the merged photo pool.
-- Settings → new "Screensaver" panel: enable toggle, idle minutes, per-photo dwell seconds, clock overlay on/off.
-- State: `fh_saver` (bool), `fh_saverIdleMin`, `fh_saverDwellSec`. Follow the Adding-a-Feature checklist (openSettings/saveSettings wiring, FEATURES.md).
-- Burn-in protection for the wall display: slow Ken Burns pan/zoom on each photo and drift the clock position a few px per cycle.
+**Shipped:** idle-triggered full-screen slideshow of the `bgPhotos` pool with Ken Burns pan/zoom (4 keyframe variants, duration = dwell + 4s), 1.5s crossfades, and an optional clock overlay (time + date) that drifts ±30px every 10s for burn-in protection. Any interaction (`pointerdown`/`pointermove` throttled/`keydown`/`touchstart`/`wheel`) wakes it instantly — the overlay swallows the waking tap. Doesn't start with an empty photo pool or hidden tab; stops on `visibilitychange`. Settings in Look & Feel → Screensaver (enable, idle minutes 1–240, dwell seconds 5–600, clock toggle). Keys: `fh_saver`, `fh_saverIdleMin`, `fh_saverDwellSec`, `fh_saverClock`. Full function/anchor map in FEATURES.md §19.
 
 ## S2 — Photo sources (owner decision 2026-07-06: Google Photos is the only service in the stack)
 

@@ -946,6 +946,7 @@ window.addEventListener('load', () => {
   setMobileTab(mobileTab);
   lockPortraitOrientation();
   if (!db) migrateSmsContactsToMembers(); // with Firestore this runs on the first members snapshot instead
+  resetSaverIdleTimer(); // arm the screensaver idle timer (no-op when disabled)
   updateStatusPill();
   if (weatherLocations.length) showWeatherLocation(0);
   else if (weatherCity) { weatherLocations = [weatherCity]; showWeatherLocation(0); }
@@ -9172,6 +9173,10 @@ function openSettings() {
   renderWeatherLocationsList();
   renderShopCategorySettings();
   document.getElementById('settingSlideInterval').value = slideInterval;
+  document.getElementById('settingSaverEnabled').checked  = !!saverEnabled;
+  document.getElementById('settingSaverIdleMin').value    = saverIdleMin;
+  document.getElementById('settingSaverDwellSec').value   = saverDwellSec;
+  document.getElementById('settingSaverClock').checked    = !!saverClock;
   document.getElementById('settingMealAiKey').value     = mealAiKey;
   document.getElementById('settingMealPantry').value    = mealPantryDef;
   // provider is always gemini — no UI to update
@@ -9285,6 +9290,15 @@ function saveSettings() {
   }
   // familyMembers saved immediately on add/remove — nothing to save here
   slideInterval = parseInt(document.getElementById('settingSlideInterval').value) || 30;
+  saverEnabled  = document.getElementById('settingSaverEnabled').checked;
+  saverIdleMin  = Math.min(240, Math.max(1, parseInt(document.getElementById('settingSaverIdleMin').value) || 10));
+  saverDwellSec = Math.min(600, Math.max(5, parseInt(document.getElementById('settingSaverDwellSec').value) || 20));
+  saverClock    = document.getElementById('settingSaverClock').checked;
+  localStorage.setItem('fh_saver',         JSON.stringify(saverEnabled));
+  localStorage.setItem('fh_saverIdleMin',  String(saverIdleMin));
+  localStorage.setItem('fh_saverDwellSec', String(saverDwellSec));
+  localStorage.setItem('fh_saverClock',    JSON.stringify(saverClock));
+  resetSaverIdleTimer();
   mealAiKey     = document.getElementById('settingMealAiKey').value.trim();
   mealPantryDef = document.getElementById('settingMealPantry').value.trim();
   mealDietPrefs = Array.from(document.querySelectorAll('#mealDietGrid input:checked')).map(cb => cb.value);
@@ -9781,6 +9795,100 @@ async function shouldRefreshCache() {
     return true;  // Error = refresh
   }
 }
+
+// ── Screensaver ────────────────────────────────────────────────
+// Idle-triggered full-screen slideshow of the background photo pool
+// (bgPhotos). Any interaction wakes it instantly. SCREENSAVER_BACKLOG.md S1.
+let saverEnabled  = lsGet('fh_saver', false);
+let saverIdleMin  = lsGet('fh_saverIdleMin', 10);
+let saverDwellSec = lsGet('fh_saverDwellSec', 20);
+let saverClock    = lsGet('fh_saverClock', true);
+let saverActive   = false;
+let _saverIdleTimer = null, _saverCycleTimer = null, _saverClockTimer = null, _saverIdx = -1;
+
+function resetSaverIdleTimer() {
+  clearTimeout(_saverIdleTimer);
+  if (!saverEnabled || saverActive) return;
+  _saverIdleTimer = setTimeout(startScreensaver, Math.max(1, saverIdleMin) * 60000);
+}
+
+function startScreensaver() {
+  // No photos (yet) or tab hidden — re-arm and try again next idle period
+  if (!saverEnabled || saverActive || document.hidden || !bgPhotos.length) { resetSaverIdleTimer(); return; }
+  saverActive = true;
+  const clock = document.getElementById('saverClock');
+  clock.style.display = saverClock ? '' : 'none';
+  clock.style.transform = '';
+  if (saverClock) {
+    updateSaverClock();
+    _saverClockTimer = setInterval(updateSaverClock, 10000);
+  }
+  document.getElementById('screensaver').classList.add('active');
+  _saverIdx = Math.floor(Math.random() * bgPhotos.length) - 1; // random starting photo
+  advanceSaverPhoto();
+}
+
+function stopScreensaver() {
+  if (!saverActive) return;
+  saverActive = false;
+  clearTimeout(_saverCycleTimer);
+  clearInterval(_saverClockTimer);
+  const el = document.getElementById('screensaver');
+  el.classList.remove('active');
+  // Drop the photo layers once the fade-out completes
+  setTimeout(() => { if (!saverActive) el.querySelectorAll('.saver-img').forEach(i => i.remove()); }, 1300);
+  resetSaverIdleTimer();
+}
+
+function advanceSaverPhoto() {
+  if (!saverActive || !bgPhotos.length) return;
+  const el = document.getElementById('screensaver');
+  _saverIdx = (_saverIdx + 1) % bgPhotos.length;
+  const img = document.createElement('img');
+  img.className = 'saver-img kb' + Math.floor(Math.random() * 4);
+  img.alt = '';
+  img.style.animationDuration = (saverDwellSec + 4) + 's'; // pan covers dwell + crossfade
+  img.src = bgPhotos[_saverIdx];
+  el.insertBefore(img, document.getElementById('saverClock'));
+  requestAnimationFrame(() => img.classList.add('visible'));
+  // Retire the previous photo after the crossfade
+  const layers = el.querySelectorAll('.saver-img');
+  if (layers.length > 1) {
+    const old = layers[0];
+    setTimeout(() => old.remove(), 1700);
+  }
+  _saverCycleTimer = setTimeout(advanceSaverPhoto, Math.max(5, saverDwellSec) * 1000);
+}
+
+function updateSaverClock() {
+  const now = new Date();
+  document.getElementById('saverClockTime').textContent =
+    now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  document.getElementById('saverClockDate').textContent =
+    now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+  // Burn-in protection: drift the clock a little on every update
+  const dx = Math.round(Math.random() * 60 - 30), dy = Math.round(Math.random() * 40 - 20);
+  document.getElementById('saverClock').style.transform = `translate(${dx}px, ${dy}px)`;
+}
+
+// Activity detection: while asleep any interaction wakes (the overlay swallows
+// the tap since it's the event target); while awake it re-arms the idle timer.
+let _saverLastMove = 0;
+function saverActivity(e) {
+  if (saverActive) { stopScreensaver(); return; }
+  if (e && e.type === 'pointermove') {
+    const now = Date.now();
+    if (now - _saverLastMove < 1000) return; // throttle re-arms to 1/s
+    _saverLastMove = now;
+  }
+  resetSaverIdleTimer();
+}
+['pointerdown', 'pointermove', 'keydown', 'touchstart', 'wheel'].forEach(t =>
+  window.addEventListener(t, saverActivity, { passive: true }));
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) stopScreensaver();
+  else resetSaverIdleTimer();
+});
 
 // ── Category filtering ──
 
