@@ -24,25 +24,21 @@ After N minutes without pointer/touch/key activity, fade to a full-screen photo 
 - State: `fh_saver` (bool), `fh_saverIdleMin`, `fh_saverDwellSec`. Follow the Adding-a-Feature checklist (openSettings/saveSettings wiring, FEATURES.md).
 - Burn-in protection for the wall display: slow Ken Burns pan/zoom on each photo and drift the clock position a few px per cycle.
 
-## S2 — Photo source adapters (the "variety of services" part)
+## S2 — Photo sources (owner decision 2026-07-06: Google Photos is the only service in the stack)
 
-One small adapter interface so sources are pluggable:
+**Primary path — make the existing Google Photos → IndexedDB pipeline screensaver-grade.** The screensaver consumes the same IndexedDB photo pool the background slideshow already uses; the work is deepening that pipeline, not adding services:
+
+- **Bigger pool:** raise the import cap for screensaver use (a wall display wants dozens–hundreds of photos, not a handful of backgrounds). Establish an IndexedDB size budget and evict oldest-imported first.
+- **Re-pick UX:** the Photos Picker API is user-initiated per session — it cannot auto-sync an album. Add a "Refresh photos" action in Settings and a gentle nudge (e.g. status line "Photos last updated 34 days ago") so the pool doesn't go stale. Downloads still need the `Authorization: Bearer ${googleToken}` header (Photos Picker 403 gotcha).
+- **Quality:** import at display resolution (`=w2560-h1440` URL suffix) rather than thumbnail size, since photos will be shown full-screen.
+
+**Secondary (optional, later):** a single generic adapter interface so a future source can slot in without rework —
 
 ```js
 // { id, label, configured(): bool, listPhotos(): Promise<{url, caption?}[]> }
 ```
 
-Merged pool cached in IndexedDB (reuse the bg-photo store pattern) with a per-source refresh timestamp. Suggested order:
-
-| Priority | Source | Method | Notes |
-|---|---|---|---|
-| 1 | Local / already-imported photos | IndexedDB | Free — this is `bgPhotos` today |
-| 2 | Google Photos (Picker) | Existing OAuth flow | Picker sessions are user-initiated; periodic re-pick, can't auto-sync an album. Needs Bearer header on download |
-| 3 | iCloud Shared Album | Public web-album JSON (`sharedstreams` endpoint) | Keyless, but CORS-blocked → Netlify proxy function like `ics.js` |
-| 4 | Immich / self-hosted | REST + API key | Best "family photo server" answer; key in Settings, never committed |
-| 5 | Ambient art fallbacks | Bing image of the day (keyless), NASA APOD, Unsplash (key) | For households with no photo source configured |
-
-Each enabled source adds its host to the CSP `img-src` (or is routed through the proxy so everything stays same-origin).
+with keyless ambient fallbacks (Bing image of the day, NASA APOD) as the only other planned implementations, for days when the local pool is empty. Any remote source either gets its host added to the CSP `img-src` or is routed through a Netlify proxy function (the `ics.js` pattern). iCloud/Immich/Unsplash adapters: dropped — not in the family's stack.
 
 ## S3 — Ambient info overlay ("Nest Hub" mode)
 
@@ -60,4 +56,5 @@ Optional overlay on the screensaver: large clock, current temp (reuse Open-Meteo
 
 - Should the screensaver replace the existing *background* slideshow or coexist with it (same pool, two consumers)? Leaning: same pool, two consumers.
 - Photo pool size cap for IndexedDB on the target device?
-- Is Immich actually in the family's stack, or should priority 4 be a generic WebDAV/URL-list adapter instead?
+
+*(Resolved 2026-07-06: Google Photos is the only photo service in the stack — see S2.)*

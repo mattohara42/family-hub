@@ -1,8 +1,8 @@
 # Compact Calendar Layout — Brainstorm
 
-**Date:** 2026-07-06
-**Status:** Brainstorm — not yet approved for planning
-**Goal:** A layout variant where the calendar occupies roughly half its current footprint, freeing space for other widgets.
+**Date:** 2026-07-06 (updated same day with owner answers)
+**Status:** Direction settled — ready for planning
+**Goal:** A layout variant where the calendar scales proportionally to **50% width × 50% height** (≈25% of its current area), freeing the rest of the screen for other widgets.
 
 ---
 
@@ -23,39 +23,45 @@ Don't *replace* the current layout — add a third presentation axis, **Density*
 
 ---
 
-## Options for the "balanced" layout
+## Settled direction — quadrant layout (Option A + B hybrid)
 
-### Option A — 50/50 split with a two-column widget grid (recommended)
+Owner answer: 50% means **both axes, scaled proportionally** — the calendar becomes a quadrant-sized card (~25% of its former area), and the freed **L-shaped region** (right half + lower-left quadrant) belongs to widgets.
 
-`body.density-balanced .layout { grid-template-columns: 1fr 1fr }` and `.sidebar` becomes a two-column grid (`grid-template-columns: 1fr 1fr; align-content: start`). Cards keep their current size; roughly twice as many are visible without scrolling.
+```
+┌─────────────────┬─────────────────┐
+│                 │                 │
+│    Calendar     │   widget grid   │
+│  (50% × 50%)    │  (two columns,  │
+├─────────────────┤   spans full    │
+│  #bottomStrip   │     height)     │
+│  (widget grid)  │                 │
+└─────────────────┴─────────────────┘
+```
 
-- **Pros:** CSS-only + one small JS toggle; reuses every existing card unchanged; respects the `.sidebar > *` no-shrink invariant (grid ignores flex-shrink anyway).
-- **Cons:** Wide cards (weather with radar, assistant) may want to span both tracks → needs a per-widget `grid-column: span 2` list.
-- **Watch out:** month-view pills get cramped at half width. There is already a media rule that hides `.cal-event` pills at small sizes — generalize it into a container-based rule (`container-type: inline-size` on `.cal-card`) so pills degrade to dots whenever the calendar is narrow, regardless of *why*.
+Implementation sketch under `body.density-balanced`:
 
-### Option B — Shrink the calendar vertically, grow `#bottomStrip`
+- `.layout { grid-template-columns: 1fr 1fr }` — columns split 50/50.
+- Left column stays `.cal-column` (flex column): calendar card gets `flex: 0 0 50%` of the viewport-height track (`min-height: 0` chain preserved), and `#bottomStrip` — which already exists as an auto-fit card grid — grows (`flex: 1`) to fill the lower-left quadrant.
+- `.sidebar` becomes a two-column grid (`grid-template-columns: 1fr 1fr; align-content: start`), spanning the full right half. Wide cards (weather with radar, assistant) get `grid-column: span 2` via a small per-widget list.
+- Widget placement model is unchanged: `'sidebar'` → right half, `'bottom'` → lower-left quadrant. No new persistence needed.
 
-Keep column widths; the calendar card gets `flex: 0 0 50%` of the column height and `#bottomStrip` grows to fill the lower half (it's already an auto-fit grid). Pairs well with switching the default view to **week** or a **mini-month + next-7-days agenda** combo, which read better short-and-wide than a full month grid.
+**Calendar readability at quarter area** — the critical design problem:
 
-- **Pros:** No new grid; bottom strip already exists and handles any widget.
-- **Cons:** Month view at half height is the hardest calendar view to compress; probably forces an agenda-style default in this density.
+- Month grid at 50%×50% cannot show text pills. Put `container-type: inline-size` on `.cal-card` and degrade `.cal-event` pills to colored dots below a width threshold (generalizing the existing small-size media rule so it works regardless of *why* the calendar is narrow).
+- Default the balanced density to **week view** or a **mini-month + next-7-days agenda** combo, which compress far better than the month grid. Month stays one tap away via the existing view tabs.
+- `#yearStrip` is cut in balanced mode (first casualty of the height budget).
 
-### Option C — Uniform dashboard grid (bigger swing)
+**Density axis mechanics** (mirrors theme/flavor):
 
-Drop the column split entirely: one CSS grid of tiles, calendar spans 2×2, every widget is a 1×1 tile, optional drag-to-rearrange. This is the "real dashboard" end state.
+- `'calendar-focus'` (default, absence of class) | `'balanced'` (`body.density-balanced`).
+- `applyDensity()` + `setDensity()`, persisted `fh_density`, buttons in Settings → Look & Feel.
+- Mobile (`max-width: 640px`) untouched — tab layout already governs it. TV mode forces calendar-focus unless someone asks otherwise.
 
-- **Pros:** Most flexible; makes widget placement first-class.
-- **Cons:** Largest effort; invalidates the sidebar/bottom placement model and its Settings UI; drag persistence is a new subsystem. Better as a later phase after A proves demand.
+## Deferred — Option C: uniform dashboard grid
 
-## Suggested path
+One CSS grid of tiles, calendar spanning 2×2, drag-to-rearrange. Most flexible, but it invalidates the sidebar/bottom placement model and its Settings UI, and drag persistence is a new subsystem. Revisit only if the family lives in balanced mode and wants finer control.
 
-1. Ship Option A behind the Density toggle (small, reversible, CSS-first).
-2. Add per-widget `span 2` tuning and the container-query pill degradation.
-3. Revisit Option C only if the family actually lives in balanced mode.
+## Remaining open questions
 
-## Open questions
-
-- Does "50%" mean width (A), height (B), or area? A is the assumption.
 - Which widgets earn promotion into the freed space by default — photos, event discovery, meals?
-- Does `#yearStrip` survive in balanced mode, or is it the first thing to cut?
-- TV mode interaction: should TV mode force calendar-focus?
+- Default calendar view in balanced mode: week, or mini-month + agenda?
