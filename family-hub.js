@@ -5326,16 +5326,38 @@ async function setFamilyMemberPhone(idOrIndex, phone) {
   }
 }
 
+/** Surface a family-member write failure inline instead of swallowing it.
+    A Firestore permission-denied here usually means the project's security
+    rules deny writes (e.g. expired test-mode rules) — point the user there. */
+function showFamilyMemberError(e) {
+  const box = document.getElementById('familyMemberError');
+  if (!box) return;
+  if (!e) { box.style.display = 'none'; box.textContent = ''; return; }
+  const msg = e?.message || String(e);
+  const denied = e?.code === 'permission-denied' || /permission|insufficient/i.test(msg);
+  box.textContent = denied
+    ? '⚠️ Couldn’t save — Firestore denied the write. Check your database security rules (test-mode rules expire after 30 days).'
+    : '⚠️ Couldn’t save: ' + msg;
+  box.style.display = '';
+}
+
 async function addFamilyMember() {
   const input = document.getElementById('newFamilyMemberInput');
   const name  = input.value.trim();
   if (!name) return;
-  input.value = '';
+  showFamilyMemberError(null);
   if (db) {
-    await db.collection('familyMembers').add({ name, order: familyMembers.length, gender: 'neutral', color: null });
-    // onSnapshot updates familyMembers + renderFamilyMemberList
+    try {
+      await db.collection('familyMembers').add({ name, order: familyMembers.length, gender: 'neutral', color: null });
+      input.value = '';   // clear only after the write is accepted
+      // onSnapshot updates familyMembers + renderFamilyMemberList
+    } catch (e) {
+      console.error('addFamilyMember', e);
+      showFamilyMemberError(e);   // keep the typed name so it isn't lost
+    }
     return;
   }
+  input.value = '';
   familyMembers.push({ name });
   localStorage.setItem('fh_familyMembers', JSON.stringify(familyMembers));
   renderFamilyMemberList();

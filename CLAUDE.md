@@ -51,6 +51,7 @@ Shared state (shopping, todo, budget) lives in Firebase Firestore. Photos are bl
 | `budgetDatesInRange()` returns strings | Returns `YYYY-MM-DD` strings, not Date objects — don't call Date methods on them |
 | Budget pill hidden by default | `#budgetTotalCard` starts `display:none`; `renderBudgetCard()` shows it when items exist |
 | Budget uses Firestore | Collection `budget` ordered by `createdAt`; `onSnapshot` keeps `budgetItems[]` live |
+| Firestore writes silently fail on denied rules | `.add()`/`.update()` reject with `permission-denied` (commonly **expired test-mode rules** — they auto-deny 30 days after project creation). Cached reads still render, so it looks like "add does nothing." `addFamilyMember()` now surfaces this via `#familyMemberError`; other write paths still swallow it — wrap new writes in try/catch. Fix is in Firebase Console → Firestore → Rules |
 | WOTD cache requires definition | Cache entry rejected if `definition` is empty |
 | ICS subs = no-OAuth calendars | Subscribe to public/secret `.ics` URLs (`icsSubs`) — events inject into `calEventCache` like Google ones. `parseIcs`/`expandRecurrence` handle TZID + RRULE/EXDATE; `fetchIcsSub` falls back to the `netlify/functions/ics.js` proxy (Netlify-only). Local dev can't proxy CORS-restricted feeds |
 | ICS recurrence is pragmatic | Supports FREQ DAILY/WEEKLY/MONTHLY/YEARLY + INTERVAL/COUNT/UNTIL/BYDAY/EXDATE only — no BYMONTHDAY/nth-weekday/RDATE/RECURRENCE-ID. Expanded over a ~2 mo back → 14 mo forward window |
