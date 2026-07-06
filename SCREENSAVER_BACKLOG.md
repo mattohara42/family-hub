@@ -33,9 +33,9 @@ Last updated: 2026-07-06
 
 with keyless ambient fallbacks (Bing image of the day, NASA APOD) as the only other planned implementations, for days when the local pool is empty. Any remote source either gets its host added to the CSP `img-src` or is routed through a Netlify proxy function (the `ics.js` pattern). iCloud/Immich/Unsplash adapters: dropped — not in the family's stack.
 
-## S3 — Ambient info overlay ("Nest Hub" mode)
+## ✅ DONE — S3: Ambient info overlay ("Nest Hub" mode)  (shipped 2026-07-06)
 
-Optional overlay on the screensaver: large clock, current temp (reuse Open-Meteo data already in memory), and the next calendar event. Night hours (configurable) switch to a dim clock-only mode.
+**Shipped:** optional info line under the clock — current temp (reuses the in-memory Open-Meteo payload via the new `lastWxData` global) and the next calendar event (`getNextCalendarEvent()`: soonest timed event later today across enabled calendars, else tomorrow's first event; skips holidays and disabled calendars). Configurable night window (default 22:00–06:30, handles midnight wrap) switches to a dim clock-only mode: photo layers are dropped (no overnight 2.5K decodes), cycling pauses, info hides, clock dims to 35% and shows even if the clock toggle is off; photos resume when the window ends. Settings: "Weather & next event" toggle, "Night dimming" toggle + from/to time inputs. Keys: `fh_saverInfo`, `fh_saverNight`, `fh_saverNightStart`, `fh_saverNightEnd`.
 
 ## S4 — Scheduling & TV-mode integration
 

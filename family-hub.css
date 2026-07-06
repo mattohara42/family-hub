@@ -5486,5 +5486,24 @@ body.safe-palette-on.flavor-tactile.nautical-mode .cal-card .card-body { backgro
   margin-top: 8px;
   opacity: .8;
 }
+/* Ambient info line: temp + next calendar event */
+#saverInfo {
+  display: flex;
+  gap: 18px;
+  align-items: baseline;
+  font-size: 1.2rem;
+  margin-top: 14px;
+  opacity: .75;
+}
+#saverInfoEvent {
+  max-width: 60vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Night dimming: photos off, dim clock only */
+#screensaver.night { background: #000; }
+#screensaver.night .saver-img { display: none; }
+#screensaver.night #saverClock { opacity: .35; }
 /* Tactile flavor: clock in the display serif */
 body.flavor-tactile #saverClockTime { font-family: var(--font-display); }

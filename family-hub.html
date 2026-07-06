@@ -646,6 +646,32 @@
               <div class="toggle-sub">Large time &amp; date overlay; drifts position slightly to protect the display from burn-in.</div>
             </div>
           </div>
+          <div class="toggle-row" style="margin-top:8px">
+            <label class="toggle-switch">
+              <input type="checkbox" id="settingSaverInfo" />
+              <span class="toggle-track"></span>
+            </label>
+            <div>
+              <div class="toggle-label">🌤 Weather &amp; next event</div>
+              <div class="toggle-sub">Show the current temperature and the next calendar event under the clock.</div>
+            </div>
+          </div>
+          <div class="toggle-row" style="margin-top:8px">
+            <label class="toggle-switch">
+              <input type="checkbox" id="settingSaverNight" />
+              <span class="toggle-track"></span>
+            </label>
+            <div>
+              <div class="toggle-label">🌒 Night dimming</div>
+              <div class="toggle-sub">During night hours the screensaver shows only a dim clock — no photos.</div>
+            </div>
+          </div>
+          <div class="field-row" style="margin-top:6px">
+            <label>Night from</label>
+            <input type="time" id="settingSaverNightStart" value="22:00" />
+            <label>to</label>
+            <input type="time" id="settingSaverNightEnd" value="06:30" />
+          </div>
         </div>
         <div class="field">
           <label>Family Assistant empty state</label>
@@ -1397,6 +1423,10 @@
   <div id="saverClock" style="display:none">
     <div id="saverClockTime"></div>
     <div id="saverClockDate"></div>
+    <div id="saverInfo" style="display:none">
+      <span id="saverInfoWx"></span>
+      <span id="saverInfoEvent"></span>
+    </div>
   </div>
 </div>
 

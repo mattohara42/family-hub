@@ -4141,7 +4141,10 @@ function showWxError(msg, badCity) {
   }
 }
 
+let lastWxData = null; // most recent weather payload — reused by the screensaver overlay
+
 function renderWeatherData(data) {
+  lastWxData = data;
   // Animated icon
   const iconEl = document.getElementById('wIcon');
   const wrapEl = document.getElementById('wIconWrap');
@@ -9177,6 +9180,10 @@ function openSettings() {
   document.getElementById('settingSaverIdleMin').value    = saverIdleMin;
   document.getElementById('settingSaverDwellSec').value   = saverDwellSec;
   document.getElementById('settingSaverClock').checked    = !!saverClock;
+  document.getElementById('settingSaverInfo').checked     = !!saverInfo;
+  document.getElementById('settingSaverNight').checked    = !!saverNight;
+  document.getElementById('settingSaverNightStart').value = saverNightStart;
+  document.getElementById('settingSaverNightEnd').value   = saverNightEnd;
   document.getElementById('settingMealAiKey').value     = mealAiKey;
   document.getElementById('settingMealPantry').value    = mealPantryDef;
   // provider is always gemini — no UI to update
@@ -9306,10 +9313,18 @@ function saveSettings() {
   saverIdleMin  = Math.min(240, Math.max(1, parseInt(document.getElementById('settingSaverIdleMin').value) || 10));
   saverDwellSec = Math.min(600, Math.max(5, parseInt(document.getElementById('settingSaverDwellSec').value) || 20));
   saverClock    = document.getElementById('settingSaverClock').checked;
-  localStorage.setItem('fh_saver',         JSON.stringify(saverEnabled));
-  localStorage.setItem('fh_saverIdleMin',  String(saverIdleMin));
-  localStorage.setItem('fh_saverDwellSec', String(saverDwellSec));
-  localStorage.setItem('fh_saverClock',    JSON.stringify(saverClock));
+  saverInfo     = document.getElementById('settingSaverInfo').checked;
+  saverNight    = document.getElementById('settingSaverNight').checked;
+  saverNightStart = document.getElementById('settingSaverNightStart').value || '22:00';
+  saverNightEnd   = document.getElementById('settingSaverNightEnd').value   || '06:30';
+  localStorage.setItem('fh_saver',           JSON.stringify(saverEnabled));
+  localStorage.setItem('fh_saverIdleMin',    String(saverIdleMin));
+  localStorage.setItem('fh_saverDwellSec',   String(saverDwellSec));
+  localStorage.setItem('fh_saverClock',      JSON.stringify(saverClock));
+  localStorage.setItem('fh_saverInfo',       JSON.stringify(saverInfo));
+  localStorage.setItem('fh_saverNight',      JSON.stringify(saverNight));
+  localStorage.setItem('fh_saverNightStart', JSON.stringify(saverNightStart));
+  localStorage.setItem('fh_saverNightEnd',   JSON.stringify(saverNightEnd));
   resetSaverIdleTimer();
   mealAiKey     = document.getElementById('settingMealAiKey').value.trim();
   mealPantryDef = document.getElementById('settingMealPantry').value.trim();
@@ -9849,8 +9864,53 @@ let saverEnabled  = lsGet('fh_saver', false);
 let saverIdleMin  = lsGet('fh_saverIdleMin', 10);
 let saverDwellSec = lsGet('fh_saverDwellSec', 20);
 let saverClock    = lsGet('fh_saverClock', true);
+let saverInfo     = lsGet('fh_saverInfo', true);        // temp + next event under the clock
+let saverNight    = lsGet('fh_saverNight', true);       // night hours → dim clock only, no photos
+let saverNightStart = lsGet('fh_saverNightStart', '22:00');
+let saverNightEnd   = lsGet('fh_saverNightEnd', '06:30');
 let saverActive   = false;
 let _saverIdleTimer = null, _saverCycleTimer = null, _saverClockTimer = null, _saverIdx = -1;
+let _saverNightOn = false;
+
+/** Is local time inside the configured night window (handles midnight wrap)? */
+function saverInNightWindow(d = new Date()) {
+  if (!saverNight) return false;
+  const mins = d.getHours() * 60 + d.getMinutes();
+  const [sh, sm] = String(saverNightStart).split(':').map(Number);
+  const [eh, em] = String(saverNightEnd).split(':').map(Number);
+  const start = (sh || 0) * 60 + (sm || 0), end = (eh || 0) * 60 + (em || 0);
+  return start <= end ? (mins >= start && mins < end) : (mins >= start || mins < end);
+}
+
+/** Next upcoming calendar event across enabled calendars: the soonest timed
+    event later today, else tomorrow's first event. Returns display text or null. */
+function getNextCalendarEvent() {
+  const now = new Date();
+  const todayKey = localDateKey(now);
+  const tmrw = new Date(now); tmrw.setDate(tmrw.getDate() + 1);
+  const tomorrowKey = localDateKey(tmrw);
+  const fmt = t => new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const collect = key => {
+    const evs = [];
+    Object.entries(calEventCache).forEach(([calId, byDate]) => {
+      if (disabledCals.has(calId)) return;
+      (byDate[key] || []).forEach(ev => { if (!ev.holiday) evs.push(ev); });
+    });
+    return evs;
+  };
+  const todayTimed = collect(todayKey)
+    .filter(ev => !ev.allDay && ev.startDT && new Date(ev.startDT) >= now)
+    .sort((a, b) => new Date(a.startDT) - new Date(b.startDT));
+  if (todayTimed.length) return `${todayTimed[0].summary} · ${fmt(todayTimed[0].startDT)}`;
+  const tomorrow = collect(tomorrowKey)
+    .sort((a, b) => (a.allDay ? 1 : 0) - (b.allDay ? 1 : 0) ||
+                    new Date(a.startDT || 0) - new Date(b.startDT || 0));
+  if (tomorrow.length) {
+    const ev = tomorrow[0];
+    return `Tomorrow: ${ev.summary}` + (ev.allDay || !ev.startDT ? '' : ` · ${fmt(ev.startDT)}`);
+  }
+  return null;
+}
 
 function resetSaverIdleTimer() {
   clearTimeout(_saverIdleTimer);
@@ -9862,16 +9922,13 @@ function startScreensaver() {
   // No photos (yet) or tab hidden — re-arm and try again next idle period
   if (!saverEnabled || saverActive || document.hidden || !bgPhotos.length) { resetSaverIdleTimer(); return; }
   saverActive = true;
-  const clock = document.getElementById('saverClock');
-  clock.style.display = saverClock ? '' : 'none';
-  clock.style.transform = '';
-  if (saverClock) {
-    updateSaverClock();
-    _saverClockTimer = setInterval(updateSaverClock, 10000);
-  }
+  document.getElementById('saverClock').style.transform = '';
+  _saverNightOn = false;
+  updateSaverOverlay(); // sets clock/info/night state before the first photo
+  _saverClockTimer = setInterval(updateSaverOverlay, 10000);
   document.getElementById('screensaver').classList.add('active');
   _saverIdx = Math.floor(Math.random() * bgPhotos.length) - 1; // random starting photo
-  advanceSaverPhoto();
+  if (!_saverNightOn) advanceSaverPhoto();
 }
 
 function stopScreensaver() {
@@ -9881,13 +9938,15 @@ function stopScreensaver() {
   clearInterval(_saverClockTimer);
   const el = document.getElementById('screensaver');
   el.classList.remove('active');
+  el.classList.remove('night');
+  _saverNightOn = false;
   // Drop the photo layers once the fade-out completes
   setTimeout(() => { if (!saverActive) el.querySelectorAll('.saver-img').forEach(i => i.remove()); }, 1300);
   resetSaverIdleTimer();
 }
 
 function advanceSaverPhoto() {
-  if (!saverActive || !bgPhotos.length) return;
+  if (!saverActive || _saverNightOn || !bgPhotos.length) return;
   const el = document.getElementById('screensaver');
   _saverIdx = (_saverIdx + 1) % bgPhotos.length;
   const img = document.createElement('img');
@@ -9906,15 +9965,47 @@ function advanceSaverPhoto() {
   _saverCycleTimer = setTimeout(advanceSaverPhoto, Math.max(5, saverDwellSec) * 1000);
 }
 
-function updateSaverClock() {
+function updateSaverOverlay() {
   const now = new Date();
+  const el  = document.getElementById('screensaver');
+
+  // Night transitions: dim clock-only mode — stop cycling and drop the photo
+  // layers (no point decoding 2.5K photos nobody is looking at overnight)
+  const night = saverInNightWindow(now);
+  if (night !== _saverNightOn) {
+    _saverNightOn = night;
+    el.classList.toggle('night', night);
+    if (night) {
+      clearTimeout(_saverCycleTimer);
+      el.querySelectorAll('.saver-img').forEach(i => i.remove());
+    } else if (saverActive) {
+      advanceSaverPhoto();
+    }
+  }
+
+  // Clock (always shown during night dimming, else per setting)
+  const clock = document.getElementById('saverClock');
+  clock.style.display = (saverClock || night) ? '' : 'none';
   document.getElementById('saverClockTime').textContent =
     now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   document.getElementById('saverClockDate').textContent =
     now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
-  // Burn-in protection: drift the clock a little on every update
+
+  // Ambient info: current temp + next calendar event (hidden during night)
+  const infoEl = document.getElementById('saverInfo');
+  if (saverInfo && !night) {
+    const wx  = lastWxData ? `${WX_ICONS[lastWxData.icon] || '🌡'} ${lastWxData.temp}°` : '';
+    const nxt = getNextCalendarEvent() || '';
+    document.getElementById('saverInfoWx').textContent    = wx;
+    document.getElementById('saverInfoEvent').textContent = nxt;
+    infoEl.style.display = (wx || nxt) ? '' : 'none';
+  } else {
+    infoEl.style.display = 'none';
+  }
+
+  // Burn-in protection: drift the whole overlay block a little on every update
   const dx = Math.round(Math.random() * 60 - 30), dy = Math.round(Math.random() * 40 - 20);
-  document.getElementById('saverClock').style.transform = `translate(${dx}px, ${dy}px)`;
+  clock.style.transform = `translate(${dx}px, ${dy}px)`;
 }
 
 // Activity detection: while asleep any interaction wakes (the overlay swallows
