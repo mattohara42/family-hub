@@ -9213,7 +9213,19 @@ function openSettings() {
   document.getElementById('flavorTactile').className      = 'btn btn-sm' + (appFlavor === 'tactile'      ? ' btn-mode-active' : '');
   renderBgPreview();
   const statusEl = document.getElementById('bgStatus');
-  if (statusEl && bgPhotos.length) statusEl.textContent = `✓ ${bgPhotos.length} image(s) loaded`;
+  if (statusEl && bgPhotos.length) {
+    // Staleness nudge: the Photos Picker can't auto-sync an album, so
+    // surface the pool's age and suggest a re-pick when it's grown old
+    const importedAt = parseInt(localStorage.getItem('fh_photosImportedAt')) || 0;
+    const ageDays = importedAt ? Math.floor((Date.now() - importedAt) / 86400000) : null;
+    const ageTxt  = ageDays === null ? ''
+      : ageDays === 0 ? ' · updated today'
+      : ageDays === 1 ? ' · updated yesterday'
+      : ` · updated ${ageDays} days ago`;
+    statusEl.textContent = `✓ ${bgPhotos.length} image(s) in the pool${ageTxt}` +
+      (ageDays > 30 ? ' — tap 📷 above to refresh from Google Photos' : '');
+    statusEl.style.color = ageDays > 30 ? 'var(--accent2)' : '';
+  }
   // Calendar section visibility
   if (googleToken) {
     document.getElementById('settingCalNotSignedIn').style.display = 'none';
@@ -9357,6 +9369,9 @@ function saveSettings() {
 const BG_DB_NAME    = 'fh_bgImages';
 const BG_DB_VERSION = 1;
 const BG_STORE_NAME = 'images';
+// Pool cap: imports are additive; oldest photos are evicted beyond this.
+// ~800 KB per photo at 2560px → ~160 MB IndexedDB budget on the display.
+const BG_MAX_PHOTOS = 200;
 
 let bgDb       = null;
 let bgPhotos   = [];   // object URLs for the current session
@@ -9374,18 +9389,49 @@ function openBgDb() {
   });
 }
 
+/** Rebuild bgPhotos object URLs from the full IndexedDB pool (shuffled),
+    refresh the settings preview, and (re)start the slideshow. */
+async function rebuildBgPhotosFromDb() {
+  const db  = await openBgDb();
+  const all = await new Promise((res, rej) => {
+    const req = db.transaction(BG_STORE_NAME, 'readonly').objectStore(BG_STORE_NAME).getAll();
+    req.onsuccess = () => res(req.result);
+    req.onerror   = () => rej(req.error);
+  });
+  bgPhotos.forEach(u => URL.revokeObjectURL(u));
+  bgPhotos = all.map(r => URL.createObjectURL(new Blob([r.data], { type: r.type })));
+  for (let i = bgPhotos.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [bgPhotos[i], bgPhotos[j]] = [bgPhotos[j], bgPhotos[i]];
+  }
+  renderBgPreview();
+  if (bgPhotos.length) startSlideshow();
+  return bgPhotos.length;
+}
+
+/** Delete the oldest photos beyond BG_MAX_PHOTOS (auto-increment ids preserve
+    import order). Returns how many were evicted. */
+async function evictBgOverflow() {
+  const db   = await openBgDb();
+  const keys = await new Promise((res, rej) => {
+    const req = db.transaction(BG_STORE_NAME, 'readonly').objectStore(BG_STORE_NAME).getAllKeys();
+    req.onsuccess = () => res(req.result);
+    req.onerror   = () => rej(req.error);
+  });
+  if (keys.length <= BG_MAX_PHOTOS) return 0;
+  const excess = keys.slice(0, keys.length - BG_MAX_PHOTOS); // lowest ids = oldest imports
+  await new Promise((res, rej) => {
+    const tx = db.transaction(BG_STORE_NAME, 'readwrite');
+    const store = tx.objectStore(BG_STORE_NAME);
+    excess.forEach(k => store.delete(k));
+    tx.oncomplete = res; tx.onerror = rej;
+  });
+  return excess.length;
+}
+
 async function loadBgFromDb() {
   try {
-    const db  = await openBgDb();
-    const all = await new Promise((res, rej) => {
-      const req = db.transaction(BG_STORE_NAME, 'readonly').objectStore(BG_STORE_NAME).getAll();
-      req.onsuccess = () => res(req.result);
-      req.onerror   = () => rej(req.error);
-    });
-    if (!all.length) return;
-    bgPhotos = all.map(r => URL.createObjectURL(new Blob([r.data], { type: r.type })));
-    renderBgPreview();
-    startSlideshow();
+    await rebuildBgPhotosFromDb();
   } catch(e) { console.warn('loadBgFromDb', e); }
 }
 
@@ -9405,11 +9451,7 @@ async function saveBgFiles(files) {
   document.getElementById('bgStatus').textContent = `Loading ${files.length} image(s)…`;
   try {
     const db = await openBgDb();
-    await new Promise((res, rej) => {
-      const tx = db.transaction(BG_STORE_NAME, 'readwrite');
-      tx.objectStore(BG_STORE_NAME).clear();
-      tx.oncomplete = res; tx.onerror = rej;
-    });
+    // Additive: new images join the pool; oldest are evicted beyond the cap
     const blobs = await Promise.all(files.map(f => f.arrayBuffer().then(buf => ({ type: f.type, data: buf }))));
     await new Promise((res, rej) => {
       const tx    = db.transaction(BG_STORE_NAME, 'readwrite');
@@ -9417,15 +9459,11 @@ async function saveBgFiles(files) {
       blobs.forEach(b => store.add(b));
       tx.oncomplete = res; tx.onerror = rej;
     });
-    bgPhotos.forEach(u => URL.revokeObjectURL(u));
-    bgPhotos = blobs.map(b => URL.createObjectURL(new Blob([b.data], { type: b.type })));
-    for (let i = bgPhotos.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [bgPhotos[i], bgPhotos[j]] = [bgPhotos[j], bgPhotos[i]];
-    }
-    renderBgPreview();
-    document.getElementById('bgStatus').textContent = `✓ ${bgPhotos.length} image(s) loaded`;
-    startSlideshow();
+    const evicted = await evictBgOverflow();
+    localStorage.setItem('fh_photosImportedAt', String(Date.now()));
+    const total = await rebuildBgPhotosFromDb();
+    document.getElementById('bgStatus').textContent =
+      `✓ Added ${blobs.length} — ${total} image(s) in the pool` + (evicted ? ` (${evicted} oldest removed)` : '');
   } catch(e) {
     console.error('saveBgFiles', e);
     document.getElementById('bgStatus').textContent = 'Error: ' + e.message;
@@ -9463,6 +9501,7 @@ async function clearBgImages() {
   if (strip) strip.innerHTML = '';
   const status = document.getElementById('bgStatus');
   if (status) status.textContent = 'Background cleared.';
+  localStorage.removeItem('fh_photosImportedAt');
   try {
     const db = await openBgDb();
     const tx = db.transaction(BG_STORE_NAME, 'readwrite');
@@ -9564,19 +9603,30 @@ async function openPhotosPicker() {
       }, 2000);
     });
 
-    // ── 4. Fetch the selected media items ───────────────────────
+    // ── 4. Fetch the selected media items (paginated — selections beyond
+    //       one page were previously silently truncated at 100) ──────────
     statusEl.textContent = 'Fetching selected photos…';
-    const itemsResp = await fetch(
-      `https://photospicker.googleapis.com/v1/mediaItems?sessionId=${sessionId}&pageSize=100`,
-      { headers: { Authorization: `Bearer ${googleToken}` } }
-    );
-    if (!itemsResp.ok) {
-      const err = await itemsResp.json().catch(() => ({}));
-      throw new Error('Could not fetch items: ' + (err?.error?.message || itemsResp.statusText));
+    let mediaItems = [];
+    let pageToken  = '';
+    do {
+      const itemsResp = await fetch(
+        `https://photospicker.googleapis.com/v1/mediaItems?sessionId=${sessionId}&pageSize=100` +
+        (pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ''),
+        { headers: { Authorization: `Bearer ${googleToken}` } }
+      );
+      if (!itemsResp.ok) {
+        const err = await itemsResp.json().catch(() => ({}));
+        throw new Error('Could not fetch items: ' + (err?.error?.message || itemsResp.statusText));
+      }
+      const itemsData = await itemsResp.json();
+      mediaItems.push(...(itemsData.mediaItems || []));
+      pageToken = itemsData.nextPageToken || '';
+    } while (pageToken && mediaItems.length < BG_MAX_PHOTOS);
+    if (mediaItems.length > BG_MAX_PHOTOS) {
+      console.log(`[Photos] Capping selection at ${BG_MAX_PHOTOS} of ${mediaItems.length}`);
+      mediaItems = mediaItems.slice(0, BG_MAX_PHOTOS);
     }
-    const itemsData  = await itemsResp.json();
-    const mediaItems = itemsData.mediaItems || [];
-    console.log('[Photos] Media items:', mediaItems);
+    console.log('[Photos] Media items:', mediaItems.length);
 
     if (!mediaItems.length) {
       statusEl.textContent = 'No photos were returned.';
@@ -9584,59 +9634,55 @@ async function openPhotosPicker() {
       return;
     }
 
-    // ── 5. Download each photo as a blob ────────────────────────
+    // ── 5. Download each photo as a blob (4 at a time) ──────────
+    // =w2560-h1440 fits within display resolution — photos are shown
+    // full-screen by the screensaver, so thumbnails aren't enough
     statusEl.textContent = `Downloading ${mediaItems.length} photo(s)…`;
     const blobs = [];
-    for (let i = 0; i < mediaItems.length; i++) {
-      const item = mediaItems[i];
-      statusEl.textContent = `Downloading photo ${i + 1} of ${mediaItems.length}…`;
-      try {
-        // baseUrl needs a size suffix; =w2048 gives a high-res download
-        const baseUrl = item.mediaFile?.baseUrl;
-        if (!baseUrl) { console.warn('[Photos] No baseUrl on item', item); continue; }
-        const url = baseUrl + '=w2048';
-        console.log('[Photos] Downloading', url);
-        const r = await fetch(url, { headers: { Authorization: `Bearer ${googleToken}` } });
-        console.log('[Photos] Download response', r.status, r.headers.get('content-type'));
-        if (!r.ok) { console.warn('[Photos] Download failed', r.status, url); continue; }
-        const contentType = r.headers.get('content-type') || 'image/jpeg';
-        const buf = await r.arrayBuffer();
-        blobs.push({ type: contentType, data: buf });
-      } catch (dlErr) {
-        console.error('[Photos] Download error for item', item, dlErr);
+    let dlDone = 0;
+    const queue = [...mediaItems];
+    async function dlWorker() {
+      while (queue.length) {
+        const item = queue.shift();
+        try {
+          const baseUrl = item.mediaFile?.baseUrl;
+          if (!baseUrl) { console.warn('[Photos] No baseUrl on item', item); continue; }
+          const url = baseUrl + '=w2560-h1440';
+          const r = await fetch(url, { headers: { Authorization: `Bearer ${googleToken}` } });
+          if (!r.ok) { console.warn('[Photos] Download failed', r.status, url); continue; }
+          const contentType = r.headers.get('content-type') || 'image/jpeg';
+          const buf = await r.arrayBuffer();
+          blobs.push({ type: contentType, data: buf });
+        } catch (dlErr) {
+          console.error('[Photos] Download error for item', item, dlErr);
+        } finally {
+          dlDone++;
+          statusEl.textContent = `Downloading photo ${dlDone} of ${mediaItems.length}…`;
+        }
       }
     }
+    await Promise.all(Array.from({ length: Math.min(4, queue.length) }, dlWorker));
 
     if (!blobs.length) {
       throw new Error('Downloaded 0 of ' + mediaItems.length + ' photo(s). Check the browser console (F12) for details.');
     }
 
-    // ── 6. Persist to IndexedDB ─────────────────────────────────
+    // ── 6. Persist to IndexedDB (additive — joins the existing pool;
+    //       oldest photos are evicted beyond BG_MAX_PHOTOS) ─────────
     statusEl.textContent = 'Saving to local storage…';
     const idb = await openBgDb();
-    await new Promise((res, rej) => {
-      const tx = idb.transaction(BG_STORE_NAME, 'readwrite');
-      tx.objectStore(BG_STORE_NAME).clear();
-      tx.oncomplete = res; tx.onerror = rej;
-    });
     await new Promise((res, rej) => {
       const tx    = idb.transaction(BG_STORE_NAME, 'readwrite');
       const store = tx.objectStore(BG_STORE_NAME);
       blobs.forEach(b => store.add(b));
       tx.oncomplete = res; tx.onerror = rej;
     });
+    const evicted = await evictBgOverflow();
+    localStorage.setItem('fh_photosImportedAt', String(Date.now()));
 
-    // Revoke old URLs, build new ones, shuffle
-    bgPhotos.forEach(u => URL.revokeObjectURL(u));
-    bgPhotos = blobs.map(b => URL.createObjectURL(new Blob([b.data], { type: b.type })));
-    for (let i = bgPhotos.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [bgPhotos[i], bgPhotos[j]] = [bgPhotos[j], bgPhotos[i]];
-    }
-
-    renderBgPreview();
-    statusEl.textContent = `✓ ${bgPhotos.length} photo(s) loaded from Google Photos`;
-    startSlideshow();
+    const total = await rebuildBgPhotosFromDb();
+    statusEl.textContent = `✓ Added ${blobs.length} from Google Photos — ${total} in the pool` +
+      (evicted ? ` (${evicted} oldest removed)` : '');
 
   } catch (e) {
     console.error('[Photos] openPhotosPicker error:', e);

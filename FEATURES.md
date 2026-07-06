@@ -263,23 +263,28 @@ let sunArcEnabled       = lsGet('fh_sunArc', true);   // sun-path arc on/off
 ### 4. Google Photos Background Slideshow
 
 **API:** Google Photos Picker API (session-based, OAuth token required)
-**Storage:** IndexedDB database `fh_bgImages` (stores downloaded blobs)
+**Storage:** IndexedDB database `fh_bgImages` (stores downloaded blobs). **Imports are additive** (Picker picks and local uploads join the existing pool); beyond `BG_MAX_PHOTOS` (200) the oldest photos are evicted (auto-increment ids = import order). "Clear background images" resets the pool.
 **State:**
 ```js
+const BG_MAX_PHOTOS = 200;  // pool cap — oldest evicted beyond this
 let bgPhotos = [];
 let bgIndex  = 0;
 let bgTimer  = null;
 let slideInterval = parseInt(localStorage.getItem('fh_slideInterval')) || 30;
 ```
 **Key functions:**
-- `loadBgFromDb()` — loads stored images from IndexedDB, starts slideshow
-- `startSlideshow()` / `stopSlideshow()` — manages `bgTimer` interval
-- `openPhotosPicker()` — creates Picker session, opens picker popup, polls for result
-- `downloadPickerPhotos(mediaItems)` — fetches each image with `Authorization: Bearer` header, stores in IndexedDB
+- `rebuildBgPhotosFromDb()` — rebuilds `bgPhotos` object URLs from the full pool (shuffled), refreshes preview, restarts slideshow; returns count
+- `evictBgOverflow()` — deletes oldest photos beyond `BG_MAX_PHOTOS`; returns evicted count
+- `loadBgFromDb()` — startup wrapper around `rebuildBgPhotosFromDb()`
+- `startSlideshow()` — manages `bgTimer` interval
+- `openPhotosPicker()` — creates Picker session, opens picker popup, polls for result; **paginates** `mediaItems` (`nextPageToken`, capped at `BG_MAX_PHOTOS`); downloads at **`=w2560-h1440`** (display resolution — the screensaver shows photos full-screen) with 4 concurrent workers
+- `saveBgFiles(files)` — local uploads, same additive + eviction path
+
+**Staleness nudge:** every import stamps `fh_photosImportedAt`; `openSettings()` shows "✓ N image(s) in the pool · updated X days ago" and, past 30 days, an accent-colored prompt to re-pick (the Picker API can't auto-sync an album — re-picking is the only refresh).
 
 **Gotcha:** Picker session URLs expire. If photos stop loading, re-open the picker. Download requires `Authorization: Bearer ${googleToken}` header — without it you get 403.
 
-**localStorage:** `fh_slideInterval`
+**localStorage:** `fh_slideInterval`, `fh_photosImportedAt`
 
 ---
 
@@ -739,6 +744,7 @@ let saverActive   = false;                          // runtime only
 | `fh_wcity` | string | Weather | Legacy single city — kept in sync with `fh_wlocations[0]` |
 | `fh_sunArc` | bool | Weather | Sun-path arc visibility (default true) |
 | `fh_slideInterval` | string | Photos | Slideshow seconds |
+| `fh_photosImportedAt` | string | Photos | Epoch ms of last photo import (staleness nudge) |
 | `fh_widgets` | JSON object | Widgets | `{ shopping: bool, todo: bool, … }` |
 | `fh_widget_placement` | JSON object | Widgets | `{ shopping: 'sidebar'\|'bottom', … }` |
 | `fh_mealPlan` | JSON object | Meals | `{ dateKey: { breakfast, lunch, dinner } }` |

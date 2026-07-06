@@ -18,15 +18,14 @@ Last updated: 2026-07-06
 
 **Shipped:** idle-triggered full-screen slideshow of the `bgPhotos` pool with Ken Burns pan/zoom (4 keyframe variants, duration = dwell + 4s), 1.5s crossfades, and an optional clock overlay (time + date) that drifts ±30px every 10s for burn-in protection. Any interaction (`pointerdown`/`pointermove` throttled/`keydown`/`touchstart`/`wheel`) wakes it instantly — the overlay swallows the waking tap. Doesn't start with an empty photo pool or hidden tab; stops on `visibilitychange`. Settings in Look & Feel → Screensaver (enable, idle minutes 1–240, dwell seconds 5–600, clock toggle). Keys: `fh_saver`, `fh_saverIdleMin`, `fh_saverDwellSec`, `fh_saverClock`. Full function/anchor map in FEATURES.md §19.
 
-## S2 — Photo sources (owner decision 2026-07-06: Google Photos is the only service in the stack)
+## ✅ DONE — S2 (primary path): screensaver-grade Google Photos pipeline  (shipped 2026-07-06)
 
-**Primary path — make the existing Google Photos → IndexedDB pipeline screensaver-grade.** The screensaver consumes the same IndexedDB photo pool the background slideshow already uses; the work is deepening that pipeline, not adding services:
+**Shipped:**
+- **Bigger pool:** imports are now *additive* — Picker picks and local uploads join the existing pool instead of replacing it; `BG_MAX_PHOTOS = 200` cap with oldest-first eviction (`evictBgOverflow()`, auto-increment ids = import order). Picker `mediaItems` fetch paginates (`nextPageToken`) instead of truncating at 100.
+- **Re-pick UX:** every import stamps `fh_photosImportedAt`; Settings shows "✓ N image(s) in the pool · updated X days ago" with an accent-colored re-pick prompt past 30 days.
+- **Quality:** downloads at `=w2560-h1440` (was `=w2048`), 4 concurrent download workers.
 
-- **Bigger pool:** raise the import cap for screensaver use (a wall display wants dozens–hundreds of photos, not a handful of backgrounds). Establish an IndexedDB size budget and evict oldest-imported first.
-- **Re-pick UX:** the Photos Picker API is user-initiated per session — it cannot auto-sync an album. Add a "Refresh photos" action in Settings and a gentle nudge (e.g. status line "Photos last updated 34 days ago") so the pool doesn't go stale. Downloads still need the `Authorization: Bearer ${googleToken}` header (Photos Picker 403 gotcha).
-- **Quality:** import at display resolution (`=w2560-h1440` URL suffix) rather than thumbnail size, since photos will be shown full-screen.
-
-**Secondary (optional, later):** a single generic adapter interface so a future source can slot in without rework —
+**Secondary (optional, still open):** a single generic adapter interface so a future source can slot in without rework —
 
 ```js
 // { id, label, configured(): bool, listPhotos(): Promise<{url, caption?}[]> }
