@@ -103,6 +103,6 @@ When checking that a change worked in the browser, **default to `javascript_tool
 
 **Documentation:** `FEATURES.md` (detailed feature/reference map) · `family-hub-setup.md` (end-user setup) · `RETROSPECTIVE.md` (lessons learned) · `CLAUDE.md` (this file)
 
-**Backlogs & Plans:** `WEATHER_BACKLOG.md` · `ASSISTANT_BACKLOG.md` · `MEALS_BACKLOG.md` · `EVENT_DISCOVERY_BACKLOG.md` (optional) · `docs/brainstorms/` · `docs/plans/`
+**Backlogs & Plans:** `WEATHER_BACKLOG.md` · `ASSISTANT_BACKLOG.md` · `MEALS_BACKLOG.md` · `EVENT_DISCOVERY_BACKLOG.md` (optional) · `SCREENSAVER_BACKLOG.md` · `docs/brainstorms/` · `docs/plans/`
 
 **Backend:** `netlify/functions/events.js` (event discovery multi-API aggregation)

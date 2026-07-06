@@ -1,0 +1,60 @@
+# Screensaver / Ambient Mode — Backlog
+
+*Idle-triggered full-screen photo screensaver for the wall-mounted display, with photos pulled from a variety of services. Constraints: three-file no-build architecture, CDN scripts only, CSP in `family-hub.html` must be extended per photo source (`img-src` currently includes `'self'`).*
+
+Last updated: 2026-07-06
+
+---
+
+## Existing groundwork (reuse, don't rebuild)
+
+- **Background photo slideshow** — `bgPhotos[]` object URLs from IndexedDB blobs, `startSlideshow()`, `slideInterval` / `fh_slideInterval`, Google Photos Picker import (requires `Authorization: Bearer ${googleToken}` when downloading — see Photos Picker 403 gotcha in CLAUDE.md).
+- **TV mode** (`fh_tvMode`, `?tv=1`) — the display-oriented mode the screensaver should cooperate with.
+- **Netlify function proxy pattern** — `netlify/functions/ics.js` shows how to proxy CORS-restricted feeds; some photo services will need the same.
+
+---
+
+## S1 — Core screensaver (idle → full-screen slideshow)
+
+After N minutes without pointer/touch/key activity, fade to a full-screen photo layer; any interaction wakes back to the dashboard instantly.
+
+- Idle timer reset on `pointerdown` / `pointermove` (throttled) / `keydown` / `touchstart`; pause when `document.hidden`.
+- Full-viewport overlay (`#screensaver`, `position: fixed`, `z-index` above everything, opacity fade in/out) cycling the merged photo pool.
+- Settings → new "Screensaver" panel: enable toggle, idle minutes, per-photo dwell seconds, clock overlay on/off.
+- State: `fh_saver` (bool), `fh_saverIdleMin`, `fh_saverDwellSec`. Follow the Adding-a-Feature checklist (openSettings/saveSettings wiring, FEATURES.md).
+- Burn-in protection for the wall display: slow Ken Burns pan/zoom on each photo and drift the clock position a few px per cycle.
+
+## S2 — Photo sources (owner decision 2026-07-06: Google Photos is the only service in the stack)
+
+**Primary path — make the existing Google Photos → IndexedDB pipeline screensaver-grade.** The screensaver consumes the same IndexedDB photo pool the background slideshow already uses; the work is deepening that pipeline, not adding services:
+
+- **Bigger pool:** raise the import cap for screensaver use (a wall display wants dozens–hundreds of photos, not a handful of backgrounds). Establish an IndexedDB size budget and evict oldest-imported first.
+- **Re-pick UX:** the Photos Picker API is user-initiated per session — it cannot auto-sync an album. Add a "Refresh photos" action in Settings and a gentle nudge (e.g. status line "Photos last updated 34 days ago") so the pool doesn't go stale. Downloads still need the `Authorization: Bearer ${googleToken}` header (Photos Picker 403 gotcha).
+- **Quality:** import at display resolution (`=w2560-h1440` URL suffix) rather than thumbnail size, since photos will be shown full-screen.
+
+**Secondary (optional, later):** a single generic adapter interface so a future source can slot in without rework —
+
+```js
+// { id, label, configured(): bool, listPhotos(): Promise<{url, caption?}[]> }
+```
+
+with keyless ambient fallbacks (Bing image of the day, NASA APOD) as the only other planned implementations, for days when the local pool is empty. Any remote source either gets its host added to the CSP `img-src` or is routed through a Netlify proxy function (the `ics.js` pattern). iCloud/Immich/Unsplash adapters: dropped — not in the family's stack.
+
+## S3 — Ambient info overlay ("Nest Hub" mode)
+
+Optional overlay on the screensaver: large clock, current temp (reuse Open-Meteo data already in memory), and the next calendar event. Night hours (configurable) switch to a dim clock-only mode.
+
+## S4 — Scheduling & TV-mode integration
+
+- Auto-start screensaver on a schedule (e.g. 22:00–06:00) independent of idle.
+- In TV mode, shorten the idle threshold (the display is rarely touched).
+- Wake-on-event: pop out of the screensaver briefly when a calendar reminder or timer fires.
+
+---
+
+## Open questions
+
+- Should the screensaver replace the existing *background* slideshow or coexist with it (same pool, two consumers)? Leaning: same pool, two consumers.
+- Photo pool size cap for IndexedDB on the target device?
+
+*(Resolved 2026-07-06: Google Photos is the only photo service in the stack — see S2.)*
