@@ -149,6 +149,12 @@ HTML5 drag-and-drop via ⠿ grip handle on each card header. Order persisted in 
 ### ~~Portrait / landscape orientation modes~~ ✅ Done
 `body.portrait-mode` (forced) and `body.auto-portrait` (auto, toggled by `matchMedia orientation` listener) classes apply a single-column layout with sidebar cards wrapping horizontally below the calendar. Manual override select in Settings → Look & Feel persists to `fh_layoutMode`.
 
+### Preferences modal layout / design overhaul
+**Priority: Medium**
+The Settings ("Preferences") modal has grown to many tabs and long, dense panels. Rework its layout and visual design to conserve space and give a cleaner flow — the tab strip is getting crowded and individual panels are tall walls of controls.
+
+*Directions to explore: group related settings under collapsible sections within a panel; consider a two-pane layout (vertical nav list + content) on wide screens instead of the horizontal `.modal-tabs` strip; tighten field spacing and reuse the shared `.field` styling; possibly a search/filter for settings. Constraints: `modal-tab` + `settings-panel` structure wired through `openSettings()` (populate) and `saveSettings()` (persist — persist + `closeSettings()` before any re-render that could throw); must look correct in all five themes and both Flavors; touch tap-targets stay inside `@media (hover: none)`. Design-first — prototype in `docs/prototypes/` before touching the live modal.*
+
 ### PWA service worker / offline support
 **Priority: Low**
 Add a minimal service worker that caches the three app files and the last-fetched weather data. The app would remain usable when offline or on a slow connection, showing cached content.
