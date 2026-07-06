@@ -4891,49 +4891,38 @@ function setupCalSwipe() {
 }
 
 // ── Firestore Lists ─────────────────────────────────────────────
-function setupListeners() {
-  if (!db) {
-    // Fallback to localStorage if Firebase not configured
-    todoItems = getLocalList('todo');
-    renderTodoList();
-    renderLocalList('shopping');
-    budgetItems = lsGet('fh_budgetItems', []);
-    onBudgetChanged();
-    return;
-  }
+let _fsUnsub   = [];          // active onSnapshot unsubscribe fns
+let _fsAuthUid = undefined;   // undefined = never attached; null = attached signed-out
 
-  db.collection('todo').orderBy('createdAt').onSnapshot(snap => {
+// permission-denied before Firebase Auth is established is expected — the
+// onAuthStateChanged hook below re-attaches on sign-in. Stay quiet about it so
+// a normal pre-auth error doesn't look like a failure; log anything else.
+function _fsError(e) {
+  if (e?.code === 'permission-denied') return;
+  console.warn('[Firestore] listener error:', e?.code || e?.message || e);
+}
+
+function attachFirestoreListeners() {
+  _fsUnsub.forEach(u => { try { u(); } catch(_) {} });
+  _fsUnsub = [];
+
+  _fsUnsub.push(db.collection('todo').orderBy('createdAt').onSnapshot(snap => {
     todoItems = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     renderTodoList();
     renderCurrentView(); // refresh calendar so due-date items update
-  });
-  db.collection('shopping').orderBy('createdAt').onSnapshot(snap => {
+  }, _fsError));
+  _fsUnsub.push(db.collection('shopping').orderBy('createdAt').onSnapshot(snap => {
     renderFsList('shopList', 'shopEmpty', snap.docs, 'shopping');
-  });
+  }, _fsError));
 
   // Budget — real-time sync
-  db.collection('budget').orderBy('createdAt').onSnapshot(snap => {
+  _fsUnsub.push(db.collection('budget').orderBy('createdAt').onSnapshot(snap => {
     budgetItems = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     onBudgetChanged();
-  });
-
-  // One-time migration: if localStorage has budget items, push them to Firestore
-  const legacy = lsGet('fh_budgetItems', []);
-  if (legacy.length) {
-    const batch = db.batch();
-    legacy.forEach(item => {
-      const { id: _oldId, ...rest } = item; // drop old numeric id
-      const ref = db.collection('budget').doc();
-      batch.set(ref, { ...rest, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
-    });
-    batch.commit().then(() => {
-      localStorage.removeItem('fh_budgetItems');
-      console.log('[Budget] Migrated', legacy.length, 'item(s) from localStorage to Firestore.');
-    });
-  }
+  }, _fsError));
 
   // Meal plan — real-time sync across all family devices
-  db.collection('mealPlan').onSnapshot(snap => {
+  _fsUnsub.push(db.collection('mealPlan').onSnapshot(snap => {
     mealPlan = {};
     snap.docs.forEach(doc => {
       const d = doc.data();
@@ -4944,9 +4933,50 @@ function setupListeners() {
       }
     });
     renderCurrentView();
-  });
+  }, _fsError));
 
-  // One-time migration: push localStorage meal plan to Firestore
+  // Chore Chart — real-time sync
+  _fsUnsub.push(db.collection('chores').orderBy('createdAt').onSnapshot(snap => {
+    choreItems = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    renderChoreCard();
+  }, _fsError));
+
+  // Family members — real-time sync so every device shares the same list
+  _fsUnsub.push(db.collection('familyMembers').orderBy('order').onSnapshot(snap => {
+    familyMembers = snap.docs.map(doc => ({ id: doc.id, name: doc.data().name, order: doc.data().order ?? 0, gender: doc.data().gender || 'neutral', color: doc.data().color || null, phone: doc.data().phone || '', points: doc.data().points || 0, rewardName: doc.data().rewardName || '', rewardThreshold: doc.data().rewardThreshold || 100 }));
+    // Back-fill missing order fields (e.g. docs created before this field existed)
+    const needsOrder = familyMembers.filter(m => m.order === 0 && familyMembers.indexOf(m) > 0);
+    if (snap.docs.some(d => d.data().order == null)) {
+      const batch = db.batch();
+      snap.docs.forEach((d, i) => {
+        if (d.data().order == null) batch.update(d.ref, { order: i });
+      });
+      batch.commit().catch(_fsError);
+    }
+    renderFamilyMemberList();
+    renderChoreCard();
+    migrateSmsContactsToMembers();
+  }, _fsError));
+
+  // One-time localStorage → Firestore migrations. Writes require auth, so only
+  // run them once we're actually signed in (re-attach post-auth reaches here).
+  if (firebase.auth().currentUser) runFirestoreMigrations();
+}
+
+function runFirestoreMigrations() {
+  const legacy = lsGet('fh_budgetItems', []);
+  if (legacy.length) {
+    const batch = db.batch();
+    legacy.forEach(item => {
+      const { id: _oldId, ...rest } = item; // drop old numeric id
+      batch.set(db.collection('budget').doc(), { ...rest, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+    });
+    batch.commit().then(() => {
+      localStorage.removeItem('fh_budgetItems');
+      console.log('[Budget] Migrated', legacy.length, 'item(s) from localStorage to Firestore.');
+    }).catch(_fsError);
+  }
+
   const legacyMeals = lsGet('fh_mealPlan', {});
   const legacyMealEntries = [];
   Object.entries(legacyMeals).forEach(([dateKey, meals]) => {
@@ -4962,33 +4992,9 @@ function setupListeners() {
     mealBatch.commit().then(() => {
       localStorage.removeItem('fh_mealPlan');
       console.log('[MealPlan] Migrated', legacyMealEntries.length, 'meal(s) from localStorage to Firestore.');
-    });
+    }).catch(_fsError);
   }
 
-  // Chore Chart — real-time sync
-  db.collection('chores').orderBy('createdAt').onSnapshot(snap => {
-    choreItems = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    renderChoreCard();
-  });
-
-  // Family members — real-time sync so every device shares the same list
-  db.collection('familyMembers').orderBy('order').onSnapshot(snap => {
-    familyMembers = snap.docs.map(doc => ({ id: doc.id, name: doc.data().name, order: doc.data().order ?? 0, gender: doc.data().gender || 'neutral', color: doc.data().color || null, phone: doc.data().phone || '', points: doc.data().points || 0, rewardName: doc.data().rewardName || '', rewardThreshold: doc.data().rewardThreshold || 100 }));
-    // Back-fill missing order fields (e.g. docs created before this field existed)
-    const needsOrder = familyMembers.filter(m => m.order === 0 && familyMembers.indexOf(m) > 0);
-    if (snap.docs.some(d => d.data().order == null)) {
-      const batch = db.batch();
-      snap.docs.forEach((d, i) => {
-        if (d.data().order == null) batch.update(d.ref, { order: i });
-      });
-      batch.commit();
-    }
-    renderFamilyMemberList();
-    renderChoreCard();
-    migrateSmsContactsToMembers();
-  });
-
-  // One-time migration: push localStorage family members to Firestore
   const legacyMembers = lsGet('fh_familyMembers', []);
   if (legacyMembers.length) {
     const memberBatch = db.batch();
@@ -4998,8 +5004,35 @@ function setupListeners() {
     memberBatch.commit().then(() => {
       localStorage.removeItem('fh_familyMembers');
       console.log('[FamilyMembers] Migrated', legacyMembers.length, 'member(s) from localStorage to Firestore.');
-    });
+    }).catch(_fsError);
   }
+}
+
+function setupListeners() {
+  if (!db) {
+    // Fallback to localStorage if Firebase not configured
+    todoItems = getLocalList('todo');
+    renderTodoList();
+    renderLocalList('shopping');
+    budgetItems = lsGet('fh_budgetItems', []);
+    onBudgetChanged();
+    return;
+  }
+
+  // Attach now (works with open/test-mode rules), then re-attach whenever
+  // Firebase Auth state changes. Production rules gate reads on request.auth,
+  // so listeners attached before sign-in get permission-denied and never
+  // recover — re-attaching once the user is authenticated is what makes shared
+  // state actually load (and an added item render) under those rules.
+  attachFirestoreListeners();
+  _fsAuthUid = firebase.auth().currentUser?.uid ?? null;
+  firebase.auth().onAuthStateChanged(user => {
+    const uid = user?.uid ?? null;
+    if (uid !== _fsAuthUid) {
+      _fsAuthUid = uid;
+      attachFirestoreListeners();
+    }
+  });
 }
 
 function renderTodoList() {
