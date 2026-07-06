@@ -185,6 +185,10 @@ if (isConfigured) {
 // ── State ──────────────────────────────────────────────────────
 let currentUser     = null;
 let googleToken     = null;
+// Firebase Auth (separate from the GIS Google token) populates request.auth for
+// Firestore rules. null = not attempted / OK; Error = signInWithCredential failed
+// → Firestore sees us as unauthenticated and denies writes.
+let firebaseAuthError = null;
 // calendarMeta: [{ id, label, color }]  — migrates from old string-array format
 const DEFAULT_COLORS = ['#6c8ef5','#f5a623','#4caf82','#e06c75','#c678dd','#61afef'];
 function loadCalendarMeta() {
@@ -1020,7 +1024,12 @@ function initGoogleAuth() {
       try {
         const credential = firebase.auth.GoogleAuthProvider.credential(null, googleToken);
         await firebase.auth().signInWithCredential(credential);
-      } catch(e) { console.warn('Firebase Auth sign-in failed', e); }
+        firebaseAuthError = null;
+      } catch(e) {
+        console.warn('Firebase Auth sign-in failed', e);
+        firebaseAuthError = e;   // surfaced in the status card + on write failures
+      }
+      updateStatusPill();
 
       // Fetch user profile if not already known
       if (!currentUser) {
@@ -1084,7 +1093,9 @@ function onSignedIn() {
 let controlCardOpen = false;
 
 function updateStatusPill() {
-  const firebaseOk = isConfigured && db !== null;
+  // "Firebase OK" means not just configured, but that Firestore will accept
+  // writes: if we're signed into Google, Firebase Auth must have succeeded too
+  const firebaseOk = isConfigured && db !== null && !(currentUser && firebaseAuthError);
   const googleOk   = !!currentUser;
   const calOk      = googleOk && (typeof calendarMeta !== 'undefined') && calendarMeta.length > 0;
   const weatherOk  = !!(typeof weatherLocations !== 'undefined' && weatherLocations.length > 0);
@@ -1131,16 +1142,23 @@ function renderCtrlStatusView() {
   const container = document.getElementById('ctrlStatusRows');
   if (!container) return;
 
-  const firebaseOk = isConfigured && db !== null;
+  const configOk   = isConfigured && db !== null;
+  const authFailed = !!currentUser && !!firebaseAuthError;
+  const firebaseOk = configOk && !authFailed;
   const googleOk   = !!currentUser;
   const calOk      = googleOk && (typeof calendarMeta !== 'undefined') && calendarMeta.length > 0;
   const weatherOk  = !!(typeof weatherLocations !== 'undefined' && weatherLocations.length > 0);
   const aiOk       = !!(typeof mealAiKey !== 'undefined' && mealAiKey);
 
+  const firebaseDesc = !configOk
+    ? 'Add FIREBASE_CONFIG to family-hub.js'
+    : authFailed
+      ? `⚠️ Signed in to Google but NOT to the database — new items won't save. Enable Google under Firebase → Authentication → Sign-in method. (${firebaseAuthError.code || firebaseAuthError.message || 'auth failed'})`
+      : 'Firestore connected — shared state is live';
   const checks = [
     {
       label: 'Firebase',
-      desc:  firebaseOk ? 'Firestore connected — shared state is live' : 'Add FIREBASE_CONFIG to family-hub.js',
+      desc:  firebaseDesc,
       ok: firebaseOk
     },
     {
@@ -4873,49 +4891,38 @@ function setupCalSwipe() {
 }
 
 // ── Firestore Lists ─────────────────────────────────────────────
-function setupListeners() {
-  if (!db) {
-    // Fallback to localStorage if Firebase not configured
-    todoItems = getLocalList('todo');
-    renderTodoList();
-    renderLocalList('shopping');
-    budgetItems = lsGet('fh_budgetItems', []);
-    onBudgetChanged();
-    return;
-  }
+let _fsUnsub   = [];          // active onSnapshot unsubscribe fns
+let _fsAuthUid = undefined;   // undefined = never attached; null = attached signed-out
 
-  db.collection('todo').orderBy('createdAt').onSnapshot(snap => {
+// permission-denied before Firebase Auth is established is expected — the
+// onAuthStateChanged hook below re-attaches on sign-in. Stay quiet about it so
+// a normal pre-auth error doesn't look like a failure; log anything else.
+function _fsError(e) {
+  if (e?.code === 'permission-denied') return;
+  console.warn('[Firestore] listener error:', e?.code || e?.message || e);
+}
+
+function attachFirestoreListeners() {
+  _fsUnsub.forEach(u => { try { u(); } catch(_) {} });
+  _fsUnsub = [];
+
+  _fsUnsub.push(db.collection('todo').orderBy('createdAt').onSnapshot(snap => {
     todoItems = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     renderTodoList();
     renderCurrentView(); // refresh calendar so due-date items update
-  });
-  db.collection('shopping').orderBy('createdAt').onSnapshot(snap => {
+  }, _fsError));
+  _fsUnsub.push(db.collection('shopping').orderBy('createdAt').onSnapshot(snap => {
     renderFsList('shopList', 'shopEmpty', snap.docs, 'shopping');
-  });
+  }, _fsError));
 
   // Budget — real-time sync
-  db.collection('budget').orderBy('createdAt').onSnapshot(snap => {
+  _fsUnsub.push(db.collection('budget').orderBy('createdAt').onSnapshot(snap => {
     budgetItems = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     onBudgetChanged();
-  });
-
-  // One-time migration: if localStorage has budget items, push them to Firestore
-  const legacy = lsGet('fh_budgetItems', []);
-  if (legacy.length) {
-    const batch = db.batch();
-    legacy.forEach(item => {
-      const { id: _oldId, ...rest } = item; // drop old numeric id
-      const ref = db.collection('budget').doc();
-      batch.set(ref, { ...rest, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
-    });
-    batch.commit().then(() => {
-      localStorage.removeItem('fh_budgetItems');
-      console.log('[Budget] Migrated', legacy.length, 'item(s) from localStorage to Firestore.');
-    });
-  }
+  }, _fsError));
 
   // Meal plan — real-time sync across all family devices
-  db.collection('mealPlan').onSnapshot(snap => {
+  _fsUnsub.push(db.collection('mealPlan').onSnapshot(snap => {
     mealPlan = {};
     snap.docs.forEach(doc => {
       const d = doc.data();
@@ -4926,9 +4933,50 @@ function setupListeners() {
       }
     });
     renderCurrentView();
-  });
+  }, _fsError));
 
-  // One-time migration: push localStorage meal plan to Firestore
+  // Chore Chart — real-time sync
+  _fsUnsub.push(db.collection('chores').orderBy('createdAt').onSnapshot(snap => {
+    choreItems = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    renderChoreCard();
+  }, _fsError));
+
+  // Family members — real-time sync so every device shares the same list
+  _fsUnsub.push(db.collection('familyMembers').orderBy('order').onSnapshot(snap => {
+    familyMembers = snap.docs.map(doc => ({ id: doc.id, name: doc.data().name, order: doc.data().order ?? 0, gender: doc.data().gender || 'neutral', color: doc.data().color || null, phone: doc.data().phone || '', points: doc.data().points || 0, rewardName: doc.data().rewardName || '', rewardThreshold: doc.data().rewardThreshold || 100 }));
+    // Back-fill missing order fields (e.g. docs created before this field existed)
+    const needsOrder = familyMembers.filter(m => m.order === 0 && familyMembers.indexOf(m) > 0);
+    if (snap.docs.some(d => d.data().order == null)) {
+      const batch = db.batch();
+      snap.docs.forEach((d, i) => {
+        if (d.data().order == null) batch.update(d.ref, { order: i });
+      });
+      batch.commit().catch(_fsError);
+    }
+    renderFamilyMemberList();
+    renderChoreCard();
+    migrateSmsContactsToMembers();
+  }, _fsError));
+
+  // One-time localStorage → Firestore migrations. Writes require auth, so only
+  // run them once we're actually signed in (re-attach post-auth reaches here).
+  if (firebase.auth().currentUser) runFirestoreMigrations();
+}
+
+function runFirestoreMigrations() {
+  const legacy = lsGet('fh_budgetItems', []);
+  if (legacy.length) {
+    const batch = db.batch();
+    legacy.forEach(item => {
+      const { id: _oldId, ...rest } = item; // drop old numeric id
+      batch.set(db.collection('budget').doc(), { ...rest, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+    });
+    batch.commit().then(() => {
+      localStorage.removeItem('fh_budgetItems');
+      console.log('[Budget] Migrated', legacy.length, 'item(s) from localStorage to Firestore.');
+    }).catch(_fsError);
+  }
+
   const legacyMeals = lsGet('fh_mealPlan', {});
   const legacyMealEntries = [];
   Object.entries(legacyMeals).forEach(([dateKey, meals]) => {
@@ -4944,33 +4992,9 @@ function setupListeners() {
     mealBatch.commit().then(() => {
       localStorage.removeItem('fh_mealPlan');
       console.log('[MealPlan] Migrated', legacyMealEntries.length, 'meal(s) from localStorage to Firestore.');
-    });
+    }).catch(_fsError);
   }
 
-  // Chore Chart — real-time sync
-  db.collection('chores').orderBy('createdAt').onSnapshot(snap => {
-    choreItems = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    renderChoreCard();
-  });
-
-  // Family members — real-time sync so every device shares the same list
-  db.collection('familyMembers').orderBy('order').onSnapshot(snap => {
-    familyMembers = snap.docs.map(doc => ({ id: doc.id, name: doc.data().name, order: doc.data().order ?? 0, gender: doc.data().gender || 'neutral', color: doc.data().color || null, phone: doc.data().phone || '', points: doc.data().points || 0, rewardName: doc.data().rewardName || '', rewardThreshold: doc.data().rewardThreshold || 100 }));
-    // Back-fill missing order fields (e.g. docs created before this field existed)
-    const needsOrder = familyMembers.filter(m => m.order === 0 && familyMembers.indexOf(m) > 0);
-    if (snap.docs.some(d => d.data().order == null)) {
-      const batch = db.batch();
-      snap.docs.forEach((d, i) => {
-        if (d.data().order == null) batch.update(d.ref, { order: i });
-      });
-      batch.commit();
-    }
-    renderFamilyMemberList();
-    renderChoreCard();
-    migrateSmsContactsToMembers();
-  });
-
-  // One-time migration: push localStorage family members to Firestore
   const legacyMembers = lsGet('fh_familyMembers', []);
   if (legacyMembers.length) {
     const memberBatch = db.batch();
@@ -4980,8 +5004,35 @@ function setupListeners() {
     memberBatch.commit().then(() => {
       localStorage.removeItem('fh_familyMembers');
       console.log('[FamilyMembers] Migrated', legacyMembers.length, 'member(s) from localStorage to Firestore.');
-    });
+    }).catch(_fsError);
   }
+}
+
+function setupListeners() {
+  if (!db) {
+    // Fallback to localStorage if Firebase not configured
+    todoItems = getLocalList('todo');
+    renderTodoList();
+    renderLocalList('shopping');
+    budgetItems = lsGet('fh_budgetItems', []);
+    onBudgetChanged();
+    return;
+  }
+
+  // Attach now (works with open/test-mode rules), then re-attach whenever
+  // Firebase Auth state changes. Production rules gate reads on request.auth,
+  // so listeners attached before sign-in get permission-denied and never
+  // recover — re-attaching once the user is authenticated is what makes shared
+  // state actually load (and an added item render) under those rules.
+  attachFirestoreListeners();
+  _fsAuthUid = firebase.auth().currentUser?.uid ?? null;
+  firebase.auth().onAuthStateChanged(user => {
+    const uid = user?.uid ?? null;
+    if (uid !== _fsAuthUid) {
+      _fsAuthUid = uid;
+      attachFirestoreListeners();
+    }
+  });
 }
 
 function renderTodoList() {
@@ -5326,16 +5377,40 @@ async function setFamilyMemberPhone(idOrIndex, phone) {
   }
 }
 
+/** Surface a family-member write failure inline instead of swallowing it.
+    A Firestore permission-denied here usually means the project's security
+    rules deny writes (e.g. expired test-mode rules) — point the user there. */
+function showFamilyMemberError(e) {
+  const box = document.getElementById('familyMemberError');
+  if (!box) return;
+  if (!e) { box.style.display = 'none'; box.textContent = ''; return; }
+  const msg = e?.message || String(e);
+  const denied = e?.code === 'permission-denied' || /permission|insufficient/i.test(msg);
+  box.textContent = firebaseAuthError
+    ? '⚠️ Couldn’t save — you’re signed in to Google but not to the database. Enable Google under Firebase Console → Authentication → Sign-in method, then sign out and back in.'
+    : denied
+      ? '⚠️ Couldn’t save — Firestore denied the write. Check your database security rules (your email must be in the allow-list).'
+      : '⚠️ Couldn’t save: ' + msg;
+  box.style.display = '';
+}
+
 async function addFamilyMember() {
   const input = document.getElementById('newFamilyMemberInput');
   const name  = input.value.trim();
   if (!name) return;
-  input.value = '';
+  showFamilyMemberError(null);
   if (db) {
-    await db.collection('familyMembers').add({ name, order: familyMembers.length, gender: 'neutral', color: null });
-    // onSnapshot updates familyMembers + renderFamilyMemberList
+    try {
+      await db.collection('familyMembers').add({ name, order: familyMembers.length, gender: 'neutral', color: null });
+      input.value = '';   // clear only after the write is accepted
+      // onSnapshot updates familyMembers + renderFamilyMemberList
+    } catch (e) {
+      console.error('addFamilyMember', e);
+      showFamilyMemberError(e);   // keep the typed name so it isn't lost
+    }
     return;
   }
+  input.value = '';
   familyMembers.push({ name });
   localStorage.setItem('fh_familyMembers', JSON.stringify(familyMembers));
   renderFamilyMemberList();
