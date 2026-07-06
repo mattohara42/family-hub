@@ -3207,14 +3207,40 @@ function appendMemberBadges(container, members) {
 }
 
 const _RRULE_DAYS = ['SU','MO','TU','WE','TH','FR','SA'];
-function buildRRule(freq, date) {
+function buildRRule(freq, date, ends) {
   if (!freq || freq === 'none') return null;
-  if (freq === 'daily')    return 'RRULE:FREQ=DAILY';
-  if (freq === 'weekdays') return 'RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR';
-  if (freq === 'weekly')   return `RRULE:FREQ=WEEKLY;BYDAY=${_RRULE_DAYS[new Date(date + 'T00:00:00').getDay()]}`;
-  if (freq === 'monthly')  return 'RRULE:FREQ=MONTHLY';
-  if (freq === 'yearly')   return 'RRULE:FREQ=YEARLY';
-  return null;
+  let rule;
+  if      (freq === 'daily')    rule = 'FREQ=DAILY';
+  else if (freq === 'weekdays') rule = 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR';
+  else if (freq === 'weekly')   rule = `FREQ=WEEKLY;BYDAY=${_RRULE_DAYS[new Date(date + 'T00:00:00').getDay()]}`;
+  else if (freq === 'monthly')  rule = 'FREQ=MONTHLY';
+  else if (freq === 'yearly')   rule = 'FREQ=YEARLY';
+  else return null;
+
+  if (ends?.mode === 'count' && ends.count > 0) {
+    rule += `;COUNT=${ends.count}`;
+  } else if (ends?.mode === 'until' && ends.until) {
+    rule += `;UNTIL=${_rruleUntil(ends.until, ends.isAllDay)}`;
+  }
+  return `RRULE:${rule}`;
+}
+
+// Format an UNTIL value to match the event's DTSTART value-type (Google rejects
+// a DATE UNTIL on a DATE-TIME series and vice-versa). All-day → YYYYMMDD;
+// timed → end of that local day expressed as a UTC YYYYMMDDTHHMMSSZ stamp.
+function _rruleUntil(dateStr, isAllDay) {
+  if (isAllDay) return dateStr.replace(/-/g, '');
+  return new Date(dateStr + 'T23:59:59').toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+}
+
+// Show the Ends field only when the event repeats; reveal the count/date input
+// for the chosen end mode.
+function toggleEvtEdEnds() {
+  const repeats = document.getElementById('evtEdRepeat').value !== 'none';
+  document.getElementById('evtEdEndsSection').style.display = repeats ? '' : 'none';
+  const mode = document.getElementById('evtEdEndsMode').value;
+  document.getElementById('evtEdEndsCountRow').style.display = (repeats && mode === 'count') ? '' : 'none';
+  document.getElementById('evtEdEndsUntilRow').style.display = (repeats && mode === 'until') ? '' : 'none';
 }
 
 function selectEvtScope(btn) {
@@ -3328,6 +3354,11 @@ function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
     repeatSection.style.display    = '';
     recurringSection.style.display = 'none';
   }
+  // Reset the recurrence-end controls (matches Repeat resetting to 'none')
+  document.getElementById('evtEdEndsMode').value  = 'never';
+  document.getElementById('evtEdEndsCount').value = '10';
+  document.getElementById('evtEdEndsUntil').value = dk;
+  toggleEvtEdEnds();
 
   document.getElementById('eventEditorModal').style.display = 'flex';
   trapFocus(document.querySelector('#eventEditorModal .modal'), null, closeEventEditor);
@@ -3393,9 +3424,15 @@ async function saveCalEvent() {
 
   // The Repeat select is hidden (and meaningless) when editing an instance of
   // an existing series — never attach a recurrence rule in that case
+  const ends = {
+    mode:     document.getElementById('evtEdEndsMode').value,
+    count:    parseInt(document.getElementById('evtEdEndsCount').value, 10),
+    until:    document.getElementById('evtEdEndsUntil').value,
+    isAllDay,
+  };
   const rrule = evtEditing?.recurringEventId
     ? null
-    : buildRRule(document.getElementById('evtEdRepeat').value, date);
+    : buildRRule(document.getElementById('evtEdRepeat').value, date, ends);
 
   // For recurring event instances, respect the user's scope choice
   const editScope  = document.querySelector('.evt-scope-btn.selected')?.dataset.scope || 'this';

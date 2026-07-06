@@ -2592,6 +2592,12 @@ body.nautical-mode #eventEditorModal .modal {
   border: 1px solid rgba(255,255,255,.15); border-radius: 8px;
   padding: 6px 10px; font-size: .9rem; cursor: pointer; width: 100%; margin-top: 4px;
 }
+.evt-editor-ends-row {
+  display: flex; align-items: center; gap: 8px; margin-top: 8px;
+  font-size: .9rem; color: var(--muted);
+}
+.evt-editor-ends-row input[type=number] { width: 90px; }
+.evt-editor-ends-row input[type=date]   { width: auto; flex: 1; }
 .evt-editor-scope-row { display: flex; gap: 6px; margin-top: 6px; }
 .evt-scope-btn {
   padding: 5px 14px; border-radius: 20px; border: 2px solid rgba(255,255,255,.18);
@@ -2760,7 +2766,9 @@ body.nautical-mode #settingsModal .modal {
 #settingsModal .modal h2 { margin-bottom: 12px; }
 .field { margin-bottom: 14px; }
 .field label { display: block; font-size: var(--text-sm); color: var(--muted); margin-bottom: 5px; }
-.field input {
+.field input,
+.field textarea,
+.field select {
   width: 100%;
   background: var(--surface2);
   border: 1px solid rgba(255,255,255,.1);
@@ -2768,8 +2776,11 @@ body.nautical-mode #settingsModal .modal {
   color: var(--text);
   padding: 9px 12px;
   font-size: var(--text-base);
+  font-family: inherit;
 }
-.field input:focus { outline: none; border-color: var(--accent); }
+.field input:focus,
+.field textarea:focus,
+.field select:focus { outline: none; border-color: var(--accent); }
 .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; flex-shrink: 0; }
 .btn-secondary { background: var(--surface2); color: var(--text); }
 .btn-mode-active { background: var(--accent) !important; color: #fff !important; }

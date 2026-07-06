@@ -1358,7 +1358,7 @@
 
     <div id="evtEdRepeatSection" class="field">
       <label>Repeat</label>
-      <select id="evtEdRepeat" class="evt-editor-select">
+      <select id="evtEdRepeat" class="evt-editor-select" onchange="toggleEvtEdEnds()">
         <option value="none">Does not repeat</option>
         <option value="daily">Daily</option>
         <option value="weekdays">Every weekday (Mon–Fri)</option>
@@ -1366,6 +1366,22 @@
         <option value="monthly">Monthly</option>
         <option value="yearly">Yearly</option>
       </select>
+    </div>
+
+    <div id="evtEdEndsSection" class="field" style="display:none">
+      <label>Ends</label>
+      <select id="evtEdEndsMode" class="evt-editor-select" onchange="toggleEvtEdEnds()">
+        <option value="never">Never</option>
+        <option value="count">After…</option>
+        <option value="until">On date</option>
+      </select>
+      <div id="evtEdEndsCountRow" class="evt-editor-ends-row" style="display:none">
+        <input type="number" id="evtEdEndsCount" min="1" max="730" value="10" />
+        <span>occurrences</span>
+      </div>
+      <div id="evtEdEndsUntilRow" class="evt-editor-ends-row" style="display:none">
+        <input type="date" id="evtEdEndsUntil" />
+      </div>
     </div>
 
     <div id="evtEdRecurringSection" class="field" style="display:none">
