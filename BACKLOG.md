@@ -1,6 +1,6 @@
 # Family Hub — Feature Backlog
 
-*Last updated: 2026-06-09*
+*Last updated: 2026-07-06*
 
 Items are grouped by theme. Each entry notes the motivation and any known implementation approach.
 
@@ -48,6 +48,18 @@ Color picker in Settings → Family Members. `applyMemberColors()` runs after ea
 
 ### ~~Create events from month view~~ ✅ Done
 Clicking any day cell (or its date number) in month view opens the event editor directly. Cells get a pointer cursor and `can-add` class when signed in.
+
+### Location field with Google Maps link
+**Priority: Low**
+Add a Location input to the event editor. Save it to the Google Calendar event's native `location` property (round-trips automatically via the API). In the event detail/pill view, render the location as a Google Maps link — a "view on map" link (`https://www.google.com/maps/search/?api=1&query=<encoded>`) and optionally a "directions" link (`https://www.google.com/maps/dir/?api=1&destination=<encoded>`).
+
+*Implementation: new `<input id="evtEdLocation">` field in the editor; read/write in `openEventEditor()` / `saveCalEvent()` (`body.location`); populate from `ev.location`. Render the maps links wherever event details are shown (agenda view / event detail). No API key needed — plain maps.google.com URLs. Encode the location with `encodeURIComponent`.*
+
+### Auto-advance End Time when Start Time moves past it
+**Priority: Low**
+In the event editor, when the Start Time (`evtEdStart`) is changed to a value at or after the current End Time (`evtEdEnd`), bump End Time to one hour after the new Start Time. Mirrors Google Calendar's behaviour and avoids invalid start-after-end ranges.
+
+*Implementation: add an `onchange`/`input` handler on `#evtEdStart` that, when `evtEdEnd.value <= evtEdStart.value`, sets `evtEdEnd.value` to start + 1h (roll past midnight → clamp to 23:59 or leave, TBD). Only applies to timed events (the time section is hidden for all-day). See `toggleEvtEdAllDay()` / `saveCalEvent()` in `family-hub.js`.*
 
 ---
 
