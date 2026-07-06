@@ -185,6 +185,10 @@ if (isConfigured) {
 // ── State ──────────────────────────────────────────────────────
 let currentUser     = null;
 let googleToken     = null;
+// Firebase Auth (separate from the GIS Google token) populates request.auth for
+// Firestore rules. null = not attempted / OK; Error = signInWithCredential failed
+// → Firestore sees us as unauthenticated and denies writes.
+let firebaseAuthError = null;
 // calendarMeta: [{ id, label, color }]  — migrates from old string-array format
 const DEFAULT_COLORS = ['#6c8ef5','#f5a623','#4caf82','#e06c75','#c678dd','#61afef'];
 function loadCalendarMeta() {
@@ -1020,7 +1024,12 @@ function initGoogleAuth() {
       try {
         const credential = firebase.auth.GoogleAuthProvider.credential(null, googleToken);
         await firebase.auth().signInWithCredential(credential);
-      } catch(e) { console.warn('Firebase Auth sign-in failed', e); }
+        firebaseAuthError = null;
+      } catch(e) {
+        console.warn('Firebase Auth sign-in failed', e);
+        firebaseAuthError = e;   // surfaced in the status card + on write failures
+      }
+      updateStatusPill();
 
       // Fetch user profile if not already known
       if (!currentUser) {
@@ -1084,7 +1093,9 @@ function onSignedIn() {
 let controlCardOpen = false;
 
 function updateStatusPill() {
-  const firebaseOk = isConfigured && db !== null;
+  // "Firebase OK" means not just configured, but that Firestore will accept
+  // writes: if we're signed into Google, Firebase Auth must have succeeded too
+  const firebaseOk = isConfigured && db !== null && !(currentUser && firebaseAuthError);
   const googleOk   = !!currentUser;
   const calOk      = googleOk && (typeof calendarMeta !== 'undefined') && calendarMeta.length > 0;
   const weatherOk  = !!(typeof weatherLocations !== 'undefined' && weatherLocations.length > 0);
@@ -1131,16 +1142,23 @@ function renderCtrlStatusView() {
   const container = document.getElementById('ctrlStatusRows');
   if (!container) return;
 
-  const firebaseOk = isConfigured && db !== null;
+  const configOk   = isConfigured && db !== null;
+  const authFailed = !!currentUser && !!firebaseAuthError;
+  const firebaseOk = configOk && !authFailed;
   const googleOk   = !!currentUser;
   const calOk      = googleOk && (typeof calendarMeta !== 'undefined') && calendarMeta.length > 0;
   const weatherOk  = !!(typeof weatherLocations !== 'undefined' && weatherLocations.length > 0);
   const aiOk       = !!(typeof mealAiKey !== 'undefined' && mealAiKey);
 
+  const firebaseDesc = !configOk
+    ? 'Add FIREBASE_CONFIG to family-hub.js'
+    : authFailed
+      ? `⚠️ Signed in to Google but NOT to the database — new items won't save. Enable Google under Firebase → Authentication → Sign-in method. (${firebaseAuthError.code || firebaseAuthError.message || 'auth failed'})`
+      : 'Firestore connected — shared state is live';
   const checks = [
     {
       label: 'Firebase',
-      desc:  firebaseOk ? 'Firestore connected — shared state is live' : 'Add FIREBASE_CONFIG to family-hub.js',
+      desc:  firebaseDesc,
       ok: firebaseOk
     },
     {
@@ -5335,9 +5353,11 @@ function showFamilyMemberError(e) {
   if (!e) { box.style.display = 'none'; box.textContent = ''; return; }
   const msg = e?.message || String(e);
   const denied = e?.code === 'permission-denied' || /permission|insufficient/i.test(msg);
-  box.textContent = denied
-    ? '⚠️ Couldn’t save — Firestore denied the write. Check your database security rules (test-mode rules expire after 30 days).'
-    : '⚠️ Couldn’t save: ' + msg;
+  box.textContent = firebaseAuthError
+    ? '⚠️ Couldn’t save — you’re signed in to Google but not to the database. Enable Google under Firebase Console → Authentication → Sign-in method, then sign out and back in.'
+    : denied
+      ? '⚠️ Couldn’t save — Firestore denied the write. Check your database security rules (your email must be in the allow-list).'
+      : '⚠️ Couldn’t save: ' + msg;
   box.style.display = '';
 }
 
