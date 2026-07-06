@@ -14,25 +14,18 @@ Last updated: 2026-07-06
 
 ---
 
-## S1 — Core screensaver (idle → full-screen slideshow)
+## ✅ DONE — S1: Core screensaver (idle → full-screen slideshow)  (shipped 2026-07-06)
 
-After N minutes without pointer/touch/key activity, fade to a full-screen photo layer; any interaction wakes back to the dashboard instantly.
+**Shipped:** idle-triggered full-screen slideshow of the `bgPhotos` pool with Ken Burns pan/zoom (4 keyframe variants, duration = dwell + 4s), 1.5s crossfades, and an optional clock overlay (time + date) that drifts ±30px every 10s for burn-in protection. Any interaction (`pointerdown`/`pointermove` throttled/`keydown`/`touchstart`/`wheel`) wakes it instantly — the overlay swallows the waking tap. Doesn't start with an empty photo pool or hidden tab; stops on `visibilitychange`. Settings in Look & Feel → Screensaver (enable, idle minutes 1–240, dwell seconds 5–600, clock toggle). Keys: `fh_saver`, `fh_saverIdleMin`, `fh_saverDwellSec`, `fh_saverClock`. Full function/anchor map in FEATURES.md §19.
 
-- Idle timer reset on `pointerdown` / `pointermove` (throttled) / `keydown` / `touchstart`; pause when `document.hidden`.
-- Full-viewport overlay (`#screensaver`, `position: fixed`, `z-index` above everything, opacity fade in/out) cycling the merged photo pool.
-- Settings → new "Screensaver" panel: enable toggle, idle minutes, per-photo dwell seconds, clock overlay on/off.
-- State: `fh_saver` (bool), `fh_saverIdleMin`, `fh_saverDwellSec`. Follow the Adding-a-Feature checklist (openSettings/saveSettings wiring, FEATURES.md).
-- Burn-in protection for the wall display: slow Ken Burns pan/zoom on each photo and drift the clock position a few px per cycle.
+## ✅ DONE — S2 (primary path): screensaver-grade Google Photos pipeline  (shipped 2026-07-06)
 
-## S2 — Photo sources (owner decision 2026-07-06: Google Photos is the only service in the stack)
+**Shipped:**
+- **Bigger pool:** imports are now *additive* — Picker picks and local uploads join the existing pool instead of replacing it; `BG_MAX_PHOTOS = 200` cap with oldest-first eviction (`evictBgOverflow()`, auto-increment ids = import order). Picker `mediaItems` fetch paginates (`nextPageToken`) instead of truncating at 100.
+- **Re-pick UX:** every import stamps `fh_photosImportedAt`; Settings shows "✓ N image(s) in the pool · updated X days ago" with an accent-colored re-pick prompt past 30 days.
+- **Quality:** downloads at `=w2560-h1440` (was `=w2048`), 4 concurrent download workers.
 
-**Primary path — make the existing Google Photos → IndexedDB pipeline screensaver-grade.** The screensaver consumes the same IndexedDB photo pool the background slideshow already uses; the work is deepening that pipeline, not adding services:
-
-- **Bigger pool:** raise the import cap for screensaver use (a wall display wants dozens–hundreds of photos, not a handful of backgrounds). Establish an IndexedDB size budget and evict oldest-imported first.
-- **Re-pick UX:** the Photos Picker API is user-initiated per session — it cannot auto-sync an album. Add a "Refresh photos" action in Settings and a gentle nudge (e.g. status line "Photos last updated 34 days ago") so the pool doesn't go stale. Downloads still need the `Authorization: Bearer ${googleToken}` header (Photos Picker 403 gotcha).
-- **Quality:** import at display resolution (`=w2560-h1440` URL suffix) rather than thumbnail size, since photos will be shown full-screen.
-
-**Secondary (optional, later):** a single generic adapter interface so a future source can slot in without rework —
+**Secondary (optional, still open):** a single generic adapter interface so a future source can slot in without rework —
 
 ```js
 // { id, label, configured(): bool, listPhotos(): Promise<{url, caption?}[]> }
@@ -40,9 +33,9 @@ After N minutes without pointer/touch/key activity, fade to a full-screen photo 
 
 with keyless ambient fallbacks (Bing image of the day, NASA APOD) as the only other planned implementations, for days when the local pool is empty. Any remote source either gets its host added to the CSP `img-src` or is routed through a Netlify proxy function (the `ics.js` pattern). iCloud/Immich/Unsplash adapters: dropped — not in the family's stack.
 
-## S3 — Ambient info overlay ("Nest Hub" mode)
+## ✅ DONE — S3: Ambient info overlay ("Nest Hub" mode)  (shipped 2026-07-06)
 
-Optional overlay on the screensaver: large clock, current temp (reuse Open-Meteo data already in memory), and the next calendar event. Night hours (configurable) switch to a dim clock-only mode.
+**Shipped:** optional info line under the clock — current temp (reuses the in-memory Open-Meteo payload via the new `lastWxData` global) and the next calendar event (`getNextCalendarEvent()`: soonest timed event later today across enabled calendars, else tomorrow's first event; skips holidays and disabled calendars). Configurable night window (default 22:00–06:30, handles midnight wrap) switches to a dim clock-only mode: photo layers are dropped (no overnight 2.5K decodes), cycling pauses, info hides, clock dims to 35% and shows even if the clock toggle is off; photos resume when the window ends. Settings: "Weather & next event" toggle, "Night dimming" toggle + from/to time inputs. Keys: `fh_saverInfo`, `fh_saverNight`, `fh_saverNightStart`, `fh_saverNightEnd`.
 
 ## S4 — Scheduling & TV-mode integration
 

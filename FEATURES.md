@@ -263,23 +263,28 @@ let sunArcEnabled       = lsGet('fh_sunArc', true);   // sun-path arc on/off
 ### 4. Google Photos Background Slideshow
 
 **API:** Google Photos Picker API (session-based, OAuth token required)
-**Storage:** IndexedDB database `fh_bgImages` (stores downloaded blobs)
+**Storage:** IndexedDB database `fh_bgImages` (stores downloaded blobs). **Imports are additive** (Picker picks and local uploads join the existing pool); beyond `BG_MAX_PHOTOS` (200) the oldest photos are evicted (auto-increment ids = import order). "Clear background images" resets the pool.
 **State:**
 ```js
+const BG_MAX_PHOTOS = 200;  // pool cap — oldest evicted beyond this
 let bgPhotos = [];
 let bgIndex  = 0;
 let bgTimer  = null;
 let slideInterval = parseInt(localStorage.getItem('fh_slideInterval')) || 30;
 ```
 **Key functions:**
-- `loadBgFromDb()` — loads stored images from IndexedDB, starts slideshow
-- `startSlideshow()` / `stopSlideshow()` — manages `bgTimer` interval
-- `openPhotosPicker()` — creates Picker session, opens picker popup, polls for result
-- `downloadPickerPhotos(mediaItems)` — fetches each image with `Authorization: Bearer` header, stores in IndexedDB
+- `rebuildBgPhotosFromDb()` — rebuilds `bgPhotos` object URLs from the full pool (shuffled), refreshes preview, restarts slideshow; returns count
+- `evictBgOverflow()` — deletes oldest photos beyond `BG_MAX_PHOTOS`; returns evicted count
+- `loadBgFromDb()` — startup wrapper around `rebuildBgPhotosFromDb()`
+- `startSlideshow()` — manages `bgTimer` interval
+- `openPhotosPicker()` — creates Picker session, opens picker popup, polls for result; **paginates** `mediaItems` (`nextPageToken`, capped at `BG_MAX_PHOTOS`); downloads at **`=w2560-h1440`** (display resolution — the screensaver shows photos full-screen) with 4 concurrent workers
+- `saveBgFiles(files)` — local uploads, same additive + eviction path
+
+**Staleness nudge:** every import stamps `fh_photosImportedAt`; `openSettings()` shows "✓ N image(s) in the pool · updated X days ago" and, past 30 days, an accent-colored prompt to re-pick (the Picker API can't auto-sync an album — re-picking is the only refresh).
 
 **Gotcha:** Picker session URLs expire. If photos stop loading, re-open the picker. Download requires `Authorization: Bearer ${googleToken}` header — without it you get 403.
 
-**localStorage:** `fh_slideInterval`
+**localStorage:** `fh_slideInterval`, `fh_photosImportedAt`
 
 ---
 
@@ -693,6 +698,46 @@ Netlify environment variables:
 
 ---
 
+### 19. Screensaver
+
+**Overview:** Idle-triggered full-screen photo slideshow with ambient info (SCREENSAVER_BACKLOG.md S1+S3). After N minutes without pointer/key/touch activity, fades to a black overlay cycling the background photo pool (`bgPhotos` — same IndexedDB pool as the background slideshow) with slow Ken Burns pan/zoom, an optional drifting clock (burn-in protection), and an optional info line (current temp + next calendar event). A configurable night window switches to a dim clock-only mode. Any interaction wakes it instantly; the waking tap is swallowed by the overlay. Doesn't activate when the photo pool is empty or the tab is hidden.
+
+**State:**
+```js
+let saverEnabled  = lsGet('fh_saver', false);
+let saverIdleMin  = lsGet('fh_saverIdleMin', 10);   // minutes idle before start
+let saverDwellSec = lsGet('fh_saverDwellSec', 20);  // seconds per photo
+let saverClock    = lsGet('fh_saverClock', true);   // clock overlay on/off
+let saverInfo     = lsGet('fh_saverInfo', true);    // temp + next event line
+let saverNight    = lsGet('fh_saverNight', true);   // night dimming on/off
+let saverNightStart = lsGet('fh_saverNightStart', '22:00'); // HH:MM
+let saverNightEnd   = lsGet('fh_saverNightEnd', '06:30');   // HH:MM (wraps midnight)
+let saverActive   = false;                          // runtime only
+let lastWxData    = null;  // set by renderWeatherData(); reused for the temp line
+```
+
+**Key functions:**
+- `resetSaverIdleTimer()` — (re)arms the idle timeout; no-op when disabled or already active
+- `startScreensaver()` — activates overlay; guards: enabled, not active, tab visible, photos exist (else re-arms); computes night state before the first photo
+- `stopScreensaver()` — fades out, clears timers + night class, removes photo layers after the fade, re-arms
+- `advanceSaverPhoto()` — appends the next photo `<img>` (random `kb0–kb3` Ken Burns class, inline `animationDuration` = dwell + 4s), crossfades, retires the previous layer, schedules itself; no-op during night
+- `updateSaverOverlay()` — every 10s: time + date, temp (`lastWxData` + `WX_ICONS`), next event, night transitions (entering night drops photo layers + pauses cycling; exiting resumes), ±30/±20px drift
+- `getNextCalendarEvent()` — soonest timed event later today across enabled calendars (skips holidays + `disabledCals`), else tomorrow's first event; returns display text or null
+- `saverInNightWindow(d)` — HH:MM window test, handles midnight wrap
+- `saverActivity(e)` — global listener (`pointerdown`/`pointermove` throttled 1/s/`keydown`/`touchstart`/`wheel`): wakes if active, else re-arms; `visibilitychange` stops when hidden
+
+**Night mode:** `#screensaver.night` — photos hidden/dropped, info hidden, clock forced visible at 35% opacity (even if the clock toggle is off).
+
+**HTML anchors:** `#screensaver` (fixed overlay, `z-index: 20000` — above modals, below easter-egg layers), `#saverClock` / `#saverClockTime` / `#saverClockDate` / `#saverInfo` (`#saverInfoWx`, `#saverInfoEvent`)
+
+**CSS:** `/* ── Screensaver ── */` section — `.saver-img` (crossfade + `saverKb0–3` keyframes), `#screensaver.active`, `#screensaver.night`, `#saverInfo`, tactile flavor uses `--font-display` for the clock
+
+**Settings:** Look & Feel → Screensaver (below Background Images): enable toggle, idle minutes (1–240), dwell seconds (5–600), clock toggle, weather & next event toggle, night dimming toggle + from/to times. Wired in `openSettings()` / `saveSettings()`; init armed from the `load` handler.
+
+**localStorage:** `fh_saver`, `fh_saverIdleMin`, `fh_saverDwellSec`, `fh_saverClock`, `fh_saverInfo`, `fh_saverNight`, `fh_saverNightStart`, `fh_saverNightEnd`
+
+---
+
 ## localStorage Key Index
 
 | Key | Type | Feature | Notes |
@@ -708,6 +753,7 @@ Netlify environment variables:
 | `fh_wcity` | string | Weather | Legacy single city — kept in sync with `fh_wlocations[0]` |
 | `fh_sunArc` | bool | Weather | Sun-path arc visibility (default true) |
 | `fh_slideInterval` | string | Photos | Slideshow seconds |
+| `fh_photosImportedAt` | string | Photos | Epoch ms of last photo import (staleness nudge) |
 | `fh_widgets` | JSON object | Widgets | `{ shopping: bool, todo: bool, … }` |
 | `fh_widget_placement` | JSON object | Widgets | `{ shopping: 'sidebar'\|'bottom', … }` |
 | `fh_mealPlan` | JSON object | Meals | `{ dateKey: { breakfast, lunch, dinner } }` |
@@ -724,6 +770,14 @@ Netlify environment variables:
 | `fh_assistantTTS` | bool | Assistant | Read replies aloud via TTS (default off) |
 | `fh_tvMode` | bool | TV Mode | TV / Display Mode on/off (default false) |
 | `fh_eggCategories` | JSON object | Easter Eggs | `{ phrases, calendar, ui, weather }` — all true by default |
+| `fh_saver` | bool | Screensaver | Idle photo screensaver on/off (default false) |
+| `fh_saverIdleMin` | number | Screensaver | Minutes idle before start (default 10) |
+| `fh_saverDwellSec` | number | Screensaver | Seconds per photo (default 20) |
+| `fh_saverClock` | bool | Screensaver | Clock overlay (default true) |
+| `fh_saverInfo` | bool | Screensaver | Temp + next event line (default true) |
+| `fh_saverNight` | bool | Screensaver | Night dimming (default true) |
+| `fh_saverNightStart` | string | Screensaver | Night window start `HH:MM` (default `22:00`) |
+| `fh_saverNightEnd` | string | Screensaver | Night window end `HH:MM` (default `06:30`, wraps midnight) |
 | `fh_eventLocation` | string | Event Discovery | Default search location (default `'Rochester'`) |
 | `fh_eventMaxDistance` | number | Event Discovery | Max distance in minutes driving time (default 120) |
 | `fh_mobileTab` | string | Mobile (U1) | Current mobile tab `'cal'` \| `'todo'` \| `'shop'` \| `'weather'` \| menu items |

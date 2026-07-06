@@ -946,6 +946,7 @@ window.addEventListener('load', () => {
   setMobileTab(mobileTab);
   lockPortraitOrientation();
   if (!db) migrateSmsContactsToMembers(); // with Firestore this runs on the first members snapshot instead
+  resetSaverIdleTimer(); // arm the screensaver idle timer (no-op when disabled)
   updateStatusPill();
   if (weatherLocations.length) showWeatherLocation(0);
   else if (weatherCity) { weatherLocations = [weatherCity]; showWeatherLocation(0); }
@@ -4140,7 +4141,10 @@ function showWxError(msg, badCity) {
   }
 }
 
+let lastWxData = null; // most recent weather payload — reused by the screensaver overlay
+
 function renderWeatherData(data) {
+  lastWxData = data;
   // Animated icon
   const iconEl = document.getElementById('wIcon');
   const wrapEl = document.getElementById('wIconWrap');
@@ -9172,6 +9176,14 @@ function openSettings() {
   renderWeatherLocationsList();
   renderShopCategorySettings();
   document.getElementById('settingSlideInterval').value = slideInterval;
+  document.getElementById('settingSaverEnabled').checked  = !!saverEnabled;
+  document.getElementById('settingSaverIdleMin').value    = saverIdleMin;
+  document.getElementById('settingSaverDwellSec').value   = saverDwellSec;
+  document.getElementById('settingSaverClock').checked    = !!saverClock;
+  document.getElementById('settingSaverInfo').checked     = !!saverInfo;
+  document.getElementById('settingSaverNight').checked    = !!saverNight;
+  document.getElementById('settingSaverNightStart').value = saverNightStart;
+  document.getElementById('settingSaverNightEnd').value   = saverNightEnd;
   document.getElementById('settingMealAiKey').value     = mealAiKey;
   document.getElementById('settingMealPantry').value    = mealPantryDef;
   // provider is always gemini — no UI to update
@@ -9208,7 +9220,19 @@ function openSettings() {
   document.getElementById('flavorTactile').className      = 'btn btn-sm' + (appFlavor === 'tactile'      ? ' btn-mode-active' : '');
   renderBgPreview();
   const statusEl = document.getElementById('bgStatus');
-  if (statusEl && bgPhotos.length) statusEl.textContent = `✓ ${bgPhotos.length} image(s) loaded`;
+  if (statusEl && bgPhotos.length) {
+    // Staleness nudge: the Photos Picker can't auto-sync an album, so
+    // surface the pool's age and suggest a re-pick when it's grown old
+    const importedAt = parseInt(localStorage.getItem('fh_photosImportedAt')) || 0;
+    const ageDays = importedAt ? Math.floor((Date.now() - importedAt) / 86400000) : null;
+    const ageTxt  = ageDays === null ? ''
+      : ageDays === 0 ? ' · updated today'
+      : ageDays === 1 ? ' · updated yesterday'
+      : ` · updated ${ageDays} days ago`;
+    statusEl.textContent = `✓ ${bgPhotos.length} image(s) in the pool${ageTxt}` +
+      (ageDays > 30 ? ' — tap 📷 above to refresh from Google Photos' : '');
+    statusEl.style.color = ageDays > 30 ? 'var(--accent2)' : '';
+  }
   // Calendar section visibility
   if (googleToken) {
     document.getElementById('settingCalNotSignedIn').style.display = 'none';
@@ -9285,6 +9309,23 @@ function saveSettings() {
   }
   // familyMembers saved immediately on add/remove — nothing to save here
   slideInterval = parseInt(document.getElementById('settingSlideInterval').value) || 30;
+  saverEnabled  = document.getElementById('settingSaverEnabled').checked;
+  saverIdleMin  = Math.min(240, Math.max(1, parseInt(document.getElementById('settingSaverIdleMin').value) || 10));
+  saverDwellSec = Math.min(600, Math.max(5, parseInt(document.getElementById('settingSaverDwellSec').value) || 20));
+  saverClock    = document.getElementById('settingSaverClock').checked;
+  saverInfo     = document.getElementById('settingSaverInfo').checked;
+  saverNight    = document.getElementById('settingSaverNight').checked;
+  saverNightStart = document.getElementById('settingSaverNightStart').value || '22:00';
+  saverNightEnd   = document.getElementById('settingSaverNightEnd').value   || '06:30';
+  localStorage.setItem('fh_saver',           JSON.stringify(saverEnabled));
+  localStorage.setItem('fh_saverIdleMin',    String(saverIdleMin));
+  localStorage.setItem('fh_saverDwellSec',   String(saverDwellSec));
+  localStorage.setItem('fh_saverClock',      JSON.stringify(saverClock));
+  localStorage.setItem('fh_saverInfo',       JSON.stringify(saverInfo));
+  localStorage.setItem('fh_saverNight',      JSON.stringify(saverNight));
+  localStorage.setItem('fh_saverNightStart', JSON.stringify(saverNightStart));
+  localStorage.setItem('fh_saverNightEnd',   JSON.stringify(saverNightEnd));
+  resetSaverIdleTimer();
   mealAiKey     = document.getElementById('settingMealAiKey').value.trim();
   mealPantryDef = document.getElementById('settingMealPantry').value.trim();
   mealDietPrefs = Array.from(document.querySelectorAll('#mealDietGrid input:checked')).map(cb => cb.value);
@@ -9343,6 +9384,9 @@ function saveSettings() {
 const BG_DB_NAME    = 'fh_bgImages';
 const BG_DB_VERSION = 1;
 const BG_STORE_NAME = 'images';
+// Pool cap: imports are additive; oldest photos are evicted beyond this.
+// ~800 KB per photo at 2560px → ~160 MB IndexedDB budget on the display.
+const BG_MAX_PHOTOS = 200;
 
 let bgDb       = null;
 let bgPhotos   = [];   // object URLs for the current session
@@ -9360,18 +9404,49 @@ function openBgDb() {
   });
 }
 
+/** Rebuild bgPhotos object URLs from the full IndexedDB pool (shuffled),
+    refresh the settings preview, and (re)start the slideshow. */
+async function rebuildBgPhotosFromDb() {
+  const db  = await openBgDb();
+  const all = await new Promise((res, rej) => {
+    const req = db.transaction(BG_STORE_NAME, 'readonly').objectStore(BG_STORE_NAME).getAll();
+    req.onsuccess = () => res(req.result);
+    req.onerror   = () => rej(req.error);
+  });
+  bgPhotos.forEach(u => URL.revokeObjectURL(u));
+  bgPhotos = all.map(r => URL.createObjectURL(new Blob([r.data], { type: r.type })));
+  for (let i = bgPhotos.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [bgPhotos[i], bgPhotos[j]] = [bgPhotos[j], bgPhotos[i]];
+  }
+  renderBgPreview();
+  if (bgPhotos.length) startSlideshow();
+  return bgPhotos.length;
+}
+
+/** Delete the oldest photos beyond BG_MAX_PHOTOS (auto-increment ids preserve
+    import order). Returns how many were evicted. */
+async function evictBgOverflow() {
+  const db   = await openBgDb();
+  const keys = await new Promise((res, rej) => {
+    const req = db.transaction(BG_STORE_NAME, 'readonly').objectStore(BG_STORE_NAME).getAllKeys();
+    req.onsuccess = () => res(req.result);
+    req.onerror   = () => rej(req.error);
+  });
+  if (keys.length <= BG_MAX_PHOTOS) return 0;
+  const excess = keys.slice(0, keys.length - BG_MAX_PHOTOS); // lowest ids = oldest imports
+  await new Promise((res, rej) => {
+    const tx = db.transaction(BG_STORE_NAME, 'readwrite');
+    const store = tx.objectStore(BG_STORE_NAME);
+    excess.forEach(k => store.delete(k));
+    tx.oncomplete = res; tx.onerror = rej;
+  });
+  return excess.length;
+}
+
 async function loadBgFromDb() {
   try {
-    const db  = await openBgDb();
-    const all = await new Promise((res, rej) => {
-      const req = db.transaction(BG_STORE_NAME, 'readonly').objectStore(BG_STORE_NAME).getAll();
-      req.onsuccess = () => res(req.result);
-      req.onerror   = () => rej(req.error);
-    });
-    if (!all.length) return;
-    bgPhotos = all.map(r => URL.createObjectURL(new Blob([r.data], { type: r.type })));
-    renderBgPreview();
-    startSlideshow();
+    await rebuildBgPhotosFromDb();
   } catch(e) { console.warn('loadBgFromDb', e); }
 }
 
@@ -9391,11 +9466,7 @@ async function saveBgFiles(files) {
   document.getElementById('bgStatus').textContent = `Loading ${files.length} image(s)…`;
   try {
     const db = await openBgDb();
-    await new Promise((res, rej) => {
-      const tx = db.transaction(BG_STORE_NAME, 'readwrite');
-      tx.objectStore(BG_STORE_NAME).clear();
-      tx.oncomplete = res; tx.onerror = rej;
-    });
+    // Additive: new images join the pool; oldest are evicted beyond the cap
     const blobs = await Promise.all(files.map(f => f.arrayBuffer().then(buf => ({ type: f.type, data: buf }))));
     await new Promise((res, rej) => {
       const tx    = db.transaction(BG_STORE_NAME, 'readwrite');
@@ -9403,15 +9474,11 @@ async function saveBgFiles(files) {
       blobs.forEach(b => store.add(b));
       tx.oncomplete = res; tx.onerror = rej;
     });
-    bgPhotos.forEach(u => URL.revokeObjectURL(u));
-    bgPhotos = blobs.map(b => URL.createObjectURL(new Blob([b.data], { type: b.type })));
-    for (let i = bgPhotos.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [bgPhotos[i], bgPhotos[j]] = [bgPhotos[j], bgPhotos[i]];
-    }
-    renderBgPreview();
-    document.getElementById('bgStatus').textContent = `✓ ${bgPhotos.length} image(s) loaded`;
-    startSlideshow();
+    const evicted = await evictBgOverflow();
+    localStorage.setItem('fh_photosImportedAt', String(Date.now()));
+    const total = await rebuildBgPhotosFromDb();
+    document.getElementById('bgStatus').textContent =
+      `✓ Added ${blobs.length} — ${total} image(s) in the pool` + (evicted ? ` (${evicted} oldest removed)` : '');
   } catch(e) {
     console.error('saveBgFiles', e);
     document.getElementById('bgStatus').textContent = 'Error: ' + e.message;
@@ -9449,6 +9516,7 @@ async function clearBgImages() {
   if (strip) strip.innerHTML = '';
   const status = document.getElementById('bgStatus');
   if (status) status.textContent = 'Background cleared.';
+  localStorage.removeItem('fh_photosImportedAt');
   try {
     const db = await openBgDb();
     const tx = db.transaction(BG_STORE_NAME, 'readwrite');
@@ -9550,19 +9618,30 @@ async function openPhotosPicker() {
       }, 2000);
     });
 
-    // ── 4. Fetch the selected media items ───────────────────────
+    // ── 4. Fetch the selected media items (paginated — selections beyond
+    //       one page were previously silently truncated at 100) ──────────
     statusEl.textContent = 'Fetching selected photos…';
-    const itemsResp = await fetch(
-      `https://photospicker.googleapis.com/v1/mediaItems?sessionId=${sessionId}&pageSize=100`,
-      { headers: { Authorization: `Bearer ${googleToken}` } }
-    );
-    if (!itemsResp.ok) {
-      const err = await itemsResp.json().catch(() => ({}));
-      throw new Error('Could not fetch items: ' + (err?.error?.message || itemsResp.statusText));
+    let mediaItems = [];
+    let pageToken  = '';
+    do {
+      const itemsResp = await fetch(
+        `https://photospicker.googleapis.com/v1/mediaItems?sessionId=${sessionId}&pageSize=100` +
+        (pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ''),
+        { headers: { Authorization: `Bearer ${googleToken}` } }
+      );
+      if (!itemsResp.ok) {
+        const err = await itemsResp.json().catch(() => ({}));
+        throw new Error('Could not fetch items: ' + (err?.error?.message || itemsResp.statusText));
+      }
+      const itemsData = await itemsResp.json();
+      mediaItems.push(...(itemsData.mediaItems || []));
+      pageToken = itemsData.nextPageToken || '';
+    } while (pageToken && mediaItems.length < BG_MAX_PHOTOS);
+    if (mediaItems.length > BG_MAX_PHOTOS) {
+      console.log(`[Photos] Capping selection at ${BG_MAX_PHOTOS} of ${mediaItems.length}`);
+      mediaItems = mediaItems.slice(0, BG_MAX_PHOTOS);
     }
-    const itemsData  = await itemsResp.json();
-    const mediaItems = itemsData.mediaItems || [];
-    console.log('[Photos] Media items:', mediaItems);
+    console.log('[Photos] Media items:', mediaItems.length);
 
     if (!mediaItems.length) {
       statusEl.textContent = 'No photos were returned.';
@@ -9570,59 +9649,55 @@ async function openPhotosPicker() {
       return;
     }
 
-    // ── 5. Download each photo as a blob ────────────────────────
+    // ── 5. Download each photo as a blob (4 at a time) ──────────
+    // =w2560-h1440 fits within display resolution — photos are shown
+    // full-screen by the screensaver, so thumbnails aren't enough
     statusEl.textContent = `Downloading ${mediaItems.length} photo(s)…`;
     const blobs = [];
-    for (let i = 0; i < mediaItems.length; i++) {
-      const item = mediaItems[i];
-      statusEl.textContent = `Downloading photo ${i + 1} of ${mediaItems.length}…`;
-      try {
-        // baseUrl needs a size suffix; =w2048 gives a high-res download
-        const baseUrl = item.mediaFile?.baseUrl;
-        if (!baseUrl) { console.warn('[Photos] No baseUrl on item', item); continue; }
-        const url = baseUrl + '=w2048';
-        console.log('[Photos] Downloading', url);
-        const r = await fetch(url, { headers: { Authorization: `Bearer ${googleToken}` } });
-        console.log('[Photos] Download response', r.status, r.headers.get('content-type'));
-        if (!r.ok) { console.warn('[Photos] Download failed', r.status, url); continue; }
-        const contentType = r.headers.get('content-type') || 'image/jpeg';
-        const buf = await r.arrayBuffer();
-        blobs.push({ type: contentType, data: buf });
-      } catch (dlErr) {
-        console.error('[Photos] Download error for item', item, dlErr);
+    let dlDone = 0;
+    const queue = [...mediaItems];
+    async function dlWorker() {
+      while (queue.length) {
+        const item = queue.shift();
+        try {
+          const baseUrl = item.mediaFile?.baseUrl;
+          if (!baseUrl) { console.warn('[Photos] No baseUrl on item', item); continue; }
+          const url = baseUrl + '=w2560-h1440';
+          const r = await fetch(url, { headers: { Authorization: `Bearer ${googleToken}` } });
+          if (!r.ok) { console.warn('[Photos] Download failed', r.status, url); continue; }
+          const contentType = r.headers.get('content-type') || 'image/jpeg';
+          const buf = await r.arrayBuffer();
+          blobs.push({ type: contentType, data: buf });
+        } catch (dlErr) {
+          console.error('[Photos] Download error for item', item, dlErr);
+        } finally {
+          dlDone++;
+          statusEl.textContent = `Downloading photo ${dlDone} of ${mediaItems.length}…`;
+        }
       }
     }
+    await Promise.all(Array.from({ length: Math.min(4, queue.length) }, dlWorker));
 
     if (!blobs.length) {
       throw new Error('Downloaded 0 of ' + mediaItems.length + ' photo(s). Check the browser console (F12) for details.');
     }
 
-    // ── 6. Persist to IndexedDB ─────────────────────────────────
+    // ── 6. Persist to IndexedDB (additive — joins the existing pool;
+    //       oldest photos are evicted beyond BG_MAX_PHOTOS) ─────────
     statusEl.textContent = 'Saving to local storage…';
     const idb = await openBgDb();
-    await new Promise((res, rej) => {
-      const tx = idb.transaction(BG_STORE_NAME, 'readwrite');
-      tx.objectStore(BG_STORE_NAME).clear();
-      tx.oncomplete = res; tx.onerror = rej;
-    });
     await new Promise((res, rej) => {
       const tx    = idb.transaction(BG_STORE_NAME, 'readwrite');
       const store = tx.objectStore(BG_STORE_NAME);
       blobs.forEach(b => store.add(b));
       tx.oncomplete = res; tx.onerror = rej;
     });
+    const evicted = await evictBgOverflow();
+    localStorage.setItem('fh_photosImportedAt', String(Date.now()));
 
-    // Revoke old URLs, build new ones, shuffle
-    bgPhotos.forEach(u => URL.revokeObjectURL(u));
-    bgPhotos = blobs.map(b => URL.createObjectURL(new Blob([b.data], { type: b.type })));
-    for (let i = bgPhotos.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [bgPhotos[i], bgPhotos[j]] = [bgPhotos[j], bgPhotos[i]];
-    }
-
-    renderBgPreview();
-    statusEl.textContent = `✓ ${bgPhotos.length} photo(s) loaded from Google Photos`;
-    startSlideshow();
+    const total = await rebuildBgPhotosFromDb();
+    statusEl.textContent = `✓ Added ${blobs.length} from Google Photos — ${total} in the pool` +
+      (evicted ? ` (${evicted} oldest removed)` : '');
 
   } catch (e) {
     console.error('[Photos] openPhotosPicker error:', e);
@@ -9781,6 +9856,176 @@ async function shouldRefreshCache() {
     return true;  // Error = refresh
   }
 }
+
+// ── Screensaver ────────────────────────────────────────────────
+// Idle-triggered full-screen slideshow of the background photo pool
+// (bgPhotos). Any interaction wakes it instantly. SCREENSAVER_BACKLOG.md S1.
+let saverEnabled  = lsGet('fh_saver', false);
+let saverIdleMin  = lsGet('fh_saverIdleMin', 10);
+let saverDwellSec = lsGet('fh_saverDwellSec', 20);
+let saverClock    = lsGet('fh_saverClock', true);
+let saverInfo     = lsGet('fh_saverInfo', true);        // temp + next event under the clock
+let saverNight    = lsGet('fh_saverNight', true);       // night hours → dim clock only, no photos
+let saverNightStart = lsGet('fh_saverNightStart', '22:00');
+let saverNightEnd   = lsGet('fh_saverNightEnd', '06:30');
+let saverActive   = false;
+let _saverIdleTimer = null, _saverCycleTimer = null, _saverClockTimer = null, _saverIdx = -1;
+let _saverNightOn = false;
+
+/** Is local time inside the configured night window (handles midnight wrap)? */
+function saverInNightWindow(d = new Date()) {
+  if (!saverNight) return false;
+  const mins = d.getHours() * 60 + d.getMinutes();
+  const [sh, sm] = String(saverNightStart).split(':').map(Number);
+  const [eh, em] = String(saverNightEnd).split(':').map(Number);
+  const start = (sh || 0) * 60 + (sm || 0), end = (eh || 0) * 60 + (em || 0);
+  return start <= end ? (mins >= start && mins < end) : (mins >= start || mins < end);
+}
+
+/** Next upcoming calendar event across enabled calendars: the soonest timed
+    event later today, else tomorrow's first event. Returns display text or null. */
+function getNextCalendarEvent() {
+  const now = new Date();
+  const todayKey = localDateKey(now);
+  const tmrw = new Date(now); tmrw.setDate(tmrw.getDate() + 1);
+  const tomorrowKey = localDateKey(tmrw);
+  const fmt = t => new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const collect = key => {
+    const evs = [];
+    Object.entries(calEventCache).forEach(([calId, byDate]) => {
+      if (disabledCals.has(calId)) return;
+      (byDate[key] || []).forEach(ev => { if (!ev.holiday) evs.push(ev); });
+    });
+    return evs;
+  };
+  const todayTimed = collect(todayKey)
+    .filter(ev => !ev.allDay && ev.startDT && new Date(ev.startDT) >= now)
+    .sort((a, b) => new Date(a.startDT) - new Date(b.startDT));
+  if (todayTimed.length) return `${todayTimed[0].summary} · ${fmt(todayTimed[0].startDT)}`;
+  const tomorrow = collect(tomorrowKey)
+    .sort((a, b) => (a.allDay ? 1 : 0) - (b.allDay ? 1 : 0) ||
+                    new Date(a.startDT || 0) - new Date(b.startDT || 0));
+  if (tomorrow.length) {
+    const ev = tomorrow[0];
+    return `Tomorrow: ${ev.summary}` + (ev.allDay || !ev.startDT ? '' : ` · ${fmt(ev.startDT)}`);
+  }
+  return null;
+}
+
+function resetSaverIdleTimer() {
+  clearTimeout(_saverIdleTimer);
+  if (!saverEnabled || saverActive) return;
+  _saverIdleTimer = setTimeout(startScreensaver, Math.max(1, saverIdleMin) * 60000);
+}
+
+function startScreensaver() {
+  // No photos (yet) or tab hidden — re-arm and try again next idle period
+  if (!saverEnabled || saverActive || document.hidden || !bgPhotos.length) { resetSaverIdleTimer(); return; }
+  saverActive = true;
+  document.getElementById('saverClock').style.transform = '';
+  _saverNightOn = false;
+  updateSaverOverlay(); // sets clock/info/night state before the first photo
+  _saverClockTimer = setInterval(updateSaverOverlay, 10000);
+  document.getElementById('screensaver').classList.add('active');
+  _saverIdx = Math.floor(Math.random() * bgPhotos.length) - 1; // random starting photo
+  if (!_saverNightOn) advanceSaverPhoto();
+}
+
+function stopScreensaver() {
+  if (!saverActive) return;
+  saverActive = false;
+  clearTimeout(_saverCycleTimer);
+  clearInterval(_saverClockTimer);
+  const el = document.getElementById('screensaver');
+  el.classList.remove('active');
+  el.classList.remove('night');
+  _saverNightOn = false;
+  // Drop the photo layers once the fade-out completes
+  setTimeout(() => { if (!saverActive) el.querySelectorAll('.saver-img').forEach(i => i.remove()); }, 1300);
+  resetSaverIdleTimer();
+}
+
+function advanceSaverPhoto() {
+  if (!saverActive || _saverNightOn || !bgPhotos.length) return;
+  const el = document.getElementById('screensaver');
+  _saverIdx = (_saverIdx + 1) % bgPhotos.length;
+  const img = document.createElement('img');
+  img.className = 'saver-img kb' + Math.floor(Math.random() * 4);
+  img.alt = '';
+  img.style.animationDuration = (saverDwellSec + 4) + 's'; // pan covers dwell + crossfade
+  img.src = bgPhotos[_saverIdx];
+  el.insertBefore(img, document.getElementById('saverClock'));
+  requestAnimationFrame(() => img.classList.add('visible'));
+  // Retire the previous photo after the crossfade
+  const layers = el.querySelectorAll('.saver-img');
+  if (layers.length > 1) {
+    const old = layers[0];
+    setTimeout(() => old.remove(), 1700);
+  }
+  _saverCycleTimer = setTimeout(advanceSaverPhoto, Math.max(5, saverDwellSec) * 1000);
+}
+
+function updateSaverOverlay() {
+  const now = new Date();
+  const el  = document.getElementById('screensaver');
+
+  // Night transitions: dim clock-only mode — stop cycling and drop the photo
+  // layers (no point decoding 2.5K photos nobody is looking at overnight)
+  const night = saverInNightWindow(now);
+  if (night !== _saverNightOn) {
+    _saverNightOn = night;
+    el.classList.toggle('night', night);
+    if (night) {
+      clearTimeout(_saverCycleTimer);
+      el.querySelectorAll('.saver-img').forEach(i => i.remove());
+    } else if (saverActive) {
+      advanceSaverPhoto();
+    }
+  }
+
+  // Clock (always shown during night dimming, else per setting)
+  const clock = document.getElementById('saverClock');
+  clock.style.display = (saverClock || night) ? '' : 'none';
+  document.getElementById('saverClockTime').textContent =
+    now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  document.getElementById('saverClockDate').textContent =
+    now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+
+  // Ambient info: current temp + next calendar event (hidden during night)
+  const infoEl = document.getElementById('saverInfo');
+  if (saverInfo && !night) {
+    const wx  = lastWxData ? `${WX_ICONS[lastWxData.icon] || '🌡'} ${lastWxData.temp}°` : '';
+    const nxt = getNextCalendarEvent() || '';
+    document.getElementById('saverInfoWx').textContent    = wx;
+    document.getElementById('saverInfoEvent').textContent = nxt;
+    infoEl.style.display = (wx || nxt) ? '' : 'none';
+  } else {
+    infoEl.style.display = 'none';
+  }
+
+  // Burn-in protection: drift the whole overlay block a little on every update
+  const dx = Math.round(Math.random() * 60 - 30), dy = Math.round(Math.random() * 40 - 20);
+  clock.style.transform = `translate(${dx}px, ${dy}px)`;
+}
+
+// Activity detection: while asleep any interaction wakes (the overlay swallows
+// the tap since it's the event target); while awake it re-arms the idle timer.
+let _saverLastMove = 0;
+function saverActivity(e) {
+  if (saverActive) { stopScreensaver(); return; }
+  if (e && e.type === 'pointermove') {
+    const now = Date.now();
+    if (now - _saverLastMove < 1000) return; // throttle re-arms to 1/s
+    _saverLastMove = now;
+  }
+  resetSaverIdleTimer();
+}
+['pointerdown', 'pointermove', 'keydown', 'touchstart', 'wheel'].forEach(t =>
+  window.addEventListener(t, saverActivity, { passive: true }));
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) stopScreensaver();
+  else resetSaverIdleTimer();
+});
 
 // ── Category filtering ──
 
