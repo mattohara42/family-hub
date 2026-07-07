@@ -3260,6 +3260,7 @@ function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
   document.getElementById('evtEdDesc').value       = ev?.description || '';
   document.getElementById('evtEdLocation').value   = ev?.location    || '';
   updateEvtEdMapLink();
+  geocodeEvtEdLocation();
   // Delete only applies to an existing calendar event
   document.getElementById('evtEdDeleteBtn').style.display = ev?.eventId ? '' : 'none';
   document.getElementById('evtEdStatus').style.display = 'none';
@@ -3396,6 +3397,50 @@ function updateEvtEdMapLink() {
   view.href = `https://www.google.com/maps/search/?api=1&query=${q}`;
   dir.href  = `https://www.google.com/maps/dir/?api=1&destination=${q}`;
   view.style.display = dir.style.display = 'inline';
+}
+
+// Inline pin-map for the event location. Keyless: Leaflet (already loaded for
+// the weather radar) + Nominatim geocoding + OSM tiles. Debounced and cached to
+// stay within Nominatim's light-use policy.
+// ponytail: Nominatim keyless geocoder — fine for occasional family events; if
+// this ever gets hammered, swap to a keyed geocoder or cache lat/lng on the event.
+let _evtEdMap = null, _evtEdMarker = null, _evtEdGeoTimer = null, _evtEdGeoSeq = 0;
+const _evtEdGeoCache = {};
+
+function geocodeEvtEdLocation() {
+  clearTimeout(_evtEdGeoTimer);
+  const loc   = document.getElementById('evtEdLocation').value.trim();
+  const mapEl = document.getElementById('evtEdMap');
+  if (!loc) { mapEl.style.display = 'none'; return; }
+  if (_evtEdGeoCache[loc]) { showEvtEdMap(_evtEdGeoCache[loc]); return; }
+  const seq = ++_evtEdGeoSeq;
+  _evtEdGeoTimer = setTimeout(async () => {
+    try {
+      const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(loc)}`,
+                            { headers: { Accept: 'application/json' } });
+      const j = await r.json();
+      if (seq !== _evtEdGeoSeq) return;                 // a newer edit superseded this
+      if (!Array.isArray(j) || !j.length) { mapEl.style.display = 'none'; return; }
+      const pt = { lat: parseFloat(j[0].lat), lng: parseFloat(j[0].lon) };
+      _evtEdGeoCache[loc] = pt;
+      showEvtEdMap(pt);
+    } catch { mapEl.style.display = 'none'; }
+  }, 600);
+}
+
+function showEvtEdMap({ lat, lng }) {
+  const mapEl = document.getElementById('evtEdMap');
+  mapEl.style.display = 'block';
+  if (!_evtEdMap) {
+    _evtEdMap = L.map(mapEl, { zoomControl: false, scrollWheelZoom: false });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                { attribution: '© OpenStreetMap', maxZoom: 19 }).addTo(_evtEdMap);
+  }
+  _evtEdMap.setView([lat, lng], 15);
+  if (_evtEdMarker) _evtEdMarker.setLatLng([lat, lng]);
+  else _evtEdMarker = L.marker([lat, lng]).addTo(_evtEdMap);
+  // Container was display:none until now — Leaflet needs a resize once visible.
+  setTimeout(() => _evtEdMap.invalidateSize(), 60);
 }
 
 // When Start Time is moved to at/after End Time, push End to one hour later
