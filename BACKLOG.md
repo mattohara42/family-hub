@@ -8,8 +8,11 @@ Items are grouped by theme. Each entry notes the motivation and any known implem
 
 ## Security / Infrastructure
 
-### Offline / PWA support — register service worker before go-live
-`sw.js` and `manifest.json` already exist but the service worker is never registered. Add `navigator.serviceWorker.register('/sw.js')` to `family-hub.html` before deploying to production. Also bump `CACHE_VERSION` in `sw.js` on each deploy (or automate with a build timestamp) so users don't get stale app shell files. Dynamic data (Firebase, Google Calendar, weather, Gemini) will still require a network connection — only the app shell is cached.
+### ~~Offline / PWA support — register service worker~~ ✅ Done
+`sw.js` is registered in `family-hub.js` (network-first for the app shell, `skipWaiting` + `clients.claim`). `CACHE_VERSION` is bumped each deploy.
+
+### ~~Kiosk auto-update — self-reload the wall display on new deploys~~ ✅ Done
+The wall display keeps its tab open for days, so it never picked up new deploys. Periodic `reg.update()` (15 min) + `controllerchange` → `location.reload()`, gated to fire only while idle (no `.modal-overlay` open, no interaction for 60s) so it never interrupts mid-edit. Ignores the first-ever SW activation. See `maybeReloadForUpdate()` in `family-hub.js`.
 
 ### ~~Netlify Functions — API key proxies~~ ✅ Done
 `netlify/functions/weather.js` and `netlify/functions/ai.js` proxy OWM and Gemini. Keys stored as Netlify env vars `OWM_KEY` / `GEMINI_KEY`. Client auto-detects whether to call direct or proxy based on whether a client-side key is present.
