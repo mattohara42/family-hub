@@ -3251,6 +3251,7 @@ function selectEvtScope(btn) {
 
 function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
   if (!googleToken) return;
+  if (tvMode) return;   // TV mode is a passive read-only display — no editing
   evtEditing = ev || null;
 
   document.getElementById('eventEditorTitle').textContent =
