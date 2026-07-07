@@ -9278,13 +9278,58 @@ function releaseFocusTrap() {
 }
 
 // ── Settings modal ─────────────────────────────────────────────
+// Grouped nav structure — single source of truth for the settings shell.
+// Add/reorder settings by editing this; the nav renders from it.
+const SETTINGS_GROUPS = [
+  { label: 'General', items: [
+    { tab: 'look',   label: '🎨 Look & Feel' },
+    { tab: 'family', label: '👨‍👩‍👧 Family' },
+  ]},
+  { label: 'Calendar', items: [
+    { tab: 'calendar', label: '📅 Calendar' },
+    { tab: 'events',   label: '💡 Events' },
+  ]},
+  { label: 'Widgets', items: [
+    { tab: 'widgets', label: '🧩 Widget Layout' },
+    { tab: 'weather', label: '🌤 Weather' },
+    { tab: 'feeds',   label: '📊 Feeds' },
+  ]},
+  { label: 'Lists & chores', items: [
+    { tab: 'shopping', label: '🛒 Shopping' },
+    { tab: 'todo',     label: '✅ To-Do' },
+    { tab: 'chores',   label: '⭐ Chores' },
+    { tab: 'meals',    label: '🍽 Meals' },
+  ]},
+  { label: 'Advanced', gated: true, items: [
+    { tab: 'eggs', label: '🥚 Easter Eggs' },
+  ]},
+];
+
+function renderSettingsNav() {
+  const nav = document.getElementById('settingsNav');
+  nav.innerHTML = SETTINGS_GROUPS.map(g => `
+    <div class="settings-nav-group${g.gated ? ' settings-nav-group--gated' : ''}">
+      <div class="settings-nav-label">${g.label}</div>
+      ${g.items.map(it =>
+        `<button type="button" class="settings-nav-item" data-tab="${it.tab}" onclick="switchSettingsTab('${it.tab}')">${it.label}</button>`
+      ).join('')}
+    </div>`).join('');
+}
+
+// Narrow-screen drill-in: return from a panel to the nav list.
+function settingsShowNav() {
+  document.getElementById('settingsBody').classList.remove('show-panel');
+}
+
 function switchSettingsTab(tab) {
-  document.querySelectorAll('.modal-tab').forEach(btn => {
+  document.querySelectorAll('.settings-nav-item').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.tab === tab);
   });
   document.querySelectorAll('.settings-panel').forEach(panel => {
     panel.classList.toggle('active', panel.dataset.panel === tab);
   });
+  // Narrow screens: reveal the content pane (drill in). No-op on wide (CSS).
+  document.getElementById('settingsBody').classList.add('show-panel');
 }
 
 let _settingsGearClickCount = 0;
@@ -9310,7 +9355,9 @@ function handleSettingsGearClick() {
 }
 
 function openSettings() {
-  switchSettingsTab('look');   // always open on first tab
+  renderSettingsNav();
+  switchSettingsTab('look');   // active panel (shown on wide screens)
+  settingsShowNav();           // narrow screens: start on the nav list
   const lmEl = document.getElementById('settingLayoutMode');
   if (lmEl) lmEl.value = layoutMode;
   document.getElementById('settingName').value           = userName;

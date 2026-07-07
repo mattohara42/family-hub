@@ -486,21 +486,11 @@
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
     <h2 id="settingsModalTitle"><span id="settingsModalGear" onclick="handleSettingsGearClick()" style="cursor:default" title="">⚙️</span> Settings</h2>
 
-    <!-- Tab bar -->
-    <div class="modal-tabs">
-      <button class="modal-tab active" data-tab="look"     onclick="switchSettingsTab('look')">🎨 Look &amp; Feel</button>
-      <button class="modal-tab"        data-tab="family"   onclick="switchSettingsTab('family')">👨‍👩‍👧 Family</button>
-      <button class="modal-tab"        data-tab="calendar" onclick="switchSettingsTab('calendar')">📅 Calendar</button>
-      <button class="modal-tab"        data-tab="weather"  onclick="switchSettingsTab('weather')">🌤 Weather</button>
-      <button class="modal-tab"        data-tab="shopping" onclick="switchSettingsTab('shopping')">🛒 Shopping</button>
-      <button class="modal-tab"        data-tab="todo"     onclick="switchSettingsTab('todo')">✅ To-Do</button>
-      <button class="modal-tab"        data-tab="chores"   onclick="switchSettingsTab('chores')">⭐ Chores</button>
-      <button class="modal-tab"        data-tab="meals"    onclick="switchSettingsTab('meals')">🍽 Meals</button>
-      <button class="modal-tab"        data-tab="widgets"  onclick="switchSettingsTab('widgets')">🧩 Widgets</button>
-      <button class="modal-tab"        data-tab="events"   onclick="switchSettingsTab('events')">💡 Events</button>
-      <button class="modal-tab"        data-tab="feeds"    onclick="switchSettingsTab('feeds')">📊 Feeds</button>
-      <button class="modal-tab"        data-tab="eggs"     onclick="switchSettingsTab('eggs')">🥚 Easter Eggs</button>
-    </div>
+    <!-- Grouped two-pane body: nav (left) + content (right); drills in on narrow -->
+    <div class="settings-body" id="settingsBody">
+      <nav class="settings-nav" id="settingsNav" aria-label="Settings sections"></nav>
+      <div class="settings-content">
+        <button type="button" class="settings-back" onclick="settingsShowNav()">‹ All settings</button>
 
     <!-- Scrollable panel area -->
     <div class="settings-panels">
@@ -1185,6 +1175,8 @@
 
       <!-- ── Home Calendars ── -->
     </div><!-- /settings-panels -->
+      </div><!-- /settings-content -->
+    </div><!-- /settings-body -->
 
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeSettings()">Cancel</button>
