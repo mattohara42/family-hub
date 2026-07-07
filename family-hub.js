@@ -380,6 +380,7 @@ const ASSISTANT_QUICK_PROMPTS = [
   "Add milk to shopping",
   "Plan pizza for Friday dinner",
   "Add a $60 internet bill monthly",
+  "When should I mow the lawn?",
 ];
 // ── Widget visibility & placement ────────────────────────────────────────────
 const WIDGET_DEFAULTS = { shopping: true, todo: true, budget: true, chores: true, wotd: true, quote: true, dadjoke: true, yearstrip: true, assistant: true, countdown: true, news: false, stock: false };
@@ -7445,6 +7446,81 @@ function scoreMowWindows(forecast, events, config, now) {
   return { windows, degraded: false };
 }
 
+// Fetch the primary location's hourly forecast (keyless Open-Meteo, °F/mph) and
+// normalise to the scorer's { hours, days } shape. Own fetch because the weather
+// widget only keeps *current* wind, and the scorer needs hourly wind.
+async function getMowForecast() {
+  if (!weatherLocations.length) return { hours: [], days: [] };
+  try {
+    const place = await geocodeCity(weatherLocations[0]);
+    if (!place) return { hours: [], days: [] };
+    const p = new URLSearchParams({
+      latitude: place.latitude, longitude: place.longitude,
+      hourly: 'temperature_2m,precipitation_probability,wind_speed_10m',
+      daily:  'sunrise,sunset',
+      temperature_unit: 'fahrenheit', wind_speed_unit: 'mph',
+      timezone: 'auto', forecast_days: String(mowConfig.horizonDays || 7),
+    });
+    const fc = await (await fetch(`${OM_FORECAST_BASE}?${p}`)).json();
+    if (!fc?.hourly || !fc?.daily) return { hours: [], days: [] };
+    const H = fc.hourly, D = fc.daily;
+    const hours = (H.time || []).map((t, i) => ({
+      ts: new Date(t).getTime(),
+      tempF:   H.temperature_2m?.[i] ?? 70,
+      popPct:  H.precipitation_probability?.[i] ?? 0,
+      windMph: H.wind_speed_10m?.[i] ?? 0,
+    }));
+    const days = (D.time || []).map((d, i) => ({
+      date: d,
+      sunrise: D.sunrise?.[i] ? new Date(D.sunrise[i]).getTime() : null,
+      sunset:  D.sunset?.[i]  ? new Date(D.sunset[i]).getTime()  : null,
+    }));
+    return { hours, days };
+  } catch { return { hours: [], days: [] }; }
+}
+
+// Busy intervals from the calendar for the forecast window. Only *timed* events
+// block a mow slot — all-day items (birthdays, trash day) shouldn't.
+function getMowBusyIntervals(days) {
+  const wantDates = new Set(days.map(d => d.date));
+  const intervals = [];
+  Object.values(calEventCache).forEach(calDays => {
+    Object.entries(calDays).forEach(([date, evs]) => {
+      if (!wantDates.has(date)) return;
+      evs.forEach(e => {
+        if (e.holiday || e.allDay || !e.startDT) return;
+        intervals.push({ start: new Date(e.startDT).getTime(), end: new Date(e.endDT || e.startDT).getTime() });
+      });
+    });
+  });
+  return intervals;
+}
+
+// Cached recommendation so the (sync) assistant context can read it. Refreshed
+// on demand with a 30-min TTL — the forecast doesn't change minute-to-minute.
+let _mowReco = null;
+async function refreshMowReco() {
+  if (_mowReco && Date.now() - _mowReco.ts < 30 * 60000) return _mowReco;
+  try {
+    const forecast = await getMowForecast();
+    const res = scoreMowWindows(forecast, getMowBusyIntervals(forecast.days), mowConfig);
+    _mowReco = { ...res, ts: Date.now() };
+  } catch { _mowReco = { windows: [], degraded: true, ts: Date.now() }; }
+  return _mowReco;
+}
+
+// Compact "best times to mow" block for the assistant context ('' when unknown).
+function mowContextSection() {
+  if (!_mowReco || _mowReco.degraded || !_mowReco.windows.length) return '';
+  const line = w => {
+    const d = new Date(w.startTs);
+    const day  = d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+    const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    return `  • ${day} ${time}${w.reasons.length ? ' — ' + w.reasons.join(', ') : ''}`;
+  };
+  return `\nBest times to mow the lawn (scored from weather + calendar, best first):\n${_mowReco.windows.slice(0, 3).map(line).join('\n')}\n`;
+}
+
 // ── Family Assistant ───────────────────────────────────────────────────────
 
 /** Gather current app state into a system prompt for the AI. */
@@ -7558,7 +7634,7 @@ Weather: ${weatherSummary}
 
 Calendar — next 7 days:
 ${calLines.length ? calLines.join('\n') : '  (no upcoming events)'}
-
+${mowContextSection()}
 Meal plan — next 7 days:
 ${mealLines.length ? mealLines.join('\n') : '  (no meals planned)'}
 
@@ -7578,7 +7654,7 @@ When the user clearly asks you to add or change something, append one tag per ac
 - Add a to-do task:          [ACTION:addTodo:task description]
 - Mark a to-do as done:      [ACTION:completeTodo:task text or keywords]
 - Check off a shopping item: [ACTION:checkShopping:item text or keywords]
-- Add a calendar event:      [ACTION:addEvent:YYYY-MM-DD|HH:MM|Title]   (use "allday" in place of HH:MM if no specific time)
+- Add a calendar event:      [ACTION:addEvent:YYYY-MM-DD|HH:MM|Title|Member]   (use "allday" in place of HH:MM if no specific time; Member is optional — a family member name to assign)
 - Plan a meal:               [ACTION:setMeal:YYYY-MM-DD|mealType|Meal name]   (mealType is breakfast, lunch, or dinner)
 - Add a recurring bill:      [ACTION:addBudget:Name|Amount|frequency]   (frequency is monthly, weekly, biweekly, or yearly)
 
@@ -7590,6 +7666,7 @@ GUIDELINES:
 - When asked "what's going on this week?" or similar, summarise the calendar events including times.
 - When asked about free time or scheduling, look at the calendar gaps.
 - When asked about weather ("will it rain?", "is it going to be hot?"), use the real weather data above.
+- When asked when to mow the lawn (or do yard work), use "Best times to mow" above — recommend the top pick, explain the reasoning briefly, and offer to add it to the calendar (you can assign a family member). If that section is absent, say the forecast or a weather location isn't available.
 - When asked "what's for dinner?" or "what's the meal plan?", use the meal plan data above.
 - When asked about family members or who is assigned to something, use the family members list.
 - Do not repeat raw data back verbatim — synthesise and be helpful.
@@ -7673,7 +7750,7 @@ async function assistantCheckShopping(query) {
   return `✓ Checked off "${items[i].text}"`;
 }
 
-async function assistantAddEvent(dateStr, timeStr, title) {
+async function assistantAddEvent(dateStr, timeStr, title, member) {
   if (!title || !dateStr) return `⚠️ Couldn't add the event — missing a date or title`;
   if (!googleToken)       return `⚠️ Sign in with Google to let me add calendar events`;
   const allDay = !timeStr || /^all\s?day$/i.test(timeStr.trim());
@@ -7689,16 +7766,28 @@ async function assistantAddEvent(dateStr, timeStr, title) {
     start = { dateTime: `${dateStr}T${timeStr}:00`, timeZone: tz };
     end   = { dateTime: `${dateStr}T${endT}:00`,    timeZone: tz };
   }
+  // Optional family-member assignee → fhMembers (same field the editor writes)
+  let assignedName = null, memberNote = '';
+  if (member && member.trim()) {
+    const q = member.trim().toLowerCase();
+    const m = familyMembers.find(fm => fm.name.toLowerCase() === q)
+           || familyMembers.find(fm => fm.name.toLowerCase().includes(q) || q.includes(fm.name.toLowerCase()));
+    if (m) assignedName = m.name;
+    else memberNote = ` (couldn't match "${member.trim()}" to a family member)`;
+  }
+  const body = { summary: title, start, end };
+  if (assignedName) body.extendedProperties = { private: { fhMembers: assignedName } };
   try {
     const r = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${googleToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ summary: title, start, end }),
+      body: JSON.stringify(body),
     });
     if (!r.ok) { const e = await r.json().catch(() => ({})); return `⚠️ Calendar error: ${e.error?.message || r.status}`; }
     await loadAllCalendars();
     const when = allDay ? dateStr : `${dateStr} ${timeStr}`;
-    return `✓ Added "${title}" to your calendar (${when})`;
+    const who  = assignedName ? `, assigned to ${assignedName}` : '';
+    return `✓ Added "${title}" to your calendar (${when})${who}${memberNote}`;
   } catch (e) { return `⚠️ Couldn't add the event: ${e.message}`; }
 }
 
@@ -7743,7 +7832,7 @@ async function executeAssistantActions(actions) {
       else if (type === 'addTodo')       confirmMsgs.push(assistantAddTodo(value));
       else if (type === 'completeTodo')  confirmMsgs.push(await assistantCompleteTodo(value));
       else if (type === 'checkShopping') confirmMsgs.push(await assistantCheckShopping(value));
-      else if (type === 'addEvent')      confirmMsgs.push(await assistantAddEvent(parts[0], parts[1], parts.slice(2).join('|')));
+      else if (type === 'addEvent')      confirmMsgs.push(await assistantAddEvent(parts[0], parts[1], parts[2], parts[3]));
       else if (type === 'setMeal')       confirmMsgs.push(await assistantSetMeal(parts[0], parts[1], parts.slice(2).join('|')));
       else if (type === 'addBudget')     confirmMsgs.push(await assistantAddBudget(parts[0], parts[1], parts[2]));
     } catch (e) {
@@ -8356,6 +8445,7 @@ async function sendAssistantMessage() {
   container.scrollTop = container.scrollHeight;
 
   try {
+    await refreshMowReco();   // keep the mow recommendation fresh in context
     const systemPrompt = buildAssistantContext();
     const resp = await geminiFetch({
       systemInstruction: { parts: [{ text: systemPrompt }] },
