@@ -934,10 +934,36 @@ window.onerror = (msg, src, line, col, err) => {
   if (typeof Sentry !== 'undefined') Sentry.captureException(err || new Error(msg));
 };
 
+// ── Kiosk auto-update ─────────────────────────────────────────────
+// A wall display keeps this tab open for days, so it never picks up a new
+// deploy on its own. The service worker is network-first with skipWaiting +
+// clients.claim, so when a new sw.js lands it takes control and fires
+// controllerchange — we reload to pick it up, but only while idle (no modal
+// open, no interaction for 60s) so we never interrupt someone mid-edit.
+let _swUpdatePending = false;
+let _lastActivityTs  = Date.now();
+function markActivity() { _lastActivityTs = Date.now(); }
+function maybeReloadForUpdate() {
+  if (!_swUpdatePending) return;
+  const busy = [...document.querySelectorAll('.modal-overlay')]
+    .some(m => getComputedStyle(m).display !== 'none');
+  if (busy) return;
+  if (Date.now() - _lastActivityTs < 60000) return;
+  location.reload();
+}
+
 window.addEventListener('load', () => {
   if ('serviceWorker' in navigator) {
+    const hadController = !!navigator.serviceWorker.controller;
     navigator.serviceWorker.register('/sw.js')
+      .then(reg => { setInterval(() => reg.update().catch(() => {}), 15 * 60000); })
       .catch(err => console.warn('[SW] Registration failed:', err));
+    // A new SW taking control = a fresh deploy. Ignore the first-ever activation
+    // (no prior controller), then reload-when-idle on every later update.
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (hadController) _swUpdatePending = true;
+    });
+    setInterval(maybeReloadForUpdate, 20000);
   }
   if (!isConfigured) return;
   // GSI may already be ready (cached) or will call onGsiLoad when it loads
@@ -10285,6 +10311,7 @@ function updateSaverOverlay() {
 // the tap since it's the event target); while awake it re-arms the idle timer.
 let _saverLastMove = 0;
 function saverActivity(e) {
+  markActivity();   // also feeds the kiosk auto-update idle check
   if (saverActive) { stopScreensaver(); return; }
   if (e && e.type === 'pointermove') {
     const now = Date.now();
