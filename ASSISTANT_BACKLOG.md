@@ -74,17 +74,16 @@ Grew the `[ACTION:...]` vocabulary from 2 to **7 actions**. Multi-arg actions us
 
 ---
 
-## Priority 3 — Full Event CRUD from the Assistant
+## ✅ DONE — Full Event CRUD from the Assistant  (shipped 2026-07-07)
 
-**What:** Let the assistant fully manage calendar events — not just create them. Today only `addEvent` exists ("Follow-ups not included" above flagged editing/removing as a future pass). Extend the action vocabulary so the model can **add, edit, and remove** events and their details (title, date/time, all-day, description, location, members, recurrence).
+`editEvent` and `removeEvent` action tags in `executeAssistantActions()`:
+- **`editEvent:query|date|time|title`** — `findCalEvent()` fuzzy-matches the soonest upcoming event by title; `computeEventShift()` recomputes start/end preserving duration on a date/time move (golden test `tests/event-shift.test.js`); PATCHes only the provided fields.
+- **`removeEvent:query|date`** — fuzzy-match + DELETE the instance, with a named confirmation.
+- `addEvent` already gained the Member field (mow advisor work).
 
-**Approach:** New `[ACTION:...]` tags parsed in `executeAssistantActions()`, reusing the existing event editor's save/delete plumbing (`saveCalEvent()` / `deleteCalEvent()` write to the Google Calendar API) rather than duplicating it:
-- **`editEvent`** — fuzzy-match an existing event (by title + optional date, via `fuzzyTextMatch()`) and PATCH changed fields.
-- **`removeEvent`** — fuzzy-match and delete, with a visible confirmation.
-- Extend `addEvent` (and the new tags) to accept optional detail fields as they ship in the editor (location once that backlog item lands, description, members, recurrence end).
-- For recurring events, respect the "this event vs all events" scope the editor already models.
+Acts on the soonest match and names it in the confirmation so the user can correct. Timed + all-day handled; **series-scope editing deferred** (v1 edits the single instance). Verified: finder + shift helper (golden + in-app); Google PATCH/DELETE + Gemini tag-emission exercised on the deployed app.
 
-**Constraints:** requires Google sign-in (degrade gracefully when signed out, like `addEvent`); every write/delete surfaces a confirmation in the chat; add discovery chips to `ASSISTANT_QUICK_PROMPTS` (e.g. "Move soccer to 5pm", "Cancel Friday's dentist appointment"); teach the new tags + relative-date resolution in the system prompt.
+*Deferred follow-ups:* "this event vs all events" scope for recurring series; description/location edits; discovery chips for edit/remove.
 
 **Acceptance:** From chat, the user can reschedule, retitle, relocate, or delete an existing event and see it reflected on the calendar with a confirmation.
 

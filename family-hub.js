@@ -7657,6 +7657,8 @@ When the user clearly asks you to add or change something, append one tag per ac
 - Mark a to-do as done:      [ACTION:completeTodo:task text or keywords]
 - Check off a shopping item: [ACTION:checkShopping:item text or keywords]
 - Add a calendar event:      [ACTION:addEvent:YYYY-MM-DD|HH:MM|Title|Member]   (use "allday" in place of HH:MM if no specific time; Member is optional — a family member name to assign)
+- Change a calendar event:    [ACTION:editEvent:which event|YYYY-MM-DD|HH:MM|New title]   (match by title words; leave any field blank to keep it — e.g. only a time to reschedule, only a title to rename)
+- Remove a calendar event:    [ACTION:removeEvent:which event|YYYY-MM-DD]   (match by title words; date is optional to disambiguate)
 - Plan a meal:               [ACTION:setMeal:YYYY-MM-DD|mealType|Meal name]   (mealType is breakfast, lunch, or dinner)
 - Add a recurring bill:      [ACTION:addBudget:Name|Amount|frequency]   (frequency is monthly, weekly, biweekly, or yearly)
 
@@ -7669,6 +7671,7 @@ GUIDELINES:
 - When asked about free time or scheduling, look at the calendar gaps.
 - When asked about weather ("will it rain?", "is it going to be hot?"), use the real weather data above.
 - When asked when to mow the lawn (or do yard work), use "Best times to mow" above — recommend the top pick, explain the reasoning briefly, and offer to add it to the calendar (you can assign a family member). If that section is absent, say the forecast or a weather location isn't available.
+- To change or remove an event, use editEvent / removeEvent with words from its title. It acts on the soonest upcoming match; the confirmation names which event, so the user can correct you if it picked the wrong one. Only do this when clearly asked.
 - When asked "what's for dinner?" or "what's the meal plan?", use the meal plan data above.
 - When asked about family members or who is assigned to something, use the family members list.
 - Do not repeat raw data back verbatim — synthesise and be helpful.
@@ -7793,6 +7796,90 @@ async function assistantAddEvent(dateStr, timeStr, title, member) {
   } catch (e) { return `⚠️ Couldn't add the event: ${e.message}`; }
 }
 
+// Find the soonest upcoming (or on `dateStr`) non-holiday event whose title
+// fuzzy-matches `query`. Returns the cached event object or null.
+function findCalEvent(query, dateStr) {
+  const todayKey = localDateKey(new Date());
+  let best = null, bestKey = null;
+  Object.values(calEventCache).forEach(byDate => {
+    Object.entries(byDate).forEach(([date, evs]) => {
+      if (date < todayKey) return;
+      if (dateStr && date !== dateStr) return;
+      evs.forEach(e => {
+        if (e.holiday || !e.eventId || !fuzzyTextMatch(e.summary, query)) return;
+        const sortKey = e.startDT || (date + 'T00:00');
+        if (!best || sortKey < bestKey) { best = { ...e, date }; bestKey = sortKey; }
+      });
+    });
+  });
+  return best;
+}
+
+function _evtFmtLocal(d) {
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:00`;
+}
+
+// Recompute an event's start/end when moving its date and/or time, preserving
+// duration. Returns { start, end } in Google Calendar shape, or null if no change.
+function computeEventShift(ev, newDate, newTime) {
+  newDate = (newDate || '').trim();
+  newTime = (newTime || '').trim();
+  if (!newDate && !newTime) return null;
+  if (ev.allDay) {
+    const date = newDate || ev.date;
+    const next = new Date(date + 'T00:00:00'); next.setDate(next.getDate() + 1);
+    return { start: { date }, end: { date: _evtFmtLocal(next).slice(0, 10) } };
+  }
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const date = newDate || ev.date;
+  const timePart = newTime || (ev.startDT ? ev.startDT.slice(11, 16) : '09:00');
+  const durMs = (ev.startDT && ev.endDT) ? Math.max(0, new Date(ev.endDT) - new Date(ev.startDT)) : 3600000;
+  const startLocal = `${date}T${timePart}:00`;
+  const endD = new Date(new Date(startLocal).getTime() + durMs);
+  return { start: { dateTime: startLocal, timeZone: tz }, end: { dateTime: _evtFmtLocal(endD), timeZone: tz } };
+}
+
+async function assistantRemoveEvent(query, dateStr) {
+  if (!query)       return `⚠️ Which event should I remove?`;
+  if (!googleToken) return `⚠️ Sign in with Google to let me change calendar events`;
+  const e = findCalEvent(query, dateStr);
+  if (!e) return `⚠️ Couldn't find an upcoming event matching "${query}"`;
+  try {
+    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(e.calId)}/events/${encodeURIComponent(e.eventId)}`;
+    const r = await fetch(url, { method: 'DELETE', headers: { 'Authorization': `Bearer ${googleToken}` } });
+    if (!r.ok && r.status !== 204) { const err = await r.json().catch(() => ({})); return `⚠️ Calendar error: ${err.error?.message || r.status}`; }
+    await loadAllCalendars();
+    return `✓ Removed "${e.summary}" (${e.allDay ? e.date : new Date(e.startDT).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })})`;
+  } catch (err) { return `⚠️ Couldn't remove the event: ${err.message}`; }
+}
+
+async function assistantEditEvent(query, newDate, newTime, newTitle) {
+  if (!query)       return `⚠️ Which event should I change?`;
+  if (!googleToken) return `⚠️ Sign in with Google to let me change calendar events`;
+  const e = findCalEvent(query);
+  if (!e) return `⚠️ Couldn't find an upcoming event matching "${query}"`;
+  const patch = {};
+  if (newTitle && newTitle.trim()) patch.summary = newTitle.trim();
+  const shift = computeEventShift(e, newDate, newTime);
+  if (shift) { patch.start = shift.start; patch.end = shift.end; }
+  if (!Object.keys(patch).length) return `⚠️ Nothing to change on "${e.summary}"`;
+  try {
+    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(e.calId)}/events/${encodeURIComponent(e.eventId)}`;
+    const r = await fetch(url, {
+      method: 'PATCH',
+      headers: { 'Authorization': `Bearer ${googleToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+    if (!r.ok) { const err = await r.json().catch(() => ({})); return `⚠️ Calendar error: ${err.error?.message || r.status}`; }
+    await loadAllCalendars();
+    const changed = [];
+    if (patch.summary) changed.push(`renamed to "${patch.summary}"`);
+    if (shift) changed.push(shift.start.dateTime ? `moved to ${new Date(shift.start.dateTime).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })}` : `moved to ${shift.start.date}`);
+    return `✓ Updated "${e.summary}" — ${changed.join(', ')}`;
+  } catch (err) { return `⚠️ Couldn't update the event: ${err.message}`; }
+}
+
 async function assistantSetMeal(dateStr, mealType, name) {
   const type = (mealType || '').toLowerCase().trim();
   if (!['breakfast','lunch','dinner'].includes(type)) return `⚠️ Meal type must be breakfast, lunch, or dinner`;
@@ -7835,6 +7922,8 @@ async function executeAssistantActions(actions) {
       else if (type === 'completeTodo')  confirmMsgs.push(await assistantCompleteTodo(value));
       else if (type === 'checkShopping') confirmMsgs.push(await assistantCheckShopping(value));
       else if (type === 'addEvent')      confirmMsgs.push(await assistantAddEvent(parts[0], parts[1], parts[2], parts[3]));
+      else if (type === 'editEvent')     confirmMsgs.push(await assistantEditEvent(parts[0], parts[1], parts[2], parts[3]));
+      else if (type === 'removeEvent')   confirmMsgs.push(await assistantRemoveEvent(parts[0], parts[1]));
       else if (type === 'setMeal')       confirmMsgs.push(await assistantSetMeal(parts[0], parts[1], parts.slice(2).join('|')));
       else if (type === 'addBudget')     confirmMsgs.push(await assistantAddBudget(parts[0], parts[1], parts[2]));
     } catch (e) {
