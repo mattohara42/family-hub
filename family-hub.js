@@ -7518,7 +7518,9 @@ function mowContextSection() {
     const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     return `  • ${day} ${time}${w.reasons.length ? ' — ' + w.reasons.join(', ') : ''}`;
   };
-  return `\nBest times to mow the lawn (scored from weather + calendar, best first):\n${_mowReco.windows.slice(0, 3).map(line).join('\n')}\n`;
+  const assignee = (mowConfig.defaultAssignee || '').trim();
+  const assignNote = assignee ? `\n  (when adding it to the calendar, assign it to ${assignee})` : '';
+  return `\nBest times to mow the lawn (scored from weather + calendar, best first):\n${_mowReco.windows.slice(0, 3).map(line).join('\n')}${assignNote}\n`;
 }
 
 // ── Family Assistant ───────────────────────────────────────────────────────
@@ -9556,6 +9558,7 @@ const SETTINGS_GROUPS = [
   { label: 'Calendar', items: [
     { tab: 'calendar', label: '📅 Calendar' },
     { tab: 'events',   label: '💡 Events' },
+    { tab: 'mow',      label: '🌿 Mowing' },
   ]},
   { label: 'Widgets', items: [
     { tab: 'widgets', label: '🧩 Widget Layout' },
@@ -9661,6 +9664,14 @@ function openSettings() {
   renderLoadingMsgList();
   renderFamilyMemberList();
   renderMealTemplateList();
+  // ── Mowing advisor settings ──
+  document.getElementById('mowPreferredDay').value = String(mowConfig.preferredDay ?? 6);
+  document.getElementById('mowDuration').value     = mowConfig.mowDuration ?? 60;
+  const mowSel = document.getElementById('mowAssignee');
+  mowSel.innerHTML = '<option value="">— no one —</option>' +
+    familyMembers.map(m => `<option value="${m.name}">${m.name}</option>`).join('');
+  mowSel.value = mowConfig.defaultAssignee || '';
+
   // ── Event settings ──
   document.getElementById('eventLocation').value = eventLocation;
   document.querySelector(`input[name="eventDistance"][value="${eventMaxDistance}"]`).checked = true;
@@ -9749,6 +9760,16 @@ function saveSettings() {
   const selEmoji = document.querySelector('#emojiPickerGrid .emoji-picker-btn.selected');
   if (selEmoji) { appTitleEmoji = selEmoji.textContent; localStorage.setItem('fh_appTitleEmoji', appTitleEmoji); }
   applyAppTitle();
+  // Mowing advisor config — persist only the user-facing keys so defaults stay live
+  {
+    const stored = lsGet('fh_mowConfig', {});
+    stored.preferredDay    = parseInt(document.getElementById('mowPreferredDay').value, 10);
+    stored.mowDuration     = Math.max(15, Math.min(240, parseInt(document.getElementById('mowDuration').value, 10) || 60));
+    stored.defaultAssignee = document.getElementById('mowAssignee').value || '';
+    localStorage.setItem('fh_mowConfig', JSON.stringify(stored));
+    mowConfig = { ...MOW_CONFIG, ...stored };
+    _mowReco = null;   // force a fresh recommendation with the new prefs
+  }
   sunArcEnabled     = document.getElementById('sunArcToggle').checked;
   wxTickerEnabled   = document.getElementById('wxTickerToggle').checked;
   wxActivityEnabled = document.getElementById('wxActivityToggle').checked;

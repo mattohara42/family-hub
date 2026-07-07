@@ -1178,6 +1178,36 @@
         </div>
       </div><!-- /events -->
 
+      <!-- ── Mowing (Outdoor Task Advisor) ── -->
+      <div class="settings-panel" data-panel="mow">
+        <p style="font-size:.82rem;color:var(--muted);margin:0 0 14px">
+          The assistant recommends when to mow the lawn from the weather forecast and your calendar. Ask it “When should I mow the lawn?”
+        </p>
+        <div class="field">
+          <label>Preferred day</label>
+          <select id="mowPreferredDay">
+            <option value="0">Sunday</option>
+            <option value="1">Monday</option>
+            <option value="2">Tuesday</option>
+            <option value="3">Wednesday</option>
+            <option value="4">Thursday</option>
+            <option value="5">Friday</option>
+            <option value="6">Saturday</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Mowing takes about</label>
+          <div class="field-row">
+            <input type="number" id="mowDuration" min="15" max="240" step="15" value="60" />
+            <label>minutes</label>
+          </div>
+        </div>
+        <div class="field">
+          <label>Assign to <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+          <select id="mowAssignee"><option value="">— no one —</option></select>
+        </div>
+      </div><!-- /mow -->
+
       <!-- ── Home Calendars ── -->
     </div><!-- /settings-panels -->
       </div><!-- /settings-content -->

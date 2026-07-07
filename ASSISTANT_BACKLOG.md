@@ -90,7 +90,9 @@ Grew the `[ACTION:...]` vocabulary from 2 to **7 actions**. Multi-arg actions us
 
 ---
 
-## Priority 3b — Outdoor Task Advisor (Lawn Mowing)  📄 spec'd
+## ✅ DONE — Outdoor Task Advisor (Lawn Mowing)  (shipped 2026-07-07)
+
+Deterministic `scoreMowWindows()` (golden test: `tests/mow-scorer.test.js`) + `getMowForecast()` (keyless Open-Meteo hourly) + `getMowBusyIntervals()` feed a 30-min-cached recommendation injected into `buildAssistantContext()` as "Best times to mow". `addEvent` action gained an optional Member (→ `fhMembers`) so the assistant can schedule the mow assigned to someone. Settings → Calendar → 🌿 Mowing (preferred day / duration / default assignee, `fh_mowConfig`). Verified end-to-end against a live forecast; Google POST + Gemini round-trip exercised on the deployed app. Design: `docs/superpowers/specs/2026-07-06-mow-advisor-design.md`.
 
 **What:** On demand, the assistant recommends the ideal day/time to mow the lawn by scoring the weather forecast against the family calendar (e.g. "prefer Saturday; if it rains all weekend, Friday; if Fri+Sat rain but Sunday afternoon is booked, Sunday morning"), explains its reasoning, and can create the mow event assigned to a family member.
 
