@@ -2,7 +2,7 @@
 
 *High-effort enhancements for the Weather widget, ordered by priority. Constraints: OpenWeatherMap **free tier v2.5** only, three-file no-build architecture, CDN scripts only.*
 
-Last updated: 2026-06-04
+Last updated: 2026-07-06
 
 ---
 
@@ -63,25 +63,15 @@ Current conditions · feels-like · today hi/lo · rain % · animated condition 
 
 ---
 
-## Priority 4 — H2: Precipitation Radar Map
+## ✅ DONE — H2: Precipitation Radar Map
 
-**What:** A small live radar panel inside the weather card.
-
-**Approach:** Add **Leaflet** via CDN; base map + OWM free **Weather Maps 1.0** `precipitation_new` tile layer centered on the location's lat/lon. First map dependency in the project.
-
-**Caveats:** Sizing a map inside a flex card is fiddly (needs explicit height + `invalidateSize()` on show). Adds CDN script + CSS. Confirm CSP `img-src`/`script-src` cover the tile + Leaflet origins.
-
-**Acceptance:** Map renders centered on the active location, shows precipitation overlay, doesn't break card layout or other widgets.
+Leaflet radar panel in the weather card, using **RainViewer** tiles (keyless) instead of the originally-planned OWM tiles — `api.rainviewer.com/public/weather-maps.json` + `tilecache.rainviewer.com` overlay on a base map (`family-hub.js:4478+`, `renderRadarPanel()`).
 
 ---
 
-## Priority 5 — H5: Geolocation Auto-Detect
+## ✅ DONE — H5: Geolocation Auto-Detect
 
-**What:** A "📍 Use my location" button that adds the user's current location.
-
-**Approach:** `navigator.geolocation.getCurrentPosition()` → reverse geocode via OWM `/geo/1.0/reverse` → add resolved city to `weatherLocations[]`. Requires HTTPS (already satisfied — OAuth needs it too).
-
-**Acceptance:** Button resolves to a named city and adds it like any manual location; handles permission-denied gracefully.
+📍 button uses `navigator.geolocation.getCurrentPosition()` → keyless reverse geocode via **BigDataCloud** (`REVERSE_GEOCODE_BASE`, not OWM) → adds the resolved city to `weatherLocations[]`; handles permission-denied (`family-hub.js:3890+`).
 
 ---
 
