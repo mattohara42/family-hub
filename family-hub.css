@@ -2823,6 +2823,7 @@ body.nautical-mode #settingsModal .modal {
   color: var(--text);
   text-align: left;
   cursor: pointer;
+  font-family: inherit;
   font-size: var(--text-sm);
   font-weight: var(--weight-semi);
   transition: background .15s;
@@ -2873,6 +2874,7 @@ body.eggs-unlocked .settings-nav-group--gated { display: block; }
     background: none;
     border: none;
     color: var(--accent);
+    font-family: inherit;
     font-size: var(--text-sm);
     font-weight: var(--weight-semi);
     cursor: pointer;
