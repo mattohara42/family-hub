@@ -90,6 +90,20 @@ Grew the `[ACTION:...]` vocabulary from 2 to **7 actions**. Multi-arg actions us
 
 ---
 
+## Priority 3b — Outdoor Task Advisor (Lawn Mowing)  📄 spec'd
+
+**What:** On demand, the assistant recommends the ideal day/time to mow the lawn by scoring the weather forecast against the family calendar (e.g. "prefer Saturday; if it rains all weekend, Friday; if Fri+Sat rain but Sunday afternoon is booked, Sunday morning"), explains its reasoning, and can create the mow event assigned to a family member.
+
+**Design decisions:** assistant delivery (not a card); on-demand v1 (proactive push deferred to Daily Briefing, P5); full comfort scoring; deterministic JS scorer feeding the assistant context (LLM explains, does not score); v1 is lawn-mowing only (engine written task-agnostic).
+
+**Core pieces:** pure `scoreMowWindows(forecast, events, config)` (hard filters: rain / wet-grass dry-out / free-window / daylight; comfort score: preferred-day, sooner-is-better, temp, wind, dry-margin, time-of-day) · `getMowForecast()` retaining fuller Open-Meteo hourly arrays · advisor section in `buildAssistantContext()` · discovery chip · `assistantAddEvent()` extended with an optional member (`fhMembers`) — shares the member work with Priority 3.
+
+**Depends on / relates to:** the member-assignment extension overlaps Priority 3 (Full Event CRUD); build them together or CRUD first.
+
+**Full design:** `docs/superpowers/specs/2026-07-06-mow-advisor-design.md` — spec complete, not scheduled. Ready to hand to writing-plans when picked up.
+
+---
+
 ## Priority 4 — Conversation Persistence
 
 **What:** Save `assistantHistory` to `localStorage` (`fh_assistantHistory`) so the conversation survives reloads. Cap length (e.g. last ~20 turns) to bound storage. Clear button already exists.
