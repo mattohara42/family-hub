@@ -1322,7 +1322,16 @@
 
     <div class="field">
       <label>Description <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
-      <textarea id="evtEdDesc" rows="2" placeholder="Notes, location, etc…" style="resize:vertical"></textarea>
+      <textarea id="evtEdDesc" rows="2" placeholder="Notes, details, etc…" style="resize:vertical"></textarea>
+    </div>
+
+    <div class="field">
+      <label>Location <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+      <input type="text" id="evtEdLocation" placeholder="Address or place…" oninput="updateEvtEdMapLink()" />
+      <div style="margin-top:6px;display:flex;gap:14px">
+        <a id="evtEdMapView" href="#" target="_blank" rel="noopener" style="display:none;font-size:.82rem;color:var(--accent)">📍 View on map</a>
+        <a id="evtEdMapDir" href="#" target="_blank" rel="noopener" style="display:none;font-size:.82rem;color:var(--accent)">🧭 Directions</a>
+      </div>
     </div>
 
     <div class="field">
@@ -1345,7 +1354,7 @@
     <div id="evtEdTimeSection">
       <div class="field">
         <label>Start time</label>
-        <input type="time" id="evtEdStart" />
+        <input type="time" id="evtEdStart" onchange="autoAdvanceEvtEnd()" />
       </div>
       <div class="field">
         <label>End time</label>

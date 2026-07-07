@@ -2151,6 +2151,7 @@ async function loadAllCalendars() {
         endDate:          ev.end?.date       || null,
         members:          (ev.extendedProperties?.private?.fhMembers || '').split(',').map(s => s.trim()).filter(Boolean),
         recurringEventId: ev.recurringEventId || null,
+        location:         ev.location || '',
       };
       // Multi-day all-day events: cache on every date in their range
       if (base.allDay && base.startDate && base.endDate && base.endDate > base.startDate) {
@@ -3256,6 +3257,8 @@ function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
     ev?.eventId ? '✏️ Edit Event' : (ev ? '📅 Add to Calendar' : '📅 New Event');
   document.getElementById('evtEdTitle').value      = ev?.summary     || '';
   document.getElementById('evtEdDesc').value       = ev?.description || '';
+  document.getElementById('evtEdLocation').value   = ev?.location    || '';
+  updateEvtEdMapLink();
   // Delete only applies to an existing calendar event
   document.getElementById('evtEdDeleteBtn').style.display = ev?.eventId ? '' : 'none';
   document.getElementById('evtEdStatus').style.display = 'none';
@@ -3381,6 +3384,31 @@ function toggleEvtEdAllDay() {
   }
 }
 
+// Show/hide the "View on map" / "Directions" links based on the location field.
+// Plain maps.google.com URLs — no API key needed.
+function updateEvtEdMapLink() {
+  const loc  = document.getElementById('evtEdLocation').value.trim();
+  const view = document.getElementById('evtEdMapView');
+  const dir  = document.getElementById('evtEdMapDir');
+  if (!loc) { view.style.display = dir.style.display = 'none'; return; }
+  const q = encodeURIComponent(loc);
+  view.href = `https://www.google.com/maps/search/?api=1&query=${q}`;
+  dir.href  = `https://www.google.com/maps/dir/?api=1&destination=${q}`;
+  view.style.display = dir.style.display = 'inline';
+}
+
+// When Start Time is moved to at/after End Time, push End to one hour later
+// (clamped within the same day). Mirrors Google Calendar. Timed events only.
+function autoAdvanceEvtEnd() {
+  const startEl = document.getElementById('evtEdStart');
+  const endEl   = document.getElementById('evtEdEnd');
+  if (!startEl.value) return;
+  if (endEl.value && endEl.value > startEl.value) return;   // valid range — leave it
+  const [h, m] = startEl.value.split(':').map(Number);
+  const end = Math.min(h * 60 + m + 60, 23 * 60 + 59);       // +1h, clamp to 23:59
+  endEl.value = `${String(Math.floor(end / 60)).padStart(2,'0')}:${String(end % 60).padStart(2,'0')}`;
+}
+
 function evtEdStatus(msg, isError) {
   const el = document.getElementById('evtEdStatus');
   el.textContent = msg;
@@ -3398,6 +3426,7 @@ async function saveCalEvent() {
   const startT  = document.getElementById('evtEdStart').value;
   const endT    = document.getElementById('evtEdEnd').value;
   const desc    = document.getElementById('evtEdDesc').value.trim();
+  const location = document.getElementById('evtEdLocation').value.trim();
 
   const selectedCalBtn = document.getElementById('evtEdCalSelect').querySelector('.selected');
   if (!selectedCalBtn) { evtEdStatus('Please select a calendar.', true); return; }
@@ -3439,7 +3468,7 @@ async function saveCalEvent() {
   const seriesEdit = editScope === 'all' && !!evtEditing?.recurringEventId;
 
   const body = {
-    summary: title, description: desc,
+    summary: title, description: desc, location,
     extendedProperties: { private: { fhMembers: selectedMembers.join(',') } },
   };
   // Editing "All events": PATCHing the master with this instance's start/end
