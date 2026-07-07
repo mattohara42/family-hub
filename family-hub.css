@@ -2841,6 +2841,22 @@ body.eggs-unlocked .settings-nav-group--gated { display: block; }
 }
 .settings-back { display: none; }  /* wide screens: both panes visible, no back */
 
+/* Labeled subsection header inside a panel — breaks long panels into groups */
+.settings-section-head {
+  font-size: .8rem;
+  font-weight: var(--weight-semi);
+  color: var(--text);
+  letter-spacing: .01em;
+  margin: 20px 0 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.settings-panel > .settings-section-head:first-child {
+  margin-top: 2px;
+  padding-top: 0;
+  border-top: none;
+}
+
 /* Narrow: drill-in — show the nav list, tap an item to slide in its panel */
 @media (max-width: 700px) {
   .settings-nav {
