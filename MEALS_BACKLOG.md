@@ -2,7 +2,7 @@
 
 *Enhancement ideas for the Meal Planning feature (planner modal, week/day meal strips, and the meal detail popup). Constraints: Gemini API (Meals key), three-file no-build architecture, CDN only, free/keyless external services preferred.*
 
-Last updated: 2026-06-04
+Last updated: 2026-07-06
 
 ---
 
@@ -29,6 +29,26 @@ AI meal suggestions (per-meal-type + "all") · accept to plan · add ingredients
 **Recommendation:** Ship **#1 (persist matches)** + **#2 (simplified-query retry)** first — both improve accuracy without misleading stock imagery. Consider **#3** only behind a clear "representative image" label.
 
 **Acceptance:** More planned meals show a photo; matched photos persist across reloads; any non-exact image is clearly labeled; emoji placeholder remains the final fallback.
+
+---
+
+## Priority 2 — Import recipe from URL (schema.org/Recipe)
+
+**What:** Paste a recipe URL → pull the dish name + ingredients (and optionally instructions) into the meal plan, and push ingredients to the shopping list (the Meals feature already does ingredients→shopping). Works for **any** site that emits `schema.org/Recipe` JSON-LD — NYT Cooking, AllRecipes, Serious Eats, food blogs — so it's a generic importer, not an NYT-specific integration. Motivated by "add content from our NYT Cooking account."
+
+**Feasibility — PROVEN (probe 2026-07-06):** unauthenticated server-side fetches of NYT Cooking recipe pages (`cooking.nytimes.com/recipes/...`) returned HTTP 200 with the full `schema.org/Recipe` JSON-LD intact — title, all ingredients, and instructions — **even though `isAccessibleForFree: false`** (paywalled). The paywall gates the human-facing render, not the structured metadata. So a proxy fetch + JSON-LD parse gets everything Meals needs.
+
+**Approach:**
+- **Fetch** via a small Netlify function (same pattern as `ics.js` / `news.js`) — browsers can't fetch cross-origin recipe pages directly. Send a browser-like User-Agent.
+- **Parse:** extract `<script type="application/ld+json">` blocks, find the object whose `@type` is `Recipe` (may be nested in an array or `@graph`), read `name` + `recipeIngredient[]` (+ `recipeInstructions`). ~20 lines, no dependency.
+- **Wire into Meals:** new "Import from URL" affordance in the meal planner → prefill a planned meal (`setMealInFs` with name/ingredients/description) → existing "add ingredients to shopping" applies.
+
+**Caveats / must-handle:**
+- **Fragile external dependency** — this is undocumented page behavior, not a contract; NYT could gate the JSON-LD anytime. Degrade gracefully: if no parseable `Recipe` is found, show "couldn't read a recipe from that link" and fall back to manual entry.
+- **Personal use / ToS** — one-off imports of recipes the user is entitled to, not bulk scraping. No auto-sync of a whole NYT Recipe Box (no API exists for that).
+- Respect CSP; keep the fetch server-side. Store the source URL on the meal for reference.
+
+**Acceptance:** Pasting an NYT Cooking (and a non-NYT) recipe URL populates a planned meal's name + ingredients; ingredients export to shopping; an unparseable URL fails cleanly to manual entry.
 
 ---
 
