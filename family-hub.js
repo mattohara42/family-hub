@@ -1013,7 +1013,10 @@ window.addEventListener('load', () => {
   initAssistantVoice();
   updateAssistantTtsBtn();      // set the 🔊/🔇 voice-output toggle state
   renderAssistantMessages();   // render empty-state welcome + quick-prompt chips
-  // Briefing is now on-demand via the pill button in the assistant header
+  // Daily briefing: open once per day, after weather/calendar have had time to
+  // load; re-check hourly so a long-open kiosk shows a fresh one each morning.
+  setTimeout(maybeAutoBriefing, 6000);
+  setInterval(maybeAutoBriefing, 60 * 60000);
   renderCountdownCard(); // generate after page settles + weather/cal data loads
   // Close SMS popover on outside click
   document.addEventListener('click', e => {
@@ -8612,6 +8615,19 @@ function updateBriefingPill(active) {
   pill.title = active ? 'Dismiss briefing' : 'Daily briefing';
 }
 
+const BRIEFING_AUTOSHOWN_KEY = 'fh_briefingAutoShown';   // date we last auto-opened
+
+// Proactively open the briefing once per calendar day (first load / date rollover
+// on a long-open kiosk). Respects dismissal — once auto-shown for the day it
+// won't re-pop, and the user can still open it by hand via the pill.
+function maybeAutoBriefing() {
+  if (!mealAiKey) return;                                 // generator needs a client key
+  const today = localDateKey(new Date());
+  if (localStorage.getItem(BRIEFING_AUTOSHOWN_KEY) === today) return;
+  localStorage.setItem(BRIEFING_AUTOSHOWN_KEY, today);
+  loadDailyBriefing();
+}
+
 /** Show (or generate) the daily briefing banner above the chat. */
 async function loadDailyBriefing() {
   const banner = document.getElementById('briefingBanner');
@@ -8635,6 +8651,7 @@ async function loadDailyBriefing() {
   // Generate a fresh briefing
   showBriefingBanner(null, true); // show loading state
   try {
+    await refreshMowReco();        // include a fresh mow recommendation in context
     const context = buildAssistantContext();
     const prompt = `${context}
 

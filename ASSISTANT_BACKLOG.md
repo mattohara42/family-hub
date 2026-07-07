@@ -113,13 +113,9 @@ Deterministic `scoreMowWindows()` (golden test: `tests/mow-scorer.test.js`) + `g
 
 ---
 
-## Priority 5 — Daily Briefing / Proactive Mode
+## ✅ DONE — Daily Briefing / Proactive Mode  (shipped 2026-07-07)
 
-**What:** An auto-generated "Good morning — here's your day" summary (calendar + weather + top to-dos + any bills due), shown once per day or on demand.
-
-**Approach:** On first load of the day, call Gemini with a briefing prompt; cache the result with a date key so it generates once daily. Higher effort — needs a trigger, caching, and a non-intrusive presentation.
-
-**Acceptance:** Briefing generates once per day, reflects real data, and never spams on every reload.
+The briefing banner already existed (on-demand via the `#briefingPill`). Made it **proactive**: `maybeAutoBriefing()` opens it once per calendar day (6s after load, re-checked hourly so a long-open kiosk shows a fresh one each morning), keyed by `fh_briefingAutoShown` so it respects dismissal and never re-pops the same day. Also folded a fresh mow recommendation into the briefing context (`refreshMowReco()` in `loadDailyBriefing()`), so the Outdoor Task Advisor is now proactive too. Needs a client Gemini key (same as the existing generator). Gating verified; live generation exercised on the deployed app.
 
 ---
 
