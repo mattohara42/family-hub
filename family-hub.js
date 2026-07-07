@@ -7368,6 +7368,83 @@ Return ONLY a valid JSON object (no markdown, no explanation):
   }
 }
 
+// ── Outdoor Task Advisor (lawn mowing) ──────────────────────────────────────
+// Recommends the best day/time to mow by scoring the forecast against the
+// calendar. Deterministic pure scorer (verified against the spec's examples in
+// tests/mow-scorer.test.js); the assistant explains the result, it doesn't score.
+// Design: docs/superpowers/specs/2026-07-06-mow-advisor-design.md
+const MOW_CONFIG = {
+  preferredDay: 6,        // 0=Sun … 6=Sat
+  mowDuration: 60,        // minutes
+  rainThreshold: 40,      // % pop in/around a slot disqualifies
+  dryOutHours: 8,         // hours of no measurable rain required before a slot
+  tempIdeal: [60, 78],    // °F comfort band
+  windComfort: 15,        // mph; penalty above
+  horizonDays: 7,         // Open-Meteo gives 7 days — enough to reach the weekend
+};
+let mowConfig = { ...MOW_CONFIG, ...lsGet('fh_mowConfig', {}) };
+
+const _MOW_HR = 3600000, _MOW_DAY = 86400000, _MOW_MIN = 60000;
+
+// forecast.hours: [{ ts, tempF, popPct, windMph }] hourly, chronological
+// forecast.days:  [{ date:'YYYY-MM-DD', sunrise:ts, sunset:ts }]
+// events: [{ start:ts, end:ts }] busy intervals (all-day → full-day interval)
+// Returns { windows: [{ startTs, endTs, date, timeOfDay, score, reasons[] }], degraded }
+function scoreMowWindows(forecast, events, config, now) {
+  const cfg = { ...MOW_CONFIG, ...(config || {}) };
+  now = now || Date.now();
+  const hours = (forecast.hours || []).slice().sort((a, b) => a.ts - b.ts);
+  const days  = forecast.days || [];
+  const durMs = cfg.mowDuration * _MOW_MIN;
+  if (!hours.length || !days.length) return { windows: [], degraded: true, reason: 'no hourly forecast' };
+
+  const maxPopOver = (a, b) => hours.filter(h => h.ts >= a - _MOW_HR && h.ts <= b).reduce((m, h) => Math.max(m, h.popPct), 0);
+  const tempAt = ts => { let best = null; for (const h of hours) if (!best || Math.abs(h.ts - ts) < Math.abs(best.ts - ts)) best = h; return best ? best.tempF : 70; };
+  const windAt = ts => { let best = null; for (const h of hours) if (!best || Math.abs(h.ts - ts) < Math.abs(best.ts - ts)) best = h; return best ? best.windMph : 0; };
+  const hoursSinceRain = ts => {                                  // hours since last measurable rain before ts
+    let last = null;
+    for (const h of hours) if (h.ts < ts && h.popPct >= cfg.rainThreshold) last = h.ts;
+    return last === null ? Infinity : (ts - last) / _MOW_HR;
+  };
+  const overlapsEvent = (a, b) => events.some(e => e.start < b && e.end > a);
+
+  const windows = [];
+  for (const day of days.slice(0, cfg.horizonDays)) {
+    if (!day.sunrise || !day.sunset) continue;
+    let t = Math.ceil(day.sunrise / _MOW_HR) * _MOW_HR;            // top-of-hour candidates in daylight
+    for (; t + durMs <= day.sunset; t += _MOW_HR) {
+      if (t < now) continue;
+      const start = t, end = t + durMs;
+      // ── hard filters ──
+      if (maxPopOver(start, end) >= cfg.rainThreshold) continue;   // raining
+      if (hoursSinceRain(start) < cfg.dryOutHours) continue;       // wet grass (dry-out rule)
+      if (overlapsEvent(start, end)) continue;                     // calendar conflict
+      // ── comfort score — proximity to the preferred day is the dominant axis,
+      //    so a rained-out weekend falls back to Friday-before / Sunday, not
+      //    "soonest dry day". ──
+      const reasons = [];
+      let score = 50;
+      const dow = new Date(start).getDay();
+      const diff = Math.abs(dow - cfg.preferredDay);
+      const preferredDist = Math.min(diff, 7 - diff);
+      score += [30, 22, 14, 6][preferredDist] || 0;
+      if (preferredDist === 0) reasons.push('preferred day');
+      score -= Math.max(0, (start - now) / _MOW_DAY) * 0.2;        // gentle sooner tiebreak
+      const temp = tempAt(start);
+      if (temp >= cfg.tempIdeal[0] && temp <= cfg.tempIdeal[1]) { score += 10; reasons.push(`${Math.round(temp)}°`); }
+      else score -= Math.min(20, Math.round(Math.abs(temp - (cfg.tempIdeal[0] + cfg.tempIdeal[1]) / 2) / 2));
+      const wind = windAt(start);
+      if (wind > cfg.windComfort) { score -= Math.min(10, wind - cfg.windComfort); reasons.push('breezy'); }
+      const hr = new Date(start).getHours();
+      const timeOfDay = hr < 12 ? 'morning' : hr < 17 ? 'afternoon' : 'evening';
+      if (timeOfDay === 'morning') { score += 3; reasons.push('morning'); }
+      windows.push({ startTs: start, endTs: end, date: day.date, timeOfDay, score: Math.round(score), reasons });
+    }
+  }
+  windows.sort((a, b) => b.score - a.score || a.startTs - b.startTs);
+  return { windows, degraded: false };
+}
+
 // ── Family Assistant ───────────────────────────────────────────────────────
 
 /** Gather current app state into a system prompt for the AI. */
