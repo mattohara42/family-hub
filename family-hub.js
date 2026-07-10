@@ -9937,11 +9937,9 @@ const SETTINGS_GROUPS = [
     { tab: 'mow',      label: '🌿 Mowing' },
   ]},
   { label: 'Widgets', items: [
-    { tab: 'widgets', label: '🧩 Widget Layout' },
-    { tab: 'weather', label: '🌤 Weather' },
-    { tab: 'feeds',   label: '📊 Feeds' },
-  ]},
-  { label: 'Lists & chores', items: [
+    { tab: 'widgets',  label: '🧩 Widget Layout' },
+    { tab: 'weather',  label: '🌤 Weather' },
+    { tab: 'feeds',    label: '📊 Feeds' },
     { tab: 'shopping', label: '🛒 Shopping' },
     { tab: 'chores',   label: '⭐ Chores' },
     { tab: 'meals',    label: '🍽 Meals' },
