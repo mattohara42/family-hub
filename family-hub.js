@@ -9959,7 +9959,6 @@ const SETTINGS_GROUPS = [
   ]},
   { label: 'Lists & chores', items: [
     { tab: 'shopping', label: '🛒 Shopping' },
-    { tab: 'todo',     label: '✅ To-Do' },
     { tab: 'chores',   label: '⭐ Chores' },
     { tab: 'meals',    label: '🍽 Meals' },
   ]},
