@@ -753,26 +753,6 @@ body.has-bg .day-hour-row {
   box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--text);
 }
 
-.emoji-picker-grid {
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: 4px;
-  margin-top: 6px;
-}
-.emoji-picker-btn {
-  font-size: 1.4rem;
-  background: none;
-  border: 2px solid transparent;
-  border-radius: 6px;
-  cursor: pointer;
-  padding: 4px;
-  line-height: 1;
-  text-align: center;
-  transition: border-color 0.15s;
-}
-.emoji-picker-btn:hover { border-color: var(--accent); }
-.emoji-picker-btn.selected { border-color: var(--accent); background: rgba(108,142,245,0.18); }
-
 /* ── Control card (top of sidebar) ── */
 #controlCard {
   overflow: visible;

@@ -3178,7 +3178,7 @@ const EMOJI_LIST = [
 let _emojiPickerCallback = null;
 let _emojiPickerInputId  = null;
 
-function openEmojiPicker(inputId, anchorEl, callback) {
+function openEmojiPicker(inputId, anchorEl, callback, list = EMOJI_LIST) {
   _emojiPickerInputId = inputId;
   _emojiPickerCallback = callback || null;
 
@@ -3199,7 +3199,7 @@ function openEmojiPicker(inputId, anchorEl, callback) {
   }
 
   picker.innerHTML = '';
-  EMOJI_LIST.forEach(em => {
+  list.forEach(em => {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.textContent = em;
@@ -9724,23 +9724,6 @@ const EMOJI_PICKER_OPTIONS = [
   '🎪','🚀','🎭','🎁','🎉','🐘','🌋','🏕️',
 ];
 
-function renderEmojiPicker(selectedEmoji) {
-  const grid = document.getElementById('emojiPickerGrid');
-  if (!grid) return;
-  grid.innerHTML = '';
-  EMOJI_PICKER_OPTIONS.forEach(e => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'emoji-picker-btn' + (e === selectedEmoji ? ' selected' : '');
-    btn.textContent = e;
-    btn.onclick = () => {
-      grid.querySelectorAll('.emoji-picker-btn').forEach(b => b.classList.remove('selected'));
-      btn.classList.add('selected');
-    };
-    grid.appendChild(btn);
-  });
-}
-
 function applySafePaletteMode() {
   document.body.classList.toggle('safe-palette-on', safePaletteMode);
   document.querySelectorAll('input.lc-color').forEach(input => {
@@ -9944,8 +9927,9 @@ function releaseFocusTrap() {
 // Add/reorder settings by editing this; the nav renders from it.
 const SETTINGS_GROUPS = [
   { label: 'General', items: [
-    { tab: 'look',   label: '🎨 Look & Feel' },
-    { tab: 'family', label: '👨‍👩‍👧 Family' },
+    { tab: 'look',      label: '🎨 Look & Feel' },
+    { tab: 'family',    label: '👨‍👩‍👧 Family' },
+    { tab: 'assistant', label: '🤖 Assistant' },
   ]},
   { label: 'Calendar', items: [
     { tab: 'calendar', label: '📅 Calendar' },
@@ -10025,7 +10009,7 @@ function openSettings() {
   document.getElementById('settingName').value           = userName;
   document.getElementById('settingAppTitle').value       = appTitle;
   document.getElementById('settingAssistantName').value  = assistantName;
-  renderEmojiPicker(appTitleEmoji);
+  document.getElementById('appIconPickerBtn').textContent = appTitleEmoji;
   document.getElementById('sunArcToggle').checked        = sunArcEnabled;
   document.getElementById('wxTickerToggle').checked     = wxTickerEnabled;
   document.getElementById('wxActivityToggle').checked   = wxActivityEnabled;
@@ -10148,8 +10132,8 @@ function saveSettings() {
   localStorage.setItem('fh_assistantName', assistantName);
   applyAssistantName();
   localStorage.setItem('fh_appTitle', appTitle);
-  const selEmoji = document.querySelector('#emojiPickerGrid .emoji-picker-btn.selected');
-  if (selEmoji) { appTitleEmoji = selEmoji.textContent; localStorage.setItem('fh_appTitleEmoji', appTitleEmoji); }
+  const iconBtn = document.getElementById('appIconPickerBtn');
+  if (iconBtn) { appTitleEmoji = iconBtn.textContent; localStorage.setItem('fh_appTitleEmoji', appTitleEmoji); }
   applyAppTitle();
   // Mowing advisor config — persist only the user-facing keys so defaults stay live
   {

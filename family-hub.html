@@ -498,21 +498,20 @@
       <!-- ── Look & Feel ── -->
       <div class="settings-panel active" data-panel="look">
         <div class="settings-section-head">Identity</div>
-        <div class="field">
-          <label>Your name <span style="font-weight:400;color:var(--muted)">(shown on list items)</span></label>
-          <input type="text" id="settingName" placeholder="e.g. Matt" />
-        </div>
-        <div class="field">
-          <label>App title <span style="font-weight:400;color:var(--muted)">(top-left header)</span></label>
-          <input type="text" id="settingAppTitle" placeholder="e.g. Family Hub" maxlength="30" />
-        </div>
-        <div class="field">
-          <label>Assistant name <span style="font-weight:400;color:var(--muted)">(shown on the assistant card)</span></label>
-          <input type="text" id="settingAssistantName" placeholder="e.g. Family Assistant" maxlength="40" />
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <div class="field" style="flex:1 1 140px">
+            <label>Your name <span style="font-weight:400;color:var(--muted)">(list items)</span></label>
+            <input type="text" id="settingName" placeholder="e.g. Matt" />
+          </div>
+          <div class="field" style="flex:1 1 140px">
+            <label>App title <span style="font-weight:400;color:var(--muted)">(header)</span></label>
+            <input type="text" id="settingAppTitle" placeholder="e.g. Family Hub" maxlength="30" />
+          </div>
         </div>
         <div class="field">
           <label>App icon emoji</label>
-          <div class="emoji-picker-grid" id="emojiPickerGrid"></div>
+          <button type="button" id="appIconPickerBtn" class="btn btn-sm" style="font-size:1.4rem;line-height:1;padding:6px 18px"
+                  onclick="openEmojiPicker(null, this, v => { document.getElementById('appIconPickerBtn').textContent = v; }, EMOJI_PICKER_OPTIONS)">🏠</button>
         </div>
         <div class="settings-section-head">Theme</div>
         <div class="field">
@@ -550,22 +549,24 @@
           <div id="flavorButtons" style="display:flex;gap:8px;flex-wrap:wrap"></div>
         </div>
         <div class="settings-section-head">Layout &amp; display</div>
-        <div class="field">
-          <label>Layout orientation</label>
-          <select id="settingLayoutMode">
-            <option value="auto">Auto (follow device)</option>
-            <option value="landscape">Landscape (always)</option>
-            <option value="portrait">Portrait (always)</option>
-          </select>
-        </div>
-        <div class="toggle-row">
-          <label class="toggle-switch">
-            <input type="checkbox" id="tvModeToggle" />
-            <span class="toggle-track"></span>
-          </label>
-          <div>
-            <div class="toggle-label">📺 TV / Display mode</div>
-            <div class="toggle-sub">Hides controls and edit affordances, enlarges text — optimised for Chromecast or AirPlay. Add <code>?tv=1</code> to the URL to activate on load. Press Escape to exit.</div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
+          <div class="field" style="flex:1 1 160px;margin-bottom:0">
+            <label>Layout orientation</label>
+            <select id="settingLayoutMode">
+              <option value="auto">Auto (follow device)</option>
+              <option value="landscape">Landscape (always)</option>
+              <option value="portrait">Portrait (always)</option>
+            </select>
+          </div>
+          <div class="toggle-row" style="flex:1 1 200px">
+            <label class="toggle-switch">
+              <input type="checkbox" id="tvModeToggle" />
+              <span class="toggle-track"></span>
+            </label>
+            <div>
+              <div class="toggle-label">📺 TV / Display mode</div>
+              <div class="toggle-sub">Hides controls, enlarges text — for Chromecast/AirPlay. <code>?tv=1</code> to activate on load, Escape to exit.</div>
+            </div>
           </div>
         </div>
         <div class="settings-section-head">Photos &amp; screensaver</div>
@@ -656,20 +657,6 @@
             <input type="time" id="settingSaverNightEnd" value="06:30" />
           </div>
         </div>
-        <div class="settings-section-head">Family Assistant</div>
-        <div class="field">
-          <label>Family Assistant empty state</label>
-          <div style="display:flex;gap:16px;margin-top:4px">
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
-              <input type="radio" name="assistantWelcome" value="ticker" style="accent-color:var(--accent)">
-              <span>Quick-prompt ticker</span>
-            </label>
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
-              <input type="radio" name="assistantWelcome" value="static" style="accent-color:var(--accent)">
-              <span>Static message</span>
-            </label>
-          </div>
-        </div>
       </div><!-- /look -->
 
       <!-- ── Family Members ── -->
@@ -685,6 +672,30 @@
         </div>
         <div id="familyMemberError" style="display:none;font-size:.8rem;color:var(--red);margin-top:8px"></div>
       </div><!-- /family -->
+
+      <!-- ── Family Assistant ── -->
+      <div class="settings-panel" data-panel="assistant">
+        <div class="field">
+          <label>Assistant name <span style="font-weight:400;color:var(--muted)">(shown on the assistant card)</span></label>
+          <input type="text" id="settingAssistantName" placeholder="e.g. Family Assistant" maxlength="40" />
+        </div>
+        <div class="field">
+          <label>Empty state</label>
+          <div style="display:flex;gap:16px;margin-top:4px">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+              <input type="radio" name="assistantWelcome" value="ticker" style="accent-color:var(--accent)">
+              <span>Quick-prompt ticker</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+              <input type="radio" name="assistantWelcome" value="static" style="accent-color:var(--accent)">
+              <span>Static message</span>
+            </label>
+          </div>
+        </div>
+        <p style="font-size:var(--text-xs);color:var(--muted);margin-top:4px">
+          Uses the Gemini key from ⚙️ Settings → 🍽 Meals.
+        </p>
+      </div><!-- /assistant -->
 
       <!-- ── Calendar ── -->
       <div class="settings-panel" data-panel="calendar">
