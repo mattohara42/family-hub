@@ -167,7 +167,7 @@ Subscribe to any public/secret `.ics` URL (Google, Outlook, school/sports feeds)
 without signing into Google — events inject into the same `calEventCache` and
 render in every calendar view, the countdown picker, and conflict detection.
 
-**State:** `icsSubs` = `lsGet('fh_icsSubs', [])` (`[{id,url,label,color,weekdaysOnly}]`); `icsCache` = `lsGet('fh_icsCache', {})` (`{id:{fetchedAt,events}}`, 4 h TTL).
+**State:** `icsSubs` — Firestore collection `icsSubs` (`{id,url,label,color,weekdaysOnly}`, real-time sync across devices via `onSnapshot` in `attachFirestoreListeners()`; falls back to `lsGet('fh_icsSubs', [])` when `db` is unconfigured). `icsCache` = `lsGet('fh_icsCache', {})` (`{id:{fetchedAt,events}}`, 4 h TTL) — always local, it's just a fetch cache, not shared state.
 
 **Key functions:**
 - `parseIcs(text)` — VEVENT parser: summary/description, all-day vs timed, **TZID** (→ UTC via `tzWallToUTCISO`), **RRULE** + **EXDATE**, RFC line unfolding.
@@ -178,7 +178,7 @@ render in every calendar view, the countdown picker, and conflict detection.
 
 **HTML anchors:** `#icsSubList`, `#icsUrlInput`, `#icsLabelInput`, `#icsColorInput`, `#icsSubStatus` (Settings → Calendar → 📡 ICS Subscriptions)
 
-**localStorage:** `fh_icsSubs`, `fh_icsCache`
+**localStorage:** `fh_icsCache` (always); `fh_icsSubs` only as the no-Firebase fallback (migrated to Firestore on first sign-in, deduped by URL — see `runFirestoreMigrations()`)
 
 **Server:** `netlify/functions/ics.js` proxies a single feed URL server-side (keyless; SSRF-guards loopback/private hosts).
 
@@ -218,7 +218,7 @@ let gsiReady = false;
 
 **State:**
 ```js
-let weatherLocations    = lsGet('fh_wlocations', []);  // array of city strings
+let weatherLocations    = lsGet('fh_wlocations', []);  // array of city strings — synced via Firestore settings/weatherLocations doc
 let weatherLocIdx       = 0;                           // currently-displayed index
 const weatherCache      = {};                          // { cityKey: { ts, data } } — in-memory
 const WX_CACHE_TTL      = 30 * 60 * 1000;             // 30-minute cache TTL
@@ -242,13 +242,13 @@ let sunArcEnabled       = lsGet('fh_sunArc', true);   // sun-path arc on/off
 - `fetchWeather()` — reads from `#cityInput` first-time setup form
 - `addWeatherLocation(city)` / `removeWeatherLocation(i)` — manage `weatherLocations` array
 - `renderWeatherLocationsList()` — renders location list in Settings → Weather
-- `saveWeatherLocations()` — persists to `fh_wlocations` and syncs legacy `fh_wcity`
+- `saveWeatherLocations()` — persists via `saveFsSetting()` to Firestore `settings/weatherLocations` (or `fh_wlocations` if `db` unconfigured) and always syncs legacy `fh_wcity`
 
 **HTML anchors:** `#weatherDisplay`, `#weatherSetup`, `#wTemp`, `#wDesc`, `#wIcon`, `#wHigh`, `#wLow`, `#wRain`, `#wForecast`, `#wxSunArc`, `#wxLocNav`, `#wxLocDots`, `#weatherCity`, `#wxLocationsList`, `#sunArcToggle` (Settings → Weather)
 
-**localStorage:** `fh_wlocations` (array), `fh_wcity` (legacy, kept in sync with first location), `fh_sunArc` (bool — sun-path arc visibility). *(`fh_wkey` removed — weather is keyless now.)*
+**localStorage:** `fh_wlocations` (array — no-Firebase fallback only; synced via Firestore `settings/weatherLocations` doc otherwise), `fh_wcity` (legacy, kept in sync with first location), `fh_sunArc` (bool — sun-path arc visibility, always local). *(`fh_wkey` removed — weather is keyless now.)*
 
-**Migration:** On first run, any existing `fh_wcity` value is auto-migrated into `fh_wlocations[0]`.
+**Migration:** On first run, any existing `fh_wcity` value is auto-migrated into `fh_wlocations[0]`. On first Firestore sign-in, an existing `fh_wlocations` gets uploaded to `settings/weatherLocations` (first device to sign in wins; see `runFirestoreMigrations()`).
 
 **External (all keyless, covered by CSP `connect-src https:` / `img-src https:`):**
 - Open-Meteo `api.open-meteo.com`, `geocoding-api.open-meteo.com`, `air-quality-api.open-meteo.com`
@@ -458,7 +458,7 @@ let mealPlan       = lsGet('fh_mealPlan', {});
 // { 'YYYY-MM-DD': { breakfast: {name, description, recipeUrl, ingredients[]}, lunch, dinner } }
 let mealAiKey      = localStorage.getItem('fh_mealAiKey')    || '';
 let mealAiProvider = localStorage.getItem('fh_mealAiProvider') || 'gemini';
-let mealDietPrefs  = lsGet('fh_mealDietPrefs', []);
+let mealDietPrefs  = lsGet('fh_mealDietPrefs', []);  // synced via Firestore settings/mealDietPrefs doc
 let mealPantryDef  = localStorage.getItem('fh_mealPantry')   || '';
 ```
 **Key functions:**
@@ -486,7 +486,7 @@ let mealPantryDef  = localStorage.getItem('fh_mealPantry')   || '';
 
 **External:** TheMealDB `search.php?s=` (keyless) for dish photos — covered by CSP `connect-src https:` / `img-src https:`.
 
-**localStorage:** `fh_mealPlan`, `fh_mealAiKey`, `fh_mealAiProvider`, `fh_mealDietPrefs`, `fh_mealPantry`, `fh_mealLoadingMsgs`
+**localStorage:** `fh_mealPlan`, `fh_mealAiKey`, `fh_mealAiProvider`, `fh_mealDietPrefs`, `fh_mealPantry`, `fh_mealLoadingMsgs`, `fh_mealTemplates` — `fh_mealDietPrefs` (Firestore `settings/mealDietPrefs` doc) and `fh_mealTemplates` (Firestore `mealTemplates` collection) are no-Firebase fallbacks only; `saveMealTemplate()`/`deleteMealTemplate(id)` manage the templates collection.
 
 ---
 
@@ -749,7 +749,7 @@ let lastWxData    = null;  // set by renderWeatherData(); reused for the temp li
 | `fh_calIds` | JSON array | Calendar | Google Calendar IDs |
 | `fh_calMeta` | JSON object | Calendar | `{ calId: { label, color } }` |
 | `fh_wkey` | string | Weather | OpenWeatherMap API key |
-| `fh_wlocations` | JSON array | Weather | Array of city strings e.g. `["Boston, US", "London, GB"]` |
+| `fh_wlocations` | JSON array | Weather | Fallback only — synced via Firestore `settings/weatherLocations` doc otherwise. Array of city strings e.g. `["Boston, US", "London, GB"]` |
 | `fh_wcity` | string | Weather | Legacy single city — kept in sync with `fh_wlocations[0]` |
 | `fh_sunArc` | bool | Weather | Sun-path arc visibility (default true) |
 | `fh_slideInterval` | string | Photos | Slideshow seconds |
@@ -759,11 +759,23 @@ let lastWxData    = null;  // set by renderWeatherData(); reused for the temp li
 | `fh_mealPlan` | JSON object | Meals | `{ dateKey: { breakfast, lunch, dinner } }` |
 | `fh_mealAiKey` | string | Meals | API key (Gemini or OpenAI) |
 | `fh_mealAiProvider` | string | Meals | `'gemini'` \| `'openai'` |
-| `fh_mealDietPrefs` | JSON array | Meals | e.g. `['Vegetarian', 'Gluten-Free']` |
+| `fh_mealDietPrefs` | JSON array | Meals | Fallback only — synced via Firestore `settings/mealDietPrefs` doc otherwise. e.g. `['Vegetarian', 'Gluten-Free']` |
 | `fh_mealPantry` | string | Meals | Default pantry text |
 | `fh_mealLoadingMsgs` | JSON array | Meals | Custom loading messages |
+| `fh_mealTemplates` | JSON array | Meals | Fallback only — migrated to Firestore `mealTemplates` collection on first Firebase-enabled run |
 | `fh_budgetItems` | JSON array | Budget | Fallback only — migrated to Firestore on first Firebase-enabled run |
 | `fh_familyMembers` | JSON array | To-Do | `[{ name }]` — used to populate assignee dropdown |
+| `fh_icsSubs` | JSON array | ICS Subscriptions | Fallback only — migrated to Firestore `icsSubs` collection (deduped by URL) on first Firebase-enabled run |
+| `fh_icsCache` | JSON object | ICS Subscriptions | Always local — fetched-event cache, not shared state |
+| `fh_birthdays` | JSON array | Life Admin | Fallback only — migrated to Firestore `birthdays` collection |
+| `fh_medications` | JSON array | Life Admin | Fallback only — migrated to Firestore `medications` collection |
+| `fh_school` | JSON array | Life Admin | Fallback only — migrated to Firestore `schoolPeriods` collection |
+| `fh_trash` | JSON array | Life Admin | Fallback only — migrated to Firestore `trashPickups` collection |
+| `fh_countdowns` | JSON array | Countdowns | Fallback only — migrated to Firestore `countdowns` collection |
+| `fh_newsFeeds` | JSON array | News Feed | Fallback only — migrated to Firestore `newsFeeds` collection (deduped by URL) |
+| `fh_stockTickers` | JSON array | Stock Ticker | Fallback only — synced via Firestore `settings/stockTickers` doc otherwise |
+| `fh_shopCategories` | JSON array | Shopping | Fallback only — synced via Firestore `settings/shopCategories` doc otherwise |
+| `fh_mowConfig` | JSON object | Mow Advisor | Fallback only — synced via Firestore `settings/mowConfig` doc otherwise (only user-set override keys, defaults come from `MOW_CONFIG`) |
 | `fh_wotd` | JSON object | Word of Day | `{ date, word, phonetic, partOfSpeech, definition, example }` |
 | `fh_dadjoke` | JSON object | Dad Joke | `{ date, joke }` |
 | `fh_assistantName` | string | Assistant | Display name (default `'Family Assistant'`) |
@@ -793,5 +805,14 @@ let lastWxData    = null;  // set by renderWeatherData(); reused for the temp li
 | `mealPlan` | — (doc per date key) | Meal Planning |
 | `familyMembers` | `createdAt` | To-Do assignees, Chore Chart members + points |
 | `chores` | `createdAt` | Chore Chart |
+| `icsSubs` | `createdAt` | ICS calendar subscriptions |
+| `birthdays` | `createdAt` | Life Admin card |
+| `medications` | `createdAt` | Life Admin card |
+| `schoolPeriods` | `createdAt` | Life Admin card |
+| `trashPickups` | `createdAt` | Life Admin card |
+| `countdowns` | `createdAt` | Countdown timers |
+| `mealTemplates` | `createdAt` (display date string) | Meal Plan Templates |
+| `newsFeeds` | `createdAt` | News Feed widget |
+| `settings` | — (fixed doc id per key: `shopCategories`, `stockTickers`, `weatherLocations`, `mealDietPrefs`, `mowConfig`) | Single-value config synced whole via `saveFsSetting(fsKey, lsKey, value)` |
 
 **IndexedDB:** `fh_bgImages` (object store `images`) — stores downloaded photo blobs for background slideshow

@@ -331,7 +331,7 @@ function migrateSmsContactsToMembers() {
     if (m) {
       if (!m.phone) setFamilyMemberPhone(db ? m.id : familyMembers.indexOf(m), c.phone);
     } else if (db) {
-      db.collection('familyMembers').add({ name: c.nick || 'Contact', order: familyMembers.length, gender: 'neutral', color: null, phone: c.phone });
+      db.collection('familyMembers').add({ name: c.nick || 'Contact', order: familyMembers.length, gender: 'neutral', color: null, phone: c.phone }).catch(_fsError);
     } else {
       familyMembers.push({ name: c.nick || 'Contact', phone: c.phone });
       localStorage.setItem('fh_familyMembers', JSON.stringify(familyMembers));
@@ -841,7 +841,7 @@ async function deleteBudgetItem(id) {
   const item = budgetItems.find(b => b.id === id);
   if (!item || !confirm(`Remove "${item.name}"?`)) return;
   if (db) {
-    await db.collection('budget').doc(id).delete();
+    await db.collection('budget').doc(id).delete().catch(_fsWriteError);
   } else {
     budgetItems = budgetItems.filter(b => b.id !== id);
     localStorage.setItem('fh_budgetItems', JSON.stringify(budgetItems));
@@ -872,7 +872,7 @@ async function saveAddBudgetItem() {
   }
 
   if (db) {
-    await db.collection('budget').add(item);
+    await db.collection('budget').add(item).catch(_fsWriteError);
   } else {
     item.id = String(Date.now());
     budgetItems.push(item);
@@ -2792,37 +2792,50 @@ async function addIcsSub() {
     statusEl.textContent = 'Already subscribed to that URL.'; return;
   }
   statusEl.textContent = 'Fetching…';
-  const id = 'ics_' + Date.now();
-  const sub = { id, url, label: label || url, color };
-  const events = await fetchIcsSub(sub);
+  const events = await fetchIcsSub({ url });
   if (!events) {
     statusEl.textContent = '⚠️ Could not fetch that URL. Make sure it is a valid public ICS link.'; return;
   }
-  icsCache[id] = { fetchedAt: Date.now(), events };
-  icsSubs.push(sub);
-  localStorage.setItem('fh_icsSubs', JSON.stringify(icsSubs));
-  localStorage.setItem('fh_icsCache', JSON.stringify(icsCache));
+  const sub = { url, label: label || url, color };
+  if (db) {
+    try {
+      await db.collection('icsSubs').add({ ...sub, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+      // The 'icsSubs' onSnapshot listener picks up the new doc, caches its
+      // events, and re-renders — nothing else to do here.
+    } catch (e) {
+      statusEl.textContent = '⚠️ Could not save subscription: ' + (e.message || e); return;
+    }
+  } else {
+    const id = 'ics_' + Date.now();
+    icsCache[id] = { fetchedAt: Date.now(), events };
+    icsSubs.push({ id, ...sub });
+    localStorage.setItem('fh_icsSubs', JSON.stringify(icsSubs));
+    localStorage.setItem('fh_icsCache', JSON.stringify(icsCache));
+    renderIcsSubList();
+    renderCalendarTabs();
+    await loadIcsSubs();
+    renderCurrentView();
+    renderYearStrip();
+  }
   document.getElementById('icsUrlInput').value   = '';
   document.getElementById('icsLabelInput').value = '';
   statusEl.textContent = `✓ Subscribed — ${events.length} event${events.length !== 1 ? 's' : ''} loaded.`;
-  renderIcsSubList();
-  renderCalendarTabs();
-  // Inject into calEventCache and re-render
-  await loadIcsSubs();
-  renderCurrentView();
-  renderYearStrip();
 }
 
-function removeIcsSub(id) {
-  icsSubs = icsSubs.filter(s => s.id !== id);
+async function removeIcsSub(id) {
   delete icsCache[id];
   delete calEventCache[id];
-  localStorage.setItem('fh_icsSubs', JSON.stringify(icsSubs));
-  localStorage.setItem('fh_icsCache', JSON.stringify(icsCache));
-  renderIcsSubList();
-  renderCalendarTabs();
-  renderCurrentView();
-  renderYearStrip();
+  if (db) {
+    await db.collection('icsSubs').doc(id).delete().catch(_fsWriteError);
+  } else {
+    icsSubs = icsSubs.filter(s => s.id !== id);
+    localStorage.setItem('fh_icsSubs', JSON.stringify(icsSubs));
+    localStorage.setItem('fh_icsCache', JSON.stringify(icsCache));
+    renderIcsSubList();
+    renderCalendarTabs();
+    renderCurrentView();
+    renderYearStrip();
+  }
 }
 
 function renderIcsSubList() {
@@ -2852,7 +2865,8 @@ function renderIcsSubList() {
       const newColor = e.target.value;
       icsSubs[i].color = newColor;
       colorWrap.style.background = newColor;
-      localStorage.setItem('fh_icsSubs', JSON.stringify(icsSubs));
+      if (db) db.collection('icsSubs').doc(sub.id).update({ color: newColor }).catch(_fsWriteError);
+      else localStorage.setItem('fh_icsSubs', JSON.stringify(icsSubs));
       // Update color on already-cached events so the live calendar reflects immediately
       if (calEventCache[sub.id]) {
         Object.values(calEventCache[sub.id]).forEach(dayEvts =>
@@ -2874,7 +2888,8 @@ function renderIcsSubList() {
     labelInput.placeholder = 'Label';
     labelInput.oninput = e => {
       icsSubs[i].label = e.target.value;
-      localStorage.setItem('fh_icsSubs', JSON.stringify(icsSubs));
+      if (db) db.collection('icsSubs').doc(sub.id).update({ label: e.target.value }).catch(_fsWriteError);
+      else localStorage.setItem('fh_icsSubs', JSON.stringify(icsSubs));
       renderCalendarTabs();
     };
 
@@ -2888,7 +2903,8 @@ function renderIcsSubList() {
     wdCheck.style.accentColor = 'var(--accent)';
     wdCheck.onchange = () => {
       icsSubs[i].weekdaysOnly = wdCheck.checked;
-      localStorage.setItem('fh_icsSubs', JSON.stringify(icsSubs));
+      if (db) db.collection('icsSubs').doc(sub.id).update({ weekdaysOnly: wdCheck.checked }).catch(_fsWriteError);
+      else localStorage.setItem('fh_icsSubs', JSON.stringify(icsSubs));
       renderCountdownCard();
     };
     const wdText = document.createElement('span');
@@ -2963,22 +2979,28 @@ function countdownDays(cd) {
   return cd.weekdaysOnly ? weekdaysUntil(cd.targetDate) : daysUntil(cd.targetDate);
 }
 
-function addCountdown() {
+async function addCountdown() {
   const label       = document.getElementById('cdLabelInput').value.trim();
   const date        = document.getElementById('cdDateInput').value;
   const emoji       = document.getElementById('cdEmojiInput').value.trim() || '⏳';
   const weekdaysOnly = document.getElementById('cdWeekdaysOnly').checked;
   if (!label || !date) return;
-  countdowns.push({ id: 'cd_' + Date.now(), label, emoji, targetDate: date, weekdaysOnly });
-  saveCountdowns();
+  const item = { label, emoji, targetDate: date, weekdaysOnly };
+  if (db) {
+    await db.collection('countdowns').add({ ...item, createdAt: firebase.firestore.FieldValue.serverTimestamp() }).catch(_fsWriteError);
+  } else {
+    item.id = 'cd_' + Date.now();
+    countdowns.push(item);
+    saveCountdowns();
+    renderCountdownSettingList();
+    renderCountdownCard();
+  }
   document.getElementById('cdLabelInput').value = '';
   document.getElementById('cdDateInput').value  = '';
   document.getElementById('cdEmojiInput').value = '';
-  renderCountdownSettingList();
-  renderCountdownCard();
 }
 
-function addCountdownFromEvent() {
+async function addCountdownFromEvent() {
   const picker      = document.getElementById('cdEventPicker');
   const weekdaysOnly = document.getElementById('cdWeekdaysOnly').checked;
   const val = picker.value;
@@ -2986,19 +3008,29 @@ function addCountdownFromEvent() {
   try {
     const { label, targetDate, emoji } = JSON.parse(val);
     if (!label || !targetDate) return;
-    countdowns.push({ id: 'cd_' + Date.now(), label, emoji: emoji || '📅', targetDate, weekdaysOnly });
-    saveCountdowns();
+    const item = { label, emoji: emoji || '📅', targetDate, weekdaysOnly };
+    if (db) {
+      await db.collection('countdowns').add({ ...item, createdAt: firebase.firestore.FieldValue.serverTimestamp() }).catch(_fsWriteError);
+    } else {
+      item.id = 'cd_' + Date.now();
+      countdowns.push(item);
+      saveCountdowns();
+      renderCountdownSettingList();
+      renderCountdownCard();
+    }
     picker.value = '';
-    renderCountdownSettingList();
-    renderCountdownCard();
   } catch {}
 }
 
-function removeCountdown(id) {
-  countdowns = countdowns.filter(c => c.id !== id);
-  saveCountdowns();
-  renderCountdownSettingList();
-  renderCountdownCard();
+async function removeCountdown(id) {
+  if (db) {
+    await db.collection('countdowns').doc(id).delete().catch(_fsWriteError);
+  } else {
+    countdowns = countdowns.filter(c => c.id !== id);
+    saveCountdowns();
+    renderCountdownSettingList();
+    renderCountdownCard();
+  }
 }
 
 /** Populate the event picker with upcoming events from calEventCache. */
@@ -3071,7 +3103,8 @@ function renderCountdownSettingList() {
     emojiBtn.onclick = () => openEmojiPicker(null, emojiBtn, v => {
       countdowns[i].emoji = v;
       emojiBtn.textContent = v;
-      saveCountdowns();
+      if (db) db.collection('countdowns').doc(cd.id).update({ emoji: v }).catch(_fsWriteError);
+      else saveCountdowns();
       renderCountdownCard();
     });
 
@@ -3109,8 +3142,10 @@ function renderCountdownSettingList() {
       const newLabel = labelInput.value.trim();
       const newDate  = dateInput.value;
       if (!newLabel || !newDate) return;
-      countdowns[i] = { ...countdowns[i], label: newLabel, emoji: emojiBtn.textContent, targetDate: newDate, weekdaysOnly: wdChk.checked };
-      saveCountdowns();
+      const updated = { label: newLabel, emoji: emojiBtn.textContent, targetDate: newDate, weekdaysOnly: wdChk.checked };
+      countdowns[i] = { ...countdowns[i], ...updated };
+      if (db) db.collection('countdowns').doc(cd.id).update(updated).catch(_fsWriteError);
+      else saveCountdowns();
       renderCountdownCard();
     };
 
@@ -4054,7 +4089,7 @@ function nextWeatherLocation() {
 
 // Persist
 function saveWeatherLocations() {
-  localStorage.setItem('fh_wlocations', JSON.stringify(weatherLocations));
+  saveFsSetting('weatherLocations', 'fh_wlocations', weatherLocations);
   // Keep legacy key in sync with first location for any old code paths
   if (weatherLocations.length) localStorage.setItem('fh_wcity', weatherLocations[0]);
 }
@@ -5051,6 +5086,25 @@ function _fsError(e) {
   console.warn('[Firestore] listener error:', e?.code || e?.message || e);
 }
 
+// For writes (add/update/delete/set) rather than listeners — a failed write is
+// always something the user just tried to do, so always surface it (unlike
+// _fsError, which stays quiet for expected pre-auth listener noise).
+function _fsWriteError(e) {
+  console.warn('[Firestore] write error:', e?.code || e?.message || e);
+  if (typeof showToast !== 'function') return;
+  const msg = e?.code === 'permission-denied'
+    ? '⚠️ Not signed in — this change wasn\'t saved.'
+    : '⚠️ Could not save that change: ' + (e?.message || e?.code || 'unknown error');
+  showToast(msg, 4500);
+}
+
+// Single-doc settings sync (whole-array/object value, no per-item id) — used by
+// shopCategories, stockTickers, weatherLocations, mealDietPrefs, mowConfig.
+function saveFsSetting(fsKey, lsKey, value) {
+  if (db) db.collection('settings').doc(fsKey).set({ value }).catch(_fsWriteError);
+  else localStorage.setItem(lsKey, JSON.stringify(value));
+}
+
 function attachFirestoreListeners() {
   _fsUnsub.forEach(u => { try { u(); } catch(_) {} });
   _fsUnsub = [];
@@ -5107,6 +5161,83 @@ function attachFirestoreListeners() {
     migrateSmsContactsToMembers();
   }, _fsError));
 
+  // ICS calendar subscriptions — real-time sync across devices
+  _fsUnsub.push(db.collection('icsSubs').orderBy('createdAt').onSnapshot(snap => {
+    icsSubs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    renderIcsSubList();
+    renderCalendarTabs();
+    loadIcsSubs().then(() => { renderCurrentView(); renderYearStrip(); });
+  }, _fsError));
+
+  // Birthdays
+  _fsUnsub.push(db.collection('birthdays').orderBy('createdAt').onSnapshot(snap => {
+    birthdays = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    lcRenderBdayList();
+    injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
+  }, _fsError));
+
+  // Medications
+  _fsUnsub.push(db.collection('medications').orderBy('createdAt').onSnapshot(snap => {
+    medications = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    lcRenderMedList();
+    injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
+  }, _fsError));
+
+  // School schedule
+  _fsUnsub.push(db.collection('schoolPeriods').orderBy('createdAt').onSnapshot(snap => {
+    schoolPeriods = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    lcRenderSchoolList();
+    injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
+  }, _fsError));
+
+  // Trash & recycling
+  _fsUnsub.push(db.collection('trashPickups').orderBy('createdAt').onSnapshot(snap => {
+    trashPickups = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    lcRenderTrashList();
+    injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
+  }, _fsError));
+
+  // Countdowns
+  _fsUnsub.push(db.collection('countdowns').orderBy('createdAt').onSnapshot(snap => {
+    countdowns = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    renderCountdownSettingList();
+    renderCountdownCard();
+  }, _fsError));
+
+  // Meal plan templates
+  _fsUnsub.push(db.collection('mealTemplates').orderBy('createdAt').onSnapshot(snap => {
+    mealTemplates = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    renderMealTemplateList();
+  }, _fsError));
+
+  // News feeds
+  _fsUnsub.push(db.collection('newsFeeds').orderBy('createdAt').onSnapshot(snap => {
+    newsFeeds = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    renderNewsFeedList();
+    loadNewsFeeds(true);
+  }, _fsError));
+
+  // Shared settings (single doc per key, whole value synced)
+  _fsUnsub.push(db.collection('settings').doc('shopCategories').onSnapshot(doc => {
+    if (doc.exists) shopCategories = doc.data().value;
+    populateShopCategorySelect(); renderShopCategorySettings(); renderLocalList('shopping');
+  }, _fsError));
+  _fsUnsub.push(db.collection('settings').doc('stockTickers').onSnapshot(doc => {
+    if (doc.exists) stockTickers = doc.data().value;
+    renderStockTickerList(); loadStockQuotes(true);
+  }, _fsError));
+  _fsUnsub.push(db.collection('settings').doc('weatherLocations').onSnapshot(doc => {
+    if (doc.exists) weatherLocations = doc.data().value;
+    renderWeatherLocationsList();
+  }, _fsError));
+  _fsUnsub.push(db.collection('settings').doc('mealDietPrefs').onSnapshot(doc => {
+    if (doc.exists) mealDietPrefs = doc.data().value;
+  }, _fsError));
+  _fsUnsub.push(db.collection('settings').doc('mowConfig').onSnapshot(doc => {
+    if (doc.exists) mowConfig = { ...MOW_CONFIG, ...doc.data().value };
+    _mowReco = null;
+  }, _fsError));
+
   // One-time localStorage → Firestore migrations. Writes require auth, so only
   // run them once we're actually signed in (re-attach post-auth reaches here).
   if (firebase.auth().currentUser) runFirestoreMigrations();
@@ -5155,6 +5286,91 @@ function runFirestoreMigrations() {
       console.log('[FamilyMembers] Migrated', legacyMembers.length, 'member(s) from localStorage to Firestore.');
     }).catch(_fsError);
   }
+
+  // ICS subscriptions — dedupe by URL so a subscription already added
+  // independently on another device doesn't get duplicated.
+  const legacyIcs = lsGet('fh_icsSubs', []);
+  if (legacyIcs.length) {
+    db.collection('icsSubs').get().then(snap => {
+      const existingUrls = new Set(snap.docs.map(d => d.data().url));
+      const toMigrate = legacyIcs.filter(s => !existingUrls.has(s.url));
+      if (!toMigrate.length) { localStorage.removeItem('fh_icsSubs'); return; }
+      const batch = db.batch();
+      toMigrate.forEach(sub => {
+        const { id: _oldId, ...rest } = sub;
+        batch.set(db.collection('icsSubs').doc(), { ...rest, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+      });
+      batch.commit().then(() => {
+        localStorage.removeItem('fh_icsSubs');
+        console.log('[ICS] Migrated', toMigrate.length, 'subscription(s) from localStorage to Firestore.');
+      }).catch(_fsError);
+    }).catch(_fsError);
+  }
+
+  // Simple record lists — additive migration (matches Budget/FamilyMembers precedent)
+  [
+    { ls: 'fh_birthdays',     col: 'birthdays',     label: 'Birthdays' },
+    { ls: 'fh_medications',   col: 'medications',   label: 'Medications' },
+    { ls: 'fh_school',        col: 'schoolPeriods', label: 'SchoolPeriods' },
+    { ls: 'fh_trash',         col: 'trashPickups',  label: 'TrashPickups' },
+    { ls: 'fh_countdowns',    col: 'countdowns',    label: 'Countdowns' },
+    { ls: 'fh_mealTemplates', col: 'mealTemplates', label: 'MealTemplates' },
+  ].forEach(({ ls, col, label }) => {
+    const legacy = lsGet(ls, []);
+    if (!legacy.length) return;
+    const batch = db.batch();
+    legacy.forEach(item => {
+      const { id: _oldId, ...rest } = item;
+      // mealTemplates already carries its own display "YYYY-MM-DD" createdAt —
+      // don't clobber it with a server timestamp.
+      const data = rest.createdAt ? rest : { ...rest, createdAt: firebase.firestore.FieldValue.serverTimestamp() };
+      batch.set(db.collection(col).doc(), data);
+    });
+    batch.commit().then(() => {
+      localStorage.removeItem(ls);
+      console.log(`[${label}] Migrated`, legacy.length, 'item(s) from localStorage to Firestore.');
+    }).catch(_fsError);
+  });
+
+  // News feeds — dedupe by URL (ships with non-empty BBC/NPR defaults, so every
+  // device "has" legacy data even if never customized).
+  const legacyNews = lsGet('fh_newsFeeds', []);
+  if (legacyNews.length) {
+    db.collection('newsFeeds').get().then(snap => {
+      const existingUrls = new Set(snap.docs.map(d => d.data().url));
+      const toMigrate = legacyNews.filter(f => !existingUrls.has(f.url));
+      if (!toMigrate.length) { localStorage.removeItem('fh_newsFeeds'); return; }
+      const batch = db.batch();
+      toMigrate.forEach(f => {
+        const { id: _oldId, ...rest } = f;
+        batch.set(db.collection('newsFeeds').doc(), { ...rest, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+      });
+      batch.commit().then(() => {
+        localStorage.removeItem('fh_newsFeeds');
+        console.log('[NewsFeeds] Migrated', toMigrate.length, 'feed(s) from localStorage to Firestore.');
+      }).catch(_fsError);
+    }).catch(_fsError);
+  }
+
+  // Shared settings (single doc per key) — migrate only if not already synced
+  // elsewhere, so the first device to sign in "wins" rather than clobbering.
+  [
+    { ls: 'fh_shopCategories', key: 'shopCategories' },
+    { ls: 'fh_stockTickers',   key: 'stockTickers' },
+    { ls: 'fh_wlocations',     key: 'weatherLocations' },
+    { ls: 'fh_mealDietPrefs',  key: 'mealDietPrefs' },
+    { ls: 'fh_mowConfig',      key: 'mowConfig' },
+  ].forEach(({ ls, key }) => {
+    const raw = localStorage.getItem(ls);
+    if (raw === null) return; // never customized on this device
+    db.collection('settings').doc(key).get().then(doc => {
+      if (doc.exists) { localStorage.removeItem(ls); return; }
+      db.collection('settings').doc(key).set({ value: JSON.parse(raw) }).then(() => {
+        localStorage.removeItem(ls);
+        console.log(`[Settings] Migrated ${key} from localStorage to Firestore.`);
+      }).catch(_fsError);
+    }).catch(_fsError);
+  });
 }
 
 function setupListeners() {
@@ -5245,19 +5461,19 @@ function renderFsList(ulId, emptyId, docs, collection) {
 }
 
 async function toggleFs(col, id, done) {
-  await db.collection(col).doc(id).update({ done: !done });
+  await db.collection(col).doc(id).update({ done: !done }).catch(_fsWriteError);
 }
 async function deleteFs(col, id) {
-  await db.collection(col).doc(id).delete();
+  await db.collection(col).doc(id).delete().catch(_fsWriteError);
 }
 
 async function addToFs(col, text, extra = {}) {
-  await db.collection(col).add({ text, done: false, by: userName, createdAt: firebase.firestore.FieldValue.serverTimestamp(), ...extra });
+  await db.collection(col).add({ text, done: false, by: userName, createdAt: firebase.firestore.FieldValue.serverTimestamp(), ...extra }).catch(_fsWriteError);
 }
 
 async function clearDoneFs(col) {
   const snap = await db.collection(col).where('done','==',true).get();
-  snap.forEach(doc => doc.ref.delete());
+  snap.forEach(doc => doc.ref.delete().catch(_fsWriteError));
 }
 
 async function setMealInFs(dateKey, mealType, mealData) {
@@ -5268,7 +5484,7 @@ async function setMealInFs(dateKey, mealType, mealData) {
     renderCurrentView();
     return;
   }
-  await db.collection('mealPlan').doc(`${dateKey}_${mealType}`).set({ dateKey, mealType, ...mealData });
+  await db.collection('mealPlan').doc(`${dateKey}_${mealType}`).set({ dateKey, mealType, ...mealData }).catch(_fsWriteError);
 }
 
 async function deleteMealFromFs(dateKey, mealType) {
@@ -5280,7 +5496,7 @@ async function deleteMealFromFs(dateKey, mealType) {
     renderCurrentView();
     return;
   }
-  await db.collection('mealPlan').doc(`${dateKey}_${mealType}`).delete();
+  await db.collection('mealPlan').doc(`${dateKey}_${mealType}`).delete().catch(_fsWriteError);
 }
 
 // ── Local storage fallback ─────────────────────────────────────
@@ -5442,7 +5658,9 @@ async function setFamilyMemberColor(idOrIndex, color) {
   if (!m) return;
   m.color = color || null;
   if (db) {
-    await db.collection('familyMembers').doc(m.id).update({ color: color || null });
+    try {
+      await db.collection('familyMembers').doc(m.id).update({ color: color || null });
+    } catch (e) { showFamilyMemberError(e); }
   } else {
     localStorage.setItem('fh_familyMembers', JSON.stringify(familyMembers));
   }
@@ -5505,8 +5723,10 @@ async function setFamilyMemberGender(idOrIndex, gender) {
   if (!m) return;
   m.gender = gender;
   if (db) {
-    await db.collection('familyMembers').doc(m.id).update({ gender });
-    // onSnapshot will re-render
+    try {
+      await db.collection('familyMembers').doc(m.id).update({ gender });
+      // onSnapshot will re-render
+    } catch (e) { showFamilyMemberError(e); }
   } else {
     localStorage.setItem('fh_familyMembers', JSON.stringify(familyMembers));
     renderFamilyMemberList();
@@ -5520,7 +5740,9 @@ async function setFamilyMemberPhone(idOrIndex, phone) {
   if (!m) return;
   m.phone = phone;
   if (db) {
-    await db.collection('familyMembers').doc(m.id).update({ phone });
+    try {
+      await db.collection('familyMembers').doc(m.id).update({ phone });
+    } catch (e) { showFamilyMemberError(e); }
   } else {
     localStorage.setItem('fh_familyMembers', JSON.stringify(familyMembers));
   }
@@ -5567,8 +5789,10 @@ async function addFamilyMember() {
 
 async function removeFamilyMember(idOrIndex) {
   if (db) {
-    await db.collection('familyMembers').doc(idOrIndex).delete();
-    // onSnapshot updates familyMembers + renderFamilyMemberList
+    try {
+      await db.collection('familyMembers').doc(idOrIndex).delete();
+      // onSnapshot updates familyMembers + renderFamilyMemberList
+    } catch (e) { showFamilyMemberError(e); }
     return;
   }
   familyMembers.splice(idOrIndex, 1);
@@ -5581,12 +5805,14 @@ async function moveFamilyMember(index, direction) {
   if (swap < 0 || swap >= familyMembers.length) return;
   [familyMembers[index], familyMembers[swap]] = [familyMembers[swap], familyMembers[index]];
   if (db) {
-    const batch = db.batch();
-    familyMembers.forEach((m, i) => {
-      batch.update(db.collection('familyMembers').doc(m.id), { order: i });
-    });
-    await batch.commit();
-    // onSnapshot will re-render
+    try {
+      const batch = db.batch();
+      familyMembers.forEach((m, i) => {
+        batch.update(db.collection('familyMembers').doc(m.id), { order: i });
+      });
+      await batch.commit();
+      // onSnapshot will re-render
+    } catch (e) { showFamilyMemberError(e); }
   } else {
     localStorage.setItem('fh_familyMembers', JSON.stringify(familyMembers));
     renderFamilyMemberList();
@@ -5760,7 +5986,7 @@ function addShopCategory() {
   if (!name || shopCategories.includes(name)) return;
   input.value = '';
   shopCategories.push(name);
-  localStorage.setItem('fh_shopCategories', JSON.stringify(shopCategories));
+  saveFsSetting('shopCategories', 'fh_shopCategories', shopCategories);
   populateShopCategorySelect();
   renderShopCategorySettings();
   renderLocalList('shopping');
@@ -5770,7 +5996,7 @@ function removeShopCategory(idx) {
   const removed = shopCategories[idx];
   delete shopCollapsed[removed];
   shopCategories.splice(idx, 1);
-  localStorage.setItem('fh_shopCategories', JSON.stringify(shopCategories));
+  saveFsSetting('shopCategories', 'fh_shopCategories', shopCategories);
   populateShopCategorySelect();
   renderShopCategorySettings();
 }
@@ -5795,7 +6021,7 @@ function clearDoneShopping() { db ? clearDoneFs('shopping') : clearDoneLocal('sh
 
 async function clearAllFs(col) {
   const snap = await db.collection(col).get();
-  snap.forEach(doc => doc.ref.delete());
+  snap.forEach(doc => doc.ref.delete().catch(_fsWriteError));
 }
 function clearAllLocal(col) {
   if (col === 'todo') {
@@ -5944,7 +6170,7 @@ async function toggleChore(choreId, memberId, pts, wasDone) {
     batch.update(db.collection('familyMembers').doc(memberId), {
       points: firebase.firestore.FieldValue.increment(pointsDelta)
     });
-    await batch.commit();
+    await batch.commit().catch(_fsWriteError);
   } else {
     const chore = choreItems.find(c => c.id === choreId);
     if (chore) chore.doneDate = newDoneDate;
@@ -5978,7 +6204,7 @@ async function addChore() {
 
   const item = { text, points: pts, assignedTo, doneDate: null, createdAt: firebase.firestore.FieldValue.serverTimestamp() };
   if (db) {
-    await db.collection('chores').add(item);
+    await db.collection('chores').add(item).catch(_fsWriteError);
   } else {
     choreItems.push({ id: String(Date.now()), ...item, createdAt: new Date() });
     renderChoreCard();
@@ -5987,7 +6213,7 @@ async function addChore() {
 
 async function deleteChore(id) {
   if (db) {
-    await db.collection('chores').doc(id).delete();
+    await db.collection('chores').doc(id).delete().catch(_fsWriteError);
   } else {
     choreItems = choreItems.filter(c => c.id !== id);
     renderChoreCard();
@@ -5999,7 +6225,7 @@ async function redeemChoreReward(memberId) {
   if (!member) return;
   if (!confirm(`Redeem "${member.rewardName || 'reward'}" for ${member.name} and reset their points to 0?`)) return;
   if (db) {
-    await db.collection('familyMembers').doc(memberId).update({ points: 0 });
+    await db.collection('familyMembers').doc(memberId).update({ points: 0 }).catch(_fsWriteError);
   } else {
     member.points = 0;
     renderChoreCard();
@@ -6052,7 +6278,7 @@ async function saveChoreRewards() {
     if (!m) return;
     m.rewardName      = name;
     m.rewardThreshold = threshold;
-    if (db) updates.push(db.collection('familyMembers').doc(id).update({ rewardName: name, rewardThreshold: threshold }));
+    if (db) updates.push(db.collection('familyMembers').doc(id).update({ rewardName: name, rewardThreshold: threshold }).catch(_fsWriteError));
   });
   await Promise.all(updates);
   if (!db) renderChoreCard();
@@ -6340,28 +6566,36 @@ function renderNewsFeedList() {
     row.innerHTML = `
       <span style="flex:0 0 70px;font-size:.8rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(f.url)}">${esc(f.label)}</span>
       <span style="flex:1;font-size:.75rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.url)}</span>
-      <button style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem" onclick="removeNewsFeed(${i})">✕</button>`;
+      <button style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem" onclick="removeNewsFeed('${f.id}')">✕</button>`;
     el.appendChild(row);
   });
 }
 
-function addNewsFeed() {
+async function addNewsFeed() {
   const label = document.getElementById('newsFeedLabel').value.trim();
   const url   = document.getElementById('newsFeedUrl').value.trim();
   if (!label || !url) return;
-  newsFeeds.push({ id: 'nf_' + Date.now(), label, url });
-  saveNewsFeeds();
+  if (db) {
+    await db.collection('newsFeeds').add({ label, url, createdAt: firebase.firestore.FieldValue.serverTimestamp() }).catch(_fsWriteError);
+  } else {
+    newsFeeds.push({ id: 'nf_' + Date.now(), label, url });
+    saveNewsFeeds();
+    renderNewsFeedList();
+    loadNewsFeeds(true);
+  }
   document.getElementById('newsFeedLabel').value = '';
   document.getElementById('newsFeedUrl').value   = '';
-  renderNewsFeedList();
-  loadNewsFeeds(true);
 }
 
-function removeNewsFeed(i) {
-  newsFeeds.splice(i, 1);
-  saveNewsFeeds();
-  renderNewsFeedList();
-  loadNewsFeeds(true);
+async function removeNewsFeed(id) {
+  if (db) {
+    await db.collection('newsFeeds').doc(id).delete().catch(_fsWriteError);
+  } else {
+    newsFeeds = newsFeeds.filter(f => f.id !== id);
+    saveNewsFeeds();
+    renderNewsFeedList();
+    loadNewsFeeds(true);
+  }
 }
 
 // ── Stock Ticker ──────────────────────────────────────────────────────────────
@@ -6372,7 +6606,7 @@ const YAHOO_QUOTE_URL  = 'https://query1.finance.yahoo.com/v7/finance/quote?symb
 let stockTickers = lsGet('fh_stockTickers', []);
 
 function saveStockTickers() {
-  localStorage.setItem('fh_stockTickers', JSON.stringify(stockTickers));
+  saveFsSetting('stockTickers', 'fh_stockTickers', stockTickers);
 }
 
 async function loadStockQuotes(force = false) {
@@ -7065,7 +7299,7 @@ function exportWeekMealsToShopping() {
 
 // ── Meal Plan Templates ───────────────────────────────────────
 
-function saveMealTemplate() {
+async function saveMealTemplate() {
   const nameEl = document.getElementById('mealTemplateNameInput');
   const name = (nameEl?.value || '').trim();
   if (!name) { nameEl?.focus(); return; }
@@ -7084,10 +7318,18 @@ function saveMealTemplate() {
     });
   }
 
-  mealTemplates.push({ id: Date.now(), name, createdAt: new Date().toISOString().slice(0, 10), week });
-  localStorage.setItem('fh_mealTemplates', JSON.stringify(mealTemplates));
+  // createdAt is a plain "YYYY-MM-DD" string (displayed in the template list),
+  // not a server timestamp — ISO date strings still sort correctly with orderBy.
+  const item = { name, createdAt: new Date().toISOString().slice(0, 10), week };
+  if (db) {
+    await db.collection('mealTemplates').add(item).catch(_fsWriteError);
+  } else {
+    item.id = Date.now();
+    mealTemplates.push(item);
+    localStorage.setItem('fh_mealTemplates', JSON.stringify(mealTemplates));
+    renderMealTemplateList();
+  }
   if (nameEl) nameEl.value = '';
-  renderMealTemplateList();
 }
 
 async function applyMealTemplate(id) {
@@ -7125,11 +7367,15 @@ async function applyMealTemplate(id) {
   closeSettings();
 }
 
-function deleteMealTemplate(id) {
+async function deleteMealTemplate(id) {
   if (!confirm('Delete this template?')) return;
-  mealTemplates = mealTemplates.filter(t => t.id !== id);
-  localStorage.setItem('fh_mealTemplates', JSON.stringify(mealTemplates));
-  renderMealTemplateList();
+  if (db) {
+    await db.collection('mealTemplates').doc(id).delete().catch(_fsWriteError);
+  } else {
+    mealTemplates = mealTemplates.filter(t => t.id !== id);
+    localStorage.setItem('fh_mealTemplates', JSON.stringify(mealTemplates));
+    renderMealTemplateList();
+  }
 }
 
 function renderMealTemplateList() {
@@ -9227,26 +9473,36 @@ function lcRenderBdayList() {
       <button class="lc-del" onclick="lcDelBirthday('${b.id}')">✕</button></div>`;
   }).join('');
 }
-function lcAddBirthday() {
+async function lcAddBirthday() {
   const name  = document.getElementById('lcBdayName').value.trim();
   const month = parseInt(document.getElementById('lcBdayMonth').value);
   const day   = parseInt(document.getElementById('lcBdayDay').value);
   const year  = parseInt(document.getElementById('lcBdayYear').value) || null;
   if (!name || !month || !day) { alert('Enter a name, month and day.'); return; }
-  birthdays.push({ id: String(Date.now()), name, month, day, year });
-  localStorage.setItem('fh_birthdays', JSON.stringify(birthdays));
+  const item = { name, month, day, year };
+  if (db) {
+    await db.collection('birthdays').add({ ...item, createdAt: firebase.firestore.FieldValue.serverTimestamp() }).catch(_fsWriteError);
+  } else {
+    item.id = String(Date.now());
+    birthdays.push(item);
+    localStorage.setItem('fh_birthdays', JSON.stringify(birthdays));
+    lcRenderBdayList();
+    injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
+  }
   document.getElementById('lcBdayName').value = '';
   document.getElementById('lcBdayMonth').value = '';
   document.getElementById('lcBdayDay').value = '';
   document.getElementById('lcBdayYear').value = '';
-  lcRenderBdayList();
-  injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
 }
-function lcDelBirthday(id) {
-  birthdays = birthdays.filter(b => b.id !== id);
-  localStorage.setItem('fh_birthdays', JSON.stringify(birthdays));
-  lcRenderBdayList();
-  injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
+async function lcDelBirthday(id) {
+  if (db) {
+    await db.collection('birthdays').doc(id).delete().catch(_fsWriteError);
+  } else {
+    birthdays = birthdays.filter(b => b.id !== id);
+    localStorage.setItem('fh_birthdays', JSON.stringify(birthdays));
+    lcRenderBdayList();
+    injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
+  }
 }
 
 // ── Medications ──
@@ -9261,24 +9517,34 @@ function lcRenderMedList() {
       <button class="lc-del" onclick="lcDelMedication('${m.id}')">✕</button></div>`
   ).join('');
 }
-function lcAddMedication() {
+async function lcAddMedication() {
   const name   = document.getElementById('lcMedName').value.trim();
   const dosage = document.getElementById('lcMedDosage').value.trim();
   const time   = document.getElementById('lcMedTime').value;
   const days   = document.getElementById('lcMedDays').value;
   if (!name) { alert('Enter a medication name.'); return; }
-  medications.push({ id: String(Date.now()), name, dosage, time, days });
-  localStorage.setItem('fh_medications', JSON.stringify(medications));
+  const item = { name, dosage, time, days };
+  if (db) {
+    await db.collection('medications').add({ ...item, createdAt: firebase.firestore.FieldValue.serverTimestamp() }).catch(_fsWriteError);
+  } else {
+    item.id = String(Date.now());
+    medications.push(item);
+    localStorage.setItem('fh_medications', JSON.stringify(medications));
+    lcRenderMedList();
+    injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
+  }
   document.getElementById('lcMedName').value = '';
   document.getElementById('lcMedDosage').value = '';
-  lcRenderMedList();
-  injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
 }
-function lcDelMedication(id) {
-  medications = medications.filter(m => m.id !== id);
-  localStorage.setItem('fh_medications', JSON.stringify(medications));
-  lcRenderMedList();
-  injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
+async function lcDelMedication(id) {
+  if (db) {
+    await db.collection('medications').doc(id).delete().catch(_fsWriteError);
+  } else {
+    medications = medications.filter(m => m.id !== id);
+    localStorage.setItem('fh_medications', JSON.stringify(medications));
+    lcRenderMedList();
+    injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
+  }
 }
 
 // ── School schedule ──
@@ -9294,7 +9560,7 @@ function lcRenderSchoolList() {
       <button class="lc-del" onclick="lcDelSchool('${p.id}')">✕</button></div>`
   ).join('');
 }
-function lcAddSchoolPeriod() {
+async function lcAddSchoolPeriod() {
   const name  = document.getElementById('lcSchoolName').value.trim();
   const start = document.getElementById('lcSchoolStart').value;
   const end   = document.getElementById('lcSchoolEnd').value;
@@ -9302,17 +9568,27 @@ function lcAddSchoolPeriod() {
   const days  = [...document.querySelectorAll('#lcSchoolDays input:checked')].map(i => parseInt(i.value));
   if (!name)        { alert('Enter a class name.'); return; }
   if (!days.length) { alert('Select at least one day.'); return; }
-  schoolPeriods.push({ id: String(Date.now()), name, startTime: start, endTime: end, color, days });
-  localStorage.setItem('fh_school', JSON.stringify(schoolPeriods));
+  const item = { name, startTime: start, endTime: end, color, days };
+  if (db) {
+    await db.collection('schoolPeriods').add({ ...item, createdAt: firebase.firestore.FieldValue.serverTimestamp() }).catch(_fsWriteError);
+  } else {
+    item.id = String(Date.now());
+    schoolPeriods.push(item);
+    localStorage.setItem('fh_school', JSON.stringify(schoolPeriods));
+    lcRenderSchoolList();
+    injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
+  }
   document.getElementById('lcSchoolName').value = '';
-  lcRenderSchoolList();
-  injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
 }
-function lcDelSchool(id) {
-  schoolPeriods = schoolPeriods.filter(p => p.id !== id);
-  localStorage.setItem('fh_school', JSON.stringify(schoolPeriods));
-  lcRenderSchoolList();
-  injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
+async function lcDelSchool(id) {
+  if (db) {
+    await db.collection('schoolPeriods').doc(id).delete().catch(_fsWriteError);
+  } else {
+    schoolPeriods = schoolPeriods.filter(p => p.id !== id);
+    localStorage.setItem('fh_school', JSON.stringify(schoolPeriods));
+    lcRenderSchoolList();
+    injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
+  }
 }
 
 // ── Trash & Recycling ──
@@ -9328,23 +9604,33 @@ function lcRenderTrashList() {
       <button class="lc-del" onclick="lcDelTrash('${t.id}')">✕</button></div>`
   ).join('');
 }
-function lcAddTrash() {
+async function lcAddTrash() {
   const label   = document.getElementById('lcTrashLabel').value.trim();
   const weekday = parseInt(document.getElementById('lcTrashDay').value);
   const emoji   = document.getElementById('lcTrashEmoji').value;
   const color   = document.getElementById('lcTrashColor').value;
   if (!label) { alert('Enter a label.'); return; }
-  trashPickups.push({ id: String(Date.now()), label, weekday, emoji, color });
-  localStorage.setItem('fh_trash', JSON.stringify(trashPickups));
+  const item = { label, weekday, emoji, color };
+  if (db) {
+    await db.collection('trashPickups').add({ ...item, createdAt: firebase.firestore.FieldValue.serverTimestamp() }).catch(_fsWriteError);
+  } else {
+    item.id = String(Date.now());
+    trashPickups.push(item);
+    localStorage.setItem('fh_trash', JSON.stringify(trashPickups));
+    lcRenderTrashList();
+    injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
+  }
   document.getElementById('lcTrashLabel').value = '';
-  lcRenderTrashList();
-  injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
 }
-function lcDelTrash(id) {
-  trashPickups = trashPickups.filter(t => t.id !== id);
-  localStorage.setItem('fh_trash', JSON.stringify(trashPickups));
-  lcRenderTrashList();
-  injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
+async function lcDelTrash(id) {
+  if (db) {
+    await db.collection('trashPickups').doc(id).delete().catch(_fsWriteError);
+  } else {
+    trashPickups = trashPickups.filter(t => t.id !== id);
+    localStorage.setItem('fh_trash', JSON.stringify(trashPickups));
+    lcRenderTrashList();
+    injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
+  }
 }
 
 // ── Appearance mode ────────────────────────────────────────────
@@ -9868,11 +10154,12 @@ function saveSettings() {
   applyAppTitle();
   // Mowing advisor config — persist only the user-facing keys so defaults stay live
   {
-    const stored = lsGet('fh_mowConfig', {});
-    stored.preferredDay    = parseInt(document.getElementById('mowPreferredDay').value, 10);
-    stored.mowDuration     = Math.max(15, Math.min(240, parseInt(document.getElementById('mowDuration').value, 10) || 60));
-    stored.defaultAssignee = document.getElementById('mowAssignee').value || '';
-    localStorage.setItem('fh_mowConfig', JSON.stringify(stored));
+    const stored = {
+      preferredDay:    parseInt(document.getElementById('mowPreferredDay').value, 10),
+      mowDuration:     Math.max(15, Math.min(240, parseInt(document.getElementById('mowDuration').value, 10) || 60)),
+      defaultAssignee: document.getElementById('mowAssignee').value || '',
+    };
+    saveFsSetting('mowConfig', 'fh_mowConfig', stored);
     mowConfig = { ...MOW_CONFIG, ...stored };
     _mowReco = null;   // force a fresh recommendation with the new prefs
   }
@@ -9927,7 +10214,7 @@ function saveSettings() {
   localStorage.setItem('fh_mealAiKey',      mealAiKey);
   localStorage.setItem('fh_mealAiProvider', mealAiProvider);
   localStorage.setItem('fh_mealPantry',    mealPantryDef);
-  localStorage.setItem('fh_mealDietPrefs', JSON.stringify(mealDietPrefs));
+  saveFsSetting('mealDietPrefs', 'fh_mealDietPrefs', mealDietPrefs);
   localStorage.setItem('fh_mealLoadingMsgs', JSON.stringify(mealLoadingMsgs));
   // Widget visibility + placement
   Object.keys(WIDGET_DEFAULTS).forEach(key => {
