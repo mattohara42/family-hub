@@ -21,6 +21,33 @@
                  font-src 'self' data:;
                  frame-src 'none';" />
 
+  <!-- Earliest possible error catcher — runs before any other script, so a
+       crash anywhere (including inside family-hub.js before its own
+       window.onerror is registered) still shows something on screen instead
+       of a silent blank page. Inline styles only; app CSS may not be loaded. -->
+  <script>
+    (function () {
+      function showBootError(text) {
+        if (document.getElementById('bootErrorBanner')) return; // one at a time
+        var el = document.createElement('div');
+        el.id = 'bootErrorBanner';
+        el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;' +
+          'background:#b91c1c;color:#fff;font:13px/1.4 -apple-system,sans-serif;' +
+          'padding:10px 14px;white-space:pre-wrap;word-break:break-word;';
+        el.textContent = '⚠️ Family Hub failed to load: ' + text + ' (tap to dismiss)';
+        el.onclick = function () { el.remove(); };
+        (document.body || document.documentElement).appendChild(el);
+      }
+      window.addEventListener('error', function (e) {
+        showBootError((e.message || 'Unknown error') + ' — ' + (e.filename || '') + ':' + (e.lineno || '?'));
+      });
+      window.addEventListener('unhandledrejection', function (e) {
+        var reason = e.reason && e.reason.message ? e.reason.message : String(e.reason);
+        showBootError('unhandled promise rejection — ' + reason);
+      });
+    })();
+  </script>
+
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
