@@ -9744,6 +9744,13 @@ function updateMoreCard() {
     const btn = document.getElementById(id);
     if (btn) btn.classList.toggle('active', appMode === mode);
   });
+  // Flavor row from the FLAVORS registry (same data as the Settings buttons)
+  const flavorGrid = document.getElementById('moreFlavorGrid');
+  if (flavorGrid) {
+    flavorGrid.innerHTML = FLAVORS.map(f =>
+      `<button class="btn btn-sm more-theme-btn${f.id === appFlavor ? ' active' : ''}" onclick="setFlavor('${f.id}');updateMoreCard()">${f.label}</button>`
+    ).join('');
+  }
   // Feature grid: secondary tabs from the registry, gated on widget visibility
   const grid = document.getElementById('moreNavGrid');
   if (grid) {
@@ -9944,6 +9951,7 @@ function setAppMode(mode) {
   document.getElementById('modeNautical').className       = 'btn btn-sm' + (mode === 'nautical'       ? ' btn-mode-active' : '');
   document.getElementById('modeAurora').className         = 'btn btn-sm' + (mode === 'aurora'         ? ' btn-mode-active' : '');
   document.getElementById('modeColorblind').className     = 'btn btn-sm' + (mode === 'colorblind'     ? ' btn-mode-active' : '');
+  updateMoreCard();  // keep the More-tab theme highlight in sync when tapped there
 }
 
 function setFlavor(flavor) {
