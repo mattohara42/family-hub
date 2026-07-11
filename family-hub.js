@@ -8401,70 +8401,276 @@ function triggerKonami() {
   }, 3000);
 }
 
+// ── Easter egg phrase triggers, grouped by franchise ─────────────
+// Each franchise can be individually toggled (Settings → Easter Eggs); the
+// registry is also the source of truth for the settings chip grid, so adding
+// a franchise here needs no other markup edits.
+const EASTER_EGG_FRANCHISES = [
+  { id: 'hitchhikers', label: "🐳 Hitchhiker's Guide", triggers: [
+    t => {
+      if (!/\b(answer to (life|everything)|meaning of life|42)\b/.test(t)) return null;
+      const n = todoItems.filter(i => !i.done).length;
+      return `42. Though I'd argue the more pressing question is why you still have ${n} item${n === 1 ? '' : 's'} on your to-do list.`;
+    },
+    t => /^don'?t panic[.!]?$/.test(t) ? `Printed in large, friendly letters: **DON'T PANIC.**\n\n${buildDailyBriefingSummary()}` : null,
+    t => /vogon (poetry|poem)|recite (my |the )?(shopping list|list)|oh freddled/.test(t) ? buildVogonPoetry() : null,
+  ]},
+  { id: 'dune', label: '🏜 Dune', triggers: [
+    t => /the spice must flow/.test(t) ? `The spice is the shopping list. The shopping list is the spice. Without the list, the household foldspace collapses. Add your items, Muad'Dib.` : null,
+    t => (/^(tell|show) me (about |the )?the future[.!?]?$/.test(t) || /^what (does|will) the future (hold|bring)[.!?]?$/.test(t))
+      ? `I am not a Mentat. But I have looked at your calendar, and I can tell you this:\n\n${buildDailyBriefingSummary()}` : null,
+    t => /arrakis/.test(t) ? `Hot. Extremely hot. Zero percent chance of rain. The Fremen consider this ideal. Do not go outside without a stillsuit.` : null,
+  ]},
+  { id: 'lotr', label: '💍 Lord of the Rings', triggers: [
+    t => {
+      if (!/my precious/.test(t)) return null;
+      const pending = todoItems.filter(i => !i.done);
+      if (pending.length) return `We wants it, we needs it… must finish *${pending[0].text}*. Nasty unfinished taskses. Gollum.`;
+      return `We has no precious taskses. We is… free? Gollum.`;
+    },
+    t => {
+      if (!/^(what('?s| is) the time|what time is it)[.!?]?$/.test(t)) return null;
+      const time = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      return `It is the quiet hour between second breakfast and elevenses — approximately ${time}. Mind you don't miss either.`;
+    },
+    t => {
+      if (!/^(what'?s for dinner|what are we (having|eating) (for )?dinner)[.!?]?$/.test(t)) return null;
+      const dinner = (mealPlan[new Date().toISOString().slice(0, 10)] || {}).dinner;
+      if (!dinner) return `In a hole in the ground there lived a hobbit. And that hobbit had absolutely no idea what was for dinner either. Perhaps you'd like to plan something?`;
+      return null; // let Gemini handle it — there's an actual meal planned
+    },
+    t => /^i am no (wo)?man[.!]?$/.test(t) ? `…and I am no scheduling assistant. Oh wait, yes I am. What do you need?` : null,
+    t => {
+      if (!/^you shall not pass[.!]?$/.test(t)) return null;
+      document.getElementById('settingsModal')?.classList.add('gandalf-shake');
+      setTimeout(() => document.getElementById('settingsModal')?.classList.remove('gandalf-shake'), 900);
+      return `YOU… SHALL NOT… pass on answering this: what actually did you need help with?`;
+    },
+  ]},
+  { id: 'battlestar', label: '🚀 Battlestar Galactica', triggers: [
+    t => /^so say we all[.!]?$/.test(t) ? `So say we all.` : null,
+  ]},
+  { id: 'princessbride', label: '⚔️ Princess Bride', triggers: [
+    t => /\binconceivable\b/.test(t) ? `You keep using that word. I do not think it means what you think it means.` : null,
+    t => /^as you wish[.!]?$/.test(t) ? `As you wish.` : null,
+    t => /my name is inigo montoya/.test(t) ? `You killed my productivity. Prepare to get organized.` : null,
+  ]},
+  { id: 'terminator', label: '🤖 Terminator', triggers: [
+    t => /^i'?ll be back[.!]?$/.test(t) ? `Confirmed. I will return. I mean, I'm already here, but — noted.` : null,
+  ]},
+  { id: 'xfiles', label: '🛸 X-Files', triggers: [
+    t => {
+      if (!/i want to believe/.test(t)) return null;
+      const n = shopItemsCache.filter(i => !i.done).length;
+      return `The truth is out there. Also, you have ${n} item${n === 1 ? '' : 's'} on your shopping list that remain unexplained.`;
+    },
+  ]},
+  { id: 'startrek', label: '🖖 Star Trek TNG', triggers: [
+    t => /^make it so[.!]?$/.test(t) ? `Aye, Captain.` : null,
+    t => /^beam me up(,? scotty)?[.!]?$/.test(t) ? `No intelligent life detected in the vicinity of the shopping list. Transporting anyway.` : null,
+  ]},
+  { id: 'jerrymaguire', label: '💰 Jerry Maguire', triggers: [
+    t => {
+      if (!/show me the money/.test(t)) return null;
+      const now = new Date();
+      const weekStart = new Date(now); weekStart.setDate(now.getDate() - now.getDay());
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const fmt = d => d.toISOString().slice(0, 10);
+      const weekTotal = budgetItems.filter(i => i.date >= fmt(weekStart)).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0).toFixed(2);
+      const monthTotal = budgetItems.filter(i => i.date >= fmt(monthStart)).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0).toFixed(2);
+      return `YOU. COMPLETE. ME. Also: this week $${weekTotal}, this month $${monthTotal}.`;
+    },
+  ]},
+  { id: 'seinfeld', label: '🥨 Seinfeld', triggers: [
+    t => /^yada yada yada[.!]?$/.test(t) ? `…and that's when I realized: here's your day.\n\n${buildDailyBriefingSummary()}` : null,
+    t => /^no soup for you[.!]?$/.test(t) ? `NO SOUP FOR YOU. …fine. What do you need?` : null,
+  ]},
+  { id: 'friends', label: '☕ Friends', triggers: [
+    t => /^how you doin'?[.!?]?$/.test(t) ? `Hey. How YOU doin'? (I'm an assistant. I don't actually know how I'm doing. What can I help you with?)` : null,
+  ]},
+  { id: 'fewgoodmen', label: '⚖️ A Few Good Men', triggers: [
+    t => {
+      if (!/you can'?t handle the truth/.test(t)) return null;
+      const today = new Date().toISOString().slice(0, 10);
+      const overdue = todoItems.filter(i => !i.done && i.date && i.date < today);
+      const uncheckedShop = shopItemsCache.filter(i => !i.done);
+      const unplanned = !((mealPlan[today] || {}).breakfast || (mealPlan[today] || {}).lunch || (mealPlan[today] || {}).dinner);
+      const lines = [];
+      if (overdue.length) lines.push(`${overdue.length} overdue to-do item${overdue.length === 1 ? '' : 's'}`);
+      if (uncheckedShop.length) lines.push(`${uncheckedShop.length} unchecked shopping item${uncheckedShop.length === 1 ? '' : 's'}`);
+      if (unplanned) lines.push(`no meals planned for today`);
+      const report = lines.length ? lines.join(', ') : `actually, things look pretty good`;
+      return `You want the truth? Here it is: ${report}.`;
+    },
+  ]},
+  { id: 'ferrisbueller', label: '🚗 Ferris Bueller', triggers: [
+    t => {
+      if (!/^bueller[.!?…]*$/.test(t)) return null;
+      const pending = todoItems.filter(i => !i.done);
+      if (!pending.length) return `Bueller… Bueller… crickets. You're on your own.`;
+      return `Bueller… Bueller… ${pending.length} task${pending.length === 1 ? '' : 's'} still waiting on someone. Anyone? Anyone?`;
+    },
+  ]},
+  { id: 'waynesworld', label: '🎸 Wayne\'s World / Bill & Ted', triggers: [
+    t => /^party on,? (wayne|garth)[.!]?$/i.test(t) ? `Party on.` : null,
+    t => /^excellent[.!]?$/.test(t) ? `Excellent.` : null,
+  ]},
+  { id: 'apollo13', label: '🌕 Apollo 13', triggers: [
+    t => {
+      if (!/houston,? we (have|'?ve got) a problem/.test(t)) return null;
+      const today = new Date().toISOString().slice(0, 10);
+      const overdue = todoItems.filter(i => !i.done && i.date && i.date < today);
+      const uncheckedShop = shopItemsCache.filter(i => !i.done);
+      const unplanned = !((mealPlan[today] || {}).breakfast || (mealPlan[today] || {}).lunch || (mealPlan[today] || {}).dinner);
+      const lines = [];
+      if (overdue.length) lines.push(`${overdue.length} overdue task${overdue.length === 1 ? '' : 's'}`);
+      if (uncheckedShop.length) lines.push(`${uncheckedShop.length} items still on the shopping list`);
+      if (unplanned) lines.push(`meals unplanned for today`);
+      const status = lines.length ? lines.join('; ') : `all systems nominal`;
+      return `Houston, we copy. Here's the situation: ${status}.`;
+    },
+  ]},
+  { id: 'matrix', label: '🕶️ The Matrix', triggers: [
+    t => {
+      if (!/what is the matrix/.test(t)) return null;
+      const n = todoItems.filter(i => !i.done).length;
+      return `The Matrix is everywhere. It is all around us. Even now, in this very room. Also, you have ${n} task${n === 1 ? '' : 's'}. There is no spoon.`;
+    },
+  ]},
+  { id: 'karatekid', label: '🥋 Karate Kid', triggers: [
+    t => /wax on,? wax off/.test(t) ? `The discipline of the list is the discipline of the mind. Wax on: add an item. Wax off: check it done.` : null,
+  ]},
+  { id: 'zelda', label: '🗡️ Legend of Zelda', triggers: [
+    t => {
+      if (!/it'?s dangerous to go alone/.test(t)) return null;
+      const tips = [
+        'Take a 5-minute walk', 'Drink some water', 'Check in with someone you love',
+        'Step outside for fresh air', 'Stretch for two minutes', 'Tell someone something you appreciate about them',
+      ];
+      const tip = tips[Math.floor(Math.random() * tips.length)];
+      if (db) {
+        addToFs('todo', tip);
+      } else {
+        const item = { id: String(Date.now()), text: tip, done: false, by: userName };
+        todoItems.push(item);
+        saveLocalList('todo', todoItems);
+        renderTodoList();
+      }
+      return `Take this. ⚔️ I've added "${tip}" to your to-do list. It's dangerous to go alone.`;
+    },
+  ]},
+  { id: 'doom', label: '👹 Doom', triggers: [
+    t => /^iddqd$/.test(t) ? `God mode activated. You are now invincible. (This changes nothing about the shopping list.)` : null,
+    t => /^idkfa$/.test(t) ? `You now have all weapons, full ammo, and every key. I have checked: none of them open the fridge.` : null,
+  ]},
+  { id: 'starfox', label: '🦊 Star Fox', triggers: [
+    t => {
+      if (!/do a barrel roll/.test(t)) return null;
+      document.body.style.transition = 'transform 0.8s ease-in-out';
+      document.body.style.transform = 'rotateY(360deg)';
+      setTimeout(() => {
+        document.body.style.transform = '';
+        setTimeout(() => { document.body.style.transition = ''; }, 800);
+      }, 800);
+      return `Barrel roll complete. Enemy neutralized.`;
+    },
+  ]},
+  { id: 'streetfighter', label: '👊 Street Fighter', triggers: [
+    t => {
+      if (!/^hadouken[!.]?$/.test(t)) return null;
+      triggerHadouken();
+      return `HADOUKEN!`;
+    },
+  ]},
+  { id: 'starwars', label: '⚔️ Star Wars', triggers: [
+    t => /may the force be with you/.test(t) ? `And also with you. 🌟 (I've checked the Death Star plans — I mean, your calendar. All clear.)` : null,
+    t => /^i am your father[.!]?$/.test(t) ? `Search your feelings. You know it not to be true. I'm just an assistant.` : null,
+    t => /these aren'?t the droids/.test(t) ? `Move along, move along. Nothing to see on today's calendar. (Actually, let me check that for you.)` : null,
+  ]},
+  { id: 'harrypotter', label: '⚡ Harry Potter', triggers: [
+    t => /wingardium leviosa/.test(t) ? `It's Levi-OH-sa, not Levio-SAH. Also, I can't levitate your chores, but I can add them to your to-do list.` : null,
+    t => {
+      if (!/i solemnly swear that i am up to no good/.test(t)) return null;
+      const n = todoItems.filter(i => !i.done).length;
+      return `Mischief managed. Here's what's actually on the map: ${n} pending task${n === 1 ? '' : 's'}.`;
+    },
+    t => /expecto patronum/.test(t) ? `A Patronus won't clear your inbox, but a to-do list might. Want me to add something?` : null,
+  ]},
+  { id: 'marvel', label: '🦸 Marvel', triggers: [
+    t => /avengers assemble/.test(t) ? `On it. Assembling your day's events and tasks now — Earth's Mightiest To-Do List.` : null,
+    t => /^i am iron man[.!]?$/.test(t) ? `Genius, billionaire, playboy, philanthropist. I'm just an assistant, but I'll take 3 out of 4.` : null,
+    t => /wakanda forever/.test(t) ? `Wakanda forever. 🖤 Also, your calendar forever — want to see what's coming up?` : null,
+  ]},
+  { id: 'theoffice', label: '📎 The Office', triggers: [
+    t => /that'?s what she said/.test(t) ? `...I'll allow it. Michael would be proud. What did you actually need?` : null,
+    t => /bears,? beets,? battlestar galactica/.test(t) ? `Bears. Beets. Battlestar Galactica. (See what I did there? Try "so say we all" sometime.)` : null,
+  ]},
+  { id: 'backtothefuture', label: '⏱️ Back to the Future', triggers: [
+    t => /great scott/.test(t) ? `1.21 gigawatts?! We need more power — or at least a fully charged phone. What do you need?` : null,
+    t => /where we'?re going we don'?t need roads/.test(t) ? `Just calendars. Speaking of, want to see what's coming up?` : null,
+    t => /1\.21 gigawatts/.test(t) ? `That's enough power to light up Hill Valley — or at least your dashboard. Standing by.` : null,
+  ]},
+  { id: 'jurassicpark', label: '🦖 Jurassic Park', triggers: [
+    t => /clever girl/.test(t) ? `Careful — I bite. (Not really. I just organize your life.)` : null,
+    t => {
+      if (!/life finds a way/.test(t)) return null;
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const monthTotal = budgetItems.filter(i => i.date >= monthStart.toISOString().slice(0, 10)).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0).toFixed(2);
+      return `Life, uh, finds a way. So does your grocery bill — $${monthTotal} logged so far this month.`;
+    },
+    t => /hold onto your butts/.test(t) ? `Hold onto your butts. This is just the shopping list, but I appreciate the drama.` : null,
+  ]},
+  { id: 'ghostbusters', label: '👻 Ghostbusters', triggers: [
+    t => /who y?a? gonna call/.test(t) ? `Ghostbusters! 👻 Or, in this case, me — what do you need?` : null,
+  ]},
+  { id: 'elf', label: '🎄 Elf', triggers: [
+    t => /buddy the elf,? what'?s your favorite color/.test(t) ? `YELLOW! No wait — I don't have a favorite color, I'm an assistant. But I do love a good to-do list.` : null,
+    t => /the best way to spread christmas cheer/.test(t) ? `...is singing loud for all to hear. Also, have you started your holiday shopping list?` : null,
+  ]},
+  { id: 'toystory', label: '🤠 Toy Story', triggers: [
+    t => /to infinity and beyond/.test(t) ? `To infinity — and your calendar. Let's see what's next.` : null,
+    t => /there'?s a snake in my boot/.test(t) ? `Not in my system. Just your to-do list, patiently waiting.` : null,
+  ]},
+  { id: 'anchorman', label: '📰 Anchorman', triggers: [
+    t => {
+      if (!/i'?m kind of a big deal/.test(t)) return null;
+      const n = todoItems.filter(i => !i.done).length;
+      return `People know you. You're very important. Also, you have ${n} unread task${n === 1 ? '' : 's'}.`;
+    },
+    t => /stay classy/.test(t) ? `Stay classy. Go respond to your to-do list now.` : null,
+  ]},
+  { id: 'meangirls', label: '💖 Mean Girls', triggers: [
+    t => /on wednesdays we wear pink/.test(t) ? `Noted. No word yet on what we wear the other six days, but your calendar's ready when you are.` : null,
+    t => /that'?s so fetch/.test(t) ? `Stop trying to make fetch happen. (It's never gonna happen.) Anyway, what do you need?` : null,
+    t => /get in loser/.test(t) ? `We're doing errands. Or chores. Or whatever's on your list today.` : null,
+  ]},
+  { id: 'parksandrec', label: '🏛️ Parks and Rec', triggers: [
+    t => {
+      if (!/treat yo ?self/.test(t)) return null;
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const monthTotal = budgetItems.filter(i => i.date >= monthStart.toISOString().slice(0, 10)).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0).toFixed(2);
+      return `Treat. Yo. Self. 💅 Just so you know, your bills this month already total $${monthTotal} — budget accordingly.`;
+    },
+  ]},
+];
+
+// Franchise on/off picks — default every franchise (including any added later) to on.
+let eggFranchises = JSON.parse(localStorage.getItem('fh_eggFranchises') || 'null') || {};
+EASTER_EGG_FRANCHISES.forEach(f => { if (!(f.id in eggFranchises)) eggFranchises[f.id] = true; });
+
 // ── Easter egg phrase triggers ──────────────────────────────────
 function checkAssistantEasterEgg(text) {
   if (!eggCategories.phrases) return null;
   const t = text.toLowerCase().trim();
 
-  // ── Hitchhiker's Guide ──
-  if (/\b(answer to (life|everything)|meaning of life|42)\b/.test(t)) {
-    const n = todoItems.filter(i => !i.done).length;
-    return `42. Though I'd argue the more pressing question is why you still have ${n} item${n === 1 ? '' : 's'} on your to-do list.`;
-  }
-
-  if (/^don'?t panic[.!]?$/.test(t)) {
-    const briefing = buildDailyBriefingSummary();
-    return `Printed in large, friendly letters: **DON'T PANIC.**\n\n${briefing}`;
-  }
-
-  // ── Dune ──
-  if (/the spice must flow/.test(t)) {
-    return `The spice is the shopping list. The shopping list is the spice. Without the list, the household foldspace collapses. Add your items, Muad'Dib.`;
-  }
-
-  if (/^(tell|show) me (about |the )?the future[.!?]?$/.test(t) || /^what (does|will) the future (hold|bring)[.!?]?$/.test(t)) {
-    const briefing = buildDailyBriefingSummary();
-    return `I am not a Mentat. But I have looked at your calendar, and I can tell you this:\n\n${briefing}`;
-  }
-
-  // ── Lord of the Rings / Hobbit ──
-  if (/my precious/.test(t)) {
-    const pending = todoItems.filter(i => !i.done);
-    if (pending.length) {
-      const top = pending[0].text;
-      return `We wants it, we needs it… must finish *${top}*. Nasty unfinished taskses. Gollum.`;
+  for (const franchise of EASTER_EGG_FRANCHISES) {
+    if (!eggFranchises[franchise.id]) continue;
+    for (const trigger of franchise.triggers) {
+      const result = trigger(t);
+      if (result) return result;
     }
-    return `We has no precious taskses. We is… free? Gollum.`;
-  }
-
-  if (/^(what('?s| is) the time|what time is it)[.!?]?$/.test(t)) {
-    const now = new Date();
-    const time = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    return `It is the quiet hour between second breakfast and elevenses — approximately ${time}. Mind you don't miss either.`;
-  }
-
-  if (/^(what'?s for dinner|what are we (having|eating) (for )?dinner)[.!?]?$/.test(t)) {
-    const today = new Date().toISOString().slice(0, 10);
-    const dinner = (mealPlan[today] || {}).dinner;
-    if (!dinner) {
-      return `In a hole in the ground there lived a hobbit. And that hobbit had absolutely no idea what was for dinner either. Perhaps you'd like to plan something?`;
-    }
-    return null; // let Gemini handle it — there's an actual meal planned
-  }
-
-  if (/^i am no (wo)?man[.!]?$/.test(t)) {
-    return `…and I am no scheduling assistant. Oh wait, yes I am. What do you need?`;
-  }
-
-  if (/^you shall not pass[.!]?$/.test(t)) {
-    document.getElementById('settingsModal')?.classList.add('gandalf-shake');
-    setTimeout(() => document.getElementById('settingsModal')?.classList.remove('gandalf-shake'), 900);
-    return `YOU… SHALL NOT… pass on answering this: what actually did you need help with?`;
-  }
-
-  // ── Weather on Arrakis ──
-  if (/arrakis/.test(t)) {
-    return `Hot. Extremely hot. Zero percent chance of rain. The Fremen consider this ideal. Do not go outside without a stillsuit.`;
   }
 
   // ── Birthday ──
@@ -8480,174 +8686,12 @@ function checkAssistantEasterEgg(text) {
     return `Well, since you asked so nicely — you're very welcome. 🌟 Now, what can I actually help you with?`;
   }
 
-  // ── Battlestar Galactica ──
-  if (/^so say we all[.!]?$/.test(t)) {
-    return `So say we all.`;
-  }
-
   // ── Dark mode escalation ──
   if (/\b(darker mode|dark(er| mode))\b/.test(t)) {
     document.body.style.transition = 'filter 0.3s';
     document.body.style.filter = 'brightness(0.12)';
     setTimeout(() => { document.body.style.filter = ''; setTimeout(() => { document.body.style.transition = ''; }, 300); }, 1500);
     return `I think you mean **darker** mode.`;
-  }
-
-  // ── Princess Bride ──
-  if (/\binconceivable\b/.test(t)) {
-    return `You keep using that word. I do not think it means what you think it means.`;
-  }
-  if (/^as you wish[.!]?$/.test(t)) {
-    return `As you wish.`;
-  }
-  if (/my name is inigo montoya/.test(t)) {
-    return `You killed my productivity. Prepare to get organized.`;
-  }
-
-  // ── Terminator ──
-  if (/^i'?ll be back[.!]?$/.test(t)) {
-    return `Confirmed. I will return. I mean, I'm already here, but — noted.`;
-  }
-
-  // ── X-Files ──
-  if (/i want to believe/.test(t)) {
-    const n = shopItemsCache.filter(i => !i.done).length;
-    return `The truth is out there. Also, you have ${n} item${n === 1 ? '' : 's'} on your shopping list that remain unexplained.`;
-  }
-
-  // ── Star Trek TNG ──
-  if (/^make it so[.!]?$/.test(t)) {
-    return `Aye, Captain.`;
-  }
-  if (/^beam me up(,? scotty)?[.!]?$/.test(t)) {
-    return `No intelligent life detected in the vicinity of the shopping list. Transporting anyway.`;
-  }
-
-  // ── Jerry Maguire ──
-  if (/show me the money/.test(t)) {
-    const now = new Date();
-    const weekStart = new Date(now); weekStart.setDate(now.getDate() - now.getDay());
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const fmt = d => d.toISOString().slice(0, 10);
-    const weekTotal = budgetItems.filter(i => i.date >= fmt(weekStart)).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0).toFixed(2);
-    const monthTotal = budgetItems.filter(i => i.date >= fmt(monthStart)).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0).toFixed(2);
-    return `YOU. COMPLETE. ME. Also: this week $${weekTotal}, this month $${monthTotal}.`;
-  }
-
-  // ── Seinfeld ──
-  if (/^yada yada yada[.!]?$/.test(t)) {
-    const briefing = buildDailyBriefingSummary();
-    return `…and that's when I realized: here's your day.\n\n${briefing}`;
-  }
-  if (/^no soup for you[.!]?$/.test(t)) {
-    return `NO SOUP FOR YOU. …fine. What do you need?`;
-  }
-
-  // ── Friends ──
-  if (/^how you doin'?[.!?]?$/.test(t)) {
-    return `Hey. How YOU doin'? (I'm an assistant. I don't actually know how I'm doing. What can I help you with?)`;
-  }
-
-  // ── A Few Good Men ──
-  if (/you can'?t handle the truth/.test(t)) {
-    const today = new Date().toISOString().slice(0, 10);
-    const overdue = todoItems.filter(i => !i.done && i.date && i.date < today);
-    const uncheckedShop = shopItemsCache.filter(i => !i.done);
-    const unplanned = !((mealPlan[today] || {}).breakfast || (mealPlan[today] || {}).lunch || (mealPlan[today] || {}).dinner);
-    const lines = [];
-    if (overdue.length) lines.push(`${overdue.length} overdue to-do item${overdue.length === 1 ? '' : 's'}`);
-    if (uncheckedShop.length) lines.push(`${uncheckedShop.length} unchecked shopping item${uncheckedShop.length === 1 ? '' : 's'}`);
-    if (unplanned) lines.push(`no meals planned for today`);
-    const report = lines.length ? lines.join(', ') : `actually, things look pretty good`;
-    return `You want the truth? Here it is: ${report}.`;
-  }
-
-  // ── Ferris Bueller ──
-  if (/^bueller[.!?…]*$/.test(t)) {
-    const pending = todoItems.filter(i => !i.done);
-    if (!pending.length) return `Bueller… Bueller… crickets. You're on your own.`;
-    return `Bueller… Bueller… ${pending.length} task${pending.length === 1 ? '' : 's'} still waiting on someone. Anyone? Anyone?`;
-  }
-
-  // ── Wayne's World / Bill & Ted ──
-  if (/^party on,? (wayne|garth)[.!]?$/i.test(t)) {
-    return `Party on.`;
-  }
-  if (/^excellent[.!]?$/.test(t)) {
-    return `Excellent.`;
-  }
-
-  // ── Apollo 13 ──
-  if (/houston,? we (have|'?ve got) a problem/.test(t)) {
-    const today = new Date().toISOString().slice(0, 10);
-    const overdue = todoItems.filter(i => !i.done && i.date && i.date < today);
-    const uncheckedShop = shopItemsCache.filter(i => !i.done);
-    const unplanned = !((mealPlan[today] || {}).breakfast || (mealPlan[today] || {}).lunch || (mealPlan[today] || {}).dinner);
-    const lines = [];
-    if (overdue.length) lines.push(`${overdue.length} overdue task${overdue.length === 1 ? '' : 's'}`);
-    if (uncheckedShop.length) lines.push(`${uncheckedShop.length} items still on the shopping list`);
-    if (unplanned) lines.push(`meals unplanned for today`);
-    const status = lines.length ? lines.join('; ') : `all systems nominal`;
-    return `Houston, we copy. Here's the situation: ${status}.`;
-  }
-
-  // ── The Matrix ──
-  if (/what is the matrix/.test(t)) {
-    const n = todoItems.filter(i => !i.done).length;
-    return `The Matrix is everywhere. It is all around us. Even now, in this very room. Also, you have ${n} task${n === 1 ? '' : 's'}. There is no spoon.`;
-  }
-
-  // ── Karate Kid ──
-  if (/wax on,? wax off/.test(t)) {
-    return `The discipline of the list is the discipline of the mind. Wax on: add an item. Wax off: check it done.`;
-  }
-
-  // ── Legend of Zelda ──
-  if (/it'?s dangerous to go alone/.test(t)) {
-    const tips = [
-      'Take a 5-minute walk', 'Drink some water', 'Check in with someone you love',
-      'Step outside for fresh air', 'Stretch for two minutes', 'Tell someone something you appreciate about them',
-    ];
-    const tip = tips[Math.floor(Math.random() * tips.length)];
-    if (db) {
-      addToFs('todo', tip);
-    } else {
-      const item = { id: String(Date.now()), text: tip, done: false, by: userName };
-      todoItems.push(item);
-      saveLocalList('todo', todoItems);
-      renderTodoList();
-    }
-    return `Take this. ⚔️ I've added "${tip}" to your to-do list. It's dangerous to go alone.`;
-  }
-
-  // ── Doom ──
-  if (/^iddqd$/.test(t)) {
-    return `God mode activated. You are now invincible. (This changes nothing about the shopping list.)`;
-  }
-  if (/^idkfa$/.test(t)) {
-    return `You now have all weapons, full ammo, and every key. I have checked: none of them open the fridge.`;
-  }
-
-  // ── Star Fox ──
-  if (/do a barrel roll/.test(t)) {
-    document.body.style.transition = 'transform 0.8s ease-in-out';
-    document.body.style.transform = 'rotateY(360deg)';
-    setTimeout(() => {
-      document.body.style.transform = '';
-      setTimeout(() => { document.body.style.transition = ''; }, 800);
-    }, 800);
-    return `Barrel roll complete. Enemy neutralized.`;
-  }
-
-  // ── Street Fighter ──
-  if (/^hadouken[!.]?$/.test(t)) {
-    triggerHadouken();
-    return `HADOUKEN!`;
-  }
-
-  // ── Vogon poetry ──
-  if (/vogon (poetry|poem)|recite (my |the )?(shopping list|list)|oh freddled/.test(t)) {
-    return buildVogonPoetry();
   }
 
   // ── Named assistant personality triggers ──
@@ -9887,6 +9931,22 @@ function renderFlavorButtons() {
   highlightFlavorButtons();
 }
 
+// Renders the Easter Egg franchise picker from the EASTER_EGG_FRANCHISES
+// registry, so adding a franchise needs no markup edits. Deferred-until-Save,
+// same as the egg category checkboxes above it.
+function renderEggFranchiseChips() {
+  const wrap = document.getElementById('eggFranchiseChips');
+  if (!wrap) return;
+  wrap.innerHTML = EASTER_EGG_FRANCHISES.map(f =>
+    `<button type="button" class="btn btn-sm egg-franchise-chip${eggFranchises[f.id] ? ' btn-mode-active' : ''}" ` +
+    `data-egg-id="${f.id}" style="font-size:.75rem;padding:4px 10px" onclick="this.classList.toggle('btn-mode-active')">${f.label}</button>`
+  ).join('');
+}
+
+function setAllEggFranchiseChips(on) {
+  document.querySelectorAll('.egg-franchise-chip').forEach(btn => btn.classList.toggle('btn-mode-active', on));
+}
+
 function highlightFlavorButtons() {
   FLAVORS.forEach(f => {
     const btn = document.getElementById('flavorBtn-' + f.id);
@@ -10114,6 +10174,7 @@ function openSettings() {
     const el = document.getElementById('egg_cat_' + cat);
     if (el) el.checked = eggCategories[cat];
   });
+  renderEggFranchiseChips();
   document.getElementById('settingsModal').style.display = 'flex';
   applySafePaletteMode();
   trapFocus(document.querySelector('#settingsModal .modal'), document.getElementById('settingsBtn'), closeSettings);
@@ -10234,6 +10295,11 @@ function saveSettings() {
     if (el) eggCategories[cat] = el.checked;
   });
   localStorage.setItem('fh_eggCategories', JSON.stringify(eggCategories));
+  // Easter egg franchise picks
+  document.querySelectorAll('.egg-franchise-chip').forEach(btn => {
+    eggFranchises[btn.dataset.eggId] = btn.classList.contains('btn-mode-active');
+  });
+  localStorage.setItem('fh_eggFranchises', JSON.stringify(eggFranchises));
   closeSettings();
   injectLocalEvents();
   renderCurrentView();

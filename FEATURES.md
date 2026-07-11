@@ -91,7 +91,7 @@ family-hub.js     (all logic)
 ├── ── WORD OF DAY ──          loadWotd, renderWotd, WOTD_FALLBACKS
 ├── ── DAD JOKE ──             loadDadJoke, renderDadJoke
 ├── ── CHORE CHART ──          renderChoreCard, addChore, deleteChore, toggleChore, redeemChoreReward, renderChoreRewardList
-├── ── EASTER EGGS ──          checkAssistantEasterEgg, checkCalendarEasterEggs, buildVogonPoetry, triggerHadouken, handleSettingsGearClick
+├── ── EASTER EGGS ──          EASTER_EGG_FRANCHISES, checkAssistantEasterEgg, checkCalendarEasterEggs, buildVogonPoetry, triggerHadouken, handleSettingsGearClick, renderEggFranchiseChips
 └── window.addEventListener('load', ...) — app init
 ```
 
@@ -612,7 +612,11 @@ Categories: `phrases` (assistant triggers), `calendar` (date-based), `ui` (inter
 **Settings unlock:** Triple-clicking `#settingsModalGear` (the ⚙️ in the modal `<h2>`) within 700ms reveals the hidden 🥚 Easter Eggs tab via `body.eggs-unlocked`. Function: `handleSettingsGearClick()`.
 
 **Assistant phrase triggers (`phrases` category):**
-`checkAssistantEasterEgg(text)` — called in `sendAssistantMessage()` before the Gemini API call. Returns a canned response string or `null`. Covers 40+ triggers: LOTR, Hitchhiker's Guide, Dune, Hobbit, BSG, Star Trek, Star Wars, Seinfeld, Friends, 80s/90s movies, video game cheats (IDDQD, IDKFA), and more. See `EASTEREGGS_BACKLOG.md` for the full list.
+`checkAssistantEasterEgg(text)` — called in `sendAssistantMessage()` before the Gemini API call. Returns a canned response string or `null`.
+
+Franchise triggers live in the `EASTER_EGG_FRANCHISES` registry (array of `{ id, label, triggers: [fn(t) => string|null, ...] }`) right above the function — the single source of truth for both the matching logic and the Settings chip-grid picker, so adding a franchise needs no other markup edits. 33 franchises as of this writing (LOTR, Hitchhiker's Guide, Dune, BSG, Star Trek, Star Wars, Seinfeld, Friends, Marvel, Harry Potter, The Office, Back to the Future, Jurassic Park, Ghostbusters, Elf, Toy Story, Anchorman, Mean Girls, Parks and Rec, video game cheats (IDDQD, IDKFA), and more). Each franchise can be individually toggled — picks live in `eggFranchises` (`lsGet`-style default: every registry id defaults to `true`, including ones added after a user's first run).
+
+A handful of triggers aren't tied to any franchise (birthday, politeness, dark-mode escalation) and stay inline in `checkAssistantEasterEgg`, gated only by the `phrases` category master toggle — same as the three named-assistant personality overlays (Jarvis/HAL 9000/Alfred), which live further down the function keyed on `assistantName` rather than on user text.
 
 **UI eggs (`ui` category):**
 - **Konami Code** — rainbow hue-rotate + 🌈 burst
@@ -782,6 +786,7 @@ let lastWxData    = null;  // set by renderWeatherData(); reused for the temp li
 | `fh_assistantTTS` | bool | Assistant | Read replies aloud via TTS (default off) |
 | `fh_tvMode` | bool | TV Mode | TV / Display Mode on/off (default false) |
 | `fh_eggCategories` | JSON object | Easter Eggs | `{ phrases, calendar, ui, weather }` — all true by default |
+| `fh_eggFranchises` | JSON object | Easter Eggs | `{ [franchiseId]: bool }` — per-franchise on/off pick within the `phrases` category, all true by default |
 | `fh_saver` | bool | Screensaver | Idle photo screensaver on/off (default false) |
 | `fh_saverIdleMin` | number | Screensaver | Minutes idle before start (default 10) |
 | `fh_saverDwellSec` | number | Screensaver | Seconds per photo (default 20) |
