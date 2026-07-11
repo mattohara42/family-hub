@@ -26,6 +26,7 @@ Shared state (shopping, todo, budget) lives in Firebase Firestore. Photos are bl
 - **Full-viewport flex.** `body` is `flex-column 100dvh`. `min-height: 0` is required at every flex level to allow shrinking below content size. `.sidebar > *` must keep `flex-shrink: 0` — or cards compress instead of the sidebar scrolling.
 - **Google OAuth = GIS token client** (not code flow). Token is in-memory only (`let googleToken`), never localStorage. `file://` blocks OAuth — must serve from `localhost` or HTTPS. Any new serving origin must be added to Google Cloud Console (Authorized JS Origins) **and** Firebase Console (Authorized Domains). `generative-language` is **not** a valid OAuth scope.
 - **Touch tap-target CSS must stay inside `@media (hover: none)`** — larger button/list padding rules must never leak outside that block.
+- **Mobile tabs are registry-driven.** A tab = one `MOBILE_TABS` entry in `family-hub.js` (cardId + optional `widget` visibility gate + optional `menu` More-grid entry); `setMobileTab()` stamps `.mobile-tab-active` and generic CSS in the 640px media query does the rest. Never write per-tab `body[data-mobile-tab="…"]` card rules. Widget *placement* ('bottom') is desktop-only; the screensaver never runs under 640px. (FEATURES.md §20)
 - **Themes (color axis):** `'dark'` (default), `'light'`, `'nautical'`, `'aurora'`, `'colorblind'`. `applyAppMode()` swaps body classes (dark = no class). Nautical/aurora use `body::before`/`::after` pseudo-elements.
 - **Flavor (design-system axis), orthogonal to theme:** `'basic'` (default, flat-glass — absence of class) and `'tactile'` (lush/hand-made material). `applyFlavor()` toggles `body.flavor-tactile`; persisted in `fh_flavor`. Themes set color tokens (`--surface-solid/-hi/-lo`, `--ink`, `--line`, `--accent`…); Tactile reads those tokens and changes only the *material* (surface, type via self-hosted Fraunces/Hanken, shadow, radius, grain). Tactile decoration is suppressed under `colorblind-mode`/`safe-palette-on` (KTD-4). Both axes stack, e.g. `body.flavor-tactile.nautical-mode`.
 
@@ -71,7 +72,7 @@ Shared state (shopping, todo, budget) lives in Firebase Firestore. Photos are bl
 2. **CSS:** `/* ── Feature Name ── */` section in `family-hub.css`; use existing CSS vars; theme variants if needed
 3. **HTML:** card in `.sidebar` or modal in `<body>`
 4. **JS:** `// ── Feature Name ──` section in `family-hub.js`
-5. **Widget?** add to `WIDGET_DEFAULTS`, `WIDGET_PLACEMENT_DEFAULTS`, `WIDGET_ORDER`
+5. **Widget?** add to `WIDGET_DEFAULTS`, `WIDGET_PLACEMENT_DEFAULTS`, `WIDGET_ORDER` — and `MOBILE_TABS` (with a `menu` entry) so it's reachable on phones
 6. **Settings?** add a `modal-tab` + `settings-panel`; wire into `openSettings()` (populate) and `saveSettings()` (persist). In `saveSettings()`, persist + `closeSettings()` **before** any re-render that could throw.
 7. **Init:** call setup from `window.addEventListener('load', ...)`
 8. **Docs:** update `FEATURES.md` (function/state/anchor/key) + `CLAUDE.md` if architecture changed

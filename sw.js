@@ -4,7 +4,7 @@
  * offline fallback only), network-only for all external APIs.
  */
 
-const CACHE_VERSION = 'fh-v6';
+const CACHE_VERSION = 'fh-v7';
 const CACHE_NAME    = `family-hub-${CACHE_VERSION}`;
 
 // Tactile fonts (fonts/*.woff2) are deliberately not pre-cached: only the

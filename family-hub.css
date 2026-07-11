@@ -4074,6 +4074,14 @@ a, button, input, select, textarea, label,
     font-size: 1.1rem;
   }
 
+  /* Assistant send/mic: 30px circles are too small for fingers */
+  .assistant-send,
+  .assistant-mic {
+    width: 42px;
+    height: 42px;
+    flex-shrink: 0;
+  }
+
   /* View tabs (Month/Week/Day): taller hit area */
   .cal-view-tab {
     padding: 9px 15px;

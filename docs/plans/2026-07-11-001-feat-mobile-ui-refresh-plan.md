@@ -7,6 +7,8 @@ date: 2026-07-11
 
 # Mobile UI Refresh — Implementation Plan
 
+> **✅ IMPLEMENTED 2026-07-11** — R1–R8 shipped on `claude/mobile-ui-redesign-t6bmca` (registry-driven tabs, preference-gated More grid + Chores tab, desktop-only placement, Flavor toggle, themed/Tactile nav chrome, screensaver mobile gate, drawer removal, 375px sweep). See FEATURES.md §20 for the as-built reference.
+
 **Scope:** Standard — close the gap between the shipped mobile UI (June) and the desktop UI/preference system as it exists today (July 11). No new features; parity, correctness, and architecture cleanup.
 **Depth:** 7 implementation units.
 **Supersedes:** `2026-06-15-001-feat-mobile-redesign-plan.md`. That plan is ~90% shipped; this plan replaces its remaining intent and covers a month of desktop drift (~70 commits since June 15).
