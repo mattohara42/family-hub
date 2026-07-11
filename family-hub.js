@@ -8622,7 +8622,7 @@ const EASTER_EGG_FRANCHISES = [
     t => /hold onto your butts/.test(t) ? `Hold onto your butts. This is just the shopping list, but I appreciate the drama.` : null,
   ]},
   { id: 'ghostbusters', label: '👻 Ghostbusters', triggers: [
-    t => /who y?a? gonna call/.test(t) ? `Ghostbusters! 👻 Or, in this case, me — what do you need?` : null,
+    t => /who (you|ya) gonna call/.test(t) ? `Ghostbusters! 👻 Or, in this case, me — what do you need?` : null,
   ]},
   { id: 'elf', label: '🎄 Elf', triggers: [
     t => /buddy the elf,? what'?s your favorite color/.test(t) ? `YELLOW! No wait — I don't have a favorite color, I'm an assistant. But I do love a good to-do list.` : null,
