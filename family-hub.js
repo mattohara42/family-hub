@@ -411,6 +411,26 @@ const WIDGET_ORDER = [
   { key: 'stock',     id: 'stockCard'     },
 ];
 
+// Mobile tab registry — tab name → the one card shown full-screen on that tab.
+// 'cal' is special-cased in CSS (shows .cal-column, hides the sidebar).
+// Adding a card to mobile = one entry here (+ a More-grid label if secondary);
+// no per-tab CSS. Entries with a `widget` key are gated on widgetVisibility.
+const MOBILE_TABS = {
+  todo:      { cardId: 'todoCard',      widget: 'todo'      },
+  shop:      { cardId: 'shopCard',      widget: 'shopping'  },
+  weather:   { cardId: 'weatherCard'                        },
+  budget:    { cardId: 'budgetCard',    widget: 'budget'    },
+  chores:    { cardId: 'choreCard',     widget: 'chores'    },
+  wotd:      { cardId: 'wotdCard',      widget: 'wotd'      },
+  dadjoke:   { cardId: 'dadjokeCard',   widget: 'dadjoke'   },
+  quotes:    { cardId: 'quoteCard',     widget: 'quote'     },
+  countdown: { cardId: 'countdownCard', widget: 'countdown' },
+  news:      { cardId: 'newsCard',      widget: 'news'      },
+  stock:     { cardId: 'stockCard',     widget: 'stock'     },
+  assistant: { cardId: 'assistantCard', widget: 'assistant' },
+  more:      { cardId: 'moreCard'                           },
+};
+
 // User-defined widget order (keys only). Persisted in fh_widget_order.
 // New widgets not in saved order are appended at the end.
 let widgetOrder = lsGet('fh_widget_order', null);
@@ -9679,9 +9699,14 @@ async function lcDelTrash(id) {
 
 // ── Appearance mode ────────────────────────────────────────────
 function setMobileTab(tab) {
+  if (tab !== 'cal' && !MOBILE_TABS[tab]) tab = 'cal';  // stale fh_mobileTab from a removed tab
   mobileTab = tab;
   localStorage.setItem('fh_mobileTab', tab);
   document.body.setAttribute('data-mobile-tab', tab);
+  // Stamp the tab's card; generic CSS hides every other sidebar card
+  document.querySelectorAll('.card.mobile-tab-active').forEach(c => c.classList.remove('mobile-tab-active'));
+  const activeCard = MOBILE_TABS[tab] && document.getElementById(MOBILE_TABS[tab].cardId);
+  if (activeCard) activeCard.classList.add('mobile-tab-active');
   const calBtn     = document.getElementById('mobileNavCal');
   const todoBtn    = document.getElementById('mobileNavTodo');
   const shopBtn    = document.getElementById('mobileNavShop');
