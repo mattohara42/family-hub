@@ -361,8 +361,8 @@ const WIDGET_ORDER = [
 ];
 ```
 **Key functions:**
-- `applyWidgetPlacement()` — moves each card DOM node to `.sidebar` or `#bottomStrip` in canonical order, then calls `applyWidgetVisibility()`
-- `applyWidgetVisibility()` — shows/hides each card; handles yearstrip special case (sidebar→`#yearCard`, bottom→`#yearStrip`)
+- `applyWidgetPlacement()` — moves each card DOM node to `.sidebar` or `#bottomStrip` in canonical order, then calls `applyWidgetVisibility()`. **Placement is desktop-only:** under 640px every card stays in `.sidebar` so the mobile tab system can reach it; crossing the breakpoint re-distributes (resize handler).
+- `applyWidgetVisibility()` — shows/hides each card; handles yearstrip special case (sidebar→`#yearCard`, bottom→`#yearStrip`). On mobile, if the open tab's widget was just disabled (locally or via settings sync) it bounces the tab to Calendar and keeps the More grid in sync (see §20).
 
 **Special case — Year at a Glance:**
 - In **sidebar**: `#yearCard` (shows 2 months with ‹/› navigation)
@@ -740,6 +740,38 @@ let lastWxData    = null;  // set by renderWeatherData(); reused for the temp li
 
 **localStorage:** `fh_saver`, `fh_saverIdleMin`, `fh_saverDwellSec`, `fh_saverClock`, `fh_saverInfo`, `fh_saverNight`, `fh_saverNightStart`, `fh_saverNightEnd`
 
+**Mobile:** never activates under 640px — `resetSaverIdleTimer()`/`startScreensaver()` bail when `isMobile` (battery + OS lock screen); crossing the breakpoint re-arms/disarms via the resize handler. The Settings toggle governs desktop/kiosk only.
+
+---
+
+### 20. Mobile Layout (bottom nav + tab registry)
+
+**Overview:** Under 640px the app becomes a tab-per-card layout: a fixed bottom nav (Calendar · To-Do · Shopping · Weather · ☰ More) plus secondary tabs reached from the More tab's feature grid. A mobile tab shows exactly one sidebar card full-screen ('cal' shows `.cal-column` instead).
+
+**Registry (single source of truth):**
+```js
+const MOBILE_TABS = { todo: { cardId, widget }, …, more: { cardId: 'moreCard' } };
+// cardId — the card shown full-screen on that tab
+// widget — optional widgetVisibility key gating the tab (button hidden, tab bounced when off)
+// menu:{icon,label} — presence puts the tab in the More-tab feature grid
+```
+Adding a card to mobile = one registry entry. **No per-tab CSS:** `setMobileTab()` stamps `.mobile-tab-active` on the tab's card and four generic rules in the 640px media query (family-hub.css §8) hide everything else. The active-card rule is `!important` so a synced `display:none` from `applyWidgetVisibility()` can't blank the screen before the tab bounces.
+
+**Key functions:**
+- `setMobileTab(tab)` — validates (unknown tab or disabled widget → `'cal'`), persists, stamps the active card, highlights the nav button; calls `updateMoreCard()` on the More tab
+- `getInitialMobileTab()` / `getTimeBasedDefaultTab()` — time-of-day default on first visit of the day (`fh_mobileTabDate`), else last tab
+- `updateMoreCard()` — renders the More tab: theme buttons, Flavor row (from `FLAVORS`), feature grid (from `MOBILE_TABS` × `widgetVisibility`), sign-in/out
+- `navigateToMenuItem(item)` — More-grid routing; `'members'` opens Settings
+- `updateIsMobile()` + resize handler — `isMobile` (<640px); breakpoint crossings re-run `applyWidgetPlacement()` and `resetSaverIdleTimer()`
+
+**More tab (`#moreCard`):** quick settings for both presentation axes (theme + flavor), preference-gated feature grid, account, Full Settings. Hidden on desktop (`#moreCard { display: none }` outside the media query).
+
+**Tactile/theming:** nav + More chrome derive from tokens (`--line`, `--surface-solid/-hi`, `--accent`); Tactile mobile rules use neutral tokens only (KTD-4-safe). Touch tap-target sizing (nav buttons, assistant send/mic 42px) lives inside `@media (hover: none)` per the CLAUDE.md invariant.
+
+**HTML anchors:** `.mobile-bottom-nav` / `#mobileNav`, `#hamburgerBtn`, `#moreCard`, `#moreNavGrid`, `#moreFlavorGrid`
+
+**localStorage:** `fh_mobileTab`, `fh_mobileTabDate`
+
 ---
 
 ## localStorage Key Index
@@ -797,8 +829,8 @@ let lastWxData    = null;  // set by renderWeatherData(); reused for the temp li
 | `fh_saverNightEnd` | string | Screensaver | Night window end `HH:MM` (default `06:30`, wraps midnight) |
 | `fh_eventLocation` | string | Event Discovery | Default search location (default `'Rochester'`) |
 | `fh_eventMaxDistance` | number | Event Discovery | Max distance in minutes driving time (default 120) |
-| `fh_mobileTab` | string | Mobile (U1) | Current mobile tab `'cal'` \| `'todo'` \| `'shop'` \| `'weather'` \| menu items |
-| `fh_mobileTabDate` | string | Mobile (U3) | YYYY-MM-DD of last mobile tab switch (for time-based defaults) |
+| `fh_mobileTab` | string | Mobile (§20) | Current mobile tab — `'cal'` or any `MOBILE_TABS` key; invalid/disabled values bounce to `'cal'` |
+| `fh_mobileTabDate` | string | Mobile (§20) | YYYY-MM-DD of last mobile tab switch (for time-based defaults) |
 
 **Firestore collections:**
 

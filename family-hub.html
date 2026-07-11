@@ -46,32 +46,6 @@
   See <code>family-hub-setup.md</code> for step-by-step instructions.
 </div>
 
-<!-- Menu drawer (slides from left) -->
-<div class="menu-drawer" id="menuDrawer">
-  <div class="menu-header">
-    <h2>Menu</h2>
-    <button class="menu-close" onclick="closeMenu()" aria-label="Close menu">✕</button>
-  </div>
-  <nav class="menu-items">
-    <!-- Secondary widgets -->
-    <button class="menu-item" onclick="navigateToMenuItem('budget')">💰 Budget</button>
-    <button class="menu-item" onclick="navigateToMenuItem('wotd')">📖 Word of the Day</button>
-    <button class="menu-item" onclick="navigateToMenuItem('dadjoke')">😄 Dad Joke</button>
-    <button class="menu-item" onclick="navigateToMenuItem('quotes')">💭 Quotes</button>
-    <button class="menu-item" onclick="navigateToMenuItem('countdown')">⏱️ Countdown</button>
-    <button class="menu-item" onclick="navigateToMenuItem('news')">📰 News</button>
-    <button class="menu-item" onclick="navigateToMenuItem('stock')">📈 Stock</button>
-    <button class="menu-item" onclick="navigateToMenuItem('assistant')">🤖 Assistant</button>
-    <hr style="margin:8px 0;border:none;border-top:1px solid rgba(255,255,255,0.1)">
-    <!-- Settings and account -->
-    <button class="menu-item" onclick="openSettings();closeMenu()">⚙️ Settings</button>
-    <button class="menu-item" onclick="openSettings();closeMenu()">👥 Family Members</button>
-  </nav>
-</div>
-
-<!-- Menu backdrop (for closing when clicked outside) -->
-<div class="menu-backdrop" id="menuBackdrop" onclick="closeMenu()"></div>
-
 <div class="layout">
 
   <!-- Left: calendar + 6-month strip stacked -->
@@ -425,20 +399,16 @@
             <button class="btn btn-sm more-theme-btn" id="moreModeAurora"      onclick="setAppMode('aurora')">🌌 Aurora</button>
             <button class="btn btn-sm more-theme-btn" id="moreModeColorblind"  onclick="setAppMode('colorblind')">👁 Accessible</button>
           </div>
+          <div class="more-section-label" style="margin-top:12px">Flavor</div>
+          <div class="more-theme-grid" id="moreFlavorGrid">
+            <!-- populated by updateMoreCard() from the FLAVORS registry -->
+          </div>
         </section>
 
         <section>
           <div class="more-section-label">More Features</div>
-          <div class="more-nav-grid">
-            <button class="more-nav-item" onclick="navigateToMenuItem('budget')"><span class="more-nav-icon">💰</span><span>Budget</span></button>
-            <button class="more-nav-item" onclick="navigateToMenuItem('wotd')"><span class="more-nav-icon">📖</span><span>Word</span></button>
-            <button class="more-nav-item" onclick="navigateToMenuItem('dadjoke')"><span class="more-nav-icon">😄</span><span>Joke</span></button>
-            <button class="more-nav-item" onclick="navigateToMenuItem('quotes')"><span class="more-nav-icon">💭</span><span>Quotes</span></button>
-            <button class="more-nav-item" onclick="navigateToMenuItem('countdown')"><span class="more-nav-icon">⏱️</span><span>Countdown</span></button>
-            <button class="more-nav-item" onclick="navigateToMenuItem('news')"><span class="more-nav-icon">📰</span><span>News</span></button>
-            <button class="more-nav-item" onclick="navigateToMenuItem('stock')"><span class="more-nav-icon">📈</span><span>Stock</span></button>
-            <button class="more-nav-item" onclick="navigateToMenuItem('assistant')"><span class="more-nav-icon">🤖</span><span>Assistant</span></button>
-            <button class="more-nav-item" onclick="navigateToMenuItem('members')"><span class="more-nav-icon">👥</span><span>Family</span></button>
+          <div class="more-nav-grid" id="moreNavGrid">
+            <!-- populated by updateMoreCard(): registry tabs gated on widget visibility -->
           </div>
         </section>
 

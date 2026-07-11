@@ -279,8 +279,7 @@ function getInitialMobileTab() {
   return defaultTab;
 }
 
-let mobileTab       = getInitialMobileTab();  // 'cal' | 'todo' | 'shop' | 'weather'
-let isMenuOpen      = false;
+let mobileTab       = getInitialMobileTab();  // 'cal' | any MOBILE_TABS key
 
 // Compute isMobile boolean for viewport-width-dependent logic
 function updateIsMobile() {
@@ -288,9 +287,15 @@ function updateIsMobile() {
 }
 let isMobile = updateIsMobile();
 
-// Update isMobile on resize
+// Update isMobile on resize; crossing the breakpoint re-distributes widget
+// cards (placement is desktop-only — see applyWidgetPlacement)
 window.addEventListener('resize', () => {
+  const wasMobile = isMobile;
   isMobile = updateIsMobile();
+  if (wasMobile !== isMobile) {
+    applyWidgetPlacement();
+    resetSaverIdleTimer();  // screensaver is desktop-only; re-arm/disarm on crossing
+  }
 });
 
 // Optional: Lock orientation to portrait on mobile (if browser supports it)
@@ -411,6 +416,28 @@ const WIDGET_ORDER = [
   { key: 'stock',     id: 'stockCard'     },
 ];
 
+// Mobile tab registry — tab name → the one card shown full-screen on that tab.
+// 'cal' is special-cased in CSS (shows .cal-column, hides the sidebar).
+// Adding a card to mobile = one entry here; no per-tab CSS. `widget` gates the
+// tab on widgetVisibility (More-grid button hidden, active tab bounced when the
+// widget is turned off — locally or by a synced pref change). `menu` puts the
+// tab in the More-tab feature grid; tabs without it live in the bottom nav.
+const MOBILE_TABS = {
+  todo:      { cardId: 'todoCard',      widget: 'todo'      },
+  shop:      { cardId: 'shopCard',      widget: 'shopping'  },
+  weather:   { cardId: 'weatherCard'                        },
+  budget:    { cardId: 'budgetCard',    widget: 'budget',    menu: { icon: '💰', label: 'Budget' } },
+  chores:    { cardId: 'choreCard',     widget: 'chores',    menu: { icon: '⭐', label: 'Chores' } },
+  wotd:      { cardId: 'wotdCard',      widget: 'wotd',      menu: { icon: '📖', label: 'Word' } },
+  dadjoke:   { cardId: 'dadjokeCard',   widget: 'dadjoke',   menu: { icon: '😄', label: 'Joke' } },
+  quotes:    { cardId: 'quoteCard',     widget: 'quote',     menu: { icon: '💭', label: 'Quotes' } },
+  countdown: { cardId: 'countdownCard', widget: 'countdown', menu: { icon: '⏱️', label: 'Countdown' } },
+  news:      { cardId: 'newsCard',      widget: 'news',      menu: { icon: '📰', label: 'News' } },
+  stock:     { cardId: 'stockCard',     widget: 'stock',     menu: { icon: '📈', label: 'Stock' } },
+  assistant: { cardId: 'assistantCard', widget: 'assistant', menu: { icon: '🤖', label: 'Assistant' } },
+  more:      { cardId: 'moreCard'                            },
+};
+
 // User-defined widget order (keys only). Persisted in fh_widget_order.
 // New widgets not in saved order are appended at the end.
 let widgetOrder = lsGet('fh_widget_order', null);
@@ -429,13 +456,16 @@ function applyWidgetPlacement() {
   const bottomStrip = document.getElementById('bottomStrip');
   if (!sidebar || !bottomStrip) return;
 
-  // Distribute each widget card to the right container in user-defined order
+  // Distribute each widget card to the right container in user-defined order.
+  // Placement is a desktop-layout concept: on mobile every card stays in the
+  // sidebar, where the tab system (MOBILE_TABS) can reach it — a 'bottom' card
+  // would otherwise ride along inside .cal-column and leave its tab blank.
   resolvedWidgetOrder().forEach(key => {
     const entry = WIDGET_ORDER.find(w => w.key === key);
     if (!entry) return;
     const card = document.getElementById(entry.id);
     if (!card) return;
-    const dest = widgetPlacement[key] === 'bottom' ? bottomStrip : sidebar;
+    const dest = (!isMobile && widgetPlacement[key] === 'bottom') ? bottomStrip : sidebar;
     dest.appendChild(card);
   });
 
@@ -541,6 +571,13 @@ function applyWidgetVisibility() {
     const hasVisible = [...bottomStrip.children].some(c => c.style.display !== 'none');
     bottomStrip.style.display = hasVisible ? '' : 'none';
   }
+
+  // Mobile: if the open tab's widget was just disabled (here or via settings
+  // sync from another device), bounce to Calendar instead of a blank screen;
+  // re-render the More grid so its buttons track visibility.
+  const activeTab = MOBILE_TABS[mobileTab];
+  if (activeTab && activeTab.widget && !widgetVisibility[activeTab.widget]) setMobileTab('cal');
+  else if (mobileTab === 'more') updateMoreCard();
 }
 
 // ── Budget ───────────────────────────────────────────────────────────────────
@@ -9679,9 +9716,16 @@ async function lcDelTrash(id) {
 
 // ── Appearance mode ────────────────────────────────────────────
 function setMobileTab(tab) {
+  if (tab !== 'cal' && !MOBILE_TABS[tab]) tab = 'cal';  // stale fh_mobileTab from a removed tab
+  const gate = MOBILE_TABS[tab] && MOBILE_TABS[tab].widget;
+  if (gate && !widgetVisibility[gate]) tab = 'cal';     // widget disabled (possibly on another device)
   mobileTab = tab;
   localStorage.setItem('fh_mobileTab', tab);
   document.body.setAttribute('data-mobile-tab', tab);
+  // Stamp the tab's card; generic CSS hides every other sidebar card
+  document.querySelectorAll('.card.mobile-tab-active').forEach(c => c.classList.remove('mobile-tab-active'));
+  const activeCard = MOBILE_TABS[tab] && document.getElementById(MOBILE_TABS[tab].cardId);
+  if (activeCard) activeCard.classList.add('mobile-tab-active');
   const calBtn     = document.getElementById('mobileNavCal');
   const todoBtn    = document.getElementById('mobileNavTodo');
   const shopBtn    = document.getElementById('mobileNavShop');
@@ -9702,6 +9746,22 @@ function updateMoreCard() {
     const btn = document.getElementById(id);
     if (btn) btn.classList.toggle('active', appMode === mode);
   });
+  // Flavor row from the FLAVORS registry (same data as the Settings buttons)
+  const flavorGrid = document.getElementById('moreFlavorGrid');
+  if (flavorGrid) {
+    flavorGrid.innerHTML = FLAVORS.map(f =>
+      `<button class="btn btn-sm more-theme-btn${f.id === appFlavor ? ' active' : ''}" onclick="setFlavor('${f.id}');updateMoreCard()">${f.label}</button>`
+    ).join('');
+  }
+  // Feature grid: secondary tabs from the registry, gated on widget visibility
+  const grid = document.getElementById('moreNavGrid');
+  if (grid) {
+    const btns = Object.entries(MOBILE_TABS)
+      .filter(([, t]) => t.menu && (!t.widget || widgetVisibility[t.widget]))
+      .map(([tab, t]) => `<button class="more-nav-item" onclick="navigateToMenuItem('${tab}')"><span class="more-nav-icon">${t.menu.icon}</span><span>${t.menu.label}</span></button>`);
+    btns.push(`<button class="more-nav-item" onclick="navigateToMenuItem('members')"><span class="more-nav-icon">👥</span><span>Family</span></button>`);
+    grid.innerHTML = btns.join('');
+  }
   // Show/hide sign-in / sign-out
   const signInBtn  = document.getElementById('moreSignInBtn');
   const signOutBtn = document.getElementById('moreSignOutBtn');
@@ -9709,48 +9769,9 @@ function updateMoreCard() {
   if (signOutBtn) signOutBtn.style.display = googleToken ? '' : 'none';
 }
 
-function toggleMenu() {
-  if (isMenuOpen) closeMenu();
-  else openMenu();
-}
-
-function openMenu() {
-  isMenuOpen = true;
-  const drawer = document.getElementById('menuDrawer');
-  const backdrop = document.getElementById('menuBackdrop');
-  if (drawer) drawer.classList.add('open');
-  if (backdrop) backdrop.classList.add('open');
-}
-
-function closeMenu() {
-  isMenuOpen = false;
-  const drawer = document.getElementById('menuDrawer');
-  const backdrop = document.getElementById('menuBackdrop');
-  if (drawer) drawer.classList.remove('open');
-  if (backdrop) backdrop.classList.remove('open');
-}
-
 function navigateToMenuItem(item) {
-  if (item === 'members') {
-    closeMenu();
-    openSettings();
-    return;
-  }
-  const menuItemMap = {
-    'budget': 'budget',
-    'wotd': 'wotd',
-    'dadjoke': 'dadjoke',
-    'quotes': 'quotes',
-    'countdown': 'countdown',
-    'news': 'news',
-    'stock': 'stock',
-    'assistant': 'assistant',
-  };
-  const tabToShow = menuItemMap[item];
-  if (tabToShow) {
-    setMobileTab(tabToShow);
-    closeMenu();
-  }
+  if (item === 'members') { openSettings(); return; }
+  if (MOBILE_TABS[item]) setMobileTab(item);
 }
 
 const THEME_COLORS = {
@@ -9911,6 +9932,7 @@ function setAppMode(mode) {
   document.getElementById('modeNautical').className       = 'btn btn-sm' + (mode === 'nautical'       ? ' btn-mode-active' : '');
   document.getElementById('modeAurora').className         = 'btn btn-sm' + (mode === 'aurora'         ? ' btn-mode-active' : '');
   document.getElementById('modeColorblind').className     = 'btn btn-sm' + (mode === 'colorblind'     ? ' btn-mode-active' : '');
+  updateMoreCard();  // keep the More-tab theme highlight in sync when tapped there
 }
 
 function setFlavor(flavor) {
@@ -10842,13 +10864,18 @@ function getNextCalendarEvent() {
 
 function resetSaverIdleTimer() {
   clearTimeout(_saverIdleTimer);
-  if (!saverEnabled || saverActive) return;
+  // Never on phones: the slideshow is a kiosk/desktop feature — on mobile it
+  // burns battery and fights the OS lock screen. The setting still governs
+  // desktop; isMobile is rechecked here on every re-arm, so crossing the
+  // breakpoint needs no extra wiring.
+  if (!saverEnabled || saverActive || isMobile) return;
   _saverIdleTimer = setTimeout(startScreensaver, Math.max(1, saverIdleMin) * 60000);
 }
 
 function startScreensaver() {
   // No photos (yet) or tab hidden — re-arm and try again next idle period
   if (!saverEnabled || saverActive || document.hidden || !bgPhotos.length) { resetSaverIdleTimer(); return; }
+  if (isMobile) return;  // guard the direct path too (timer armed pre-resize)
   saverActive = true;
   document.getElementById('saverClock').style.transform = '';
   _saverNightOn = false;

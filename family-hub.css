@@ -4074,6 +4074,14 @@ a, button, input, select, textarea, label,
     font-size: 1.1rem;
   }
 
+  /* Assistant send/mic: 30px circles are too small for fingers */
+  .assistant-send,
+  .assistant-mic {
+    width: 42px;
+    height: 42px;
+    flex-shrink: 0;
+  }
+
   /* View tabs (Month/Week/Day): taller hit area */
   .cal-view-tab {
     padding: 9px 15px;
@@ -4144,112 +4152,47 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
 /* Hidden on desktop — shown only inside the 640px media query below */
 .mobile-bottom-nav { display: none; }
 .hamburger-btn { display: none; } /* shown only via .mobile-bottom-nav on mobile */
-.menu-drawer { display: none; }
-.menu-backdrop { display: none; }
 
 @media (max-width: 640px) {
-  /* Mobile tabs always use column layout regardless of portrait-mode class */
-  body[data-mobile-tab] .sidebar {
+  /* Registry-driven tabs: setMobileTab() stamps .mobile-tab-active on the one
+     card named in MOBILE_TABS (family-hub.js); everything else in the sidebar
+     is hidden by the generic rules below. 'cal' shows the calendar column and
+     no sidebar. Adding a card to mobile needs no CSS here. */
+
+  body[data-mobile-tab="cal"] .sidebar { display: none; }
+  body[data-mobile-tab]:not([data-mobile-tab="cal"]) .cal-column { display: none; }
+
+  /* Column layout regardless of portrait-mode class */
+  body[data-mobile-tab]:not([data-mobile-tab="cal"]) .sidebar {
+    display: flex !important;
     flex-direction: column !important;
     flex-wrap: nowrap !important;
+    align-items: stretch;
     overflow-y: auto !important;
+    flex: 1;
+    min-height: 0;
+    width: 100%;
   }
-  body[data-mobile-tab] .sidebar > .card {
+
+  body[data-mobile-tab]:not([data-mobile-tab="cal"]) .sidebar > .card { display: none; }
+
+  /* The active card fills the tab. No min-height: 0 — the auto minimum is what
+     lets tall content grow the card so the sidebar scrolls. !important also
+     overrides the inline display:none applyWidgetVisibility() puts on disabled
+     widgets (setMobileTab never activates one, but a synced pref change must
+     not blank the screen before the tab bounces). */
+  body[data-mobile-tab] .sidebar > .card.mobile-tab-active {
+    display: block !important;
     flex: 1 !important;
-  }
-
-  /* Calendar tab: show calendar, hide sidebar */
-  body[data-mobile-tab="cal"] .sidebar { display: none; }
-
-  /* To-Do tab: show only to-do card full-width */
-  body[data-mobile-tab="todo"] .cal-column { display: none; }
-  body[data-mobile-tab="todo"] .sidebar {
-    display: flex !important;
-    flex-direction: column;
-    align-items: stretch;
-    overflow-y: auto;
-    flex: 1;
-    min-height: 0;
-    width: 100%;
-  }
-  body[data-mobile-tab="todo"] .sidebar > .card {
     width: 100%;
     box-sizing: border-box;
-    flex: none;
   }
-  body[data-mobile-tab="todo"] .sidebar > #weatherCard,
-  body[data-mobile-tab="todo"] .sidebar > #shopCard,
-  body[data-mobile-tab="todo"] .sidebar > #budgetCard,
-  body[data-mobile-tab="todo"] .sidebar > #choreCard,
-  body[data-mobile-tab="todo"] .sidebar > #yearCard,
-  body[data-mobile-tab="todo"] .sidebar > #wotdCard,
-  body[data-mobile-tab="todo"] .sidebar > #dadjokeCard,
-  body[data-mobile-tab="todo"] .sidebar > #quoteCard,
-  body[data-mobile-tab="todo"] .sidebar > #countdownCard,
-  body[data-mobile-tab="todo"] .sidebar > #newsCard,
-  body[data-mobile-tab="todo"] .sidebar > #stockCard,
-  body[data-mobile-tab="todo"] .sidebar > #assistantCard,
-  body[data-mobile-tab="todo"] .sidebar > #controlCard { display: none; }
-
-  /* Shopping tab: show only shopping card full-width */
-  body[data-mobile-tab="shop"] .cal-column { display: none; }
-  body[data-mobile-tab="shop"] .sidebar {
+  /* More card lays out its sections as a flex column (Full Settings pinned
+     to the bottom via margin-top: auto) */
+  body[data-mobile-tab="more"] .sidebar > #moreCard.mobile-tab-active {
     display: flex !important;
     flex-direction: column;
-    align-items: stretch;
-    overflow-y: auto;
-    flex: 1;
-    min-height: 0;
-    width: 100%;
   }
-  body[data-mobile-tab="shop"] .sidebar > .card {
-    width: 100%;
-    box-sizing: border-box;
-    flex: none;
-  }
-  body[data-mobile-tab="shop"] .sidebar > #weatherCard,
-  body[data-mobile-tab="shop"] .sidebar > #todoCard,
-  body[data-mobile-tab="shop"] .sidebar > #budgetCard,
-  body[data-mobile-tab="shop"] .sidebar > #choreCard,
-  body[data-mobile-tab="shop"] .sidebar > #yearCard,
-  body[data-mobile-tab="shop"] .sidebar > #wotdCard,
-  body[data-mobile-tab="shop"] .sidebar > #dadjokeCard,
-  body[data-mobile-tab="shop"] .sidebar > #quoteCard,
-  body[data-mobile-tab="shop"] .sidebar > #countdownCard,
-  body[data-mobile-tab="shop"] .sidebar > #newsCard,
-  body[data-mobile-tab="shop"] .sidebar > #stockCard,
-  body[data-mobile-tab="shop"] .sidebar > #assistantCard,
-  body[data-mobile-tab="shop"] .sidebar > #controlCard { display: none; }
-
-  /* Weather tab: show only weather card full-width */
-  body[data-mobile-tab="weather"] .cal-column { display: none; }
-  body[data-mobile-tab="weather"] .sidebar {
-    display: flex !important;
-    flex-direction: column;
-    align-items: stretch;
-    overflow-y: auto;
-    flex: 1;
-    min-height: 0;
-    width: 100%;
-  }
-  body[data-mobile-tab="weather"] .sidebar > .card {
-    width: 100%;
-    box-sizing: border-box;
-    flex: 1;
-  }
-  body[data-mobile-tab="weather"] .sidebar > #todoCard,
-  body[data-mobile-tab="weather"] .sidebar > #shopCard,
-  body[data-mobile-tab="weather"] .sidebar > #budgetCard,
-  body[data-mobile-tab="weather"] .sidebar > #choreCard,
-  body[data-mobile-tab="weather"] .sidebar > #yearCard,
-  body[data-mobile-tab="weather"] .sidebar > #wotdCard,
-  body[data-mobile-tab="weather"] .sidebar > #dadjokeCard,
-  body[data-mobile-tab="weather"] .sidebar > #quoteCard,
-  body[data-mobile-tab="weather"] .sidebar > #countdownCard,
-  body[data-mobile-tab="weather"] .sidebar > #newsCard,
-  body[data-mobile-tab="weather"] .sidebar > #stockCard,
-  body[data-mobile-tab="weather"] .sidebar > #assistantCard,
-  body[data-mobile-tab="weather"] .sidebar > #controlCard { display: none; }
 
   /* Bottom nav bar */
   .mobile-bottom-nav {
@@ -4261,7 +4204,7 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
     height: 56px;
     padding-bottom: env(safe-area-inset-bottom, 0px);
     background: var(--surface);
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    border-top: 1px solid var(--line); /* hardcoded white was invisible in light themes */
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     z-index: 200;
@@ -4276,6 +4219,7 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
     background: none;
     border: none;
     color: var(--muted);
+    font-family: inherit; /* buttons don't inherit — UA Arial otherwise */
     font-size: 0.65rem;
     font-weight: var(--weight-semi);
     letter-spacing: 0.04em;
@@ -4308,260 +4252,8 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
   /* Hamburger button — lives in the bottom nav as a regular nav item */
   .hamburger-btn { font-size: inherit; }
 
-  /* Menu drawer */
-  .menu-drawer {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 75vw;
-    max-width: 300px;
-    height: 100vh;
-    background: var(--surface);
-    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.3);
-    transform: translateX(-100%);
-    transition: transform 0.3s ease-out;
-    z-index: 250;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-  }
-  .menu-drawer.open {
-    transform: translateX(0);
-  }
-
-  /* Menu header */
-  .menu-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 16px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  }
-  .menu-header h2 {
-    margin: 0;
-    font-size: 1.2rem;
-    font-weight: var(--weight-semi);
-  }
-  .menu-close {
-    background: none;
-    border: none;
-    color: var(--muted);
-    font-size: 1.5rem;
-    cursor: pointer;
-    padding: 4px;
-    touch-action: manipulation;
-  }
-
-  /* Menu items navigation */
-  .menu-items {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-    flex: 1;
-  }
-  .menu-item {
-    background: none;
-    border: none;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    color: var(--text);
-    padding: 14px 16px;
-    text-align: left;
-    font-size: 0.95rem;
-    cursor: pointer;
-    touch-action: manipulation;
-    transition: background-color 0.15s;
-  }
-  .menu-item:active { background-color: var(--surface2); }
-
-  /* Menu backdrop (for closing when clicked outside) */
-  .menu-backdrop {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.3s ease-out;
-    z-index: 240;
-  }
-  .menu-backdrop.open {
-    background: rgba(0, 0, 0, 0.5);
-    opacity: 1;
-    pointer-events: auto;
-  }
-
-  /* Secondary menu items: Budget, WOTD, Dad Joke, Quotes, Countdown, News, Stock, Assistant, Members */
-  /* Each shows full-screen with only that card visible */
-  body[data-mobile-tab="budget"] .cal-column,
-  body[data-mobile-tab="wotd"] .cal-column,
-  body[data-mobile-tab="dadjoke"] .cal-column,
-  body[data-mobile-tab="quotes"] .cal-column,
-  body[data-mobile-tab="countdown"] .cal-column,
-  body[data-mobile-tab="news"] .cal-column,
-  body[data-mobile-tab="stock"] .cal-column,
-  body[data-mobile-tab="assistant"] .cal-column { display: none; }
-
-  body[data-mobile-tab="budget"] .sidebar,
-  body[data-mobile-tab="wotd"] .sidebar,
-  body[data-mobile-tab="dadjoke"] .sidebar,
-  body[data-mobile-tab="quotes"] .sidebar,
-  body[data-mobile-tab="countdown"] .sidebar,
-  body[data-mobile-tab="news"] .sidebar,
-  body[data-mobile-tab="stock"] .sidebar,
-  body[data-mobile-tab="assistant"] .sidebar {
-    display: flex !important;
-    flex-direction: column;
-    align-items: stretch;
-    overflow-y: auto;
-    flex: 1;
-    min-height: 0;
-    width: 100%;
-  }
-
-  body[data-mobile-tab="budget"] .sidebar > .card,
-  body[data-mobile-tab="wotd"] .sidebar > .card,
-  body[data-mobile-tab="dadjoke"] .sidebar > .card,
-  body[data-mobile-tab="quotes"] .sidebar > .card,
-  body[data-mobile-tab="countdown"] .sidebar > .card,
-  body[data-mobile-tab="news"] .sidebar > .card,
-  body[data-mobile-tab="stock"] .sidebar > .card,
-  body[data-mobile-tab="assistant"] .sidebar > .card {
-    width: 100%;
-    box-sizing: border-box;
-    flex: none;
-  }
-
-  /* Hide non-matching cards for each menu item */
-  body[data-mobile-tab="budget"] .sidebar > #wotdCard,
-  body[data-mobile-tab="budget"] .sidebar > #dadjokeCard,
-  body[data-mobile-tab="budget"] .sidebar > #quoteCard,
-  body[data-mobile-tab="budget"] .sidebar > #countdownCard,
-  body[data-mobile-tab="budget"] .sidebar > #newsCard,
-  body[data-mobile-tab="budget"] .sidebar > #stockCard,
-  body[data-mobile-tab="budget"] .sidebar > #assistantCard,
-  body[data-mobile-tab="budget"] .sidebar > #todoCard,
-  body[data-mobile-tab="budget"] .sidebar > #shopCard,
-  body[data-mobile-tab="budget"] .sidebar > #weatherCard,
-  body[data-mobile-tab="budget"] .sidebar > #choreCard,
-  body[data-mobile-tab="budget"] .sidebar > #yearCard,
-  body[data-mobile-tab="budget"] .sidebar > #controlCard { display: none; }
-
-  body[data-mobile-tab="wotd"] .sidebar > #budgetCard,
-  body[data-mobile-tab="wotd"] .sidebar > #dadjokeCard,
-  body[data-mobile-tab="wotd"] .sidebar > #quoteCard,
-  body[data-mobile-tab="wotd"] .sidebar > #countdownCard,
-  body[data-mobile-tab="wotd"] .sidebar > #newsCard,
-  body[data-mobile-tab="wotd"] .sidebar > #stockCard,
-  body[data-mobile-tab="wotd"] .sidebar > #assistantCard,
-  body[data-mobile-tab="wotd"] .sidebar > #todoCard,
-  body[data-mobile-tab="wotd"] .sidebar > #shopCard,
-  body[data-mobile-tab="wotd"] .sidebar > #weatherCard,
-  body[data-mobile-tab="wotd"] .sidebar > #choreCard,
-  body[data-mobile-tab="wotd"] .sidebar > #yearCard,
-  body[data-mobile-tab="wotd"] .sidebar > #controlCard { display: none; }
-
-  body[data-mobile-tab="dadjoke"] .sidebar > #budgetCard,
-  body[data-mobile-tab="dadjoke"] .sidebar > #wotdCard,
-  body[data-mobile-tab="dadjoke"] .sidebar > #quoteCard,
-  body[data-mobile-tab="dadjoke"] .sidebar > #countdownCard,
-  body[data-mobile-tab="dadjoke"] .sidebar > #newsCard,
-  body[data-mobile-tab="dadjoke"] .sidebar > #stockCard,
-  body[data-mobile-tab="dadjoke"] .sidebar > #assistantCard,
-  body[data-mobile-tab="dadjoke"] .sidebar > #todoCard,
-  body[data-mobile-tab="dadjoke"] .sidebar > #shopCard,
-  body[data-mobile-tab="dadjoke"] .sidebar > #weatherCard,
-  body[data-mobile-tab="dadjoke"] .sidebar > #choreCard,
-  body[data-mobile-tab="dadjoke"] .sidebar > #yearCard,
-  body[data-mobile-tab="dadjoke"] .sidebar > #controlCard { display: none; }
-
-  body[data-mobile-tab="quotes"] .sidebar > #budgetCard,
-  body[data-mobile-tab="quotes"] .sidebar > #wotdCard,
-  body[data-mobile-tab="quotes"] .sidebar > #dadjokeCard,
-  body[data-mobile-tab="quotes"] .sidebar > #countdownCard,
-  body[data-mobile-tab="quotes"] .sidebar > #newsCard,
-  body[data-mobile-tab="quotes"] .sidebar > #stockCard,
-  body[data-mobile-tab="quotes"] .sidebar > #assistantCard,
-  body[data-mobile-tab="quotes"] .sidebar > #todoCard,
-  body[data-mobile-tab="quotes"] .sidebar > #shopCard,
-  body[data-mobile-tab="quotes"] .sidebar > #weatherCard,
-  body[data-mobile-tab="quotes"] .sidebar > #choreCard,
-  body[data-mobile-tab="quotes"] .sidebar > #yearCard,
-  body[data-mobile-tab="quotes"] .sidebar > #controlCard { display: none; }
-
-  body[data-mobile-tab="countdown"] .sidebar > #budgetCard,
-  body[data-mobile-tab="countdown"] .sidebar > #wotdCard,
-  body[data-mobile-tab="countdown"] .sidebar > #dadjokeCard,
-  body[data-mobile-tab="countdown"] .sidebar > #quoteCard,
-  body[data-mobile-tab="countdown"] .sidebar > #newsCard,
-  body[data-mobile-tab="countdown"] .sidebar > #stockCard,
-  body[data-mobile-tab="countdown"] .sidebar > #assistantCard,
-  body[data-mobile-tab="countdown"] .sidebar > #todoCard,
-  body[data-mobile-tab="countdown"] .sidebar > #shopCard,
-  body[data-mobile-tab="countdown"] .sidebar > #weatherCard,
-  body[data-mobile-tab="countdown"] .sidebar > #choreCard,
-  body[data-mobile-tab="countdown"] .sidebar > #yearCard,
-  body[data-mobile-tab="countdown"] .sidebar > #controlCard { display: none; }
-
-  body[data-mobile-tab="news"] .sidebar > #budgetCard,
-  body[data-mobile-tab="news"] .sidebar > #wotdCard,
-  body[data-mobile-tab="news"] .sidebar > #dadjokeCard,
-  body[data-mobile-tab="news"] .sidebar > #quoteCard,
-  body[data-mobile-tab="news"] .sidebar > #countdownCard,
-  body[data-mobile-tab="news"] .sidebar > #stockCard,
-  body[data-mobile-tab="news"] .sidebar > #assistantCard,
-  body[data-mobile-tab="news"] .sidebar > #todoCard,
-  body[data-mobile-tab="news"] .sidebar > #shopCard,
-  body[data-mobile-tab="news"] .sidebar > #weatherCard,
-  body[data-mobile-tab="news"] .sidebar > #choreCard,
-  body[data-mobile-tab="news"] .sidebar > #yearCard,
-  body[data-mobile-tab="news"] .sidebar > #controlCard { display: none; }
-
-  body[data-mobile-tab="stock"] .sidebar > #budgetCard,
-  body[data-mobile-tab="stock"] .sidebar > #wotdCard,
-  body[data-mobile-tab="stock"] .sidebar > #dadjokeCard,
-  body[data-mobile-tab="stock"] .sidebar > #quoteCard,
-  body[data-mobile-tab="stock"] .sidebar > #countdownCard,
-  body[data-mobile-tab="stock"] .sidebar > #newsCard,
-  body[data-mobile-tab="stock"] .sidebar > #assistantCard,
-  body[data-mobile-tab="stock"] .sidebar > #todoCard,
-  body[data-mobile-tab="stock"] .sidebar > #shopCard,
-  body[data-mobile-tab="stock"] .sidebar > #weatherCard,
-  body[data-mobile-tab="stock"] .sidebar > #choreCard,
-  body[data-mobile-tab="stock"] .sidebar > #yearCard,
-  body[data-mobile-tab="stock"] .sidebar > #controlCard { display: none; }
-
-  body[data-mobile-tab="assistant"] .sidebar > #budgetCard,
-  body[data-mobile-tab="assistant"] .sidebar > #wotdCard,
-  body[data-mobile-tab="assistant"] .sidebar > #dadjokeCard,
-  body[data-mobile-tab="assistant"] .sidebar > #quoteCard,
-  body[data-mobile-tab="assistant"] .sidebar > #countdownCard,
-  body[data-mobile-tab="assistant"] .sidebar > #newsCard,
-  body[data-mobile-tab="assistant"] .sidebar > #stockCard,
-  body[data-mobile-tab="assistant"] .sidebar > #todoCard,
-  body[data-mobile-tab="assistant"] .sidebar > #shopCard,
-  body[data-mobile-tab="assistant"] .sidebar > #weatherCard,
-  body[data-mobile-tab="assistant"] .sidebar > #choreCard,
-  body[data-mobile-tab="assistant"] .sidebar > #yearCard,
-  body[data-mobile-tab="assistant"] .sidebar > #controlCard { display: none; }
-
-  /* More tab: show only the moreCard */
-  body[data-mobile-tab="more"] .cal-column { display: none; }
-  body[data-mobile-tab="more"] .sidebar > #weatherCard,
-  body[data-mobile-tab="more"] .sidebar > #todoCard,
-  body[data-mobile-tab="more"] .sidebar > #shopCard,
-  body[data-mobile-tab="more"] .sidebar > #budgetCard,
-  body[data-mobile-tab="more"] .sidebar > #choreCard,
-  body[data-mobile-tab="more"] .sidebar > #yearCard,
-  body[data-mobile-tab="more"] .sidebar > #wotdCard,
-  body[data-mobile-tab="more"] .sidebar > #dadjokeCard,
-  body[data-mobile-tab="more"] .sidebar > #quoteCard,
-  body[data-mobile-tab="more"] .sidebar > #countdownCard,
-  body[data-mobile-tab="more"] .sidebar > #newsCard,
-  body[data-mobile-tab="more"] .sidebar > #stockCard,
-  body[data-mobile-tab="more"] .sidebar > #assistantCard,
-  body[data-mobile-tab="more"] .sidebar > #controlCard { display: none; }
+  /* Secondary tabs (budget, wotd, chores, assistant, …) need no per-tab rules:
+     the registry rules at the top of this media query cover every tab. */
 }
 
 /* ≤400px: re-apply bottom padding (that breakpoint resets padding shorthand) */
@@ -5304,7 +4996,7 @@ body.tv-mode .card:hover { box-shadow: none; }
 /* ── More Tab (mobile) ── */
 #moreCard { display: none; }
 @media (max-width: 640px) {
-  body[data-mobile-tab="more"] #moreCard { display: flex; flex-direction: column; }
+  /* Shown via the registry rules in §8 (mobile-tab-active) when tab = more */
 
   .more-section-label {
     font-size: var(--text-xs);
@@ -5346,10 +5038,11 @@ body.tv-mode .card:hover { box-shadow: none; }
     border-radius: 10px;
     color: var(--text);
     cursor: pointer;
+    font-family: inherit; /* buttons don't inherit — UA Arial otherwise */
     font-size: var(--text-sm);
     transition: background .15s;
   }
-  .more-nav-item:active { background: rgba(108,142,245,.18); }
+  .more-nav-item:active { background: color-mix(in srgb, var(--accent) 18%, transparent); }
   .more-nav-icon { font-size: 1.4rem; line-height: 1; }
 }
 
@@ -5630,5 +5323,31 @@ body.flavor-tactile #saverClockTime { font-family: var(--font-display); }
       0 22px 40px rgba(70,55,30,.16),
       inset 0 1px 0 var(--surface-hi),
       inset 0 -1px 0 var(--surface-lo);
+  }
+}
+
+/* ── Tactile mobile chrome (bottom nav + More tab) — neutral tokens only,
+      so it stays KTD-4-safe under colorblind-mode/safe-palette-on ── */
+@media (max-width: 640px) {
+  body.flavor-tactile .mobile-bottom-nav {
+    background: linear-gradient(180deg, var(--surface-hi) 0%, var(--surface-solid) 40%);
+    border-top: 1px solid var(--line);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-shadow: 0 -2px 10px rgba(0,0,0,.18);
+  }
+  body.flavor-tactile.light-mode .mobile-bottom-nav,
+  body.flavor-tactile.aurora-mode .mobile-bottom-nav {
+    box-shadow: 0 -2px 10px rgba(70,55,30,.10);
+  }
+  body.flavor-tactile .more-nav-item,
+  body.flavor-tactile .more-theme-btn {
+    background: var(--surface-solid);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+  }
+  body.flavor-tactile .more-theme-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
   }
 }
