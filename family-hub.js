@@ -9326,7 +9326,7 @@ function toggleSmsPopover(event) {
   if (!contacts.length) {
     const empty = document.createElement('div');
     empty.className = 'sms-popover-empty';
-    empty.innerHTML = 'No recipients.<br><span style="color:var(--accent);cursor:pointer" onclick="openSettings();switchSettingsTab(\'family\')">Add phones in Settings → Family ↗</span>';
+    empty.innerHTML = 'No recipients.<br><span style="color:var(--accent);cursor:pointer" onclick="openSettings(\'family\')">Add phones in Settings → Family ↗</span>';
     pop.appendChild(empty);
   } else {
     contacts.forEach(c => {
@@ -9762,6 +9762,19 @@ function updateMoreCard() {
     btns.push(`<button class="more-nav-item" onclick="navigateToMenuItem('members')"><span class="more-nav-icon">👥</span><span>Family</span></button>`);
     grid.innerHTML = btns.join('');
   }
+  // Settings sections inline (no 'Full Settings' hop) — each row opens the
+  // modal already drilled into its panel. Gated groups follow eggs-unlocked.
+  const settingsList = document.getElementById('moreSettingsList');
+  if (settingsList) {
+    settingsList.innerHTML = SETTINGS_GROUPS
+      .filter(g => !g.gated || document.body.classList.contains('eggs-unlocked'))
+      .map(g =>
+        `<div class="more-settings-sublabel">${g.label}</div>` +
+        g.items.map(it =>
+          `<button class="more-settings-item" onclick="openSettings('${it.tab}')">${it.label}<span class="more-settings-chevron">›</span></button>`
+        ).join('')
+      ).join('');
+  }
   // Show/hide sign-in / sign-out
   const signInBtn  = document.getElementById('moreSignInBtn');
   const signOutBtn = document.getElementById('moreSignOutBtn');
@@ -9770,7 +9783,7 @@ function updateMoreCard() {
 }
 
 function navigateToMenuItem(item) {
-  if (item === 'members') { openSettings(); return; }
+  if (item === 'members') { openSettings('family'); return; }
   if (MOBILE_TABS[item]) setMobileTab(item);
 }
 
@@ -10081,10 +10094,12 @@ function handleSettingsGearClick() {
   }
 }
 
-function openSettings() {
+function openSettings(tab) {
   renderSettingsNav();
-  switchSettingsTab('look');   // active panel (shown on wide screens)
-  settingsShowNav();           // narrow screens: start on the nav list
+  switchSettingsTab(tab || 'look');   // active panel (shown on wide screens)
+  if (!tab) settingsShowNav();        // narrow screens: start on the nav list —
+                                      // unless a target panel was asked for (More
+                                      // tab deep-links), then stay drilled in
   const lmEl = document.getElementById('settingLayoutMode');
   if (lmEl) lmEl.value = layoutMode;
   document.getElementById('settingName').value           = userName;

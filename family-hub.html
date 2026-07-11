@@ -412,13 +412,19 @@
           </div>
         </section>
 
+        <section>
+          <div class="more-section-label">Settings</div>
+          <div id="moreSettingsList">
+            <!-- populated by updateMoreCard() from SETTINGS_GROUPS: every
+                 section inline, each opens the modal already on its panel -->
+          </div>
+        </section>
+
         <section style="display:flex;flex-direction:column;gap:8px">
           <div class="more-section-label">Account</div>
           <button id="moreSignInBtn"  class="btn btn-sm" onclick="signIn()"   style="width:100%;display:none">Sign in with Google</button>
           <button id="moreSignOutBtn" class="btn btn-sm" onclick="signOut()"  style="width:100%;display:none">Sign out</button>
         </section>
-
-        <button class="btn btn-sm" onclick="openSettings()" style="width:100%;margin-top:auto">⚙️ Full Settings</button>
 
       </div>
     </div>

@@ -760,11 +760,11 @@ Adding a card to mobile = one registry entry. **No per-tab CSS:** `setMobileTab(
 **Key functions:**
 - `setMobileTab(tab)` — validates (unknown tab or disabled widget → `'cal'`), persists, stamps the active card, highlights the nav button; calls `updateMoreCard()` on the More tab
 - `getInitialMobileTab()` / `getTimeBasedDefaultTab()` — time-of-day default on first visit of the day (`fh_mobileTabDate`), else last tab
-- `updateMoreCard()` — renders the More tab: theme buttons, Flavor row (from `FLAVORS`), feature grid (from `MOBILE_TABS` × `widgetVisibility`), sign-in/out
+- `updateMoreCard()` — renders the More tab: theme buttons, Flavor row (from `FLAVORS`), feature grid (from `MOBILE_TABS` × `widgetVisibility`), inline settings rows (from `SETTINGS_GROUPS`, gated groups follow `eggs-unlocked`), sign-in/out
 - `navigateToMenuItem(item)` — More-grid routing; `'members'` opens Settings
 - `updateIsMobile()` + resize handler — `isMobile` (<640px); breakpoint crossings re-run `applyWidgetPlacement()` and `resetSaverIdleTimer()`
 
-**More tab (`#moreCard`):** quick settings for both presentation axes (theme + flavor), preference-gated feature grid, account, Full Settings. Hidden on desktop (`#moreCard { display: none }` outside the media query).
+**More tab (`#moreCard`):** quick settings for both presentation axes (theme + flavor), preference-gated feature grid, inline settings section list (each row calls `openSettings(tab)` — the modal opens already drilled into that panel; no "Full Settings" hop), account. Hidden on desktop (`#moreCard { display: none }` outside the media query). `openSettings()` without a tab (desktop gear) still starts on the nav list.
 
 **Tactile/theming:** nav + More chrome derive from tokens (`--line`, `--surface-solid/-hi`, `--accent`); Tactile mobile rules use neutral tokens only (KTD-4-safe). Touch tap-target sizing (nav buttons, assistant send/mic 42px) lives inside `@media (hover: none)` per the CLAUDE.md invariant.
 

@@ -5044,6 +5044,35 @@ body.tv-mode .card:hover { box-shadow: none; }
   }
   .more-nav-item:active { background: color-mix(in srgb, var(--accent) 18%, transparent); }
   .more-nav-icon { font-size: 1.4rem; line-height: 1; }
+
+  /* Inline settings sections — a row list, each deep-links into its panel */
+  .more-settings-sublabel {
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semi);
+    color: var(--muted);
+    letter-spacing: .05em;
+    margin: 10px 0 2px;
+  }
+  .more-settings-sublabel:first-child { margin-top: 0; }
+  .more-settings-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 12px 10px;
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--line);
+    color: var(--text);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.95rem;
+    text-align: left;
+    touch-action: manipulation;
+  }
+  .more-settings-item:last-child { border-bottom: none; }
+  .more-settings-item:active { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+  .more-settings-chevron { color: var(--muted); font-size: 1.1rem; line-height: 1; }
 }
 
 /* ════════════════════════════════════════════════════════════════
