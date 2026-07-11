@@ -293,7 +293,10 @@ let isMobile = updateIsMobile();
 window.addEventListener('resize', () => {
   const wasMobile = isMobile;
   isMobile = updateIsMobile();
-  if (wasMobile !== isMobile) applyWidgetPlacement();
+  if (wasMobile !== isMobile) {
+    applyWidgetPlacement();
+    resetSaverIdleTimer();  // screensaver is desktop-only; re-arm/disarm on crossing
+  }
 });
 
 // Optional: Lock orientation to portrait on mobile (if browser supports it)
@@ -10883,13 +10886,18 @@ function getNextCalendarEvent() {
 
 function resetSaverIdleTimer() {
   clearTimeout(_saverIdleTimer);
-  if (!saverEnabled || saverActive) return;
+  // Never on phones: the slideshow is a kiosk/desktop feature — on mobile it
+  // burns battery and fights the OS lock screen. The setting still governs
+  // desktop; isMobile is rechecked here on every re-arm, so crossing the
+  // breakpoint needs no extra wiring.
+  if (!saverEnabled || saverActive || isMobile) return;
   _saverIdleTimer = setTimeout(startScreensaver, Math.max(1, saverIdleMin) * 60000);
 }
 
 function startScreensaver() {
   // No photos (yet) or tab hidden — re-arm and try again next idle period
   if (!saverEnabled || saverActive || document.hidden || !bgPhotos.length) { resetSaverIdleTimer(); return; }
+  if (isMobile) return;  // guard the direct path too (timer armed pre-resize)
   saverActive = true;
   document.getElementById('saverClock').style.transform = '';
   _saverNightOn = false;
