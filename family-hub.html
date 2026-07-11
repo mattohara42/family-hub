@@ -383,46 +383,6 @@
     </div>
 
 
-    <!-- More tab: appearance quick-settings + secondary feature navigation -->
-    <div class="card" id="moreCard">
-      <div class="card-header">
-        <h2>⚙️ Settings</h2>
-      </div>
-      <div class="card-body" style="overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:18px">
-
-        <section>
-          <div class="more-section-label">Appearance</div>
-          <div class="more-theme-grid">
-            <button class="btn btn-sm more-theme-btn" id="moreModeDark"        onclick="setAppMode('dark')">🌙 Dark</button>
-            <button class="btn btn-sm more-theme-btn" id="moreModeLight"       onclick="setAppMode('light')">☀️ Light</button>
-            <button class="btn btn-sm more-theme-btn" id="moreModeNautical"    onclick="setAppMode('nautical')">⚓ Nautical</button>
-            <button class="btn btn-sm more-theme-btn" id="moreModeAurora"      onclick="setAppMode('aurora')">🌌 Aurora</button>
-            <button class="btn btn-sm more-theme-btn" id="moreModeColorblind"  onclick="setAppMode('colorblind')">👁 Accessible</button>
-          </div>
-          <div class="more-section-label" style="margin-top:12px">Flavor</div>
-          <div class="more-theme-grid" id="moreFlavorGrid">
-            <!-- populated by updateMoreCard() from the FLAVORS registry -->
-          </div>
-        </section>
-
-        <section>
-          <div class="more-section-label">More Features</div>
-          <div class="more-nav-grid" id="moreNavGrid">
-            <!-- populated by updateMoreCard(): registry tabs gated on widget visibility -->
-          </div>
-        </section>
-
-        <section style="display:flex;flex-direction:column;gap:8px">
-          <div class="more-section-label">Account</div>
-          <button id="moreSignInBtn"  class="btn btn-sm" onclick="signIn()"   style="width:100%;display:none">Sign in with Google</button>
-          <button id="moreSignOutBtn" class="btn btn-sm" onclick="signOut()"  style="width:100%;display:none">Sign out</button>
-        </section>
-
-        <button class="btn btn-sm" onclick="openSettings()" style="width:100%;margin-top:auto">⚙️ Full Settings</button>
-
-      </div>
-    </div>
-
   </div><!-- /sidebar -->
 
 </div><!-- /layout -->
@@ -445,9 +405,9 @@
     <span class="mobile-nav-icon">🌤️</span>
     <span>Weather</span>
   </button>
-  <button class="mobile-nav-btn hamburger-btn" id="hamburgerBtn" onclick="setMobileTab('more')" aria-label="Open more / settings">
-    <span class="mobile-nav-icon">☰</span>
-    <span>More</span>
+  <button class="mobile-nav-btn hamburger-btn" id="hamburgerBtn" onclick="openSettings()" aria-label="Open settings">
+    <span class="mobile-nav-icon">⚙️</span>
+    <span>Settings</span>
   </button>
 </nav>
 

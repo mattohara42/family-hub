@@ -335,7 +335,7 @@ Every sidebar widget can be assigned to **Sidebar** or **Bottom** via ⚙️ Set
 
 **State:**
 ```js
-const WIDGET_DEFAULTS = { shopping: true, todo: true, budget: true, chores: true, wotd: true, quote: true, dadjoke: true, yearstrip: true, assistant: true, countdown: true, news: false, stock: false };
+const WIDGET_DEFAULTS = { shopping: true, todo: true, budget: true, chores: true, wotd: true, quote: true, dadjoke: true, yearstrip: false, assistant: true, countdown: true, news: false, stock: false };
 let widgetVisibility = { ...WIDGET_DEFAULTS, ...lsGet('fh_widgets', {}) };
 
 const WIDGET_PLACEMENT_DEFAULTS = {
@@ -362,7 +362,7 @@ const WIDGET_ORDER = [
 ```
 **Key functions:**
 - `applyWidgetPlacement()` — moves each card DOM node to `.sidebar` or `#bottomStrip` in canonical order, then calls `applyWidgetVisibility()`. **Placement is desktop-only:** under 640px every card stays in `.sidebar` so the mobile tab system can reach it; crossing the breakpoint re-distributes (resize handler).
-- `applyWidgetVisibility()` — shows/hides each card; handles yearstrip special case (sidebar→`#yearCard`, bottom→`#yearStrip`). On mobile, if the open tab's widget was just disabled (locally or via settings sync) it bounces the tab to Calendar and keeps the More grid in sync (see §20).
+- `applyWidgetVisibility()` — shows/hides each card; handles yearstrip special case (sidebar→`#yearCard`, bottom→`#yearStrip`). On mobile, if the open tab's widget was just disabled (locally or via settings sync) it bounces the tab to Calendar (see §20).
 
 **Special case — Year at a Glance:**
 - In **sidebar**: `#yearCard` (shows 2 months with ‹/› navigation)
@@ -746,31 +746,28 @@ let lastWxData    = null;  // set by renderWeatherData(); reused for the temp li
 
 ### 20. Mobile Layout (bottom nav + tab registry)
 
-**Overview:** Under 640px the app becomes a tab-per-card layout: a fixed bottom nav (Calendar · To-Do · Shopping · Weather · ☰ More) plus secondary tabs reached from the More tab's feature grid. A mobile tab shows exactly one sidebar card full-screen ('cal' shows `.cal-column` instead).
+**Overview:** Under 640px the app becomes a tab-per-card layout: a fixed bottom nav with five buttons — Calendar · To-Do · Shopping · Weather · ⚙️ Settings. The first four are tabs (`data-mobile-tab`); Settings opens the Full Settings modal directly (`openSettings()`) rather than switching tabs — there's no intermediate mobile-only settings screen. A mobile tab shows exactly one sidebar card full-screen ('cal' shows `.cal-column` instead).
 
 **Registry (single source of truth):**
 ```js
-const MOBILE_TABS = { todo: { cardId, widget }, …, more: { cardId: 'moreCard' } };
+const MOBILE_TABS = { todo: { cardId, widget }, shop: { cardId, widget }, weather: { cardId } };
 // cardId — the card shown full-screen on that tab
-// widget — optional widgetVisibility key gating the tab (button hidden, tab bounced when off)
-// menu:{icon,label} — presence puts the tab in the More-tab feature grid
+// widget — optional widgetVisibility key gating the tab (bounces to 'cal' when off)
 ```
-Adding a card to mobile = one registry entry. **No per-tab CSS:** `setMobileTab()` stamps `.mobile-tab-active` on the tab's card and four generic rules in the 640px media query (family-hub.css §8) hide everything else. The active-card rule is `!important` so a synced `display:none` from `applyWidgetVisibility()` can't blank the screen before the tab bounces.
+Adding a card to mobile = one registry entry. **No per-tab CSS:** `setMobileTab()` stamps `.mobile-tab-active` on the tab's card and generic rules in the 640px media query (family-hub.css §8) hide everything else. The active-card rule is `!important` so a synced `display:none` from `applyWidgetVisibility()` can't blank the screen before the tab bounces.
+
+Secondary widgets (Budget, Chores, Word, Joke, Quotes, Countdown, News, Stock, Assistant) have no mobile surface — reachable only via Full Settings' configuration panels, not for day-to-day use on a phone. This is a deliberate scope cut (2026-07-11): the prior "More tab" feature grid that routed to them was removed along with the settings duplication it lived next to.
 
 **Key functions:**
-- `setMobileTab(tab)` — validates (unknown tab or disabled widget → `'cal'`), persists, stamps the active card, highlights the nav button; calls `updateMoreCard()` on the More tab
+- `setMobileTab(tab)` — validates (unknown tab or disabled widget → `'cal'`), persists, stamps the active card, highlights the nav button
 - `getInitialMobileTab()` / `getTimeBasedDefaultTab()` — time-of-day default on first visit of the day (`fh_mobileTabDate`), else last tab
-- `updateMoreCard()` — renders the More tab: theme buttons, Flavor row (from `FLAVORS`), feature grid (from `MOBILE_TABS` × `widgetVisibility`), sign-in/out
-- `navigateToMenuItem(item)` — More-grid routing; `'members'` opens Settings
 - `updateIsMobile()` + resize handler — `isMobile` (<640px); breakpoint crossings re-run `applyWidgetPlacement()` and `resetSaverIdleTimer()`
 
-**More tab (`#moreCard`):** quick settings for both presentation axes (theme + flavor), preference-gated feature grid, account, Full Settings. Hidden on desktop (`#moreCard { display: none }` outside the media query).
+**Tactile/theming:** nav chrome derives from tokens (`--line`, `--surface-solid/-hi`, `--accent`); Tactile mobile rules use neutral tokens only (KTD-4-safe). Touch tap-target sizing (nav buttons, assistant send/mic 42px) lives inside `@media (hover: none)` per the CLAUDE.md invariant.
 
-**Tactile/theming:** nav + More chrome derive from tokens (`--line`, `--surface-solid/-hi`, `--accent`); Tactile mobile rules use neutral tokens only (KTD-4-safe). Touch tap-target sizing (nav buttons, assistant send/mic 42px) lives inside `@media (hover: none)` per the CLAUDE.md invariant.
+**HTML anchors:** `.mobile-bottom-nav` / `#mobileNav`, `#hamburgerBtn` (opens Settings)
 
-**HTML anchors:** `.mobile-bottom-nav` / `#mobileNav`, `#hamburgerBtn`, `#moreCard`, `#moreNavGrid`, `#moreFlavorGrid`
-
-**localStorage:** `fh_mobileTab`, `fh_mobileTabDate`
+**localStorage:** `fh_mobileTab`, `fh_mobileTabDate`. Default calendar view (`fh_calView`, unset) is `'week'` on both mobile and desktop.
 
 ---
 

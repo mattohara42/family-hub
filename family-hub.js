@@ -388,7 +388,7 @@ const ASSISTANT_QUICK_PROMPTS = [
   "When should I mow the lawn?",
 ];
 // ── Widget visibility & placement ────────────────────────────────────────────
-const WIDGET_DEFAULTS = { shopping: true, todo: true, budget: true, chores: true, wotd: true, quote: true, dadjoke: true, yearstrip: true, assistant: true, countdown: true, news: false, stock: false };
+const WIDGET_DEFAULTS = { shopping: true, todo: true, budget: true, chores: true, wotd: true, quote: true, dadjoke: true, yearstrip: false, assistant: true, countdown: true, news: false, stock: false };
 let widgetVisibility = { ...WIDGET_DEFAULTS, ...lsGet('fh_widgets', {}) };
 
 // Placement: 'sidebar' (right column) or 'bottom' (full-width strip below layout)
@@ -417,25 +417,15 @@ const WIDGET_ORDER = [
 ];
 
 // Mobile tab registry — tab name → the one card shown full-screen on that tab.
-// 'cal' is special-cased in CSS (shows .cal-column, hides the sidebar).
-// Adding a card to mobile = one entry here; no per-tab CSS. `widget` gates the
-// tab on widgetVisibility (More-grid button hidden, active tab bounced when the
-// widget is turned off — locally or by a synced pref change). `menu` puts the
-// tab in the More-tab feature grid; tabs without it live in the bottom nav.
+// 'cal' is special-cased in CSS (shows .cal-column, hides the sidebar). These
+// are the tabs pinned in the bottom nav; the hamburger button opens Full
+// Settings directly instead of routing through a tab. `widget` gates the tab
+// on widgetVisibility (active tab bounced to Calendar when the widget is
+// turned off — locally or by a synced pref change).
 const MOBILE_TABS = {
   todo:      { cardId: 'todoCard',      widget: 'todo'      },
   shop:      { cardId: 'shopCard',      widget: 'shopping'  },
   weather:   { cardId: 'weatherCard'                        },
-  budget:    { cardId: 'budgetCard',    widget: 'budget',    menu: { icon: '💰', label: 'Budget' } },
-  chores:    { cardId: 'choreCard',     widget: 'chores',    menu: { icon: '⭐', label: 'Chores' } },
-  wotd:      { cardId: 'wotdCard',      widget: 'wotd',      menu: { icon: '📖', label: 'Word' } },
-  dadjoke:   { cardId: 'dadjokeCard',   widget: 'dadjoke',   menu: { icon: '😄', label: 'Joke' } },
-  quotes:    { cardId: 'quoteCard',     widget: 'quote',     menu: { icon: '💭', label: 'Quotes' } },
-  countdown: { cardId: 'countdownCard', widget: 'countdown', menu: { icon: '⏱️', label: 'Countdown' } },
-  news:      { cardId: 'newsCard',      widget: 'news',      menu: { icon: '📰', label: 'News' } },
-  stock:     { cardId: 'stockCard',     widget: 'stock',     menu: { icon: '📈', label: 'Stock' } },
-  assistant: { cardId: 'assistantCard', widget: 'assistant', menu: { icon: '🤖', label: 'Assistant' } },
-  more:      { cardId: 'moreCard'                            },
 };
 
 // User-defined widget order (keys only). Persisted in fh_widget_order.
@@ -573,11 +563,9 @@ function applyWidgetVisibility() {
   }
 
   // Mobile: if the open tab's widget was just disabled (here or via settings
-  // sync from another device), bounce to Calendar instead of a blank screen;
-  // re-render the More grid so its buttons track visibility.
+  // sync from another device), bounce to Calendar instead of a blank screen.
   const activeTab = MOBILE_TABS[mobileTab];
   if (activeTab && activeTab.widget && !widgetVisibility[activeTab.widget]) setMobileTab('cal');
-  else if (mobileTab === 'more') updateMoreCard();
 }
 
 // ── Budget ───────────────────────────────────────────────────────────────────
@@ -1284,7 +1272,7 @@ const CAL_COLORS = DEFAULT_COLORS;
 const DOW_LABELS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
 let calViewDate    = new Date();  // anchor date for any view
-let calView        = localStorage.getItem('fh_calView') || (window.innerWidth < 640 ? 'day' : 'month'); // 'month'|'week'|'day'
+let calView        = localStorage.getItem('fh_calView') || 'week'; // 'month'|'week'|'day'
 // calEventCache: { [calId]: { [YYYY-MM-DD]: [{summary, color, holiday, allDay, startDT, endDT}] } }
 let calEventCache  = {};
 // IDs currently hidden by the user clicking a pill
@@ -9730,48 +9718,10 @@ function setMobileTab(tab) {
   const todoBtn    = document.getElementById('mobileNavTodo');
   const shopBtn    = document.getElementById('mobileNavShop');
   const weatherBtn = document.getElementById('mobileNavWeather');
-  const moreBtn    = document.getElementById('hamburgerBtn');
   if (calBtn)     calBtn.classList.toggle('active', tab === 'cal');
   if (todoBtn)    todoBtn.classList.toggle('active', tab === 'todo');
   if (shopBtn)    shopBtn.classList.toggle('active', tab === 'shop');
   if (weatherBtn) weatherBtn.classList.toggle('active', tab === 'weather');
-  if (moreBtn)    moreBtn.classList.toggle('active', tab === 'more');
-  if (tab === 'more') updateMoreCard();
-}
-
-function updateMoreCard() {
-  // Highlight active theme button
-  const modeMap = { dark: 'moreModeDark', light: 'moreModeLight', nautical: 'moreModeNautical', aurora: 'moreModeAurora', colorblind: 'moreModeColorblind' };
-  Object.entries(modeMap).forEach(([mode, id]) => {
-    const btn = document.getElementById(id);
-    if (btn) btn.classList.toggle('active', appMode === mode);
-  });
-  // Flavor row from the FLAVORS registry (same data as the Settings buttons)
-  const flavorGrid = document.getElementById('moreFlavorGrid');
-  if (flavorGrid) {
-    flavorGrid.innerHTML = FLAVORS.map(f =>
-      `<button class="btn btn-sm more-theme-btn${f.id === appFlavor ? ' active' : ''}" onclick="setFlavor('${f.id}');updateMoreCard()">${f.label}</button>`
-    ).join('');
-  }
-  // Feature grid: secondary tabs from the registry, gated on widget visibility
-  const grid = document.getElementById('moreNavGrid');
-  if (grid) {
-    const btns = Object.entries(MOBILE_TABS)
-      .filter(([, t]) => t.menu && (!t.widget || widgetVisibility[t.widget]))
-      .map(([tab, t]) => `<button class="more-nav-item" onclick="navigateToMenuItem('${tab}')"><span class="more-nav-icon">${t.menu.icon}</span><span>${t.menu.label}</span></button>`);
-    btns.push(`<button class="more-nav-item" onclick="navigateToMenuItem('members')"><span class="more-nav-icon">👥</span><span>Family</span></button>`);
-    grid.innerHTML = btns.join('');
-  }
-  // Show/hide sign-in / sign-out
-  const signInBtn  = document.getElementById('moreSignInBtn');
-  const signOutBtn = document.getElementById('moreSignOutBtn');
-  if (signInBtn)  signInBtn.style.display  = googleToken ? 'none' : '';
-  if (signOutBtn) signOutBtn.style.display = googleToken ? '' : 'none';
-}
-
-function navigateToMenuItem(item) {
-  if (item === 'members') { openSettings(); return; }
-  if (MOBILE_TABS[item]) setMobileTab(item);
 }
 
 const THEME_COLORS = {
@@ -9932,7 +9882,6 @@ function setAppMode(mode) {
   document.getElementById('modeNautical').className       = 'btn btn-sm' + (mode === 'nautical'       ? ' btn-mode-active' : '');
   document.getElementById('modeAurora').className         = 'btn btn-sm' + (mode === 'aurora'         ? ' btn-mode-active' : '');
   document.getElementById('modeColorblind').className     = 'btn btn-sm' + (mode === 'colorblind'     ? ' btn-mode-active' : '');
-  updateMoreCard();  // keep the More-tab theme highlight in sync when tapped there
 }
 
 function setFlavor(flavor) {
