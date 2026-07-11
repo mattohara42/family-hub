@@ -46,32 +46,6 @@
   See <code>family-hub-setup.md</code> for step-by-step instructions.
 </div>
 
-<!-- Menu drawer (slides from left) -->
-<div class="menu-drawer" id="menuDrawer">
-  <div class="menu-header">
-    <h2>Menu</h2>
-    <button class="menu-close" onclick="closeMenu()" aria-label="Close menu">✕</button>
-  </div>
-  <nav class="menu-items">
-    <!-- Secondary widgets -->
-    <button class="menu-item" onclick="navigateToMenuItem('budget')">💰 Budget</button>
-    <button class="menu-item" onclick="navigateToMenuItem('wotd')">📖 Word of the Day</button>
-    <button class="menu-item" onclick="navigateToMenuItem('dadjoke')">😄 Dad Joke</button>
-    <button class="menu-item" onclick="navigateToMenuItem('quotes')">💭 Quotes</button>
-    <button class="menu-item" onclick="navigateToMenuItem('countdown')">⏱️ Countdown</button>
-    <button class="menu-item" onclick="navigateToMenuItem('news')">📰 News</button>
-    <button class="menu-item" onclick="navigateToMenuItem('stock')">📈 Stock</button>
-    <button class="menu-item" onclick="navigateToMenuItem('assistant')">🤖 Assistant</button>
-    <hr style="margin:8px 0;border:none;border-top:1px solid rgba(255,255,255,0.1)">
-    <!-- Settings and account -->
-    <button class="menu-item" onclick="openSettings();closeMenu()">⚙️ Settings</button>
-    <button class="menu-item" onclick="openSettings();closeMenu()">👥 Family Members</button>
-  </nav>
-</div>
-
-<!-- Menu backdrop (for closing when clicked outside) -->
-<div class="menu-backdrop" id="menuBackdrop" onclick="closeMenu()"></div>
-
 <div class="layout">
 
   <!-- Left: calendar + 6-month strip stacked -->

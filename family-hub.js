@@ -279,8 +279,7 @@ function getInitialMobileTab() {
   return defaultTab;
 }
 
-let mobileTab       = getInitialMobileTab();  // 'cal' | 'todo' | 'shop' | 'weather'
-let isMenuOpen      = false;
+let mobileTab       = getInitialMobileTab();  // 'cal' | any MOBILE_TABS key
 
 // Compute isMobile boolean for viewport-width-dependent logic
 function updateIsMobile() {
@@ -9768,27 +9767,6 @@ function updateMoreCard() {
   const signOutBtn = document.getElementById('moreSignOutBtn');
   if (signInBtn)  signInBtn.style.display  = googleToken ? 'none' : '';
   if (signOutBtn) signOutBtn.style.display = googleToken ? '' : 'none';
-}
-
-function toggleMenu() {
-  if (isMenuOpen) closeMenu();
-  else openMenu();
-}
-
-function openMenu() {
-  isMenuOpen = true;
-  const drawer = document.getElementById('menuDrawer');
-  const backdrop = document.getElementById('menuBackdrop');
-  if (drawer) drawer.classList.add('open');
-  if (backdrop) backdrop.classList.add('open');
-}
-
-function closeMenu() {
-  isMenuOpen = false;
-  const drawer = document.getElementById('menuDrawer');
-  const backdrop = document.getElementById('menuBackdrop');
-  if (drawer) drawer.classList.remove('open');
-  if (backdrop) backdrop.classList.remove('open');
 }
 
 function navigateToMenuItem(item) {

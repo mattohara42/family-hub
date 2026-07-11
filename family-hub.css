@@ -4144,8 +4144,6 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
 /* Hidden on desktop — shown only inside the 640px media query below */
 .mobile-bottom-nav { display: none; }
 .hamburger-btn { display: none; } /* shown only via .mobile-bottom-nav on mobile */
-.menu-drawer { display: none; }
-.menu-backdrop { display: none; }
 
 @media (max-width: 640px) {
   /* Registry-driven tabs: setMobileTab() stamps .mobile-tab-active on the one
@@ -4245,90 +4243,6 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
 
   /* Hamburger button — lives in the bottom nav as a regular nav item */
   .hamburger-btn { font-size: inherit; }
-
-  /* Menu drawer */
-  .menu-drawer {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 75vw;
-    max-width: 300px;
-    height: 100vh;
-    background: var(--surface);
-    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.3);
-    transform: translateX(-100%);
-    transition: transform 0.3s ease-out;
-    z-index: 250;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-  }
-  .menu-drawer.open {
-    transform: translateX(0);
-  }
-
-  /* Menu header */
-  .menu-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 16px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  }
-  .menu-header h2 {
-    margin: 0;
-    font-size: 1.2rem;
-    font-weight: var(--weight-semi);
-  }
-  .menu-close {
-    background: none;
-    border: none;
-    color: var(--muted);
-    font-size: 1.5rem;
-    cursor: pointer;
-    padding: 4px;
-    touch-action: manipulation;
-  }
-
-  /* Menu items navigation */
-  .menu-items {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-    flex: 1;
-  }
-  .menu-item {
-    background: none;
-    border: none;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    color: var(--text);
-    padding: 14px 16px;
-    text-align: left;
-    font-size: 0.95rem;
-    cursor: pointer;
-    touch-action: manipulation;
-    transition: background-color 0.15s;
-  }
-  .menu-item:active { background-color: var(--surface2); }
-
-  /* Menu backdrop (for closing when clicked outside) */
-  .menu-backdrop {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.3s ease-out;
-    z-index: 240;
-  }
-  .menu-backdrop.open {
-    background: rgba(0, 0, 0, 0.5);
-    opacity: 1;
-    pointer-events: auto;
-  }
 
   /* Secondary tabs (budget, wotd, chores, assistant, …) need no per-tab rules:
      the registry rules at the top of this media query cover every tab. */
