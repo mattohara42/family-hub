@@ -288,9 +288,12 @@ function updateIsMobile() {
 }
 let isMobile = updateIsMobile();
 
-// Update isMobile on resize
+// Update isMobile on resize; crossing the breakpoint re-distributes widget
+// cards (placement is desktop-only — see applyWidgetPlacement)
 window.addEventListener('resize', () => {
+  const wasMobile = isMobile;
   isMobile = updateIsMobile();
+  if (wasMobile !== isMobile) applyWidgetPlacement();
 });
 
 // Optional: Lock orientation to portrait on mobile (if browser supports it)
@@ -451,13 +454,16 @@ function applyWidgetPlacement() {
   const bottomStrip = document.getElementById('bottomStrip');
   if (!sidebar || !bottomStrip) return;
 
-  // Distribute each widget card to the right container in user-defined order
+  // Distribute each widget card to the right container in user-defined order.
+  // Placement is a desktop-layout concept: on mobile every card stays in the
+  // sidebar, where the tab system (MOBILE_TABS) can reach it — a 'bottom' card
+  // would otherwise ride along inside .cal-column and leave its tab blank.
   resolvedWidgetOrder().forEach(key => {
     const entry = WIDGET_ORDER.find(w => w.key === key);
     if (!entry) return;
     const card = document.getElementById(entry.id);
     if (!card) return;
-    const dest = widgetPlacement[key] === 'bottom' ? bottomStrip : sidebar;
+    const dest = (!isMobile && widgetPlacement[key] === 'bottom') ? bottomStrip : sidebar;
     dest.appendChild(card);
   });
 
