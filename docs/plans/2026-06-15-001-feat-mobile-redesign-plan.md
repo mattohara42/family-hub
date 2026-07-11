@@ -7,6 +7,9 @@ date: 2026-06-15
 
 # Mobile-First Redesign — Implementation Plan
 
+> **⚠️ SUPERSEDED (2026-07-11)** by `2026-07-11-001-feat-mobile-ui-refresh-plan.md`.
+> U1–U9 below shipped (with deviations: `setMobileTab`/`fh_mobileTab` instead of `switchTab`/`fh_currentTab`; the hamburger drawer was later replaced by an inline More tab). The refresh plan audits the as-built state and covers desktop drift since this was written. Kept for historical reference — don't implement from this document.
+
 **Scope:** Standard — mobile layout, navigation, widget simplifications, no new features  
 **Depth:** 9 implementation units + supporting CSS/layout work  
 **Architecture:** Approach 3 (adaptive components, mobile-first base)  
