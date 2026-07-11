@@ -429,16 +429,8 @@
 
         <section>
           <div class="more-section-label">More Features</div>
-          <div class="more-nav-grid">
-            <button class="more-nav-item" onclick="navigateToMenuItem('budget')"><span class="more-nav-icon">💰</span><span>Budget</span></button>
-            <button class="more-nav-item" onclick="navigateToMenuItem('wotd')"><span class="more-nav-icon">📖</span><span>Word</span></button>
-            <button class="more-nav-item" onclick="navigateToMenuItem('dadjoke')"><span class="more-nav-icon">😄</span><span>Joke</span></button>
-            <button class="more-nav-item" onclick="navigateToMenuItem('quotes')"><span class="more-nav-icon">💭</span><span>Quotes</span></button>
-            <button class="more-nav-item" onclick="navigateToMenuItem('countdown')"><span class="more-nav-icon">⏱️</span><span>Countdown</span></button>
-            <button class="more-nav-item" onclick="navigateToMenuItem('news')"><span class="more-nav-icon">📰</span><span>News</span></button>
-            <button class="more-nav-item" onclick="navigateToMenuItem('stock')"><span class="more-nav-icon">📈</span><span>Stock</span></button>
-            <button class="more-nav-item" onclick="navigateToMenuItem('assistant')"><span class="more-nav-icon">🤖</span><span>Assistant</span></button>
-            <button class="more-nav-item" onclick="navigateToMenuItem('members')"><span class="more-nav-icon">👥</span><span>Family</span></button>
+          <div class="more-nav-grid" id="moreNavGrid">
+            <!-- populated by updateMoreCard(): registry tabs gated on widget visibility -->
           </div>
         </section>
 

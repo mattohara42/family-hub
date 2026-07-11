@@ -413,22 +413,24 @@ const WIDGET_ORDER = [
 
 // Mobile tab registry — tab name → the one card shown full-screen on that tab.
 // 'cal' is special-cased in CSS (shows .cal-column, hides the sidebar).
-// Adding a card to mobile = one entry here (+ a More-grid label if secondary);
-// no per-tab CSS. Entries with a `widget` key are gated on widgetVisibility.
+// Adding a card to mobile = one entry here; no per-tab CSS. `widget` gates the
+// tab on widgetVisibility (More-grid button hidden, active tab bounced when the
+// widget is turned off — locally or by a synced pref change). `menu` puts the
+// tab in the More-tab feature grid; tabs without it live in the bottom nav.
 const MOBILE_TABS = {
   todo:      { cardId: 'todoCard',      widget: 'todo'      },
   shop:      { cardId: 'shopCard',      widget: 'shopping'  },
   weather:   { cardId: 'weatherCard'                        },
-  budget:    { cardId: 'budgetCard',    widget: 'budget'    },
-  chores:    { cardId: 'choreCard',     widget: 'chores'    },
-  wotd:      { cardId: 'wotdCard',      widget: 'wotd'      },
-  dadjoke:   { cardId: 'dadjokeCard',   widget: 'dadjoke'   },
-  quotes:    { cardId: 'quoteCard',     widget: 'quote'     },
-  countdown: { cardId: 'countdownCard', widget: 'countdown' },
-  news:      { cardId: 'newsCard',      widget: 'news'      },
-  stock:     { cardId: 'stockCard',     widget: 'stock'     },
-  assistant: { cardId: 'assistantCard', widget: 'assistant' },
-  more:      { cardId: 'moreCard'                           },
+  budget:    { cardId: 'budgetCard',    widget: 'budget',    menu: { icon: '💰', label: 'Budget' } },
+  chores:    { cardId: 'choreCard',     widget: 'chores',    menu: { icon: '⭐', label: 'Chores' } },
+  wotd:      { cardId: 'wotdCard',      widget: 'wotd',      menu: { icon: '📖', label: 'Word' } },
+  dadjoke:   { cardId: 'dadjokeCard',   widget: 'dadjoke',   menu: { icon: '😄', label: 'Joke' } },
+  quotes:    { cardId: 'quoteCard',     widget: 'quote',     menu: { icon: '💭', label: 'Quotes' } },
+  countdown: { cardId: 'countdownCard', widget: 'countdown', menu: { icon: '⏱️', label: 'Countdown' } },
+  news:      { cardId: 'newsCard',      widget: 'news',      menu: { icon: '📰', label: 'News' } },
+  stock:     { cardId: 'stockCard',     widget: 'stock',     menu: { icon: '📈', label: 'Stock' } },
+  assistant: { cardId: 'assistantCard', widget: 'assistant', menu: { icon: '🤖', label: 'Assistant' } },
+  more:      { cardId: 'moreCard'                            },
 };
 
 // User-defined widget order (keys only). Persisted in fh_widget_order.
@@ -561,6 +563,13 @@ function applyWidgetVisibility() {
     const hasVisible = [...bottomStrip.children].some(c => c.style.display !== 'none');
     bottomStrip.style.display = hasVisible ? '' : 'none';
   }
+
+  // Mobile: if the open tab's widget was just disabled (here or via settings
+  // sync from another device), bounce to Calendar instead of a blank screen;
+  // re-render the More grid so its buttons track visibility.
+  const activeTab = MOBILE_TABS[mobileTab];
+  if (activeTab && activeTab.widget && !widgetVisibility[activeTab.widget]) setMobileTab('cal');
+  else if (mobileTab === 'more') updateMoreCard();
 }
 
 // ── Budget ───────────────────────────────────────────────────────────────────
@@ -9700,6 +9709,8 @@ async function lcDelTrash(id) {
 // ── Appearance mode ────────────────────────────────────────────
 function setMobileTab(tab) {
   if (tab !== 'cal' && !MOBILE_TABS[tab]) tab = 'cal';  // stale fh_mobileTab from a removed tab
+  const gate = MOBILE_TABS[tab] && MOBILE_TABS[tab].widget;
+  if (gate && !widgetVisibility[gate]) tab = 'cal';     // widget disabled (possibly on another device)
   mobileTab = tab;
   localStorage.setItem('fh_mobileTab', tab);
   document.body.setAttribute('data-mobile-tab', tab);
@@ -9727,6 +9738,15 @@ function updateMoreCard() {
     const btn = document.getElementById(id);
     if (btn) btn.classList.toggle('active', appMode === mode);
   });
+  // Feature grid: secondary tabs from the registry, gated on widget visibility
+  const grid = document.getElementById('moreNavGrid');
+  if (grid) {
+    const btns = Object.entries(MOBILE_TABS)
+      .filter(([, t]) => t.menu && (!t.widget || widgetVisibility[t.widget]))
+      .map(([tab, t]) => `<button class="more-nav-item" onclick="navigateToMenuItem('${tab}')"><span class="more-nav-icon">${t.menu.icon}</span><span>${t.menu.label}</span></button>`);
+    btns.push(`<button class="more-nav-item" onclick="navigateToMenuItem('members')"><span class="more-nav-icon">👥</span><span>Family</span></button>`);
+    grid.innerHTML = btns.join('');
+  }
   // Show/hide sign-in / sign-out
   const signInBtn  = document.getElementById('moreSignInBtn');
   const signOutBtn = document.getElementById('moreSignOutBtn');
@@ -9756,26 +9776,8 @@ function closeMenu() {
 }
 
 function navigateToMenuItem(item) {
-  if (item === 'members') {
-    closeMenu();
-    openSettings();
-    return;
-  }
-  const menuItemMap = {
-    'budget': 'budget',
-    'wotd': 'wotd',
-    'dadjoke': 'dadjoke',
-    'quotes': 'quotes',
-    'countdown': 'countdown',
-    'news': 'news',
-    'stock': 'stock',
-    'assistant': 'assistant',
-  };
-  const tabToShow = menuItemMap[item];
-  if (tabToShow) {
-    setMobileTab(tabToShow);
-    closeMenu();
-  }
+  if (item === 'members') { openSettings(); return; }
+  if (MOBILE_TABS[item]) setMobileTab(item);
 }
 
 const THEME_COLORS = {
