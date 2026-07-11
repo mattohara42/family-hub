@@ -6421,7 +6421,7 @@ function showAIQuotaError(provider, rawMsg = '') {
           <li>Go to <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--accent)">aistudio.google.com/apikey ↗</a></li>
           <li>Click <strong>Create API key</strong></li>
           <li>In the project dropdown choose <strong>Create a new project</strong> (don't reuse an existing billing-enabled project)</li>
-          <li>Copy the new key and paste it in <strong>Settings → 🍽 Meals</strong></li>
+          <li>Copy the new key and paste it in <strong>Settings → 🤖 Assistant</strong></li>
         </ol>` : `
         Possible causes:<br>
         <ul style="margin:6px 0 10px 18px;line-height:1.9">
@@ -6435,7 +6435,7 @@ function showAIQuotaError(provider, rawMsg = '') {
         Your OpenAI account is out of credits. Add billing at
         <a href="https://platform.openai.com/settings/organization/billing"
            target="_blank" style="color:var(--accent)">platform.openai.com/billing ↗</a>,
-        or switch to free <strong>Google Gemini</strong> in Settings → 🍽 Meals.<br><br>`
+        or switch to free <strong>Google Gemini</strong> in Settings → 🤖 Assistant.<br><br>`
       }
       ${rawMsg ? `<details style="margin-top:4px"><summary style="cursor:pointer;color:var(--muted);font-size:.75rem">Raw API error</summary>
         <code style="font-size:.72rem;color:var(--muted);word-break:break-all">${esc(rawMsg)}</code></details>` : ''}
@@ -7036,7 +7036,7 @@ function showAIPermissionError(provider, rawMsg = '') {
       <ol style="margin:8px 0 10px 18px;line-height:2">
         <li>Go to <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--accent)">aistudio.google.com/apikey ↗</a></li>
         <li>Click <strong>Create API key</strong> → choose a project (or create new)</li>
-        <li>Paste the new key in <strong>Settings → 🍽 Meals</strong></li>
+        <li>Paste the new key in <strong>Settings → 🤖 Assistant</strong></li>
       </ol>
       ${rawMsg ? `<details style="margin-top:4px"><summary style="cursor:pointer;color:var(--muted);font-size:.75rem">Raw API error</summary>
         <code style="font-size:.72rem;color:var(--muted);word-break:break-all">${esc(rawMsg)}</code></details>` : ''}
@@ -7051,7 +7051,7 @@ async function generateMealSuggestions() {
     wrap.innerHTML = `
       <div style="background:var(--surface2);border-radius:10px;padding:16px;font-size:.85rem">
         <strong>⚙️ API key required</strong><br><br>
-        Add your key in <strong>Settings → 🍽 Meals</strong>.
+        Add your key in <strong>Settings → 🤖 Assistant</strong>.
       </div>`;
     return;
   }
@@ -7574,7 +7574,7 @@ async function adjustMeal() {
   const instruction = document.getElementById('mealAdjustInput').value.trim();
   const statusEl    = document.getElementById('mealAdjustStatus');
   if (!instruction) { statusEl.innerHTML = '<span style="color:var(--muted);font-size:.8rem">Describe a change or tap a chip first.</span>'; return; }
-  if (!mealAiKey)   { statusEl.innerHTML = '<span style="color:var(--accent2);font-size:.8rem">⚙️ Add a Gemini API key in Settings → 🍽 Meals.</span>'; return; }
+  if (!mealAiKey)   { statusEl.innerHTML = '<span style="color:var(--accent2);font-size:.8rem">⚙️ Add a Gemini API key in Settings → 🤖 Assistant.</span>'; return; }
 
   const meal = (mealPlan[_mealDetailDate] || {})[_mealDetailType];
   if (!meal) { closeMealDetail(); return; }
@@ -8758,7 +8758,7 @@ async function sendAssistantMessage() {
   input.value = '';
 
   if (!mealAiKey) {
-    assistantHistory.push({ role: 'model', parts: [{ text: 'I need a Gemini API key to work. Add one in ⚙️ Settings → 🍽 Meals.' }] });
+    assistantHistory.push({ role: 'model', parts: [{ text: 'I need a Gemini API key to work. Add one in ⚙️ Settings → 🤖 Assistant.' }] });
     renderAssistantMessages();
     return;
   }
@@ -9927,9 +9927,10 @@ function releaseFocusTrap() {
 // Add/reorder settings by editing this; the nav renders from it.
 const SETTINGS_GROUPS = [
   { label: 'General', items: [
-    { tab: 'look',      label: '🎨 Look & Feel' },
-    { tab: 'family',    label: '👨‍👩‍👧 Family' },
-    { tab: 'assistant', label: '🤖 Assistant' },
+    { tab: 'look',        label: '🎨 Look & Feel' },
+    { tab: 'screensaver', label: '🖼 Images' },
+    { tab: 'family',      label: '👨‍👩‍👧 Family' },
+    { tab: 'assistant',   label: '🤖 Assistant' },
   ]},
   { label: 'Calendar', items: [
     { tab: 'calendar', label: '📅 Calendar' },

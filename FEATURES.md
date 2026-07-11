@@ -732,7 +732,7 @@ let lastWxData    = null;  // set by renderWeatherData(); reused for the temp li
 
 **CSS:** `/* ── Screensaver ── */` section — `.saver-img` (crossfade + `saverKb0–3` keyframes), `#screensaver.active`, `#screensaver.night`, `#saverInfo`, tactile flavor uses `--font-display` for the clock
 
-**Settings:** Look & Feel → Screensaver (below Background Images): enable toggle, idle minutes (1–240), dwell seconds (5–600), clock toggle, weather & next event toggle, night dimming toggle + from/to times. Wired in `openSettings()` / `saveSettings()`; init armed from the `load` handler.
+**Settings:** Screensaver/Background tab (General group) → Screensaver section: enable toggle, idle minutes (1–240), dwell seconds (5–600), clock toggle, weather & next event toggle, night dimming toggle + from/to times. Wired in `openSettings()` / `saveSettings()`; init armed from the `load` handler.
 
 **localStorage:** `fh_saver`, `fh_saverIdleMin`, `fh_saverDwellSec`, `fh_saverClock`, `fh_saverInfo`, `fh_saverNight`, `fh_saverNightStart`, `fh_saverNightEnd`
 

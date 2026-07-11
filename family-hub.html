@@ -498,7 +498,7 @@
       <!-- ── Look & Feel ── -->
       <div class="settings-panel active" data-panel="look">
         <div class="settings-section-head">Identity</div>
-        <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
           <div class="field" style="flex:1 1 140px">
             <label>Your name <span style="font-weight:400;color:var(--muted)">(list items)</span></label>
             <input type="text" id="settingName" placeholder="e.g. Matt" />
@@ -507,11 +507,11 @@
             <label>App title <span style="font-weight:400;color:var(--muted)">(header)</span></label>
             <input type="text" id="settingAppTitle" placeholder="e.g. Family Hub" maxlength="30" />
           </div>
-        </div>
-        <div class="field">
-          <label>App icon emoji</label>
-          <button type="button" id="appIconPickerBtn" class="btn btn-sm" style="font-size:1.4rem;line-height:1;padding:6px 18px"
-                  onclick="openEmojiPicker(null, this, v => { document.getElementById('appIconPickerBtn').textContent = v; }, EMOJI_PICKER_OPTIONS)">🏠</button>
+          <div class="field" style="flex:0 0 auto">
+            <label>App icon</label>
+            <button type="button" id="appIconPickerBtn" class="btn btn-sm" style="font-size:1.4rem;line-height:1;padding:6px 18px"
+                    onclick="openEmojiPicker(null, this, v => { document.getElementById('appIconPickerBtn').textContent = v; }, EMOJI_PICKER_OPTIONS)">🏠</button>
+          </div>
         </div>
         <div class="settings-section-head">Theme</div>
         <div class="field">
@@ -548,6 +548,13 @@
           <label>Flavor</label>
           <div id="flavorButtons" style="display:flex;gap:8px;flex-wrap:wrap"></div>
         </div>
+        <div class="field" style="margin-bottom:14px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="safePaletteToggle" style="width:14px;height:14px;accent-color:var(--accent)">
+            <span>Colorblind-safe color swatches</span>
+            <span style="font-weight:400;color:var(--muted);font-size:.80rem">(replaces color pickers with a safe palette)</span>
+          </label>
+        </div>
         <div class="settings-section-head">Layout &amp; display</div>
         <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
           <div class="field" style="flex:1 1 160px;margin-bottom:0">
@@ -569,9 +576,12 @@
             </div>
           </div>
         </div>
-        <div class="settings-section-head">Photos &amp; screensaver</div>
+      </div><!-- /look -->
+
+      <!-- ── Images (Screensaver / Background) ── -->
+      <div class="settings-panel" data-panel="screensaver">
+        <div class="settings-section-head">Background Images</div>
         <div class="field">
-          <label>Background Images</label>
           <button class="btn btn-primary" id="photosPickerBtn" onclick="openPhotosPicker()"
                   style="width:100%;margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:8px">
             <span style="font-size:1.1rem">📷</span> Choose from Google Photos
@@ -598,8 +608,8 @@
             <button class="btn btn-sm" style="background:var(--surface2);color:var(--red)" onclick="clearBgImages()">Clear background images</button>
           </div>
         </div>
+        <div class="settings-section-head">Screensaver</div>
         <div class="field">
-          <label>Screensaver</label>
           <div class="toggle-row">
             <label class="toggle-switch">
               <input type="checkbox" id="settingSaverEnabled" />
@@ -657,7 +667,7 @@
             <input type="time" id="settingSaverNightEnd" value="06:30" />
           </div>
         </div>
-      </div><!-- /look -->
+      </div><!-- /screensaver -->
 
       <!-- ── Family Members ── -->
       <div class="settings-panel" data-panel="family">
@@ -675,9 +685,18 @@
 
       <!-- ── Family Assistant ── -->
       <div class="settings-panel" data-panel="assistant">
+        <div style="display:flex;gap:10px;align-items:flex-start;background:var(--surface2);border-radius:var(--radius);padding:10px 12px;margin:0 0 14px">
+          <span style="font-size:1.1rem;line-height:1;flex-shrink:0">🤖</span>
+          <p style="font-size:var(--text-sm);color:var(--muted);margin:0;line-height:1.45">
+            Ask about your schedule, weather, or budget, or tell it what to do — add or remove shopping items, to-dos, and calendar events, plan a meal, log a bill, or ask when to mow the lawn. It sees your family's calendars, lists, and budget in real time to answer.
+          </p>
+        </div>
         <div class="field">
           <label>Assistant name <span style="font-weight:400;color:var(--muted)">(shown on the assistant card)</span></label>
           <input type="text" id="settingAssistantName" placeholder="e.g. Family Assistant" maxlength="40" />
+        </div>
+        <div class="toggle-sub" style="margin:-8px 0 14px">
+          🎭 Some names unlock a matching personality in its replies — try naming it after a famous fictional AI or butler.
         </div>
         <div class="field">
           <label>Empty state</label>
@@ -692,21 +711,18 @@
             </label>
           </div>
         </div>
-        <p style="font-size:var(--text-xs);color:var(--muted);margin-top:4px">
-          Uses the Gemini key from ⚙️ Settings → 🍽 Meals.
-        </p>
+        <div class="settings-section-head">AI Provider</div>
+        <div class="field">
+          <label>Google Gemini API Key</label>
+          <input type="password" id="settingMealAiKey" placeholder="Paste your API key…" autocomplete="off" />
+          <p style="font-size:var(--text-xs);color:var(--muted);margin-top:6px">
+            Also powers meal suggestions in ⚙️ Settings → 🍽 Meals.
+          </p>
+        </div>
       </div><!-- /assistant -->
 
       <!-- ── Calendar ── -->
       <div class="settings-panel" data-panel="calendar">
-
-        <div class="field" style="margin-bottom:14px">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-            <input type="checkbox" id="safePaletteToggle" style="width:14px;height:14px;accent-color:var(--accent)">
-            <span>Colorblind-safe color swatches</span>
-            <span style="font-weight:400;color:var(--muted);font-size:.80rem">(replaces color pickers with a safe palette)</span>
-          </label>
-        </div>
 
         <!-- Google Calendars (sign-in required) -->
         <div class="lc-section">
@@ -934,10 +950,9 @@
 
       <!-- ── Meal Planning ── -->
       <div class="settings-panel" data-panel="meals">
-        <div class="field">
-          <label>Google Gemini API Key</label>
-          <input type="password" id="settingMealAiKey" placeholder="Paste your API key…" autocomplete="off" />
-        </div>
+        <p style="font-size:.82rem;color:var(--muted);margin:0 0 14px">
+          The Gemini API key that powers meal suggestions now lives in <strong style="cursor:pointer;color:var(--accent)" onclick="switchSettingsTab('assistant')">🤖 Assistant</strong>.
+        </p>
         <div class="field">
           <label>Dietary Preferences</label>
           <div class="meal-diet-grid" id="mealDietGrid">
