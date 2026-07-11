@@ -300,7 +300,9 @@ window.addEventListener('resize', () => {
 
 // Optional: Lock orientation to portrait on mobile (if browser supports it)
 function lockPortraitOrientation() {
-  if (isMobile && screen.orientation) {
+  // iOS Safari has screen.orientation but not .lock — calling it throws
+  // synchronously (no promise, so .catch can't help) and kills the load handler
+  if (isMobile && screen.orientation && typeof screen.orientation.lock === 'function') {
     screen.orientation.lock('portrait-primary').catch((err) => {
       console.debug('Portrait lock not supported:', err);
     });
