@@ -685,7 +685,9 @@
         <div class="lc-section">
           <div class="lc-section-title">📅 Google Calendars</div>
           <div id="settingCalNotSignedIn" style="font-size:.82rem;color:var(--muted);padding:4px 0 8px">
-            Sign in with Google to manage calendars.
+            Sign in with Google to manage calendars and sync shared lists.
+            <!-- Only sign-in entry point on mobile: the status-pill card is desktop-sidebar-only -->
+            <button class="btn btn-primary btn-sm" style="width:100%;margin-top:8px" onclick="signIn()">Sign in with Google</button>
           </div>
           <div id="settingCalSignedIn" style="display:none">
             <ul id="settingCalList" style="list-style:none;margin:0 0 8px"></ul>
