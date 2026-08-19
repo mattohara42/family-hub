@@ -940,6 +940,82 @@ const MEAL_ADJUST_PRESETS = ['Vegetarian','Vegan','Lactose-free','Gluten-free','
 let tokenClient;
 let gsiReady = false;
 
+// GIS access tokens are short-lived (~1 h) and in-memory only. On a wall
+// display the tab stays open all day, so the token silently expires and the
+// next calendar write fails auth — reading as a hang/"timeout" and looking
+// like the session wasn't persisted. We track expiry, refresh silently before
+// it lapses, and expose ensureFreshToken() so writes can await a valid token.
+let tokenExpiresAt   = 0;      // epoch ms when googleToken stops being valid
+let tokenRefreshTimer = null;  // scheduled proactive silent refresh
+let tokenWaiters      = [];    // {resolve, reject} awaiting the next token grant
+const TOKEN_SKEW_MS   = 5 * 60 * 1000; // refresh this long before actual expiry
+
+// Called from the OAuth callback once a token (or error) comes back, to settle
+// any ensureFreshToken() promises waiting on this grant.
+function settleTokenWaiters(err) {
+  const waiters = tokenWaiters;
+  tokenWaiters = [];
+  waiters.forEach(w => err ? w.reject(err) : w.resolve(googleToken));
+}
+
+// Schedule a silent (prompt-less) refresh shortly before the current token
+// expires so the app keeps a live token without user interaction.
+function scheduleTokenRefresh() {
+  clearTimeout(tokenRefreshTimer);
+  if (!tokenExpiresAt) return;
+  const delay = Math.max(0, tokenExpiresAt - TOKEN_SKEW_MS - Date.now());
+  tokenRefreshTimer = setTimeout(() => {
+    if (tokenClient) tokenClient.requestAccessToken({ prompt: '' });
+  }, delay);
+}
+
+// Resolve with a valid access token, silently refreshing first if the current
+// one is missing or within the skew window. Rejects if no silent token can be
+// obtained (e.g. the Google session cookie is gone → interactive sign-in needed).
+function ensureFreshToken() {
+  const fresh = googleToken && Date.now() < tokenExpiresAt - TOKEN_SKEW_MS;
+  if (fresh) return Promise.resolve(googleToken);
+  if (!tokenClient) return Promise.reject(new Error('Google sign-in not ready'));
+  return new Promise((resolve, reject) => {
+    // Guard against a callback that never fires (popup blocked, cookie gone)
+    let timeout;
+    const waiter = {
+      resolve: v => { clearTimeout(timeout); resolve(v); },
+      reject:  e => { clearTimeout(timeout); reject(e); },
+    };
+    timeout = setTimeout(() => {
+      tokenWaiters = tokenWaiters.filter(w => w !== waiter);
+      reject(new Error('Sign-in timed out — please sign in with Google again.'));
+    }, 20000);
+    tokenWaiters.push(waiter);
+    tokenClient.requestAccessToken({ prompt: '' });
+  });
+}
+
+// fetch() against Google APIs that guarantees a fresh token, retries once on a
+// 401 after a silent refresh, and aborts after a timeout instead of hanging.
+async function calFetch(url, opts = {}, { retryOn401 = true } = {}) {
+  const token = await ensureFreshToken();
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), 20000);
+  const headers = { ...(opts.headers || {}), Authorization: `Bearer ${token}` };
+  let resp;
+  try {
+    resp = await fetch(url, { ...opts, headers, signal: controller.signal });
+  } catch (e) {
+    clearTimeout(t);
+    if (e.name === 'AbortError') throw new Error('Request timed out — check your connection and try again.');
+    throw e;
+  }
+  clearTimeout(t);
+  if (resp.status === 401 && retryOn401) {
+    // Token was rejected (expired/revoked). Force a silent refresh and retry once.
+    tokenExpiresAt = 0;
+    return calFetch(url, opts, { retryOn401: false });
+  }
+  return resp;
+}
+
 // Called by the GSI script once it has loaded
 function onGsiLoad() {
   gsiReady = true;
@@ -1080,8 +1156,17 @@ function initGoogleAuth() {
     client_id: GOOGLE_CLIENT_ID,
     scope: 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/photospicker.mediaitems.readonly',
     callback: async (resp) => {
-      if (resp.error) { console.error('OAuth error', resp); return; }
+      if (resp.error) {
+        console.error('OAuth error', resp);
+        settleTokenWaiters(new Error(resp.error));   // unblock any pending write
+        return;
+      }
       googleToken = resp.access_token;
+      // Track expiry so we can refresh before it lapses. expires_in is seconds.
+      const ttl = Number(resp.expires_in) || 3600;
+      tokenExpiresAt = Date.now() + ttl * 1000;
+      scheduleTokenRefresh();
+      settleTokenWaiters(null);                       // resolve ensureFreshToken() waiters
 
       // Sign in to Firebase Auth with the Google credential so that
       // Firestore Security Rules can use request.auth (A01/A07 fix).
@@ -1133,6 +1218,9 @@ function signIn() {
 function signOut() {
   if (googleToken) google.accounts.oauth2.revoke(googleToken);
   firebase.auth().signOut().catch(() => {});
+  clearTimeout(tokenRefreshTimer);
+  tokenExpiresAt = 0;
+  settleTokenWaiters(new Error('Signed out'));
   currentUser = null; googleToken = null;
   localStorage.removeItem('fh_user');
   document.getElementById('calNotSignedIn').style.display = '';
@@ -3621,9 +3709,9 @@ async function saveCalEvent() {
       // PATCH existing event (or its series when scope === 'all')
       const targetId = seriesEdit ? evtEditing.recurringEventId : evtEditing.eventId;
       const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(targetId)}`;
-      const r = await fetch(url, {
+      const r = await calFetch(url, {
         method: 'PATCH',
-        headers: { 'Authorization': `Bearer ${googleToken}`, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
       if (!r.ok) {
@@ -3633,9 +3721,9 @@ async function saveCalEvent() {
     } else {
       // POST new event
       const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events`;
-      const r = await fetch(url, {
+      const r = await calFetch(url, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${googleToken}`, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
       if (!r.ok) {
@@ -3668,9 +3756,8 @@ async function deleteCalEvent() {
   evtEdStatus('Deleting…', false);
   try {
     const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(targetId)}`;
-    const r = await fetch(url, {
+    const r = await calFetch(url, {
       method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${googleToken}` },
     });
     if (!r.ok && r.status !== 204) {
       const err = await r.json().catch(() => ({}));
@@ -3722,9 +3809,9 @@ async function rescheduleEvent(ev, newDateKey) {
 
   const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(ev.calId)}/events/${encodeURIComponent(ev.eventId)}`;
   try {
-    const r = await fetch(url, {
+    const r = await calFetch(url, {
       method: 'PATCH',
-      headers: { 'Authorization': `Bearer ${googleToken}`, 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ start, end }),
     });
     if (!r.ok) {
@@ -8059,9 +8146,9 @@ async function assistantAddEvent(dateStr, timeStr, title, member) {
   const body = { summary: title, start, end };
   if (assignedName) body.extendedProperties = { private: { fhMembers: assignedName } };
   try {
-    const r = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+    const r = await calFetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${googleToken}`, 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
     if (!r.ok) { const e = await r.json().catch(() => ({})); return `⚠️ Calendar error: ${e.error?.message || r.status}`; }
@@ -8123,7 +8210,7 @@ async function assistantRemoveEvent(query, dateStr) {
   if (!e) return `⚠️ Couldn't find an upcoming event matching "${query}"`;
   try {
     const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(e.calId)}/events/${encodeURIComponent(e.eventId)}`;
-    const r = await fetch(url, { method: 'DELETE', headers: { 'Authorization': `Bearer ${googleToken}` } });
+    const r = await calFetch(url, { method: 'DELETE' });
     if (!r.ok && r.status !== 204) { const err = await r.json().catch(() => ({})); return `⚠️ Calendar error: ${err.error?.message || r.status}`; }
     await loadAllCalendars();
     return `✓ Removed "${e.summary}" (${e.allDay ? e.date : new Date(e.startDT).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })})`;
@@ -8142,9 +8229,9 @@ async function assistantEditEvent(query, newDate, newTime, newTitle) {
   if (!Object.keys(patch).length) return `⚠️ Nothing to change on "${e.summary}"`;
   try {
     const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(e.calId)}/events/${encodeURIComponent(e.eventId)}`;
-    const r = await fetch(url, {
+    const r = await calFetch(url, {
       method: 'PATCH',
-      headers: { 'Authorization': `Bearer ${googleToken}`, 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),
     });
     if (!r.ok) { const err = await r.json().catch(() => ({})); return `⚠️ Calendar error: ${err.error?.message || r.status}`; }
