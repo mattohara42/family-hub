@@ -377,6 +377,7 @@ let assistantRecognition = null;  // SpeechRecognition instance
 let assistantListening   = false; // true while mic is open
 let assistantTTS         = lsGet('fh_assistantTTS', false); // read replies aloud
 let assistantWelcomeMode = localStorage.getItem('fh_assistantWelcome') || 'ticker'; // 'static' | 'ticker'
+let oskEnabled           = lsGet('fh_osk', false); // on-screen keyboard for keyboardless wall displays
 // Starter prompts shown as clickable chips in the empty chat state.
 // ⚠️ Keep this current: when a new assistant capability ships (see ASSISTANT_BACKLOG.md),
 // add a representative prompt here so users discover it.
@@ -1114,6 +1115,7 @@ window.addEventListener('load', () => {
   if (eggCategories.ui) setupKonamiCode();
   if (eggCategories.ui) setupEmojiFireworks();
   initAssistantVoice();
+  initOnScreenKeyboard();       // touch keyboard for keyboardless wall displays (opt-in)
   updateAssistantTtsBtn();      // set the 🔊/🔇 voice-output toggle state
   renderAssistantMessages();   // render empty-state welcome + quick-prompt chips
   // Daily briefing: open once per day, after weather/calendar have had time to
@@ -5765,6 +5767,32 @@ function applyMemberColors() {
   });
 }
 
+/** Resolve a free-text member reference to a family member's exact name, or
+ *  null. Strips possessives ("Jake's" → "Jake") and matches partials. Longest
+ *  names first so "Jack" doesn't shadow "Jackson". */
+function resolveFamilyMember(query) {
+  if (!query) return null;
+  const q = query.trim().toLowerCase().replace(/['’]s\b/g, '').trim();
+  if (!q) return null;
+  const members = [...familyMembers].sort((a, b) => b.name.length - a.name.length);
+  const m = members.find(fm => fm.name.toLowerCase() === q)
+         || members.find(fm => fm.name.toLowerCase().includes(q) || q.includes(fm.name.toLowerCase()));
+  return m ? m.name : null;
+}
+
+/** Find a family member whose name appears as a whole word (optionally
+ *  possessive) in an event title, e.g. "Jake's dentist" → "Jake". */
+function detectMemberInTitle(title) {
+  const t = (title || '').toLowerCase();
+  if (!t) return null;
+  const members = [...familyMembers].sort((a, b) => b.name.length - a.name.length);
+  const hit = members.find(fm => {
+    const name = fm.name.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`\\b${name}(['’]s)?\\b`).test(t);
+  });
+  return hit ? hit.name : null;
+}
+
 async function setFamilyMemberColor(idOrIndex, color) {
   const m = typeof idOrIndex === 'string'
     ? familyMembers.find(m => m.id === idOrIndex)
@@ -8034,6 +8062,7 @@ GUIDELINES:
 - When asked about free time or scheduling, look at the calendar gaps.
 - When asked about weather ("will it rain?", "is it going to be hot?"), use the real weather data above.
 - When asked when to mow the lawn (or do yard work), use "Best times to mow" above — recommend the top pick, explain the reasoning briefly, and offer to add it to the calendar (you can assign a family member). If that section is absent, say the forecast or a weather location isn't available.
+- When an event clearly belongs to a specific family member ("Mom's dentist", "soccer for Jake", "Ava has a recital"), pass that person's name in the Member field of addEvent so the event is color-coded to them. Use the closest matching name from the family members list above — never invent a name that isn't listed.
 - To change or remove an event, use editEvent / removeEvent with words from its title. It acts on the soonest upcoming match; the confirmation names which event, so the user can correct you if it picked the wrong one. Only do this when clearly asked.
 - When asked "what's for dinner?" or "what's the meal plan?", use the meal plan data above.
 - When asked about family members or who is assigned to something, use the family members list.
@@ -8137,12 +8166,12 @@ async function assistantAddEvent(dateStr, timeStr, title, member) {
   // Optional family-member assignee → fhMembers (same field the editor writes)
   let assignedName = null, memberNote = '';
   if (member && member.trim()) {
-    const q = member.trim().toLowerCase();
-    const m = familyMembers.find(fm => fm.name.toLowerCase() === q)
-           || familyMembers.find(fm => fm.name.toLowerCase().includes(q) || q.includes(fm.name.toLowerCase()));
-    if (m) assignedName = m.name;
-    else memberNote = ` (couldn't match "${member.trim()}" to a family member)`;
+    assignedName = resolveFamilyMember(member);
+    if (!assignedName) memberNote = ` (couldn't match "${member.trim()}" to a family member)`;
   }
+  // Fall back to a name mentioned in the title itself (e.g. "Jake's dentist"),
+  // so the event still gets color-coded even if the model omits the Member field.
+  if (!assignedName) assignedName = detectMemberInTitle(title);
   const body = { summary: title, start, end };
   if (assignedName) body.extendedProperties = { private: { fhMembers: assignedName } };
   try {
@@ -10014,6 +10043,156 @@ function highlightFlavorButtons() {
   });
 }
 
+// ── On-Screen Keyboard ─────────────────────────────────────────
+// A lightweight touch keyboard for keyboardless wall displays. Opt-in via
+// Settings → Look (fh_osk); never on phones (they have a native keyboard).
+// Pops up when a [data-osk] field is focused and types into it, dispatching
+// real `input` events so field handlers (e.g. geocode) still fire.
+let oskEl       = null;    // keyboard container (built once, appended to body)
+let oskTarget   = null;    // the input/textarea currently receiving keys
+let oskLayer    = 'letters'; // 'letters' | 'symbols'
+let oskShift    = false;   // one-shot shift for the next letter
+
+const OSK_LAYOUTS = {
+  letters: [
+    ['q','w','e','r','t','y','u','i','o','p'],
+    ['a','s','d','f','g','h','j','k','l'],
+    ['⇧','z','x','c','v','b','n','m','⌫'],
+    ['?123',',','␣','.','↵'],
+  ],
+  symbols: [
+    ['1','2','3','4','5','6','7','8','9','0'],
+    ['@','#','$','_','&','-','+','(',')','/'],
+    ['*','"',"'",':',';','!','?','⌫'],
+    ['ABC',',','␣','.','↵'],
+  ],
+};
+
+function buildOnScreenKeyboard() {
+  if (oskEl) return oskEl;
+  oskEl = document.createElement('div');
+  oskEl.className = 'osk';
+  oskEl.setAttribute('role', 'group');
+  oskEl.setAttribute('aria-label', 'On-screen keyboard');
+  // Keep focus on the target: prevent the mousedown from blurring the field.
+  oskEl.addEventListener('mousedown', e => e.preventDefault());
+  document.body.appendChild(oskEl);
+  return oskEl;
+}
+
+function renderOnScreenKeyboard() {
+  if (!oskEl) return;
+  oskEl.innerHTML = '';
+  const rows = OSK_LAYOUTS[oskLayer];
+  rows.forEach((row, ri) => {
+    const rowEl = document.createElement('div');
+    rowEl.className = 'osk-row';
+    row.forEach(key => {
+      const btn = document.createElement('div');
+      btn.className = 'osk-key';
+      let label = key;
+      if (key === '␣') { btn.classList.add('osk-space'); label = ''; }
+      else if (key === '⌫' || key === '↵' || key === '⇧' || key === '?123' || key === 'ABC') btn.classList.add('osk-wide');
+      if (key === '↵') btn.classList.add('osk-enter');
+      if (key === '?123' || key === 'ABC') btn.classList.add('osk-fn');
+      if (key === '⇧' && oskShift) btn.classList.add('osk-active');
+      // Letters follow shift state
+      if (oskLayer === 'letters' && /^[a-z]$/.test(key) && oskShift) label = key.toUpperCase();
+      btn.textContent = label;
+      btn.addEventListener('click', () => onOskKey(key));
+      rowEl.appendChild(btn);
+    });
+    // Trailing dismiss key on the last row
+    if (ri === rows.length - 1) {
+      const hide = document.createElement('div');
+      hide.className = 'osk-key osk-fn osk-hide';
+      hide.textContent = '⌨✕';
+      hide.title = 'Hide keyboard';
+      hide.addEventListener('click', hideOnScreenKeyboard);
+      rowEl.appendChild(hide);
+    }
+    oskEl.appendChild(rowEl);
+  });
+}
+
+function onOskKey(key) {
+  switch (key) {
+    case '⌫':  oskBackspace(); return;
+    case '↵':  oskEnter();     return;
+    case '␣':  oskInsert(' '); return;
+    case '⇧':  oskShift = !oskShift; renderOnScreenKeyboard(); return;
+    case '?123': oskLayer = 'symbols'; renderOnScreenKeyboard(); return;
+    case 'ABC':  oskLayer = 'letters'; renderOnScreenKeyboard(); return;
+    default: {
+      const ch = (oskLayer === 'letters' && oskShift && /^[a-z]$/.test(key)) ? key.toUpperCase() : key;
+      oskInsert(ch);
+      if (oskShift) { oskShift = false; renderOnScreenKeyboard(); }
+    }
+  }
+}
+
+function oskInsert(ch) {
+  const el = oskTarget;
+  if (!el) return;
+  const start = el.selectionStart ?? el.value.length;
+  const end   = el.selectionEnd   ?? el.value.length;
+  el.value = el.value.slice(0, start) + ch + el.value.slice(end);
+  const caret = start + ch.length;
+  try { el.setSelectionRange(caret, caret); } catch {}
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function oskBackspace() {
+  const el = oskTarget;
+  if (!el) return;
+  let start = el.selectionStart ?? el.value.length;
+  const end = el.selectionEnd   ?? el.value.length;
+  if (start === end) { if (start === 0) return; start--; }
+  el.value = el.value.slice(0, start) + el.value.slice(end);
+  try { el.setSelectionRange(start, start); } catch {}
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function oskEnter() {
+  const el = oskTarget;
+  if (!el) return;
+  if (el.tagName === 'TEXTAREA') { oskInsert('\n'); return; }
+  // Fire the field's own Enter handler (e.g. assistantInput → send), then, if
+  // the field is still focused and non-empty behavior didn't move on, leave it.
+  el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+}
+
+function showOnScreenKeyboard(target) {
+  if (!oskEnabled || isMobile) return;
+  buildOnScreenKeyboard();
+  oskTarget = target;
+  oskLayer = 'letters';
+  oskShift = false;
+  renderOnScreenKeyboard();
+  oskEl.classList.add('visible');
+}
+
+function hideOnScreenKeyboard() {
+  if (oskEl) oskEl.classList.remove('visible');
+  oskTarget = null;
+}
+
+function initOnScreenKeyboard() {
+  document.addEventListener('focusin', e => {
+    if (!oskEnabled || isMobile) return;
+    const t = e.target;
+    if (t && t.matches && t.matches('[data-osk]')) showOnScreenKeyboard(t);
+  });
+  document.addEventListener('focusout', () => {
+    if (!oskEl || !oskEl.classList.contains('visible')) return;
+    // Defer so a focus move to another [data-osk] field keeps the keyboard up.
+    setTimeout(() => {
+      const a = document.activeElement;
+      if (!a || !a.matches || !a.matches('[data-osk]')) hideOnScreenKeyboard();
+    }, 120);
+  });
+}
+
 // ── Focus trap ─────────────────────────────────────────────────
 const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 let _focusTrapCleanup = null;
@@ -10130,6 +10309,7 @@ function openSettings() {
   document.getElementById('settingAssistantName').value  = assistantName;
   document.getElementById('appIconPickerBtn').textContent = appTitleEmoji;
   document.getElementById('sunArcToggle').checked        = sunArcEnabled;
+  document.getElementById('oskToggle').checked           = oskEnabled;
   document.getElementById('wxTickerToggle').checked     = wxTickerEnabled;
   document.getElementById('wxActivityToggle').checked   = wxActivityEnabled;
   document.getElementById('wxView5day').checked   = !!wxEnabledViews['5day'];
@@ -10267,6 +10447,9 @@ function saveSettings() {
     _mowReco = null;   // force a fresh recommendation with the new prefs
   }
   sunArcEnabled     = document.getElementById('sunArcToggle').checked;
+  oskEnabled        = document.getElementById('oskToggle').checked;
+  localStorage.setItem('fh_osk', JSON.stringify(oskEnabled));
+  if (!oskEnabled) hideOnScreenKeyboard();
   wxTickerEnabled   = document.getElementById('wxTickerToggle').checked;
   wxActivityEnabled = document.getElementById('wxActivityToggle').checked;
   wxEnabledViews = {
