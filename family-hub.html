@@ -38,7 +38,14 @@
         el.onclick = function () { el.remove(); };
         (document.body || document.documentElement).appendChild(el);
       }
+      // Benign browser quirk, not a real error: fires when a ResizeObserver
+      // callback triggers another resize within the same frame. Harmless and
+      // unrelated to app code — don't let it trip the boot-error banner.
+      function isBenignError(msg) {
+        return /ResizeObserver loop/.test(msg || '');
+      }
       window.addEventListener('error', function (e) {
+        if (isBenignError(e.message)) return;
         showBootError((e.message || 'Unknown error') + ' — ' + (e.filename || '') + ':' + (e.lineno || '?'));
       });
       window.addEventListener('unhandledrejection', function (e) {
