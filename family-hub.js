@@ -1030,6 +1030,7 @@ window.addEventListener('unhandledrejection', e => {
   if (typeof showToast === 'function') showToast('⚠️ Something went wrong — check the browser console.', 5000);
 });
 window.onerror = (msg, src, line, col, err) => {
+  if (/ResizeObserver loop/.test(msg || '')) return; // benign browser quirk, not a real error
   console.error('[Family Hub] Uncaught error:', msg, `${src}:${line}:${col}`);
   if (typeof Sentry !== 'undefined') Sentry.captureException(err || new Error(msg));
 };
