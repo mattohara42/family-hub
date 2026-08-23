@@ -950,6 +950,12 @@
           </div>
           <div id="mealTemplateList"></div>
         </div>
+        <div class="field">
+          <label>Recipe Box
+            <span style="font-weight:400;color:var(--muted)"> — dishes saved from manual meal entry</span>
+          </label>
+          <div id="recipeBoxList"></div>
+        </div>
       </div><!-- /meals -->
 
 
@@ -1244,6 +1250,42 @@
 
     <!-- Suggestion cards -->
     <div id="mealSuggestionsWrap" style="max-height:400px;overflow-y:auto"></div>
+
+    <div style="display:flex;align-items:center;gap:10px;margin:18px 0">
+      <div style="flex:1;height:1px;background:rgba(128,128,128,.25)"></div>
+      <span style="font-size:.75rem;color:var(--muted)">or</span>
+      <div style="flex:1;height:1px;background:rgba(128,128,128,.25)"></div>
+    </div>
+
+    <!-- Manual entry -->
+    <div class="field">
+      <label>Type your own meal</label>
+      <input type="text" id="manualMealName" placeholder="e.g. Lemon Chicken w/Risotto" style="width:100%;margin-bottom:8px" />
+      <select id="manualMealTypeSelect" style="width:100%;margin-bottom:8px;display:none">
+        <option value="breakfast">🌅 Breakfast</option>
+        <option value="lunch">☀️ Lunch</option>
+        <option value="dinner">🌙 Dinner</option>
+      </select>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <input type="text" id="manualMealIngredientInput" placeholder="Add ingredient…" style="flex:1"
+               onkeydown="if(event.key==='Enter'){event.preventDefault();addManualIngredient()}" />
+        <button class="btn btn-sm" onclick="addManualIngredient()" type="button">+ Add</button>
+      </div>
+      <div id="manualMealIngredientList" class="meal-ing-chips"></div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <input type="checkbox" id="manualMealSaveToBox" style="width:15px;height:15px;cursor:pointer;accent-color:var(--accent)" />
+        <label for="manualMealSaveToBox" style="font-size:.84rem;cursor:pointer;color:var(--text)">Save to Recipe Box for later</label>
+      </div>
+      <button class="btn btn-primary" onclick="saveManualMeal()" style="width:100%">✓ Add This Meal</button>
+    </div>
+
+    <!-- Recipe Box picker -->
+    <div class="field" style="margin-top:16px">
+      <label>📖 Or pick from Recipe Box</label>
+      <input type="text" id="recipeBoxSearch" placeholder="Search saved recipes…" style="width:100%;margin-bottom:8px"
+             oninput="renderRecipeBoxPicker()" />
+      <div id="recipeBoxPickList" style="max-height:180px;overflow-y:auto;display:flex;flex-direction:column;gap:6px"></div>
+    </div>
 
     <div class="modal-actions" style="margin-top:10px">
       <button class="btn btn-secondary" onclick="closeMealModal()">Close</button>

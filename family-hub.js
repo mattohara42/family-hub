@@ -355,6 +355,8 @@ let mealAiProvider  = localStorage.getItem('fh_mealAiProvider')           || 'ge
 let mealDietPrefs   = lsGet('fh_mealDietPrefs', []);
 let mealPantryDef   = localStorage.getItem('fh_mealPantry')               || '';
 let mealTemplates   = lsGet('fh_mealTemplates', []);
+let recipeBox        = lsGet('fh_recipeBox', []);
+let _manualMealIngredients = []; // ingredients being built for the manual-entry meal form
 // ── Shopping categories ───────────────────────────────────────────────────
 const SHOP_DEFAULT_CATEGORIES = ['Produce','Dairy','Meat & Seafood','Bakery','Frozen','Pantry','Beverages','Household','Other'];
 const SHOP_CATEGORY_ICONS = {
@@ -5237,6 +5239,13 @@ function attachFirestoreListeners() {
     renderMealTemplateList();
   }, _fsError));
 
+  // Recipe box
+  _fsUnsub.push(db.collection('recipeBox').orderBy('name').onSnapshot(snap => {
+    recipeBox = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    renderRecipeBoxList();
+    renderRecipeBoxPicker();
+  }, _fsError));
+
   // News feeds
   _fsUnsub.push(db.collection('newsFeeds').orderBy('createdAt').onSnapshot(snap => {
     newsFeeds = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -5342,13 +5351,14 @@ function runFirestoreMigrations() {
     { ls: 'fh_trash',         col: 'trashPickups',  label: 'TrashPickups' },
     { ls: 'fh_countdowns',    col: 'countdowns',    label: 'Countdowns' },
     { ls: 'fh_mealTemplates', col: 'mealTemplates', label: 'MealTemplates' },
+    { ls: 'fh_recipeBox',     col: 'recipeBox',     label: 'RecipeBox' },
   ].forEach(({ ls, col, label }) => {
     const legacy = lsGet(ls, []);
     if (!legacy.length) return;
     const batch = db.batch();
     legacy.forEach(item => {
       const { id: _oldId, ...rest } = item;
-      // mealTemplates already carries its own display "YYYY-MM-DD" createdAt —
+      // mealTemplates/recipeBox already carry their own display "YYYY-MM-DD" createdAt —
       // don't clobber it with a server timestamp.
       const data = rest.createdAt ? rest : { ...rest, createdAt: firebase.firestore.FieldValue.serverTimestamp() };
       batch.set(db.collection(col).doc(), data);
@@ -6358,6 +6368,17 @@ function openMealModal(dateKey, mealType) {
   document.getElementById('mealUseCalendar').checked       = true;
   document.getElementById('mealSuggestionsWrap').innerHTML = '';
   document.getElementById('mealGenerateBtn').disabled      = false;
+
+  _manualMealIngredients = [];
+  document.getElementById('manualMealName').value = '';
+  document.getElementById('manualMealIngredientInput').value = '';
+  document.getElementById('manualMealSaveToBox').checked = false;
+  document.getElementById('manualMealTypeSelect').style.display = mealType === 'all' ? '' : 'none';
+  document.getElementById('manualMealTypeSelect').value = mealType === 'all' ? 'dinner' : mealType;
+  renderManualIngredientList();
+  document.getElementById('recipeBoxSearch').value = '';
+  renderRecipeBoxPicker();
+
   document.getElementById('mealModal').style.display       = 'flex';
   trapFocus(document.querySelector('#mealModal .modal'), null, closeMealModal);
 }
@@ -7441,6 +7462,150 @@ function renderMealTemplateList() {
     row.append(info, applyBtn, delBtn);
     list.appendChild(row);
   });
+}
+
+// ── Recipe Box (manually-entered, reusable dishes) ─────────────
+
+async function saveRecipeBoxItem(name, ingredients) {
+  const item = { name, ingredients, createdAt: new Date().toISOString().slice(0, 10) };
+  if (db) {
+    await db.collection('recipeBox').add(item).catch(_fsWriteError);
+  } else {
+    item.id = Date.now();
+    recipeBox.push(item);
+    localStorage.setItem('fh_recipeBox', JSON.stringify(recipeBox));
+    renderRecipeBoxList();
+    renderRecipeBoxPicker();
+  }
+}
+
+async function deleteRecipeBoxItem(id) {
+  if (!confirm('Delete this recipe from the Recipe Box?')) return;
+  if (db) {
+    await db.collection('recipeBox').doc(id).delete().catch(_fsWriteError);
+  } else {
+    recipeBox = recipeBox.filter(r => r.id !== id);
+    localStorage.setItem('fh_recipeBox', JSON.stringify(recipeBox));
+    renderRecipeBoxList();
+    renderRecipeBoxPicker();
+  }
+}
+
+// Adds a saved recipe straight to the meal slot the modal is currently open for.
+async function useRecipeBoxItem(id) {
+  const r = recipeBox.find(x => x.id === id);
+  if (!r) return;
+  const mealType = _mealType === 'all'
+    ? document.getElementById('manualMealTypeSelect').value
+    : _mealType;
+  await setMealInFs(_mealDate, mealType, { name: r.name, description: '', ingredients: r.ingredients || [] });
+  closeMealModal();
+}
+
+function renderRecipeBoxPicker() {
+  const wrap = document.getElementById('recipeBoxPickList');
+  if (!wrap) return;
+  const q = (document.getElementById('recipeBoxSearch')?.value || '').trim().toLowerCase();
+  const matches = recipeBox.filter(r => !q || r.name.toLowerCase().includes(q));
+  wrap.innerHTML = '';
+  if (!recipeBox.length) {
+    wrap.innerHTML = '<div style="color:var(--muted);font-size:.8rem;padding:4px 0">No saved recipes yet — add a meal below and check "Save to Recipe Box."</div>';
+    return;
+  }
+  if (!matches.length) {
+    wrap.innerHTML = '<div style="color:var(--muted);font-size:.8rem;padding:4px 0">No matches.</div>';
+    return;
+  }
+  matches.forEach(r => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface2);border-radius:8px';
+    const info = document.createElement('div');
+    info.style.cssText = 'flex:1;min-width:0';
+    const ingStr = (r.ingredients || []).join(', ');
+    info.innerHTML = `<div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.name)}</div>
+      <div style="font-size:.73rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(ingStr)}</div>`;
+    const useBtn = document.createElement('button');
+    useBtn.className = 'btn btn-sm btn-primary';
+    useBtn.textContent = '+ Use';
+    useBtn.onclick = () => useRecipeBoxItem(r.id);
+    row.append(info, useBtn);
+    wrap.appendChild(row);
+  });
+}
+
+// Settings > Meals panel — manage saved recipes
+function renderRecipeBoxList() {
+  const list = document.getElementById('recipeBoxList');
+  if (!list) return;
+  list.innerHTML = '';
+  if (!recipeBox.length) {
+    list.innerHTML = '<div style="color:var(--muted);font-size:.8rem;padding:4px 0">No saved recipes yet.</div>';
+    return;
+  }
+  recipeBox.forEach(r => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--surface2);border-radius:8px';
+    const info = document.createElement('div');
+    info.style.cssText = 'flex:1;min-width:0';
+    info.innerHTML = `<div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.name)}</div>
+      <div style="font-size:.73rem;color:var(--muted)">${r.createdAt} · ${(r.ingredients||[]).length} ingredient${(r.ingredients||[]).length !== 1 ? 's' : ''}</div>`;
+    const delBtn = document.createElement('button');
+    delBtn.className = 'btn btn-sm';
+    delBtn.style.cssText = 'color:var(--red);background:none;border:1px solid rgba(255,255,255,.15);padding:3px 8px';
+    delBtn.textContent = '✕';
+    delBtn.title = 'Delete recipe';
+    delBtn.onclick = () => deleteRecipeBoxItem(r.id);
+    row.append(info, delBtn);
+    list.appendChild(row);
+  });
+}
+
+// ── Manual meal entry (type your own dish + ingredients) ───────
+
+function addManualIngredient() {
+  const input = document.getElementById('manualMealIngredientInput');
+  const val = input.value.trim();
+  if (!val) return;
+  if (!_manualMealIngredients.some(i => i.toLowerCase() === val.toLowerCase())) {
+    _manualMealIngredients.push(val);
+    renderManualIngredientList();
+  }
+  input.value = '';
+  input.focus();
+}
+
+function removeManualIngredient(i) {
+  _manualMealIngredients.splice(i, 1);
+  renderManualIngredientList();
+}
+
+function renderManualIngredientList() {
+  const wrap = document.getElementById('manualMealIngredientList');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  _manualMealIngredients.forEach((ing, i) => {
+    const chip = document.createElement('span');
+    chip.className = 'meal-ing-chip';
+    chip.innerHTML = `${esc(ing)} <button type="button" title="Remove" onclick="removeManualIngredient(${i})">×</button>`;
+    wrap.appendChild(chip);
+  });
+}
+
+async function saveManualMeal() {
+  const nameEl = document.getElementById('manualMealName');
+  const name = nameEl.value.trim();
+  if (!name) { nameEl.focus(); return; }
+
+  const mealType = _mealType === 'all'
+    ? document.getElementById('manualMealTypeSelect').value
+    : _mealType;
+
+  await setMealInFs(_mealDate, mealType, { name, description: '', ingredients: [..._manualMealIngredients] });
+
+  if (document.getElementById('manualMealSaveToBox').checked) {
+    await saveRecipeBoxItem(name, [..._manualMealIngredients]);
+  }
+  closeMealModal();
 }
 
 // ── Meal Detail modal ─────────────────────────────────────────
@@ -10071,6 +10236,7 @@ function openSettings() {
   renderLoadingMsgList();
   renderFamilyMemberList();
   renderMealTemplateList();
+  renderRecipeBoxList();
   // ── Mowing advisor settings ──
   document.getElementById('mowPreferredDay').value = String(mowConfig.preferredDay ?? 6);
   document.getElementById('mowDuration').value     = mowConfig.mowDuration ?? 60;

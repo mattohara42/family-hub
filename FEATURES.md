@@ -488,6 +488,22 @@ let mealPantryDef  = localStorage.getItem('fh_mealPantry')   || '';
 
 **localStorage:** `fh_mealPlan`, `fh_mealAiKey`, `fh_mealAiProvider`, `fh_mealDietPrefs`, `fh_mealPantry`, `fh_mealLoadingMsgs`, `fh_mealTemplates` — `fh_mealDietPrefs` (Firestore `settings/mealDietPrefs` doc) and `fh_mealTemplates` (Firestore `mealTemplates` collection) are no-Firebase fallbacks only; `saveMealTemplate()`/`deleteMealTemplate(id)` manage the templates collection.
 
+**Manual meal entry** (in `#mealModal`, alongside the AI suggester): type a dish name (+ meal-type picker when opened from an "all" slot) and add ingredients one at a time into a chip list, then **✓ Add This Meal** calls `setMealInFs(dateKey, mealType, {name, description:'', ingredients})` directly — no AI call.
+- `addManualIngredient()` / `removeManualIngredient(i)` / `renderManualIngredientList()` — manage `_manualMealIngredients[]`, the working list for the form (chips rendered into `#manualMealIngredientList`, class `.meal-ing-chip`)
+- `saveManualMeal()` — reads `#manualMealName` + `_manualMealIngredients`, saves the meal, and (if `#manualMealSaveToBox` is checked) also calls `saveRecipeBoxItem()`
+
+**Recipe Box** (`recipeBox` collection — individual reusable dishes, distinct from `mealTemplates` which save a whole *week*):
+```js
+let recipeBox = lsGet('fh_recipeBox', []);
+// [{ id, name, ingredients: [...], createdAt: 'YYYY-MM-DD' }]
+```
+- `saveRecipeBoxItem(name, ingredients)` / `deleteRecipeBoxItem(id)` — Firestore `recipeBox` collection when `db` exists, else `fh_recipeBox` localStorage fallback (same pattern as `mealTemplates`)
+- `useRecipeBoxItem(id)` — applies a saved recipe straight to the date/meal-type the modal is open for, then closes the modal
+- `renderRecipeBoxPicker()` — filters `recipeBox` by `#recipeBoxSearch` text, renders **+ Use** rows into `#recipeBoxPickList` (inside `#mealModal`)
+- `renderRecipeBoxList()` — management list (name + delete) rendered into `#recipeBoxList` in Settings → Meals
+
+**localStorage:** `fh_recipeBox` — Firestore `recipeBox` collection is authoritative when `db` exists; localStorage is the no-Firebase fallback only (same migration pattern as `fh_mealTemplates`).
+
 ---
 
 ### 12. Budget
