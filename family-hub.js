@@ -730,13 +730,6 @@ function renderBudgetCard() {
   }
   if (widgetVisibility.budget) card.style.display = '';
 
-  // No line items for this period — show totals strip but no list
-  if (!upcoming.length) {
-    if (labelEl) labelEl.textContent = periodLabel;
-    body.innerHTML = '';
-    return;
-  }
-
   if (labelEl) labelEl.textContent = periodLabel;
   body.innerHTML = '';
 
