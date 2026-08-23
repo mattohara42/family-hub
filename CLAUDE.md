@@ -37,6 +37,7 @@ Shared state (shopping, todo, budget) lives in Firebase Firestore. Photos are bl
 | Gotcha | Detail |
 |---|---|
 | `file://` blocks OAuth | Use `http://localhost:8080` or deploy to Netlify (HTTPS) |
+| GIS token expires (~1h) | Access token is in-memory and short-lived; on an all-day wall display it silently lapses, so a later calendar write 401s and reads as a hang/"timeout." `tokenExpiresAt` tracks TTL from `resp.expires_in`; `scheduleTokenRefresh()` does a silent `prompt:''` refresh ~5 min early; `ensureFreshToken()` awaits a valid token and `calFetch()` wraps Google API writes (refresh-first, one 401 retry, 20s AbortController timeout). Route new calendar writes through `calFetch`, not raw `fetch` + `Bearer ${googleToken}` |
 | New serving origin breaks OAuth | Add to Google Cloud Console → Authorized JS Origins AND Firebase → Authorized Domains |
 | Photos Picker 403 | Must include `Authorization: Bearer ${googleToken}` header when downloading images |
 | Gemini free tier disabled | Happens when GCP billing is enabled — use an AI Studio key from a billing-free project |

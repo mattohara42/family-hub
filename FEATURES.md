@@ -572,12 +572,16 @@ let assistantName = localStorage.getItem('fh_assistantName') || 'Family Assistan
 - `initAssistantVoice()` — Web Speech mic **input**
 - `speakAssistant(text)` / `toggleAssistantTTS()` / `updateAssistantTtsBtn()` — voice **output** (TTS). Reads replies aloud via `speechSynthesis` (strips markdown/emoji), gated by `assistantTTS` (`fh_assistantTTS`, default off), toggled by the header 🔇/🔊 button. Interruptible (cancels on new send / clear).
 
-**Action vocabulary** (`[ACTION:...]`): `addShopping` · `addTodo` · `completeTodo` · `checkShopping` · `addEvent:YYYY-MM-DD|HH:MM|Title` (Google Calendar `primary`; `allday` for no time) · `setMeal:YYYY-MM-DD|mealType|Name` · `addBudget:Name|Amount|frequency`. Handlers: `assistantAddShopping/AddTodo/CompleteTodo/CheckShopping/AddEvent/SetMeal/AddBudget`, plus `fuzzyTextMatch()`.
+**Action vocabulary** (`[ACTION:...]`): `addShopping` · `addTodo` · `completeTodo` · `checkShopping` · `addEvent:YYYY-MM-DD|HH:MM|Title|Member` (Google Calendar `primary`; `allday` for no time; `Member` optional) · `editEvent` · `removeEvent` · `setMeal:YYYY-MM-DD|mealType|Name` · `addBudget:Name|Amount|frequency`. Handlers: `assistantAddShopping/AddTodo/CompleteTodo/CheckShopping/AddEvent/EditEvent/RemoveEvent/SetMeal/AddBudget`, plus `fuzzyTextMatch()`.
+
+**Member routing:** `assistantAddEvent()` assigns a family member (writes `extendedProperties.private.fhMembers`, which drives `applyMemberColors()`). The `Member` arg is resolved via `resolveFamilyMember()` (strips possessives, longest-name-first partial match); if omitted, `detectMemberInTitle()` still picks up a member named in the title (e.g. "Jake's dentist" → Jake). The system prompt instructs the model to fill `Member` for person-specific events.
 
 **HTML anchors:** `#assistantCard`, `#assistantCardTitle` (renamed by `applyAssistantName`), `#assistantMessages`, `#assistantInput`, `#assistantMicBtn`, `#assistantTtsBtn`, `.assistant-chip`
 **localStorage:** `fh_assistantTTS` (bool — read replies aloud), `fh_assistantName` (string — display name)
 
 **Requires:** Gemini key for chat; Google sign-in for `addEvent` (degrades gracefully otherwise).
+
+**On-screen keyboard (kiosk):** For keyboardless wall displays. Opt-in via Settings → Look (`oskEnabled`, `fh_osk`, default off); never shown on phones (`isMobile`). `initOnScreenKeyboard()` (called from the load listener) delegates `focusin`/`focusout` — focusing any `[data-osk]` field (`#assistantInput`, `#evtEdTitle`, `#evtEdDesc`, `#evtEdLocation`) calls `showOnScreenKeyboard()`, which builds/renders a fixed `.osk` panel appended to `<body>`. Keys type at the caret and dispatch real `input` events (so handlers like `geocodeEvtEdLocation()` fire); `⇧` is one-shot shift, `?123`/`ABC` toggle a symbols layer, `↵` fires the field's own Enter (send for the assistant, newline in a textarea), `⌫` backspaces, `⌨✕` dismisses. Keys `preventDefault` on mousedown to keep the field focused. Functions: `buildOnScreenKeyboard`, `renderOnScreenKeyboard`, `onOskKey`, `oskInsert`, `oskBackspace`, `oskEnter`, `showOnScreenKeyboard`, `hideOnScreenKeyboard`, `initOnScreenKeyboard`.
 
 ---
 
@@ -830,6 +834,7 @@ Secondary widgets (Budget, Chores, Word, Joke, Quotes, Countdown, News, Stock, A
 | `fh_assistantName` | string | Assistant | Display name (default `'Family Assistant'`) |
 | `fh_assistantTTS` | bool | Assistant | Read replies aloud via TTS (default off) |
 | `fh_tvMode` | bool | TV Mode | TV / Display Mode on/off (default false) |
+| `fh_osk` | bool | On-screen keyboard | Touch keyboard for keyboardless wall displays (default false; ignored on phones) |
 | `fh_eggCategories` | JSON object | Easter Eggs | `{ phrases, calendar, ui, weather }` — all true by default |
 | `fh_eggFranchises` | JSON object | Easter Eggs | `{ [franchiseId]: bool }` — per-franchise on/off pick within the `phrases` category, all true by default |
 | `fh_saver` | bool | Screensaver | Idle photo screensaver on/off (default false) |
