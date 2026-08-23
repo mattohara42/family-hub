@@ -804,7 +804,7 @@
           </div>
         </div>
 
-        <div class="lc-section">
+        <div class="lc-section" style="border-bottom:none">
           <div class="lc-section-title">🗑 Trash &amp; Recycling</div>
           <div id="lcTrashList" class="lc-list"></div>
           <div class="lc-add-row">
@@ -824,17 +824,6 @@
             <input id="lcTrashColor" type="color" value="#8bc34a" class="lc-color" title="Color" />
             <button class="btn btn-primary btn-sm" onclick="lcAddTrash()">Add</button>
           </div>
-        </div>
-
-        <div class="lc-section" style="border-bottom:none">
-          <div class="lc-section-title">💰 Bill Due Dates</div>
-          <label style="display:flex;align-items:center;gap:8px;font-size:var(--text-sm);cursor:pointer">
-            <input type="checkbox" id="lcBillsOnCal" style="accent-color:var(--accent)" />
-            Show budget items as calendar events on their due dates
-          </label>
-          <p style="font-size:var(--text-xs);color:var(--muted);margin-top:6px;line-height:1.5">
-            Bills with a fixed day (monthly, weekly, yearly) will appear on the calendar automatically.
-          </p>
         </div>
 
       </div><!-- /calendar -->
