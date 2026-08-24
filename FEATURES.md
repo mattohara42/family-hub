@@ -472,17 +472,25 @@ let mealPantryDef  = localStorage.getItem('fh_mealPantry')   || '';
 - `openMealDetail(dateKey, mealType)` — populates the detail popup; falls back to `openMealModal` if the slot is empty
 - `closeMealDetail()`
 - `fetchMealImage(name)` — best-effort dish photo from TheMealDB (free, keyless); returns a thumb URL or null. Cached in `_mealImgCache`. Falls back to an emoji placeholder when no match.
-- `toggleMealAdjust()` — reveals/hides the Adjust section
+- `toggleMealAdjust()` — reveals/hides the Adjust section; seeds `_mealDetailIngredients` from the current meal and renders the chip editor
 - `addAdjustPreset(label)` — appends a quick-adjust chip's text to the instruction input (de-duped)
 - `adjustMeal()` — re-generates the current meal via `callMealAI` per the user's adjustment, replaces it via `setMealInFs` (optimistic local update), and re-opens the detail
 - `deleteMealFromDetail()` — `removeMeal()` + close
-- Actions: **Keep** (close, no change) · **Adjust** (vegetarian, lactose-free, swap ingredients, free-text…) · **Delete**
+- Actions: **Keep** (close, no change) · **Adjust** (edit ingredients directly, or regenerate the whole meal with AI) · **Delete**
+
+**Adjust pane — direct ingredient editing** (no AI call; separate from the AI regenerate box below it):
+- `_mealDetailIngredients[]` — working copy of the open meal's ingredients while the Adjust pane is shown
+- `addMealDetailIngredient()` / `removeMealDetailIngredient(i)` / `renderMealDetailIngredientEdit()` — manage the chip list (`#mealDetailIngredientEdit`, class `.meal-ing-chip`, same pattern as the manual-entry chips)
+- `saveMealDetailIngredients()` — persists `_mealDetailIngredients` onto the meal via `setMealInFs` and re-opens the detail
+- `addMealDetailIngredientsToShopping()` / `addMealIngredients(idx)` — both call the shared `addIngredientsToShopping(ingredients, label)` helper (dedupes against local shopping items when `!db`)
 
 **Meal remove buttons:**
 - Week view: each meal chip has a `✕` remove button (`.meal-remove-btn`) revealed on hover
 - Day view: each meal slot has an inline remove button (`.day-meal-remove-btn`)
 
-**HTML anchors:** `#mealModal`, `#mealSuggestionsWrap`, `#mealGenerateBtn`, `#mealDetailModal`, `#mealDetailImg`, `#mealDetailImgPlaceholder`, `#mealAdjustSection`, `#mealAdjustChips`, `#mealAdjustInput`
+**HTML anchors:** `#mealModal`, `#mealSuggestionsWrap`, `#mealGenerateBtn`, `#mealDetailModal`, `#mealDetailImg`, `#mealDetailImgPlaceholder`, `#mealAdjustSection`, `#mealAdjustChips`, `#mealAdjustInput`, `#mealDetailIngredientEdit`, `#mealDetailIngredientInput`
+
+**Add-a-Meal modal tabs** (`#mealModal`): three ways to fill a slot, one shown at a time via `.event-tab` pills (reused from Event Discovery) — `selectMealModalTab('ai'|'manual'|'recipebox')` toggles `#mealTabAi` / `#mealTabManual` / `#mealTabRecipebox`. Defaults to `'ai'` each time `openMealModal()` opens.
 
 **External:** TheMealDB `search.php?s=` (keyless) for dish photos — covered by CSP `connect-src https:` / `img-src https:`.
 

@@ -1233,55 +1233,63 @@
       <h2 id="mealModalTitle">🍽 Meal Ideas</h2>
       <button onclick="closeMealModal()" title="Close" aria-label="Close meal modal" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.3rem;line-height:1">✕</button>
     </div>
-    <p id="mealModalSubtitle" style="font-size:.8rem;color:var(--muted);margin-bottom:16px"></p>
+    <p id="mealModalSubtitle" style="font-size:.8rem;color:var(--muted);margin-bottom:14px"></p>
 
-    <!-- Inputs -->
-    <div class="field">
-      <label>Cuisine or style ideas <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
-      <input type="text" id="mealStyleInput"
-             placeholder="e.g. Italian, quick Asian, comfort food, Mediterranean, 30-min…" />
-    </div>
-    <div class="field">
-      <label>What's on-hand or in the freezer <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
-      <input type="text" id="mealPantryInput"
-             placeholder="e.g. chicken breasts, pasta, canned tomatoes, frozen shrimp…" />
-    </div>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
-      <input type="checkbox" id="mealUseCalendar" checked style="width:15px;height:15px;cursor:pointer;accent-color:var(--accent)" />
-      <label for="mealUseCalendar" style="font-size:.84rem;cursor:pointer;color:var(--text)">
-        Use today's calendar events to inform suggestions
-      </label>
+    <!-- Mode tabs: three ways to fill this slot -->
+    <div style="display:flex;gap:6px;margin-bottom:16px">
+      <button class="event-tab active" data-mode="ai"        onclick="selectMealModalTab('ai')" type="button">✨ AI Suggest</button>
+      <button class="event-tab"        data-mode="manual"    onclick="selectMealModalTab('manual')" type="button">✍️ Type It In</button>
+      <button class="event-tab"        data-mode="recipebox" onclick="selectMealModalTab('recipebox')" type="button">📖 Recipe Box</button>
     </div>
 
-    <button class="btn btn-primary" id="mealGenerateBtn"
-            onclick="generateMealSuggestions()" style="width:100%;margin-bottom:18px">
-      ✨ Suggest Meals
-    </button>
-
-    <!-- Suggestion cards -->
-    <div id="mealSuggestionsWrap" style="max-height:400px;overflow-y:auto"></div>
-
-    <div style="display:flex;align-items:center;gap:10px;margin:18px 0">
-      <div style="flex:1;height:1px;background:rgba(128,128,128,.25)"></div>
-      <span style="font-size:.75rem;color:var(--muted)">or</span>
-      <div style="flex:1;height:1px;background:rgba(128,128,128,.25)"></div>
-    </div>
-
-    <!-- Manual entry -->
-    <div class="field">
-      <label>Type your own meal</label>
-      <input type="text" id="manualMealName" placeholder="e.g. Lemon Chicken w/Risotto" style="width:100%;margin-bottom:8px" />
-      <select id="manualMealTypeSelect" style="width:100%;margin-bottom:8px;display:none">
-        <option value="breakfast">🌅 Breakfast</option>
-        <option value="lunch">☀️ Lunch</option>
-        <option value="dinner">🌙 Dinner</option>
-      </select>
-      <div style="display:flex;gap:8px;margin-bottom:8px">
-        <input type="text" id="manualMealIngredientInput" placeholder="Add ingredient…" style="flex:1"
-               onkeydown="if(event.key==='Enter'){event.preventDefault();addManualIngredient()}" />
-        <button class="btn btn-sm" onclick="addManualIngredient()" type="button">+ Add</button>
+    <!-- AI Suggest -->
+    <div id="mealTabAi" class="meal-modal-panel">
+      <div class="field">
+        <label>Cuisine or style ideas <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+        <input type="text" id="mealStyleInput"
+               placeholder="e.g. Italian, quick Asian, comfort food, Mediterranean, 30-min…" />
       </div>
-      <div id="manualMealIngredientList" class="meal-ing-chips"></div>
+      <div class="field">
+        <label>What's on-hand or in the freezer <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+        <input type="text" id="mealPantryInput"
+               placeholder="e.g. chicken breasts, pasta, canned tomatoes, frozen shrimp…" />
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+        <input type="checkbox" id="mealUseCalendar" checked style="width:15px;height:15px;cursor:pointer;accent-color:var(--accent)" />
+        <label for="mealUseCalendar" style="font-size:.84rem;cursor:pointer;color:var(--text)">
+          Use today's calendar events to inform suggestions
+        </label>
+      </div>
+
+      <button class="btn btn-primary" id="mealGenerateBtn"
+              onclick="generateMealSuggestions()" style="width:100%;margin-bottom:18px">
+        ✨ Suggest Meals
+      </button>
+
+      <!-- Suggestion cards -->
+      <div id="mealSuggestionsWrap" style="max-height:400px;overflow-y:auto"></div>
+    </div>
+
+    <!-- Type It In -->
+    <div id="mealTabManual" class="meal-modal-panel" style="display:none">
+      <div class="field">
+        <label>Meal name</label>
+        <input type="text" id="manualMealName" placeholder="e.g. Lemon Chicken w/Risotto" style="width:100%;margin-bottom:8px" />
+        <select id="manualMealTypeSelect" style="width:100%;margin-bottom:8px;display:none">
+          <option value="breakfast">🌅 Breakfast</option>
+          <option value="lunch">☀️ Lunch</option>
+          <option value="dinner">🌙 Dinner</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Ingredients <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <input type="text" id="manualMealIngredientInput" placeholder="Add ingredient…" style="flex:1"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();addManualIngredient()}" />
+          <button class="btn btn-sm" onclick="addManualIngredient()" type="button">+ Add</button>
+        </div>
+        <div id="manualMealIngredientList" class="meal-ing-chips"></div>
+      </div>
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
         <input type="checkbox" id="manualMealSaveToBox" style="width:15px;height:15px;cursor:pointer;accent-color:var(--accent)" />
         <label for="manualMealSaveToBox" style="font-size:.84rem;cursor:pointer;color:var(--text)">Save to Recipe Box for later</label>
@@ -1289,12 +1297,14 @@
       <button class="btn btn-primary" onclick="saveManualMeal()" style="width:100%">✓ Add This Meal</button>
     </div>
 
-    <!-- Recipe Box picker -->
-    <div class="field" style="margin-top:16px">
-      <label>📖 Or pick from Recipe Box</label>
-      <input type="text" id="recipeBoxSearch" placeholder="Search saved recipes…" style="width:100%;margin-bottom:8px"
-             oninput="renderRecipeBoxPicker()" />
-      <div id="recipeBoxPickList" style="max-height:180px;overflow-y:auto;display:flex;flex-direction:column;gap:6px"></div>
+    <!-- Recipe Box -->
+    <div id="mealTabRecipebox" class="meal-modal-panel" style="display:none">
+      <div class="field">
+        <label>📖 Pick from Recipe Box</label>
+        <input type="text" id="recipeBoxSearch" placeholder="Search saved recipes…" style="width:100%;margin-bottom:8px"
+               oninput="renderRecipeBoxPicker()" />
+        <div id="recipeBoxPickList" style="max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:6px"></div>
+      </div>
     </div>
 
     <div class="modal-actions" style="margin-top:10px">
@@ -1328,7 +1338,20 @@
 
     <!-- Adjust section (revealed by the Adjust button) -->
     <div id="mealAdjustSection" style="display:none;margin-top:16px;border-top:1px solid rgba(128,128,128,.18);padding-top:14px">
-      <label style="font-size:.82rem;font-weight:600;color:var(--text);display:block;margin-bottom:8px">Adjust this meal</label>
+
+      <label style="font-size:.82rem;font-weight:600;color:var(--text);display:block;margin-bottom:8px">Ingredients</label>
+      <div id="mealDetailIngredientEdit" class="meal-ing-chips"></div>
+      <div style="display:flex;gap:8px;margin:8px 0 10px">
+        <input type="text" id="mealDetailIngredientInput" placeholder="Add ingredient…" style="flex:1"
+               onkeydown="if(event.key==='Enter'){event.preventDefault();addMealDetailIngredient()}" />
+        <button class="btn btn-sm" onclick="addMealDetailIngredient()" type="button">+ Add</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:18px">
+        <button class="btn btn-sm btn-secondary" style="flex:1" onclick="saveMealDetailIngredients()">💾 Save</button>
+        <button class="btn btn-sm btn-primary"   style="flex:1" onclick="addMealDetailIngredientsToShopping()">🛒 Add to Shopping List</button>
+      </div>
+
+      <label style="font-size:.82rem;font-weight:600;color:var(--text);display:block;margin-bottom:8px">Or regenerate the whole meal with AI</label>
       <div class="meal-adjust-chips" id="mealAdjustChips"></div>
       <input type="text" id="mealAdjustInput"
              placeholder="e.g. make it vegetarian, swap shrimp for chicken, lower carb…"

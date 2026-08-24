@@ -6494,8 +6494,17 @@ function openMealModal(dateKey, mealType) {
   document.getElementById('recipeBoxSearch').value = '';
   renderRecipeBoxPicker();
 
+  selectMealModalTab('ai');
   document.getElementById('mealModal').style.display       = 'flex';
   trapFocus(document.querySelector('#mealModal .modal'), null, closeMealModal);
+}
+
+/** Switch between the AI Suggest / Type It In / Recipe Box panels in the Add-a-Meal modal. */
+function selectMealModalTab(mode) {
+  document.querySelectorAll('#mealModal .event-tab').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  document.getElementById('mealTabAi').style.display        = mode === 'ai'        ? '' : 'none';
+  document.getElementById('mealTabManual').style.display    = mode === 'manual'    ? '' : 'none';
+  document.getElementById('mealTabRecipebox').style.display = mode === 'recipebox' ? '' : 'none';
 }
 
 function closeMealModal() {
@@ -7381,10 +7390,9 @@ async function acceptMeal(idx) {
   // renderCurrentView() is triggered by onSnapshot (or by setMealInFs in the !db fallback)
 }
 
-function addMealIngredients(idx) {
-  const s = _mealSuggestions[idx];
-  const ingredients = s.ingredients || [];
-  if (!ingredients.length) { alert('No ingredients listed for this meal.'); return; }
+/** Add a list of ingredient strings to the Shopping List (dedupes against existing local items). */
+function addIngredientsToShopping(ingredients, label) {
+  if (!ingredients || !ingredients.length) { alert('No ingredients to add.'); return; }
 
   let added = 0;
   if (db) {
@@ -7400,8 +7408,12 @@ function addMealIngredients(idx) {
     saveLocalList('shopping', items);
     renderLocalList('shopping');
   }
-  // Brief toast via bgStatus re-use or alert
-  alert(`✓ Added ${added} ingredient(s) from "${s.name}" to the Shopping List.`);
+  alert(`✓ Added ${added} ingredient(s)${label ? ` from "${label}"` : ''} to the Shopping List.`);
+}
+
+function addMealIngredients(idx) {
+  const s = _mealSuggestions[idx];
+  addIngredientsToShopping(s.ingredients || [], s.name);
 }
 
 async function removeMeal(dateKey, mealType) {
@@ -7859,7 +7871,59 @@ function toggleMealAdjust() {
   const sec = document.getElementById('mealAdjustSection');
   const show = sec.style.display === 'none';
   sec.style.display = show ? 'block' : 'none';
-  if (show) document.getElementById('mealAdjustInput').focus();
+  if (show) {
+    const meal = (mealPlan[_mealDetailDate] || {})[_mealDetailType];
+    _mealDetailIngredients = [...((meal && meal.ingredients) || [])];
+    renderMealDetailIngredientEdit();
+    document.getElementById('mealAdjustInput').focus();
+  }
+}
+
+/** Working copy of the current meal's ingredients while the Adjust pane is open. */
+let _mealDetailIngredients = [];
+
+function renderMealDetailIngredientEdit() {
+  const wrap = document.getElementById('mealDetailIngredientEdit');
+  wrap.innerHTML = '';
+  _mealDetailIngredients.forEach((ing, i) => {
+    const chip = document.createElement('span');
+    chip.className = 'meal-ing-chip';
+    chip.innerHTML = `${esc(ing)} <button type="button" title="Remove" onclick="removeMealDetailIngredient(${i})">×</button>`;
+    wrap.appendChild(chip);
+  });
+}
+
+function addMealDetailIngredient() {
+  const input = document.getElementById('mealDetailIngredientInput');
+  const val = input.value.trim();
+  if (!val) return;
+  if (!_mealDetailIngredients.some(i => i.toLowerCase() === val.toLowerCase())) {
+    _mealDetailIngredients.push(val);
+    renderMealDetailIngredientEdit();
+  }
+  input.value = '';
+  input.focus();
+}
+
+function removeMealDetailIngredient(i) {
+  _mealDetailIngredients.splice(i, 1);
+  renderMealDetailIngredientEdit();
+}
+
+/** Persist the edited ingredient list onto the planned meal (no AI call). */
+async function saveMealDetailIngredients() {
+  const meal = (mealPlan[_mealDetailDate] || {})[_mealDetailType];
+  if (!meal) return;
+  const newMeal = { ...meal, ingredients: [..._mealDetailIngredients] };
+  await setMealInFs(_mealDetailDate, _mealDetailType, newMeal);
+  if (!mealPlan[_mealDetailDate]) mealPlan[_mealDetailDate] = {};
+  mealPlan[_mealDetailDate][_mealDetailType] = newMeal;
+  openMealDetail(_mealDetailDate, _mealDetailType);
+}
+
+function addMealDetailIngredientsToShopping() {
+  const meal = (mealPlan[_mealDetailDate] || {})[_mealDetailType];
+  addIngredientsToShopping(_mealDetailIngredients, meal && meal.name);
 }
 
 /** Append a quick-adjust preset to the instruction input (comma-separated, de-duped). */
