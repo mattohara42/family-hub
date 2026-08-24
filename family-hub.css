@@ -2078,14 +2078,14 @@ body.has-bg.light-mode .day-hour-row.current-hour { background: rgba(190,198,225
   flex-shrink: 0;   /* always holds its size at the bottom of the day card */
 }
 .week-meal-item {
-  font-size: var(--text-base); color: var(--text);
+  font-size: var(--text-base); font-weight: var(--weight-semi); color: var(--text);
   display: flex; align-items: center; gap: 2px;
   padding: 4px 6px; border-radius: 4px;
   min-height: 56px;   /* match the "+ plan meal" button size */
-  background: rgba(76,175,130,.18); cursor: pointer;
+  background: color-mix(in srgb, var(--green) 18%, transparent); cursor: pointer;
   overflow: hidden;
 }
-.week-meal-item:hover { background: rgba(76,175,130,.32); }
+.week-meal-item:hover { background: color-mix(in srgb, var(--green) 32%, transparent); }
 .week-meal-item:hover .meal-remove-btn { opacity: 1; }
 
 /* Remove (×) button — shared between week and day views */
@@ -2130,7 +2130,7 @@ body.has-bg.light-mode .day-hour-row.current-hour { background: rgba(190,198,225
   cursor: pointer; border: 1px solid transparent; transition: border-color .15s;
 }
 .day-meal-slot:hover { border-color: var(--accent); }
-.day-meal-slot.has-meal { border-color: rgba(76,175,130,.5); }
+.day-meal-slot.has-meal { border-color: color-mix(in srgb, var(--green) 50%, transparent); }
 .day-meal-slot-label {
   font-size: var(--text-xs); color: var(--muted); margin-bottom: 4px;
   text-transform: uppercase; letter-spacing: .04em;
@@ -2153,7 +2153,7 @@ body.has-bg.light-mode .day-hour-row.current-hour { background: rgba(190,198,225
   max-width: 100%;
 }
 .day-meal-chip:hover { border-color: var(--accent); }
-.day-meal-chip.has-meal { border-color: rgba(76,175,130,.4); }
+.day-meal-chip.has-meal { border-color: color-mix(in srgb, var(--green) 40%, transparent); }
 .day-meal-chip-icon { font-size: .9rem; flex-shrink: 0; }
 .day-meal-chip-text { font-weight: var(--weight-semi); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .day-meal-chip-label { color: var(--muted); }
@@ -4033,7 +4033,7 @@ a, button, input, select, textarea, label,
   .budget-pill:hover             { background: rgba(229,115,115,.18); }
   .budget-item-del:hover         { color: var(--muted); }
   .sms-contact-row:hover         { background: none; }
-  .week-meal-item:hover          { background: rgba(76,175,130,.18); }
+  .week-meal-item:hover          { background: color-mix(in srgb, var(--green) 18%, transparent); }
   .week-add-meal-btn:hover       { border-style: dashed; background: none; }
   .day-meal-slot:hover           { border-color: transparent; }
   /* Always show remove button on touch — no hover to reveal it */
@@ -4055,7 +4055,7 @@ a, button, input, select, textarea, label,
   .day-event-pill:active         { opacity: .7; }
   .list-check:active             { transform: scale(1.15); }
   .sms-contact-row:active        { background: var(--surface2); }
-  .week-meal-item:active         { background: rgba(76,175,130,.32); }
+  .week-meal-item:active         { background: color-mix(in srgb, var(--green) 32%, transparent); }
   .day-meal-slot:active          { border-color: var(--accent); }
   .budget-pill:active            { background: rgba(229,115,115,.32); }
   .widget-toggle-row:active      { background: var(--surface2); }
