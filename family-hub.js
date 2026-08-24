@@ -730,13 +730,6 @@ function renderBudgetCard() {
   }
   if (widgetVisibility.budget) card.style.display = '';
 
-  // No line items for this period — show totals strip but no list
-  if (!upcoming.length) {
-    if (labelEl) labelEl.textContent = periodLabel;
-    body.innerHTML = '';
-    return;
-  }
-
   if (labelEl) labelEl.textContent = periodLabel;
   body.innerHTML = '';
 
@@ -1037,6 +1030,7 @@ window.addEventListener('unhandledrejection', e => {
   if (typeof showToast === 'function') showToast('⚠️ Something went wrong — check the browser console.', 5000);
 });
 window.onerror = (msg, src, line, col, err) => {
+  if (/ResizeObserver loop/.test(msg || '')) return; // benign browser quirk, not a real error
   console.error('[Family Hub] Uncaught error:', msg, `${src}:${line}:${col}`);
   if (typeof Sentry !== 'undefined') Sentry.captureException(err || new Error(msg));
 };
@@ -2459,8 +2453,7 @@ function renderCalendarTabs() {
       lc.id === LC_IDS.birthdays ? birthdays.length > 0 :
       lc.id === LC_IDS.meds      ? medications.length > 0 :
       lc.id === LC_IDS.school    ? schoolPeriods.length > 0 :
-      lc.id === LC_IDS.trash     ? trashPickups.length > 0 :
-      lc.id === LC_IDS.bills     ? showBillsOnCal && budgetItems.length > 0 : false;
+      lc.id === LC_IDS.trash     ? trashPickups.length > 0 : false;
     if (hasData) all.push({ id: lc.id, label: lc.label, color: lc.color });
   });
 
@@ -9707,21 +9700,18 @@ let birthdays    = lsGet('fh_birthdays',    []);
 let medications  = lsGet('fh_medications',  []);
 let schoolPeriods= lsGet('fh_school',       []);
 let trashPickups = lsGet('fh_trash',        []);
-let showBillsOnCal = lsGet('fh_bills_on_cal', false);
 
 const LC_IDS = {
   birthdays: 'local_birthdays',
   meds:      'local_meds',
   school:    'local_school',
   trash:     'local_trash',
-  bills:     'local_bills',
 };
 const LC_DEFS = [
   { id: LC_IDS.birthdays, label: '🎂 Birthdays',        color: '#e91e8c' },
   { id: LC_IDS.meds,      label: '💊 Medications',       color: '#4caf82' },
   { id: LC_IDS.school,    label: '🏫 School',            color: '#61afef' },
   { id: LC_IDS.trash,     label: '🗑 Trash & Recycling', color: '#8bc34a' },
-  { id: LC_IDS.bills,     label: '💰 Bills Due',         color: '#f5a623' },
 ];
 
 function lcDateKey(d) {
@@ -9837,19 +9827,6 @@ function injectLocalEvents() {
       });
     });
   }
-
-  // Bills due (reuse budgetDatesInRange)
-  if (showBillsOnCal && !disabledCals.has(LC_IDS.bills)) {
-    budgetItems.forEach(item => {
-      budgetDatesInRange(item, range.start, range.end).forEach(key => {
-        // budgetDatesInRange already returns YYYY-MM-DD strings
-        lcAddToCache(LC_IDS.bills, key, {
-          eventId: `bill_${item.id}_${key}`, summary: `💰 ${item.name} due`,
-          color: '#f5a623', allDay: true, startDate: key, endDate: key,
-        });
-      });
-    });
-  }
 }
 
 // Settings panel — populate lists
@@ -9870,8 +9847,6 @@ function lcOpenSettings() {
   lcRenderMedList();
   lcRenderSchoolList();
   lcRenderTrashList();
-  const billsEl = document.getElementById('lcBillsOnCal');
-  if (billsEl) billsEl.checked = showBillsOnCal;
 }
 
 
@@ -10754,12 +10729,6 @@ function saveSettings() {
   // Save layout orientation mode
   const lmSaveEl = document.getElementById('settingLayoutMode');
   if (lmSaveEl) { layoutMode = lmSaveEl.value; localStorage.setItem('fh_layoutMode', layoutMode); applyLayoutMode(); }
-  // Save bills-on-cal toggle
-  const billsEl = document.getElementById('lcBillsOnCal');
-  if (billsEl) {
-    showBillsOnCal = billsEl.checked;
-    localStorage.setItem('fh_bills_on_cal', JSON.stringify(showBillsOnCal));
-  }
   saveChoreRewards();
   applyTvMode(document.getElementById('tvModeToggle').checked);
   // Easter egg categories
