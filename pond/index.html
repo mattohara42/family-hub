@@ -1,0 +1,1636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Pond Chimes</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128031;</text></svg>">
+<style>
+  html, body { margin:0; padding:0; height:100%; overflow:hidden; background:#08161a; }
+  canvas { display:block; width:100vw; height:100vh; touch-action:none; }
+  #title {
+    position:fixed; top:24px; left:50%; transform:translateX(-50%);
+    font-family: Georgia, 'Times New Roman', serif;
+    color:#c9dfd8; text-align:center; pointer-events:none;
+    opacity:1; transition:opacity 2.5s ease;
+  }
+  #title h1 { font-size:28px; font-weight:normal; letter-spacing:0.35em; margin:0; text-transform:uppercase; }
+  #title p { font-size:12px; letter-spacing:0.2em; margin:6px 0 0; opacity:0.55;
+    font-family:'Helvetica Neue', Arial, sans-serif; text-transform:uppercase; }
+  /* first-sighting "field guide" card for a discovery */
+  #card {
+    position:fixed; bottom:36px; left:50%;
+    transform:translateX(-50%) translateY(8px);
+    font-family:Georgia,'Times New Roman',serif; color:#e2efe9; text-align:center;
+    pointer-events:none; opacity:0; transition:opacity 1s ease, transform 1s ease;
+  }
+  #card .n { font-size:22px; letter-spacing:0.26em; text-transform:uppercase; }
+  #card .s { font-size:11px; letter-spacing:0.18em; margin-top:5px; opacity:0.6;
+    font-family:'Helvetica Neue', Arial, sans-serif; text-transform:uppercase; }
+  #card.show { opacity:1; transform:translateX(-50%) translateY(0); }
+</style>
+<script src="vendor/Tone.js"></script>
+</head>
+<body>
+<div id="title"><h1>Pond Chimes</h1><p>tap the pond to wake it</p></div>
+<div id="card"><div class="n"></div><div class="s"></div></div>
+<canvas id="c"></canvas>
+<script>
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+let W=0, H=0, DPR=1;
+function resize(){
+  DPR = Math.min(window.devicePixelRatio||1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = W*DPR; cv.height = H*DPR;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize', resize); resize();
+
+const rand=(a,b)=>a+Math.random()*(b-a);
+const TAU=Math.PI*2;
+
+/* ================= audio =================
+   Key of D, everything pentatonic (D E F# A B) so any
+   combination of taps sounds intentional.
+   Fish  : kalimba-ish FM pluck, pitch from Y at tap time.
+   Lilies: soft chord swell on toggle; open flowers hold
+           their tone in a low drone under everything.
+   Frogs : plucked bass-guitar note on landing, pitch from
+           the pad's Y; soft two-pulse croak when idle.
+   Flies : quick high shimmer arp — sparkle on top.
+   Hums  : fast tremolo trill, highest register — a rare
+           treat when the hummingbird visits a flower.     */
+let audioReady=false;
+let fishSynth=null, padSynth=null, frogSynth=null, flySynth=null, humSynth=null;
+
+const SCALE=['D3','E3','F#3','A3','B3','D4','E4','F#4','A4','B4','D5','E5','F#5'];
+function noteFromY(y){
+  const i=Math.max(0, Math.min(SCALE.length-1, Math.round((1 - y/H)*(SCALE.length-1))));
+  return SCALE[i];
+}
+const BASS=['D2','E2','F#2','A2','B2'];
+function bassFromY(y){
+  const i=Math.max(0, Math.min(BASS.length-1, Math.round((1 - y/H)*(BASS.length-1))));
+  return BASS[i];
+}
+const SPARKLE=['D5','E5','F#5','A5','B5','D6','E6'];
+const TRILL=['D6','E6','F#6','A6','B6'];
+
+async function initAudio(){
+  if(audioReady) return;
+  audioReady=true;
+  await Tone.start();
+
+  const limiter=new Tone.Limiter(-3).toDestination();
+  const verb=new Tone.Reverb({decay:6, wet:0.4}).connect(limiter);
+  const bus=new Tone.Gain(0.9).connect(verb);
+
+  fishSynth=new Tone.PolySynth(Tone.FMSynth,{
+    harmonicity:8, modulationIndex:3,
+    oscillator:{type:'sine'},
+    envelope:{attack:0.001, decay:1.3, sustain:0, release:1.3},
+    modulation:{type:'sine'},
+    modulationEnvelope:{attack:0.002, decay:0.2, sustain:0, release:0.2}
+  }).connect(bus);
+  fishSynth.volume.value=-8;
+
+  padSynth=new Tone.PolySynth(Tone.Synth,{
+    oscillator:{type:'triangle'},
+    envelope:{attack:1.2, decay:0.6, sustain:0.5, release:3.5}
+  }).connect(bus);
+  padSynth.volume.value=-16;
+
+  frogSynth=new Tone.PolySynth(Tone.MonoSynth,{
+    oscillator:{type:'fmsquare5', modulationType:'triangle', modulationIndex:2, harmonicity:0.501},
+    filter:{Q:1, type:'lowpass', rolloff:-24},
+    envelope:{attack:0.01, decay:0.4, sustain:0.2, release:0.6},
+    filterEnvelope:{attack:0.005, decay:0.3, sustain:0.35, release:0.7, baseFrequency:60, octaves:3.5}
+  }).connect(bus);
+  frogSynth.volume.value=-7;
+
+  flySynth=new Tone.PolySynth(Tone.FMSynth,{
+    harmonicity:12, modulationIndex:4,
+    oscillator:{type:'sine'},
+    envelope:{attack:0.001, decay:0.25, sustain:0, release:0.3},
+    modulation:{type:'sine'},
+    modulationEnvelope:{attack:0.001, decay:0.08, sustain:0, release:0.08}
+  }).connect(bus);
+  flySynth.volume.value=-16;
+
+  humSynth=new Tone.PolySynth(Tone.Synth,{
+    oscillator:{type:'triangle'},
+    envelope:{attack:0.005, decay:0.09, sustain:0, release:0.12}
+  }).connect(bus);
+  humSynth.volume.value=-14;
+
+  // faint ever-present root under the pond
+  const baseGain=new Tone.Gain(0.04).connect(bus);
+  new Tone.Oscillator('D2','sine').start().connect(baseGain);
+
+  // one drone voice per flower, gain ramps with open/close
+  for(const p of pads){
+    if(!p.flower) continue;
+    const g=new Tone.Gain(p.flower.open?0.1:0).connect(bus);
+    new Tone.Oscillator(p.flower.drone,'sine').start().connect(g);
+    const shimmer=new Tone.Oscillator(p.flower.drone,'triangle').start();
+    shimmer.detune.value=6;
+    shimmer.connect(new Tone.Gain(0.35).connect(g));
+    p.flower.gain=g;
+  }
+}
+
+function pluck(y, vel){
+  if(!fishSynth) return;
+  fishSynth.triggerAttackRelease(noteFromY(y), 0.6, undefined, vel);
+}
+function swell(chord, vel){
+  if(!padSynth) return;
+  padSynth.triggerAttackRelease(chord, 2.5, undefined, vel);
+}
+function setDrone(flower){
+  if(!flower.gain) return;
+  flower.gain.gain.rampTo(flower.open?0.1:0, 2);
+}
+function bloop(y, vel){
+  if(!frogSynth) return;
+  frogSynth.triggerAttackRelease(bassFromY(y), 0.35, undefined, vel);
+}
+function croakSound(y){
+  if(!frogSynth) return;
+  const now=Tone.now();
+  frogSynth.triggerAttackRelease(bassFromY(y), 0.12, now, 0.18);
+  frogSynth.triggerAttackRelease(bassFromY(y), 0.1, now+0.13, 0.12);
+}
+function shimmer(y, vel){
+  if(!flySynth) return;
+  const start=Math.max(0, Math.min(SPARKLE.length-3, Math.round((1 - y/H)*(SPARKLE.length-3))));
+  const now=Tone.now();
+  for(let i=0;i<3;i++) flySynth.triggerAttackRelease(SPARKLE[start+i], 0.18, now+i*0.055, vel*(1-i*0.15));
+}
+function flit(){ // single faint sparkle note for idle skims
+  if(!flySynth) return;
+  flySynth.triggerAttackRelease(SPARKLE[Math.floor(rand(0,SPARKLE.length))], 0.15, undefined, 0.12);
+}
+function trill(vel){ // fast tremolo between two adjacent high scale tones
+  if(!humSynth) return;
+  const i=Math.floor(rand(0,TRILL.length-1));
+  const now=Tone.now();
+  for(let k=0;k<8;k++)
+    humSynth.triggerAttackRelease(TRILL[k%2?i+1:i], 0.07, now+k*0.045, vel*(1-k*0.07));
+}
+
+/* ---------- ripples & note glyphs ---------- */
+const ripples=[], notes=[];
+function ripple(x,y,big=1){ ripples.push({x,y,r:6,max:90*big,a:0.6}); }
+function noteGlyph(x,y,color){ notes.push({x,y,vy:-0.4,a:1,color,g:Math.random()<0.5?'♪':'♫'}); }
+
+/* ---------- lily pads (static anchors) ---------- */
+const pads=[];
+// lily pads across the right side of the pond (still water, away from the
+// waterfall and the shore) — more of them, staggered so they barely overlap
+const PAD_SPOTS=[
+  [0.60,0.19],[0.77,0.15],[0.93,0.22],
+  [0.66,0.37],[0.84,0.39],[0.98,0.46],
+  [0.60,0.57],[0.78,0.60],[0.94,0.63],
+  [0.70,0.81],[0.88,0.83]
+];
+const FLOWER_VOICES={ // drone tone + swell chord, all inside D pentatonic
+  0:{hue:'#f2d4dc', drone:'D3',  chord:['D4','E4','A4']},
+  2:{hue:'#fdf6ee', drone:'A3',  chord:['A3','D4','F#4']},
+  4:{hue:'#fdf6ee', drone:'F#3', chord:['F#3','B3','E4']},
+  7:{hue:'#f2d4dc', drone:'E3',  chord:['E4','A4','B4']},
+  9:{hue:'#fdf6ee', drone:'B3',  chord:['B3','E4','F#4']}
+};
+function layoutPads(){
+  PAD_SPOTS.forEach((s,i)=>{
+    if(pads[i]){ pads[i].x=s[0]*W; pads[i].y=s[1]*H; return; }
+    const v=FLOWER_VOICES[i];
+    pads.push({
+      x:s[0]*W, y:s[1]*H, r:rand(38,54), rot:rand(0,TAU),
+      notch:rand(0.5,0.9), bob:rand(0,TAU),
+      flower: v ? {open:false, anim:0, hue:v.hue, drone:v.drone, chord:v.chord, gain:null} : null
+    });
+  });
+}
+layoutPads();
+
+/* ---------- fish ---------- */
+const FISH_COLORS=[['#e8956b','#f5e6d3'],['#f5e6d3','#e8956b'],['#d97b52','#f0e0c8'],['#f0ad7e','#fdf6ee']];
+const fish=[];
+for(let i=0;i<6;i++){
+  const c=FISH_COLORS[i%FISH_COLORS.length];
+  fish.push({ x:rand(0.1,0.9)*W, y:rand(0.1,0.9)*H, h:rand(0,TAU),
+    speed:rand(14,22), dart:0, wig:rand(0,TAU), size:rand(16,24), c1:c[0], c2:c[1] });
+}
+
+/* ---------- frogs (sit on pads, hop on tap) ---------- */
+const frogs=[
+  {pad:1, jump:null, croak:0, croakT:rand(5,12)},
+  {pad:3, jump:null, croak:0, croakT:rand(5,12)}
+];
+function hopFrog(f, vel){
+  let to; do{ to=Math.floor(rand(0,pads.length)); }while(to===f.pad || frogs.some(o=>o!==f&&o.pad===to));
+  f.jump={from:pads[f.pad], to:pads[to], t:0, vel}; f.pad=to;
+}
+
+/* ---------- dragonflies (skim the surface) ---------- */
+const flies=[];
+for(let i=0;i<2;i++){
+  flies.push({ x:rand(0.1,0.9)*W, y:rand(0.1,0.5)*H, tx:rand(0.1,0.9)*W, ty:rand(0.1,0.6)*H,
+    dash:0, wing:rand(0,TAU) });
+}
+
+/* ---------- hummingbird (rare visitor) ---------- */
+let hum=null, humTimer=rand(20,40);
+function spawnHum(){
+  const flowers=pads.filter(p=>p.flower);
+  const target=flowers[Math.floor(rand(0,flowers.length))]||pads[0];
+  const fromLeft=target.x<W/2;
+  hum={x:fromLeft?-40:W+40, y:target.y-60, t:0, stay:rand(6,9),
+       dir:fromLeft?1:-1, target, arrived:false, flee:false};
+}
+
+/* ---------- caustic light blobs ---------- */
+const blobs=[];
+for(let i=0;i<7;i++) blobs.push({x:rand(0,1),y:rand(0,1),r:rand(120,260),p:rand(0,TAU),s:rand(0.05,0.15)});
+
+/* ---------- day / night sky (real local clock, moonlit range) ----------
+   The pond keeps its cool, moonlit identity: days brighten only to a soft
+   overcast teal, dawn & dusk get a warm low-sun rake across the water, and
+   nights go deep with faint star reflections. The palette is interpolated
+   from these anchor hours; the water, caustics and ripples all read their
+   colour from here so the whole scene drifts through the day on its own.   */
+const SKY=[
+  {h:0,   top:[13,34,38],  bot:[8,22,26],   blob:[72,140,140], blobA:0.04, rip:[150,200,195], glow:[20,40,60],   glowA:0.00, night:1.00},
+  {h:5,   top:[20,44,54],  bot:[10,28,36],  blob:[80,150,150], blobA:0.05, rip:[160,205,200], glow:[70,62,84],   glowA:0.05, night:0.70},
+  {h:6.5, top:[46,72,80],  bot:[26,48,56],  blob:[120,165,150],blobA:0.07, rip:[200,215,205], glow:[214,150,108],glowA:0.11, night:0.12},
+  {h:9,   top:[52,104,110],bot:[28,62,72],  blob:[130,185,185],blobA:0.10, rip:[200,230,225], glow:[120,150,150],glowA:0.03, night:0.00},
+  {h:13,  top:[62,120,126],bot:[32,74,84],  blob:[140,195,195],blobA:0.12, rip:[210,238,232], glow:[150,175,170],glowA:0.02, night:0.00},
+  {h:16,  top:[54,106,112],bot:[28,64,74],  blob:[130,185,182],blobA:0.10, rip:[205,232,226], glow:[140,160,155],glowA:0.02, night:0.00},
+  {h:18.5,top:[48,74,82],  bot:[34,46,54],  blob:[120,160,150],blobA:0.07, rip:[205,205,195], glow:[224,140,92], glowA:0.13, night:0.14},
+  {h:20.5,top:[24,50,58],  bot:[14,34,42],  blob:[85,150,148], blobA:0.05, rip:[170,208,202], glow:[80,60,80],   glowA:0.05, night:0.55},
+  {h:22.5,top:[16,38,44],  bot:[10,26,32],  blob:[75,142,142], blobA:0.04, rip:[155,202,196], glow:[30,45,65],   glowA:0.00, night:0.90}
+];
+function currentHour(){ const d=new Date(); return d.getHours()+d.getMinutes()/60+d.getSeconds()/3600; }
+const lerp=(a,b,t)=>a+(b-a)*t;
+const lerpArr=(a,b,t)=>a.map((v,i)=>lerp(v,b[i],t));
+function skyAt(H){
+  let i=0; while(i<SKY.length && SKY[i].h<=H) i++;
+  const b=SKY[i%SKY.length], a=SKY[(i-1+SKY.length)%SKY.length];
+  let span=(((b.h-a.h)%24)+24)%24; if(span===0) span=24;
+  const t=((((H-a.h)%24)+24)%24)/span;
+  return {
+    top:lerpArr(a.top,b.top,t),   bot:lerpArr(a.bot,b.bot,t),
+    blob:lerpArr(a.blob,b.blob,t), blobA:lerp(a.blobA,b.blobA,t),
+    rip:lerpArr(a.rip,b.rip,t),   glow:lerpArr(a.glow,b.glow,t),
+    glowA:lerp(a.glowA,b.glowA,t), night:lerp(a.night,b.night,t)
+  };
+}
+const stars=[]; for(let i=0;i<44;i++) stars.push({x:rand(0,1),y:rand(0,1),r:rand(0.5,1.5),tw:rand(0,TAU),s:rand(0.4,1.4)});
+
+/* ---------- live outdoor weather (optional, degrades to clear) ----------
+   Pulls current conditions from Open-Meteo (free, no API key, CORS-ok) and
+   lets the real sky bleed into the pond: cloud cover greys the water and
+   hides the sun; rain stipples the surface with dimples; wind roughens it
+   and stirs the fish; snow drifts down. Everything defaults to "clear" so
+   with no network — or no location — the pond looks exactly like the plain
+   day/night cycle. Nothing here ever throws into the render loop.
+
+   Location, in priority order:
+     1) ?lat=..&lon=..  in the URL  (easiest for a kiosk / wall panel)
+     2) FIXED_LOCATION  below       (bake in the backyard pond once)
+     3) browser geolocation         (prompts once; needs https)
+   If none resolve, weather simply stays off.                               */
+const FIXED_LOCATION = { lat: 43.08, lon: -77.52 }; // Pittsford, NY (ZIP 14534)
+const weather = { lat:null, lon:null, cloud:0, precip:0, snow:0, wind:0, temp:null, loaded:false };
+
+function resolveLocation(cb){
+  const q = new URLSearchParams(location.search);
+  const qlat = parseFloat(q.get('lat')), qlon = parseFloat(q.get('lon'));
+  if(isFinite(qlat) && isFinite(qlon)) return cb(qlat, qlon);
+  if(FIXED_LOCATION) return cb(FIXED_LOCATION.lat, FIXED_LOCATION.lon);
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(
+      p => cb(p.coords.latitude, p.coords.longitude),
+      () => cb(null, null),
+      { timeout:8000, maximumAge:3600000 }
+    );
+  } else cb(null, null);
+}
+async function fetchWeather(){
+  if(weather.lat == null) return;
+  try{
+    const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + weather.lat +
+      '&longitude=' + weather.lon +
+      '&current=temperature_2m,precipitation,snowfall,cloud_cover,wind_speed_10m';
+    const r = await fetch(url);
+    if(!r.ok) return;
+    const c = (await r.json()).current || {};
+    weather.cloud  = +c.cloud_cover    || 0;   // %
+    weather.precip = +c.precipitation  || 0;   // mm
+    weather.snow   = +c.snowfall       || 0;   // cm
+    weather.wind   = +c.wind_speed_10m || 0;   // km/h
+    weather.temp   = (c.temperature_2m==null ? null : +c.temperature_2m); // °C
+    weather.loaded = true;
+  }catch(e){ /* offline / blocked: stay on the plain day-night sky */ }
+}
+resolveLocation((lat, lon) => { weather.lat = lat; weather.lon = lon; fetchWeather(); });
+setInterval(fetchWeather, 10*60*1000); // conditions drift slowly; refresh every 10 min
+
+// drifting snow flecks — only drawn when it's actually snowing outside
+const flakes=[]; for(let i=0;i<80;i++) flakes.push({x:rand(0,1),y:rand(0,1),r:rand(1,2.4),sp:rand(0.02,0.06),sw:rand(0,TAU),sa:rand(0.4,0.9)});
+let rainAcc=0, chopAcc=0;
+
+/* ---------- seasons (real calendar date, hemisphere-aware) -------------
+   The third way the pond mirrors the world outside (after time & weather):
+   the year drifts through it. A subtle tint warms or cools the water, the
+   lily pads take on the season's colour, blossom petals fall in spring and
+   leaves in autumn, and the cold quiets the dragonflies and frogs. Anchors
+   are keyed to a month-float (0..12) and interpolated, so the change is
+   gradual — you'd never catch it switching. Southern latitudes flip by six
+   months. All modifiers sit near "neutral summer", so the pond's identity
+   holds year-round.                                                        */
+const SEASON=[
+  {m:0.0,  warmth:0.03, tint:[120,150,190], tintA:0.10, pad:[42,72,66],  fall:0.12, petals:0.00, leaf:[168,176,196], ice:0.85, young:0.00}, // deep winter
+  {m:2.5,  warmth:0.18, tint:[120,175,175], tintA:0.06, pad:[44,92,66],  fall:0.00, petals:0.12, leaf:[160,196,158], ice:0.25, young:0.15}, // late winter
+  {m:3.8,  warmth:0.55, tint:[150,205,160], tintA:0.08, pad:[52,120,78], fall:0.00, petals:0.85, leaf:[244,202,214], ice:0.00, young:1.00}, // spring bloom
+  {m:5.8,  warmth:0.92, tint:[212,205,150], tintA:0.05, pad:[46,104,62], fall:0.00, petals:0.10, leaf:[120,170,110], ice:0.00, young:0.30}, // early summer
+  {m:6.8,  warmth:1.00, tint:[230,210,150], tintA:0.05, pad:[42,95,58],  fall:0.00, petals:0.00, leaf:[120,170,110], ice:0.00, young:0.00}, // high summer
+  {m:8.6,  warmth:0.60, tint:[222,182,120], tintA:0.06, pad:[74,102,52], fall:0.32, petals:0.00, leaf:[222,150,80],  ice:0.00, young:0.00}, // early autumn
+  {m:9.6,  warmth:0.35, tint:[230,160,90],  tintA:0.10, pad:[94,88,46],  fall:0.90, petals:0.00, leaf:[224,120,60],  ice:0.00, young:0.00}, // peak autumn
+  {m:10.6, warmth:0.15, tint:[200,150,110], tintA:0.09, pad:[82,72,48],  fall:0.55, petals:0.00, leaf:[190,110,70],  ice:0.12, young:0.00}, // late autumn
+  {m:11.5, warmth:0.03, tint:[120,150,190], tintA:0.10, pad:[42,72,66],  fall:0.15, petals:0.00, leaf:[168,176,196], ice:0.80, young:0.00}  // winter
+];
+function currentMonth(){
+  const d=new Date(), doy=(d - new Date(d.getFullYear(),0,1))/86400000;
+  return (doy/365.25)*12; // 0 = Jan 1 … 12 = year end
+}
+function seasonAt(m){
+  let i=0; while(i<SEASON.length && SEASON[i].m<=m) i++;
+  const b=SEASON[i%SEASON.length], a=SEASON[(i-1+SEASON.length)%SEASON.length];
+  let span=(((b.m-a.m)%12)+12)%12; if(span===0) span=12;
+  const t=((((m-a.m)%12)+12)%12)/span;
+  return {
+    warmth:lerp(a.warmth,b.warmth,t), tint:lerpArr(a.tint,b.tint,t), tintA:lerp(a.tintA,b.tintA,t),
+    pad:lerpArr(a.pad,b.pad,t), fall:lerp(a.fall,b.fall,t), petals:lerp(a.petals,b.petals,t),
+    leaf:lerpArr(a.leaf,b.leaf,t), ice:lerp(a.ice,b.ice,t), young:lerp(a.young,b.young,t)
+  };
+}
+function seasonNow(){
+  let m=currentMonth();
+  const lat = weather.lat!=null ? weather.lat : (FIXED_LOCATION?FIXED_LOCATION.lat:1);
+  if(lat<0) m=(m+6)%12;             // southern hemisphere is half a year offset
+  return seasonAt(m);
+}
+// shared each frame so the draw helpers can read the season without threading it through
+// dormantNow: 0 = pads & frogs fully present, 1 = died back / hibernating under deep ice
+// heatNow: 0 = mild, 1 = hot day (fish seek the rocks' shade)
+let season=seasonAt(6.8), warmthNow=1, iceNow=0, dormantNow=0, wasDormant=false, heatNow=0, nightNow=0;
+// drifting foliage — leaves in autumn, blossom petals in spring
+const foliage=[]; for(let i=0;i<60;i++) foliage.push({x:rand(0,1),y:rand(0,1),vy:rand(0.012,0.032),sw:rand(0,TAU),sws:rand(0.5,1.6),rot:rand(0,TAU),rs:rand(-1.4,1.4)});
+// a little school of fry that appears in spring and fades out by summer
+const babies=[]; for(let i=0;i<8;i++) babies.push({x:rand(0.2,0.8)*W, y:rand(0.2,0.8)*H, h:rand(0,TAU), sp:rand(7,12), wig:rand(0,TAU), dart:0, size:rand(4.5,7)});
+// fixed crack lines etched into the winter ice (pre-baked so they don't shimmer)
+const iceCracks=[]; for(let i=0;i<5;i++){ const pts=[]; let px=rand(0,1),py=rand(0,1), n=Math.floor(rand(3,6)); for(let k=0;k<n;k++){ pts.push([px,py]); px+=rand(-0.22,0.22); py+=rand(-0.22,0.22); } iceCracks.push(pts); }
+
+/* ---------- rocks (two corner clusters) --------------------------------
+   Little stony outcrops tucked into two corners — big rocks, a few medium
+   ones and a scatter of pebbles — like the real pond's edges. Each cluster
+   throws shade on the water that the fish drift into on a hot day (see the
+   heat-seeking in drawFish). Rocks are permanent: they poke up through the
+   winter ice and are drawn over the fish so a fish can tuck in behind one.  */
+const ROCK_TONES=[
+  {hi:'#4c5f68', lo:'#26343b'}, {hi:'#57646d', lo:'#2b343b'},
+  {hi:'#445760', lo:'#212c31'}, {hi:'#50606a', lo:'#28343a'}
+];
+// an uneven rocky border down the left edge that wraps along the bottom.
+// `reach` varies each stretch's depth & size so the frame isn't a uniform
+// band — some clusters bulge into the pond, others hug the edge tight.
+// the stones are the shoreline: pulled hard into the left edge (their left
+// halves run off-screen behind the ground) and thinned out, so only a
+// modest stony fringe shows at the waterline.
+const ROCK_CLUSTERS=[
+  {cx:0.015, cy:0.05,  edge:'left',   reach:0.58, shade:true},  // top-left
+  {cx:0.004, cy:0.26,  edge:'left',   reach:0.26},              // tight break
+  {cx:0.028, cy:0.49,  edge:'left',   reach:0.70, shade:true},  // slight bulge
+  {cx:0.004, cy:0.71,  edge:'left',   reach:0.26},              // tight break
+  {cx:0.018, cy:0.95,  edge:'left',   reach:0.64, shade:true},  // bottom-left
+  {cx:0.13,  cy:0.975, edge:'bottom', reach:0.50},              // a little along the bottom
+  {cx:0.29,  cy:0.99,  edge:'bottom', reach:0.32}               // trailing off
+];
+const rocks=[], shadeSpots=[];
+const ROCK_SPEC=[['L',72],['L',58],['L',46],['M',34],['M',28],['M',22],['P',13],['P',11],['P',9],['P',7.5],['P',6]];
+(function buildRocks(){
+  for(const c of ROCK_CLUSTERS){
+    const R=c.reach;
+    for(const [k,sz] of ROCK_SPEC){
+      const depth=(k==='L'?54 : k==='M'?96 : 128)*R;              // into the pond, scaled by reach
+      const along=(k==='L'?68 : k==='M'?122 : 168)*(0.65+R*0.5);  // along the edge
+      const n=k==='P'?Math.floor(rand(6,8)):Math.floor(rand(8,11)), verts=[];
+      for(let i=0;i<n;i++) verts.push(rand(0.86,1.0));            // rounder = smoother boulders
+      let ox, oy;
+      if(c.edge==='bottom'){
+        ox=rand(-along*0.5, along);        // fan rightward along the bottom
+        oy=-rand(-18, depth);              // up into the pond
+      } else {
+        const sy=c.cy<0.34?1 : c.cy>0.66?-1 : 0;   // corners fan off their edge; mid spreads both ways
+        ox=rand(-18, depth);               // into the pond, slight off-edge bleed
+        oy=sy!==0 ? sy*rand(-20, along) : rand(-along, along);
+      }
+      rocks.push({ cx:c.cx, cy:c.cy, ox, oy,
+        r:sz*R*rand(0.92,1.14), ry:rand(0.66,0.82), rot:rand(0,TAU),
+        verts, tone:ROCK_TONES[Math.floor(rand(0,ROCK_TONES.length))] });
+    }
+    if(c.shade) shadeSpots.push({ cx:c.cx, cy:c.cy, r:128, x:0, y:0 });  // shade from the main shore stretches
+  }
+})();
+function layoutRocks(){
+  for(const rk of rocks){ rk.x=rk.cx*W+rk.ox; rk.y=rk.cy*H+rk.oy; }
+  for(const s of shadeSpots){ s.x=0.18*W; s.y=s.cy*H; }   // shade sits in the open water just off the shore
+}
+layoutRocks();
+
+// right edge of the left-shore stony bank (wavy, so the shoreline isn't a ruler line)
+function groundRightAt(yf){ return W*(0.092 + 0.030*Math.sin(yf*6.3+0.6) + 0.018*Math.sin(yf*12.7+2.2)); }
+// a packed bed of small stones filling the shore under the big rocks (tf = fraction across the band)
+const gravel=[];
+for(let i=0;i<180;i++){
+  const n=Math.floor(rand(6,9)), verts=[];
+  for(let k=0;k<n;k++) verts.push(rand(0.82,1.0));
+  gravel.push({ tf:Math.pow(rand(0,1),0.85), fy:rand(-0.03,1.03), r:rand(4,13),
+    ry:rand(0.58,0.82), rot:rand(0,TAU), verts, tone:ROCK_TONES[Math.floor(rand(0,ROCK_TONES.length))] });
+}
+
+/* ---------- water flow (gentle current) --------------------------------
+   A pump draws from the bottom-right, so the whole surface drifts slowly
+   that way. Kept deliberately faint — the caustic light and any drifting
+   petals/leaves ride the current, and the pump dimples the far corner —
+   so you feel the movement without losing the still, moonlit calm.        */
+const FLOW={x:0.70, y:0.70};    // unit-ish, toward the bottom-right
+const OUTLET={x:0.93, y:0.90};  // pump intake, bottom-right
+let pumpAcc=0;
+
+/* ---------- tall wide-leaf water plants -------------------------------
+   Emergent clumps (think pickerelweed / canna) poking up among the rocks
+   to break up the frame with some height. Each clump is a fan of broad
+   curved blades that sway with the wind, take the season's colour, and die
+   back with the lily pads in deep winter.                                  */
+const PLANT_SPOTS=[
+  [0.055,0.16],[0.038,0.40],[0.078,0.54],[0.05,0.82],[0.15,0.955],  // among the left/bottom rocks
+  [0.63,0.38],[0.965,0.60],[0.83,0.90]                              // just a few out in the water on the right
+];
+const plants=[];
+for(const [fx,fy] of PLANT_SPOTS){
+  const scale=rand(0.66,1.38), broad=rand(0.7,1.5);   // some tall & narrow, some short & broad
+  const tint=[rand(-16,10), rand(-8,16), rand(-12,8)];// per-clump colour shift
+  const n=Math.floor(rand(4,9)), leaves=[];
+  for(let i=0;i<n;i++) leaves.push({
+    len:rand(48,102)*scale, wid:rand(9,16)*broad, ang:rand(-0.62,0.62),
+    bend:rand(-0.45,0.45), phase:rand(0,TAU), speed:rand(0.5,1.05)
+  });
+  leaves.sort((a,b)=>b.len-a.len);          // longest blades drawn first (behind)
+  plants.push({fx,fy,leaves,tint});
+}
+function drawPlant(pl,t){
+  const vis=1-dormantNow;                   // dies right back in deep winter
+  if(vis<=0.03) return;
+  const pc=season.pad, windx=(weather.wind||0), T=pl.tint||[0,0,0];
+  const cl=v=>Math.max(0,Math.min(255,v|0));
+  const lo=`rgb(${cl(pc[0]+6+T[0])},${cl(pc[1]+22+T[1])},${cl(pc[2]+4+T[2])})`;
+  const hi=`rgb(${cl(pc[0]+28+T[0])},${cl(pc[1]+48+T[1])},${cl(pc[2]+16+T[2])})`;
+  ctx.save(); ctx.translate(pl.fx*W, pl.fy*H); ctx.globalAlpha=vis;
+  for(const lf of pl.leaves){
+    const sway=Math.sin(t*lf.speed+lf.phase)*(0.09+windx*0.004);
+    ctx.save(); ctx.rotate(lf.ang+sway);
+    const grd=ctx.createLinearGradient(0,0,0,-lf.len);
+    grd.addColorStop(0,lo); grd.addColorStop(1,hi); ctx.fillStyle=grd;
+    const bend=lf.bend+sway*1.6, tipx=Math.sin(bend)*lf.len*0.28, tipy=-lf.len;
+    ctx.beginPath(); ctx.moveTo(0,0);
+    ctx.quadraticCurveTo(-lf.wid+tipx*0.3, tipy*0.5, tipx, tipy);
+    ctx.quadraticCurveTo( lf.wid+tipx*0.3, tipy*0.5, 0, 0);
+    ctx.fill();
+    ctx.strokeStyle='rgba(18,38,20,0.22)'; ctx.lineWidth=1;   // midrib
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.quadraticCurveTo(tipx*0.4, tipy*0.5, tipx, tipy); ctx.stroke();
+    ctx.restore();
+  }
+  ctx.restore(); ctx.globalAlpha=1;
+}
+
+/* ---------- discoveries -------------------------------------------------
+   Rare creatures the pond reveals only under the right real-world conditions
+   (leaning on the day/night, weather and season systems). A first sighting
+   softly fades a little "field guide" card in. Hidden test / re-show: press
+   and hold on the stony left shore to summon the next one on demand and
+   replay its card, cycling through the roster regardless of conditions.    */
+const cardEl=document.getElementById('card');
+let cardTimer=0;
+function showCard(name,sub){
+  cardEl.querySelector('.n').textContent=name;
+  cardEl.querySelector('.s').textContent=sub;
+  cardEl.classList.add('show'); cardTimer=6;
+}
+function tickCard(dt){ if(cardTimer>0){ cardTimer-=dt; if(cardTimer<=0) cardEl.classList.remove('show'); } }
+let seen; try{ seen=new Set(JSON.parse(localStorage.getItem('pond.seen')||'[]')); }catch(e){ seen=new Set(); }
+function markSeen(id){ if(!seen.has(id)){ seen.add(id); try{ localStorage.setItem('pond.seen',JSON.stringify([...seen])); }catch(e){} } }
+
+// Fireflies — warm summer nights. A drifting, blinking swarm with sparse twinkles.
+const fireflies={
+  id:'fireflies', name:'Fireflies', sub:'a warm summer night',
+  active:false, life:0, age:0, pool:[], spark:1,
+  wants(){ return warmthNow>0.6 && nightNow>0.55; },
+  start(){ this.active=true; this.life=rand(36,66); this.age=0; this.spark=rand(0.4,1.2); this.pool.length=0;
+    for(let i=0;i<20;i++) this.pool.push({ x:rand(0.2,0.96)*W, y:rand(0.18,0.9)*H, a:rand(0,TAU), sp:rand(6,15), ph:rand(0,TAU), bl:rand(0.7,1.7) });
+  },
+  update(dt,t){
+    this.age+=dt; this.life-=dt; if(this.life<0){ this.active=false; return; }
+    const fade=Math.min(1, this.age/3, this.life/3);
+    for(const f of this.pool){
+      f.a += Math.sin(t*0.6+f.ph)*0.03 + rand(-0.05,0.05);
+      f.x += Math.cos(f.a)*f.sp*dt; f.y += Math.sin(f.a)*f.sp*dt;
+      if(f.x<20){f.x=20;f.a=Math.PI-f.a;} if(f.x>W-20){f.x=W-20;f.a=Math.PI-f.a;}
+      if(f.y<18){f.y=18;f.a=-f.a;} if(f.y>H*0.92){f.y=H*0.92;f.a=-f.a;}
+      const gl=Math.max(0, Math.sin(t*f.bl+f.ph)), on=gl*gl*fade;
+      if(on>0.02){
+        ctx.save(); ctx.globalCompositeOperation='lighter';
+        const rg=ctx.createRadialGradient(f.x,f.y,0,f.x,f.y,16);
+        rg.addColorStop(0,`rgba(214,242,150,${0.5*on})`);
+        rg.addColorStop(0.4,`rgba(170,220,90,${0.26*on})`);
+        rg.addColorStop(1,'rgba(170,220,90,0)');
+        ctx.fillStyle=rg; ctx.beginPath(); ctx.arc(f.x,f.y,16,0,TAU); ctx.fill();
+        ctx.fillStyle=`rgba(240,252,214,${0.9*on})`;
+        ctx.beginPath(); ctx.arc(f.x,f.y,1.6,0,TAU); ctx.fill();
+        ctx.restore();
+      }
+    }
+    this.spark-=dt;
+    if(this.spark<0){ this.spark=rand(0.6,1.7);
+      if(flySynth) flySynth.triggerAttackRelease(SPARKLE[Math.floor(rand(3,SPARKLE.length))], 0.2, undefined, 0.08*fade);
+    }
+  }
+};
+
+// Painted turtle — hot days. Crawls up onto the shore rocks to bask, then slips back.
+const turtle={
+  id:'turtle', name:'Painted turtle', sub:'basking in the sun',
+  active:false, x:0, y:0, tx:0, ty:0, state:'in', timer:0, shift:0,
+  wants(){ return heatNow>0.6 && dormantNow<0.3; },
+  start(){ this.active=true; const yf=rand(0.42,0.86);
+    this.tx=groundRightAt(yf)-6; this.ty=yf*H; this.x=-32; this.y=this.ty+rand(-8,8);
+    this.state='in'; this.timer=rand(30,80); this.shift=rand(3,7);
+  },
+  update(dt,t){
+    if(this.state==='in'){
+      this.x+=(this.tx-this.x)*Math.min(1,dt*0.6); this.y+=(this.ty-this.y)*Math.min(1,dt*0.6);
+      if(Math.abs(this.x-this.tx)<3){ this.state='bask'; if(frogSynth) frogSynth.triggerAttackRelease('D2',0.4,undefined,0.5); }
+    } else if(this.state==='bask'){
+      this.timer-=dt; this.shift-=dt;
+      if(this.shift<0){ this.shift=rand(6,16); if(frogSynth) frogSynth.triggerAttackRelease('E2',0.3,undefined,0.28); }
+      if(this.timer<0) this.state='out';
+    } else { this.x-=34*dt; if(this.x<-42){ this.active=false; return; } }
+    this.draw();
+  },
+  draw(){
+    ctx.save(); ctx.translate(this.x,this.y);
+    ctx.fillStyle='#41563e';                                            // legs
+    for(const s of [-1,1]){ ctx.beginPath(); ctx.ellipse(-9,s*8,5,3,0.5*s,0,TAU); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(11,s*7,5,3,-0.5*s,0,TAU); ctx.fill(); }
+    const sh=ctx.createLinearGradient(0,-14,0,14);                      // shell
+    sh.addColorStop(0,'#5c7551'); sh.addColorStop(1,'#31492f');
+    ctx.fillStyle=sh; ctx.beginPath(); ctx.ellipse(0,0,22,15,0,0,TAU); ctx.fill();
+    ctx.strokeStyle='rgba(18,32,16,0.5)'; ctx.lineWidth=1;              // scutes
+    ctx.beginPath(); ctx.ellipse(0,0,13,9,0,0,TAU); ctx.stroke();
+    for(let i=0;i<6;i++){ const a=i/6*TAU+0.3; ctx.beginPath(); ctx.moveTo(Math.cos(a)*13,Math.sin(a)*9); ctx.lineTo(Math.cos(a)*22,Math.sin(a)*15); ctx.stroke(); }
+    ctx.strokeStyle='rgba(198,92,70,0.45)'; ctx.lineWidth=2;            // painted rim
+    ctx.beginPath(); ctx.ellipse(0,0,21,14,0,0,TAU); ctx.stroke();
+    ctx.fillStyle='#41563e'; ctx.beginPath(); ctx.ellipse(24,0,7,5,0,0,TAU); ctx.fill();  // head
+    ctx.fillStyle='#e6b84a'; ctx.beginPath(); ctx.arc(27,-1.5,1.2,0,TAU); ctx.fill();      // eye
+    ctx.restore();
+  }
+};
+
+// send nearby fish darting away from a point (heron landing / taking off)
+function scatterFish(fx,r){ for(const f of fish){ if(Math.abs(f.x-fx)<r){ f.dart=1; f.h=Math.atan2((f.y-H/2)*0.3, f.x-fx)+rand(-0.3,0.3); } } }
+
+// Great blue heron — a still dawn. Glides in, stands motionless, then lifts away.
+const heron={
+  id:'heron', name:'Great blue heron', sub:'a still dawn',
+  active:false, x:0, y:0, fy:0, state:'in', timer:0,
+  wants(){ const h=currentHour(); return h>5 && h<7.6 && dormantNow<0.6; },
+  start(){ this.active=true; this.x=rand(0.24,0.42)*W; this.fy=rand(0.74,0.90)*H;
+    this.y=-120; this.state='in'; this.timer=rand(26,60);
+    scatterFish(this.x,150); if(padSynth) padSynth.triggerAttackRelease('D3',1.6,undefined,0.3);
+  },
+  update(dt,t){
+    if(this.state==='in'){ this.y+=(this.fy-this.y)*Math.min(1,dt*1.1); if(this.fy-this.y<3) this.state='stand'; }
+    else if(this.state==='stand'){ this.timer-=dt; if(this.timer<0){ this.state='out'; scatterFish(this.x,160); if(padSynth) padSynth.triggerAttackRelease('A3',1.2,undefined,0.26); } }
+    else { this.y-=150*dt; this.x-=42*dt; if(this.y<-150){ this.active=false; return; } }
+    this.draw();
+  },
+  draw(){
+    ctx.save(); ctx.translate(this.x,this.y); ctx.scale(2.6,2.6); ctx.lineCap='round';  // herons tower over the pond
+    ctx.strokeStyle='#556b76'; ctx.lineWidth=2.2;                       // legs
+    ctx.beginPath(); ctx.moveTo(-3,0); ctx.lineTo(-4,-42); ctx.moveTo(5,0); ctx.lineTo(3,-42); ctx.stroke();
+    ctx.fillStyle='rgba(90,116,128,0.7)';                               // tail
+    ctx.beginPath(); ctx.moveTo(-16,-54); ctx.lineTo(-34,-49); ctx.lineTo(-16,-46); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#6b828f';                                            // body
+    ctx.beginPath(); ctx.ellipse(0,-53,22,12,-0.12,0,TAU); ctx.fill();
+    ctx.fillStyle='#5c747f';                                            // wing
+    ctx.beginPath(); ctx.ellipse(-3,-51,15,8,-0.1,0,TAU); ctx.fill();
+    ctx.strokeStyle='#6b828f'; ctx.lineWidth=6;                         // S-neck
+    ctx.beginPath(); ctx.moveTo(12,-59); ctx.quadraticCurveTo(22,-72,13,-84); ctx.quadraticCurveTo(9,-90,18,-94); ctx.stroke();
+    ctx.fillStyle='#6b828f'; ctx.beginPath(); ctx.ellipse(19,-95,6,5,0,0,TAU); ctx.fill(); // head
+    ctx.strokeStyle='#3f5158'; ctx.lineWidth=1.4;                       // crest plume
+    ctx.beginPath(); ctx.moveTo(16,-98); ctx.lineTo(8,-103); ctx.stroke();
+    ctx.fillStyle='#caa24e';                                            // beak
+    ctx.beginPath(); ctx.moveTo(24,-97); ctx.lineTo(40,-94); ctx.lineTo(24,-92); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+};
+
+// Mallard — an overcast or rainy day. Glides across with a wake, dabbles, drifts off.
+const ducks={
+  id:'ducks', name:'Mallard', sub:'an overcast afternoon',
+  active:false, x:0, y:0, tx:0, dir:-1, state:'in', timer:0, wake:0, tip:0,
+  wants(){ return ((weather.cloud||0)>66 || (weather.precip||0)>0.1) && dormantNow<0.7 && nightNow<0.6; },
+  start(){ this.active=true; const fromRight=Math.random()<0.7;
+    this.dir=fromRight?-1:1; this.x=fromRight?W+30:-30; this.y=rand(0.4,0.72)*H;
+    this.tx=fromRight?rand(0.3,0.45)*W:rand(0.55,0.7)*W; this.state='in'; this.timer=rand(16,34); this.wake=0; this.tip=0;
+  },
+  update(dt,t){
+    this.wake-=dt;
+    if(this.state==='in'){
+      this.x+=(this.tx-this.x)*Math.min(1,dt*0.4);
+      if(this.wake<0){ this.wake=0.5; ripple(this.x-this.dir*16, this.y+2, 0.3); }
+      if(Math.abs(this.x-this.tx)<8) this.state='dabble';
+    } else if(this.state==='dabble'){ this.timer-=dt; this.tip=Math.max(0,this.tip-dt*2);
+      if(Math.random()<dt*0.5){ this.tip=1; ripple(this.x+this.dir*14,this.y+2,0.35); if(fishSynth) fishSynth.triggerAttackRelease('D3',0.3,undefined,0.13); }
+      if(this.timer<0){ this.state='out'; this.tx=this.dir<0?-40:W+40; }
+    } else { this.x+=(this.tx-this.x)*Math.min(1,dt*0.5); if(this.x<-30||this.x>W+30){ this.active=false; return; } }
+    this.draw();
+  },
+  draw(){
+    const tip=this.tip||0;
+    ctx.save(); ctx.translate(this.x,this.y); ctx.scale(this.dir*2.4,2.4); ctx.rotate(tip*0.5); // a duck reads bigger than a fish
+    ctx.fillStyle='#8b959b'; ctx.beginPath(); ctx.ellipse(0,0,20,9,0,0,TAU); ctx.fill();      // body
+    ctx.fillStyle='#7a5a3e'; ctx.beginPath(); ctx.ellipse(11,1,7,6,0,0,TAU); ctx.fill();       // breast
+    ctx.strokeStyle='#3a3f42'; ctx.lineWidth=2.5; ctx.lineCap='round';                          // tail curl
+    ctx.beginPath(); ctx.moveTo(-18,-2); ctx.quadraticCurveTo(-26,-6,-22,-9); ctx.stroke();
+    if(tip<0.3){
+      ctx.fillStyle='#2f6a49'; ctx.beginPath(); ctx.ellipse(15,-9,5,7,0.2,0,TAU); ctx.fill();   // green head
+      ctx.fillStyle='#eef2ee'; ctx.fillRect(11,-4,7,2);                                          // neck ring
+      ctx.fillStyle='#dcae3f'; ctx.beginPath(); ctx.ellipse(21,-9,4,2.2,0.1,0,TAU); ctx.fill();  // bill
+      ctx.fillStyle='#12201a'; ctx.beginPath(); ctx.arc(16,-10,1,0,TAU); ctx.fill();             // eye
+    }
+    ctx.restore();
+  }
+};
+
+// Cardinal — a bright red spot on a cold winter day. Perches on the shore, whistles, flits.
+const cardinal={
+  id:'cardinal', name:'Cardinal', sub:'a bright spot on a winter day',
+  active:false, x:0, y:0, hopTimer:0, sing:0, life:0,
+  wants(){ return iceNow>0.25 && nightNow<0.4; },
+  perch(){ const yf=rand(0.2,0.85); this.x=groundRightAt(yf)+rand(-2,10); this.y=yf*H-6; },
+  start(){ this.active=true; this.life=rand(26,50); this.perch(); this.hopTimer=rand(4,8); this.sing=rand(1,3); },
+  whistle(){ if(!humSynth) return; const now=Tone.now(), ns=['B6','A6','F#6','E6'];
+    for(let i=0;i<4;i++) humSynth.triggerAttackRelease(ns[i],0.12,now+i*0.09,0.16*(1-i*0.12)); },
+  update(dt,t){
+    this.life-=dt; if(this.life<0){ this.active=false; return; }
+    this.hopTimer-=dt; this.sing-=dt;
+    if(this.sing<0){ this.sing=rand(3,7); this.whistle(); }
+    if(this.hopTimer<0){ this.hopTimer=rand(4,9); this.perch(); }
+    const bob=Math.sin(t*3)*1.2;
+    ctx.save(); ctx.translate(this.x,this.y+bob);
+    ctx.fillStyle='#a3241f'; ctx.beginPath(); ctx.moveTo(-4,4); ctx.lineTo(-16,14); ctx.lineTo(-8,6); ctx.closePath(); ctx.fill(); // tail
+    ctx.fillStyle='#c62f2a'; ctx.beginPath(); ctx.ellipse(0,0,10,11,0,0,TAU); ctx.fill();                                          // body
+    ctx.beginPath(); ctx.moveTo(2,-9); ctx.lineTo(8,-18); ctx.lineTo(6,-8); ctx.closePath(); ctx.fill();                            // crest
+    ctx.fillStyle='#1c1513'; ctx.beginPath(); ctx.ellipse(7,-3,4,4,0,0,TAU); ctx.fill();                                           // face mask
+    ctx.fillStyle='#e8913a'; ctx.beginPath(); ctx.moveTo(9,-3); ctx.lineTo(15,-2); ctx.lineTo(9,-1); ctx.closePath(); ctx.fill();   // bill
+    ctx.fillStyle='#22120f'; ctx.beginPath(); ctx.arc(7,-5,0.9,0,TAU); ctx.fill();                                                 // eye
+    ctx.restore();
+  }
+};
+
+// Bats — dusk. A few dark shapes flit erratically over the water with faint ticks.
+const bats={
+  id:'bats', name:'Bats', sub:'the last of the dusk',
+  active:false, life:0, pool:[],
+  wants(){ const h=currentHour(); return h>18.2 && h<20.6 && dormantNow<0.5; },
+  start(){ this.active=true; this.life=rand(24,44); this.pool.length=0;
+    for(let i=0;i<3;i++) this.pool.push({ x:rand(0.2,0.9)*W, y:rand(0.14,0.58)*H, tx:rand(0.2,0.9)*W, ty:rand(0.12,0.58)*H, wing:rand(0,TAU), tick:rand(0.5,2) });
+  },
+  update(dt,t){
+    this.life-=dt; if(this.life<0){ this.active=false; return; }
+    const fade=Math.min(1, this.life/2);
+    for(const b of this.pool){
+      b.wing+=dt*28;
+      const ease=Math.min(1,dt*3);
+      b.x+=(b.tx-b.x)*ease; b.y+=(b.ty-b.y)*ease;
+      if(Math.hypot(b.tx-b.x,b.ty-b.y)<26){ b.tx=rand(0.15,0.92)*W; b.ty=rand(0.1,0.6)*H;
+        b.tick-=1; if(b.tick<0){ b.tick=rand(1,3); if(humSynth) humSynth.triggerAttackRelease('E6',0.05,undefined,0.05); } }
+      const ang=Math.atan2(b.ty-b.y,b.tx-b.x), wf=Math.abs(Math.sin(b.wing))*0.75+0.25;
+      ctx.save(); ctx.translate(b.x,b.y); ctx.rotate(ang); ctx.globalAlpha=0.82*fade;
+      ctx.fillStyle='#242030';
+      ctx.beginPath(); ctx.ellipse(0,0,3.5,2,0,0,TAU); ctx.fill();     // body
+      const sp=3+8*wf;
+      for(const s of [-1,1]){                                          // scalloped wings
+        ctx.beginPath(); ctx.moveTo(-1,0);
+        ctx.quadraticCurveTo(-7,s*sp,-14,s*sp*0.7);
+        ctx.lineTo(-10,s*sp*0.3);
+        ctx.quadraticCurveTo(-8,s*sp*0.5,-5,s*1.5);
+        ctx.closePath(); ctx.fill();
+      }
+      ctx.restore(); ctx.globalAlpha=1;
+    }
+  }
+};
+
+// Rainbow koi — a patience reward: surfaces only after the pond's run a long
+// while, drifting and leaping with a warm chord. (A non-weather trigger.)
+let uptime=0;
+const koi={
+  id:'koi', name:'Rainbow koi', sub:'a long wait, rewarded',
+  active:false, x:0, y:0, h:0, wig:0, life:0, hue:0, leapT:0, leap:0,
+  wants(){ return uptime>240 && dormantNow<0.9; },
+  start(){ this.active=true; this.life=rand(28,50); this.x=rand(0.3,0.7)*W; this.y=rand(0.35,0.75)*H;
+    this.h=rand(0,TAU); this.wig=0; this.leapT=rand(6,12); this.leap=0; uptime=0;
+  },
+  update(dt,t){
+    this.life-=dt; if(this.life<0){ this.active=false; return; }
+    this.wig+=dt*4; this.hue=(t*36)%360;
+    const sp=26;
+    this.h += Math.sin(t*0.4+this.wig*0.1)*0.02 + rand(-0.02,0.02);
+    this.x+=Math.cos(this.h)*sp*dt; this.y+=Math.sin(this.h)*sp*dt;
+    const m=W*0.18; if(this.x<m||this.x>W-40||this.y<40||this.y>H-40){ this.h=Math.atan2(H/2-this.y,W/2-this.x)+rand(-0.5,0.5); }
+    this.leapT-=dt; if(this.leap>0) this.leap-=dt*1.2;
+    if(this.leapT<0 && this.leap<=0){ this.leapT=rand(8,16); this.leap=1; ripple(this.x,this.y,1.2);
+      if(fishSynth) fishSynth.triggerAttackRelease(['D4','F#4','A4'],0.8,undefined,0.4); }
+    const lift=Math.sin(Math.max(0,this.leap)*Math.PI)*24;
+    ctx.save(); ctx.translate(this.x,this.y-lift); ctx.rotate(this.h);
+    const s=36, tw=Math.sin(this.wig)*0.5;
+    const grd=ctx.createLinearGradient(-s,0,s,0);
+    grd.addColorStop(0,`hsl(${this.hue%360},70%,70%)`);
+    grd.addColorStop(0.5,`hsl(${(this.hue+70)%360},75%,72%)`);
+    grd.addColorStop(1,`hsl(${(this.hue+150)%360},70%,66%)`);
+    ctx.globalAlpha=0.92; ctx.filter='blur(0.5px)'; ctx.fillStyle=grd;
+    ctx.beginPath();                                                   // tail
+    ctx.moveTo(-s*0.7,0); ctx.quadraticCurveTo(-s*1.4,tw*s*0.8-s*0.4,-s*1.6,tw*s);
+    ctx.quadraticCurveTo(-s*1.4,tw*s*0.8+s*0.4,-s*0.7,0); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0,0,s,s*0.42,0,0,TAU); ctx.fill();    // body
+    ctx.fillStyle='rgba(255,255,255,0.55)';                            // pale koi patch
+    ctx.beginPath(); ctx.ellipse(s*0.2,-s*0.05,s*0.34,s*0.2,0,0,TAU); ctx.fill();
+    ctx.restore(); ctx.filter='none'; ctx.globalAlpha=1;
+  }
+};
+
+// Swallows — a windy day. Fast birds swooping low, skimming the surface for insects.
+const swallows={
+  id:'swallows', name:'Swallows', sub:'skimming a windy day',
+  active:false, life:0, pool:[],
+  wants(){ return (weather.wind||0)>17 && dormantNow<0.5 && nightNow<0.5; },
+  start(){ this.active=true; this.life=rand(22,40); this.pool.length=0;
+    for(let i=0;i<3;i++) this.pool.push({ x:rand(0.2,0.9)*W, y:rand(0.3,0.75)*H, tx:rand(0.2,0.9)*W, ty:rand(0.3,0.8)*H, wing:rand(0,TAU), chit:rand(0.5,2) });
+  },
+  update(dt,t){
+    this.life-=dt; if(this.life<0){ this.active=false; return; }
+    const fade=Math.min(1,this.life/2);
+    for(const b of this.pool){
+      b.wing+=dt*36; const ease=Math.min(1,dt*3.2);
+      b.x+=(b.tx-b.x)*ease; b.y+=(b.ty-b.y)*ease;
+      if(Math.hypot(b.tx-b.x,b.ty-b.y)<26){
+        if(Math.random()<0.4) ripple(b.x,b.y,0.3);
+        b.tx=rand(0.15,0.92)*W; b.ty=rand(0.3,0.82)*H;
+        b.chit-=1; if(b.chit<0){ b.chit=rand(1.5,3.5); if(flySynth) flySynth.triggerAttackRelease(SPARKLE[Math.floor(rand(3,SPARKLE.length))],0.06,undefined,0.07); }
+      }
+      const ang=Math.atan2(b.ty-b.y,b.tx-b.x), wf=Math.abs(Math.sin(b.wing));
+      ctx.save(); ctx.translate(b.x,b.y); ctx.rotate(ang); ctx.globalAlpha=0.85*fade;
+      ctx.fillStyle='#2b3d52';
+      ctx.beginPath(); ctx.ellipse(0,0,5,2,0,0,TAU); ctx.fill();                    // body
+      for(const s of [-1,1]){ ctx.beginPath(); ctx.moveTo(-1,0);                     // swept wings
+        ctx.quadraticCurveTo(-6,s*(2+7*wf),-13,s*(1+9*wf)); ctx.quadraticCurveTo(-7,s*2,-3,0); ctx.closePath(); ctx.fill(); }
+      ctx.strokeStyle='#2b3d52'; ctx.lineWidth=1.4;                                  // forked tail
+      ctx.beginPath(); ctx.moveTo(-4,0); ctx.lineTo(-11,-3); ctx.moveTo(-4,0); ctx.lineTo(-11,3); ctx.stroke();
+      ctx.fillStyle='#b5643c'; ctx.beginPath(); ctx.arc(5,0,1.4,0,TAU); ctx.fill();  // rusty throat
+      ctx.restore(); ctx.globalAlpha=1;
+    }
+  }
+};
+
+// Swan — a still, foggy morning. Glides serenely, leaving a slow wake.
+const swan={
+  id:'swan', name:'Swan', sub:'a still, foggy morning',
+  active:false, x:0, y:0, tx:0, dir:-1, state:'in', timer:0, wake:0,
+  wants(){ const h=currentHour(); return h>6 && h<10.5 && (weather.cloud||0)>75 && (weather.wind||0)<9 && dormantNow<0.7; },
+  start(){ this.active=true; const fromRight=Math.random()<0.7; this.dir=fromRight?-1:1;
+    this.x=fromRight?W+50:-50; this.y=rand(0.42,0.72)*H; this.tx=fromRight?rand(0.32,0.5)*W:rand(0.5,0.68)*W;
+    this.state='in'; this.timer=rand(20,40); this.wake=0;
+  },
+  update(dt,t){
+    this.wake-=dt;
+    if(this.state!=='out'){ this.x+=(this.tx-this.x)*Math.min(1,dt*0.3);
+      if(this.wake<0){ this.wake=0.6; ripple(this.x-this.dir*26,this.y+4,0.4); }
+      if(Math.abs(this.x-this.tx)<10){ this.timer-=dt; if(this.timer<0){ this.state='out'; this.tx=this.dir<0?-50:W+50; } }
+    } else { this.x+=(this.tx-this.x)*Math.min(1,dt*0.4); if(this.x<-50||this.x>W+50){ this.active=false; return; } }
+    const bob=Math.sin(t*0.8)*1.4;
+    ctx.save(); ctx.translate(this.x,this.y+bob); ctx.scale(this.dir,1);
+    ctx.fillStyle='#eef1f2';
+    ctx.beginPath(); ctx.ellipse(0,0,34,15,0,0,TAU); ctx.fill();                     // body
+    ctx.beginPath(); ctx.ellipse(-6,-6,22,13,0.1,0,TAU); ctx.fill();                 // raised wing
+    ctx.beginPath(); ctx.moveTo(-30,-2); ctx.lineTo(-46,-8); ctx.lineTo(-30,3); ctx.closePath(); ctx.fill(); // tail
+    ctx.strokeStyle='#eef1f2'; ctx.lineWidth=9; ctx.lineCap='round';                 // S-neck
+    ctx.beginPath(); ctx.moveTo(24,-6); ctx.quadraticCurveTo(44,-14,40,-32); ctx.quadraticCurveTo(38,-42,30,-42); ctx.stroke();
+    ctx.fillStyle='#eef1f2'; ctx.beginPath(); ctx.ellipse(29,-42,7,6,0,0,TAU); ctx.fill(); // head
+    ctx.fillStyle='#1c1c1c'; ctx.beginPath(); ctx.ellipse(23,-42,4,4,0,0,TAU); ctx.fill(); // mask
+    ctx.fillStyle='#e08a2a'; ctx.beginPath(); ctx.moveTo(20,-43); ctx.lineTo(11,-41); ctx.lineTo(20,-39); ctx.closePath(); ctx.fill(); // bill
+    ctx.restore();
+  }
+};
+
+// Shooting star — a clear night. A streak across the sky, mirrored on the water.
+const shootingstar={
+  id:'shootingstar', name:'Shooting star', sub:'a clear night',
+  active:false, life:0, sx:0, sy:0, ex:0, ey:0, p:1, gap:0,
+  wants(){ return nightNow>0.6 && (weather.cloud||0)<25; },
+  streak(){ this.sx=rand(0.08,0.7)*W; this.sy=rand(0.04,0.28)*H; const len=rand(0.3,0.5)*W, slope=rand(0.3,0.9);
+    this.ex=this.sx+len; this.ey=this.sy+len*slope; this.p=0;
+    if(humSynth) humSynth.triggerAttackRelease('B6',0.5,undefined,0.13);
+  },
+  start(){ this.active=true; this.life=rand(11,17); this.gap=0.4; this.p=1; },
+  update(dt,t){
+    this.life-=dt; if(this.life<0){ this.active=false; return; }
+    if(this.p>=1){ this.gap-=dt; if(this.gap<0){ this.gap=rand(2.5,5); this.streak(); } }
+    if(this.p<1){ this.p=Math.min(1,this.p+dt*1.3);
+      const hx=this.sx+(this.ex-this.sx)*this.p, hy=this.sy+(this.ey-this.sy)*this.p, tp=Math.max(0,this.p-0.28);
+      const txx=this.sx+(this.ex-this.sx)*tp, tyy=this.sy+(this.ey-this.sy)*tp, a=(1-this.p)*0.9+0.12;
+      ctx.save(); ctx.globalCompositeOperation='lighter';
+      const g2=ctx.createLinearGradient(txx,tyy,hx,hy);
+      g2.addColorStop(0,'rgba(180,210,255,0)'); g2.addColorStop(1,`rgba(222,236,255,${0.85*a})`);
+      ctx.strokeStyle=g2; ctx.lineWidth=2; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(txx,tyy); ctx.lineTo(hx,hy); ctx.stroke();
+      ctx.fillStyle=`rgba(242,248,255,${a})`; ctx.beginPath(); ctx.arc(hx,hy,2.2,0,TAU); ctx.fill();
+      // faint mirror low on the water
+      ctx.strokeStyle=`rgba(200,222,255,${0.18*a})`; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.moveTo(txx,H-tyy*0.5); ctx.lineTo(hx,H-hy*0.5); ctx.stroke();
+      ctx.restore();
+    }
+  }
+};
+
+// Rabbit — a light brown visitor at the water's edge, dawn or dusk.
+const rabbit={
+  id:'rabbit', name:'Rabbit', sub:"the water's edge",
+  active:false, x:0, y:0, hopTimer:0, life:0, ear:0,
+  wants(){ const h=currentHour(); return ((h>5.4&&h<8) || (h>18&&h<20.6)) && dormantNow<0.75; },
+  perch(){ const yf=rand(0.2,0.9); this.x=groundRightAt(yf)+rand(2,16); this.y=yf*H-4; },
+  start(){ this.active=true; this.life=rand(24,44); this.perch(); this.hopTimer=rand(5,10); this.ear=rand(0,TAU); },
+  update(dt,t){
+    this.life-=dt; if(this.life<0){ this.active=false; return; }
+    this.hopTimer-=dt; this.ear+=dt;
+    if(this.hopTimer<0){ this.hopTimer=rand(5,11); this.perch(); if(frogSynth) frogSynth.triggerAttackRelease('D2',0.14,undefined,0.1); }
+    const bob=(Math.sin(t*4)>0.6)?1.5:0;                                   // gentle nibble
+    ctx.save(); ctx.translate(this.x,this.y);
+    ctx.fillStyle='#b79573'; ctx.beginPath(); ctx.ellipse(0,0,12,8,0,0,TAU); ctx.fill();      // body
+    ctx.fillStyle='#e8e2d6'; ctx.beginPath(); ctx.arc(-11,-1,3.5,0,TAU); ctx.fill();          // tail puff
+    ctx.fillStyle='#b79573'; ctx.beginPath(); ctx.ellipse(10,-4+bob,6,5.5,0,0,TAU); ctx.fill(); // head
+    const ew=Math.sin(this.ear*1.3)*0.15;
+    ctx.save(); ctx.translate(10,-8+bob);                                                       // ears
+    for(const s of [-1,1]){ ctx.save(); ctx.rotate(s*0.25+ew*s);
+      ctx.fillStyle='#b79573'; ctx.beginPath(); ctx.ellipse(0,-8,2.4,8,0,0,TAU); ctx.fill();
+      ctx.fillStyle='#d8b6a0'; ctx.beginPath(); ctx.ellipse(0,-8,1.1,6,0,0,TAU); ctx.fill(); ctx.restore(); }
+    ctx.restore();
+    ctx.fillStyle='#2a2018'; ctx.beginPath(); ctx.arc(13,-5+bob,1,0,TAU); ctx.fill();          // eye
+    ctx.fillStyle='#8a5a5a'; ctx.beginPath(); ctx.arc(16,-3+bob,0.9,0,TAU); ctx.fill();         // nose
+    ctx.restore();
+  }
+};
+
+// Kingfisher — a rare flash of blue. Perches over the water, then plunge-dives.
+const kingfisher={
+  id:'kingfisher', name:'Kingfisher', sub:'a rare flash of blue',
+  active:false, x:0, y:0, perchY:0, life:0, diveT:0, diving:0, splashed:false,
+  wants(){ return nightNow<0.4 && dormantNow<0.5 && (weather.cloud||0)<60; },
+  start(){ this.active=true; this.life=rand(20,36); this.x=rand(0.16,0.30)*W; this.perchY=rand(0.26,0.48)*H;
+    this.y=this.perchY; this.diveT=rand(4,9); this.diving=0; this.splashed=false;
+  },
+  update(dt,t){
+    this.life-=dt; if(this.life<0){ this.active=false; return; }
+    this.diveT-=dt;
+    if(this.diving>0){ this.diving-=dt*1.5; if(this.diving<0) this.diving=0; }
+    if(this.diveT<0 && this.diving===0){ this.diveT=rand(5,11); this.diving=1; this.splashed=false;
+      if(flySynth) flySynth.triggerAttackRelease('B6',0.08,undefined,0.16); }
+    const waterY=Math.max(this.perchY+80, H*0.6);
+    if(this.diving>0){ const ph=1-this.diving; this.y=this.perchY+Math.sin(ph*Math.PI)*(waterY-this.perchY);
+      if(!this.splashed && ph>0.5){ this.splashed=true; ripple(this.x,waterY,0.5); } }
+    else this.y=this.perchY;
+    ctx.save(); ctx.translate(this.x,this.y);
+    ctx.fillStyle='#1f7fb0'; ctx.beginPath(); ctx.ellipse(0,0,7,9,0,0,TAU); ctx.fill();    // blue body
+    ctx.beginPath(); ctx.ellipse(3,-8,6,6,0,0,TAU); ctx.fill();                             // big head
+    ctx.fillStyle='#d98436'; ctx.beginPath(); ctx.ellipse(-1,2,5,6,0,0,TAU); ctx.fill();    // orange breast
+    ctx.fillStyle='#16161a'; ctx.beginPath(); ctx.moveTo(8,-8); ctx.lineTo(21,-6); ctx.lineTo(8,-5); ctx.closePath(); ctx.fill(); // beak
+    ctx.fillStyle='#0f2028'; ctx.beginPath(); ctx.arc(5,-9,1.1,0,TAU); ctx.fill();          // eye
+    ctx.restore();
+  }
+};
+
+/* ---- birthday visitors: a favourite animal comes to the pond all day on
+   a birthday, with a "Happy birthday, NAME!" card. These have no natural
+   condition (wants:false) — only the birthday, or the hidden summon.     ---- */
+
+// Jack — a mother duck with three ducklings trailing across the water.
+const duckfamily={
+  id:'duckfamily', name:'Duck family', sub:'', active:false, x:0,y:0,tx:0,dir:-1,state:'in',timer:0,wake:0,babies:[],
+  wants(){ return false; },
+  start(){ this.active=true; const fromRight=Math.random()<0.6; this.dir=fromRight?-1:1;
+    this.x=fromRight?W+40:-40; this.y=rand(0.4,0.7)*H; this.tx=fromRight?rand(0.35,0.5)*W:rand(0.5,0.65)*W;
+    this.state='in'; this.timer=rand(22,44); this.wake=0; this.babies=[]; for(let i=0;i<3;i++) this.babies.push({x:this.x,y:this.y});
+  },
+  update(dt,t){
+    this.wake-=dt;
+    if(this.state!=='out'){ this.x+=(this.tx-this.x)*Math.min(1,dt*0.4);
+      if(this.wake<0){ this.wake=0.5; ripple(this.x-this.dir*16,this.y+2,0.3); }
+      if(Math.abs(this.x-this.tx)<10){ this.timer-=dt; if(this.timer<0){ this.state='out'; this.tx=this.dir<0?-60:W+60; } }
+    } else { this.x+=(this.tx-this.x)*Math.min(1,dt*0.45); if(this.x<-60||this.x>W+60){ this.active=false; return; } }
+    let px=this.x, py=this.y;
+    for(const b of this.babies){ const tx=px-this.dir*26, ty=py+Math.sin(t*3+px*0.05)*3;
+      b.x+=(tx-b.x)*Math.min(1,dt*3); b.y+=(ty-b.y)*Math.min(1,dt*3); px=b.x; py=b.y; }
+    for(const b of this.babies) this.drawDuckling(b.x,b.y);
+    this.drawMama();
+  },
+  drawDuckling(x,y){ ctx.save(); ctx.translate(x,y); ctx.scale(this.dir,1);
+    ctx.fillStyle='#c9a86a'; ctx.beginPath(); ctx.ellipse(0,0,8,5,0,0,TAU); ctx.fill();
+    ctx.fillStyle='#d8ba7a'; ctx.beginPath(); ctx.arc(6,-4,4,0,TAU); ctx.fill();
+    ctx.fillStyle='#8a7a40'; ctx.beginPath(); ctx.ellipse(9,-3,2,1.2,0,0,TAU); ctx.fill();
+    ctx.fillStyle='#3a3320'; ctx.beginPath(); ctx.arc(7,-4.6,0.9,0,TAU); ctx.fill(); ctx.restore(); },
+  drawMama(){ ctx.save(); ctx.translate(this.x,this.y); ctx.scale(this.dir*2.0,2.0);
+    ctx.fillStyle='#8f7a55'; ctx.beginPath(); ctx.ellipse(0,0,20,9,0,0,TAU); ctx.fill();      // hen body
+    ctx.fillStyle='#3a6a86'; ctx.beginPath(); ctx.ellipse(-3,-1,6,3,0,0,TAU); ctx.fill();      // wing speculum
+    ctx.strokeStyle='#4a4030'; ctx.lineWidth=2.5; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(-18,-2); ctx.quadraticCurveTo(-26,-6,-22,-9); ctx.stroke();    // tail
+    ctx.fillStyle='#6f5c3f'; ctx.beginPath(); ctx.ellipse(15,-9,5,7,0.2,0,TAU); ctx.fill();     // head
+    ctx.fillStyle='#5c5230'; ctx.beginPath(); ctx.ellipse(21,-9,4,2.2,0.1,0,TAU); ctx.fill();   // bill
+    ctx.fillStyle='#20180f'; ctx.beginPath(); ctx.arc(16,-10,1,0,TAU); ctx.fill(); ctx.restore(); }
+};
+
+// Frankie — a mother rabbit with three kits nibbling along the shore.
+function drawBunny(x,y,sc,bob,ear){
+  ctx.save(); ctx.translate(x,y); ctx.scale(sc,sc);
+  ctx.fillStyle='#b79573'; ctx.beginPath(); ctx.ellipse(0,0,12,8,0,0,TAU); ctx.fill();
+  ctx.fillStyle='#e8e2d6'; ctx.beginPath(); ctx.arc(-11,-1,3.5,0,TAU); ctx.fill();
+  ctx.fillStyle='#b79573'; ctx.beginPath(); ctx.ellipse(10,-4+bob,6,5.5,0,0,TAU); ctx.fill();
+  const ew=Math.sin(ear*1.3)*0.15;
+  ctx.save(); ctx.translate(10,-8+bob);
+  for(const s of [-1,1]){ ctx.save(); ctx.rotate(s*0.25+ew*s);
+    ctx.fillStyle='#b79573'; ctx.beginPath(); ctx.ellipse(0,-8,2.4,8,0,0,TAU); ctx.fill();
+    ctx.fillStyle='#d8b6a0'; ctx.beginPath(); ctx.ellipse(0,-8,1.1,6,0,0,TAU); ctx.fill(); ctx.restore(); }
+  ctx.restore();
+  ctx.fillStyle='#2a2018'; ctx.beginPath(); ctx.arc(13,-5+bob,1,0,TAU); ctx.fill();
+  ctx.fillStyle='#8a5a5a'; ctx.beginPath(); ctx.arc(16,-3+bob,0.9,0,TAU); ctx.fill();
+  ctx.restore();
+}
+const bunnyfamily={
+  id:'bunnyfamily', name:'Bunny family', sub:'', active:false, life:0, mama:{x:0,y:0}, babies:[], hopTimer:0, ear:0,
+  wants(){ return false; },
+  placeGroup(){ const yf=rand(0.22,0.82), bx=groundRightAt(yf)+16, by=yf*H-4;
+    this.mama={x:bx,y:by}; this.babies=[
+      {x:bx+18,y:by+13},{x:bx+34,y:by+4},{x:bx+30,y:by+22}]; },
+  start(){ this.active=true; this.life=rand(30,55); this.hopTimer=rand(5,9); this.ear=0; this.placeGroup(); },
+  update(dt,t){
+    this.life-=dt; if(this.life<0){ this.active=false; return; }
+    this.hopTimer-=dt; this.ear+=dt;
+    if(this.hopTimer<0){ this.hopTimer=rand(5,10); this.placeGroup(); if(frogSynth) frogSynth.triggerAttackRelease('D2',0.14,undefined,0.1); }
+    const bob=(Math.sin(t*4)>0.6)?1.2:0;
+    for(const b of this.babies) drawBunny(b.x,b.y,0.72,bob,this.ear);
+    drawBunny(this.mama.x,this.mama.y,1,bob,this.ear);
+  }
+};
+
+// Matt — a narwhal breaching out of the pond, tusk and all.
+const narwhal={
+  id:'narwhal', name:'Narwhal', sub:'', active:false, life:0, x:0, y0:0, breachT:0, phase:0,
+  wants(){ return false; },
+  start(){ this.active=true; this.life=rand(24,42); this.x=rand(0.4,0.6)*W; this.y0=rand(0.5,0.7)*H; this.breachT=rand(0.3,1); this.phase=0; },
+  update(dt,t){
+    this.life-=dt; if(this.life<0){ this.active=false; return; }
+    if(this.phase>0){ this.phase-=dt*0.5; if(this.phase<0) this.phase=0; }
+    else { this.breachT-=dt; if(this.breachT<0){ this.breachT=rand(2.5,5); this.phase=1; this.x=rand(0.35,0.65)*W;
+      ripple(this.x,this.y0,1.5); if(fishSynth) fishSynth.triggerAttackRelease('D2',0.6,undefined,0.4); } }
+    if(this.phase>0){ const ph=1-this.phase, lift=Math.sin(ph*Math.PI)*135, tilt=(ph-0.5)*1.1;
+      if(Math.abs(ph-0.14)<0.02 || Math.abs(ph-0.86)<0.02) ripple(this.x,this.y0,0.8);
+      this.draw(this.x, this.y0-lift, tilt);
+    }
+  },
+  draw(x,y,tilt){
+    ctx.save(); ctx.translate(x,y); ctx.rotate(tilt*0.5);
+    const grd=ctx.createLinearGradient(-16,0,16,0);
+    grd.addColorStop(0,'#5f6d75'); grd.addColorStop(0.5,'#8a97a0'); grd.addColorStop(1,'#5f6d75');
+    ctx.fillStyle=grd; ctx.beginPath();
+    ctx.moveTo(0,44); ctx.quadraticCurveTo(16,20,13,-6); ctx.quadraticCurveTo(11,-26,0,-30);
+    ctx.quadraticCurveTo(-11,-26,-13,-6); ctx.quadraticCurveTo(-16,20,0,44); ctx.fill();       // body
+    ctx.fillStyle='#67757d'; ctx.beginPath(); ctx.moveTo(0,40); ctx.quadraticCurveTo(-16,44,-20,52);
+    ctx.quadraticCurveTo(-6,48,0,46); ctx.quadraticCurveTo(6,48,20,52); ctx.quadraticCurveTo(16,44,0,40); ctx.fill(); // flukes
+    ctx.fillStyle='rgba(40,50,56,0.4)';
+    for(const p of [[-4,10],[5,0],[-2,-8],[6,18],[-6,24]]){ ctx.beginPath(); ctx.arc(p[0],p[1],1.6,0,TAU); ctx.fill(); }
+    ctx.fillStyle='#20282c'; ctx.beginPath(); ctx.arc(5,-20,1.4,0,TAU); ctx.fill();             // eye
+    ctx.save(); ctx.translate(0,-30); ctx.rotate(0.12);                                          // tusk
+    ctx.fillStyle='#ece6d8'; ctx.beginPath(); ctx.moveTo(-2.5,0); ctx.lineTo(2.5,0); ctx.lineTo(1,-72); ctx.lineTo(-1,-72); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='rgba(120,110,90,0.5)'; ctx.lineWidth=1;
+    for(let i=0;i<9;i++){ const yy=-i*8; ctx.beginPath(); ctx.moveTo(-2,yy); ctx.lineTo(2,yy-4); ctx.stroke(); }
+    ctx.restore(); ctx.restore();
+  }
+};
+
+// Kate — a flamingo standing in the pond.
+const flamingo={
+  id:'flamingo', name:'Flamingo', sub:'', active:false, x:0, y:0, fy:0, state:'in', timer:0,
+  wants(){ return false; },
+  start(){ this.active=true; this.x=rand(0.3,0.6)*W; this.fy=rand(0.66,0.82)*H; this.y=-160; this.state='in'; this.timer=rand(30,70); },
+  update(dt,t){
+    if(this.state==='in'){ this.y+=(this.fy-this.y)*Math.min(1,dt*1.0); if(this.fy-this.y<3) this.state='stand'; }
+    else if(this.state==='stand'){ this.timer-=dt; if(this.timer<0) this.state='out'; }
+    else { this.y-=130*dt; this.x+=30*dt; if(this.y<-170){ this.active=false; return; } }
+    ctx.save(); ctx.translate(this.x,this.y); ctx.scale(2.3,2.3); ctx.lineCap='round';
+    ctx.strokeStyle='#e58aa0'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(3,-20); ctx.lineTo(-1,-40); ctx.stroke();       // bent leg
+    ctx.fillStyle='#f2a6bd'; ctx.beginPath(); ctx.ellipse(0,-46,18,11,-0.1,0,TAU); ctx.fill();    // body
+    ctx.beginPath(); ctx.moveTo(-14,-48); ctx.lineTo(-27,-44); ctx.lineTo(-14,-42); ctx.closePath(); ctx.fill(); // tail
+    ctx.strokeStyle='#f2a6bd'; ctx.lineWidth=4.5;                                                 // long S-neck
+    ctx.beginPath(); ctx.moveTo(12,-52); ctx.quadraticCurveTo(32,-60,31,-78); ctx.quadraticCurveTo(30,-92,21,-92); ctx.stroke();
+    ctx.fillStyle='#f2a6bd'; ctx.beginPath(); ctx.ellipse(19,-90,4.5,4,0,0,TAU); ctx.fill();       // head
+    ctx.strokeStyle='#f2a6bd'; ctx.lineWidth=3.4;                                                 // down-hooked bill
+    ctx.beginPath(); ctx.moveTo(16,-89); ctx.quadraticCurveTo(10,-87,11,-83); ctx.stroke();
+    ctx.fillStyle='#1a1414'; ctx.beginPath(); ctx.arc(11,-82,1.4,0,TAU); ctx.fill();               // bill tip
+    ctx.fillStyle='#2a1a1a'; ctx.beginPath(); ctx.arc(20,-91,0.9,0,TAU); ctx.fill();               // eye
+    ctx.restore();
+  }
+};
+
+const DISCOVERIES=[fireflies, turtle, heron, ducks, cardinal, bats, koi, swallows, swan, shootingstar, rabbit, kingfisher,
+                   duckfamily, bunnyfamily, narwhal, flamingo];
+const discById={}; for(const d of DISCOVERIES) discById[d.id]=d;
+// birthdays (month is 1-based). Karen's is the existing heron, kept present all day.
+const BIRTHDAYS=[
+  {name:'Frankie', m:5, d:10, disc:'bunnyfamily'},
+  {name:'Jack',    m:6, d:5,  disc:'duckfamily'},
+  {name:'Matt',    m:6, d:8,  disc:'narwhal'},
+  {name:'Karen',   m:6, d:25, disc:'heron'},
+  {name:'Kate',    m:7, d:2,  disc:'flamingo'}
+];
+function todaysBirthday(){ const d=new Date(), mo=d.getMonth()+1, da=d.getDate(); return BIRTHDAYS.find(b=>b.m===mo && b.d===da)||null; }
+let discoScan=12, cycleIdx=0, holdTimer=0, bdTimer=1.5;
+function activateDisc(d, forced){
+  if(d.active){ showCard(d.name,d.sub); return; }        // already out → just replay the card
+  if(!forced && !d.wants()) return;
+  d.start(); if(forced || !seen.has(d.id)) showCard(d.name,d.sub); markSeen(d.id);
+}
+function summonNext(){ const d=DISCOVERIES[cycleIdx%DISCOVERIES.length]; cycleIdx++; activateDisc(d,true); }
+function updateDiscoveries(dt,t){
+  uptime+=dt;
+  // birthdays: keep the birthday animal coming to the pond all day
+  const bd=todaysBirthday();
+  if(bd && discById[bd.disc]){ const d=discById[bd.disc];
+    if(!d.active){ bdTimer-=dt; if(bdTimer<0){ bdTimer=rand(6,14); d.start(); showCard('Happy birthday, '+bd.name+'!', d.name); markSeen(d.id); } }
+  }
+  discoScan-=dt;                                          // once in a while, if a condition is met, one may appear
+  if(discoScan<0){ discoScan=rand(12,26);
+    for(const d of DISCOVERIES){ if(!d.active && d.wants() && Math.random()<0.5){ activateDisc(d,false); break; } }
+  }
+  for(const d of DISCOVERIES) if(d.active) d.update(dt,t);
+  tickCard(dt);
+}
+
+/* ---------- input ---------- */
+let titleFaded=false;
+function fadeTitle(){
+  if(titleFaded) return; titleFaded=true;
+  document.getElementById('title').style.opacity=0;
+}
+setTimeout(fadeTitle, 12000);
+
+cv.addEventListener('pointerdown', async (e)=>{
+  const x=e.clientX, y=e.clientY;
+  fadeTitle();
+  // hidden: press & hold on the stony left shore to summon / cycle a discovery
+  if(x < groundRightAt(y/H)+14){ clearTimeout(holdTimer); holdTimer=setTimeout(summonNext, 1150); }
+  await initAudio();
+  // baby fish scatter away from any tap (side-effect; doesn't consume the tap)
+  if(season.young>0.02) for(const b of babies){
+    if(Math.hypot(x-b.x,y-b.y)<64){ b.dart=1; b.h=Math.atan2(b.y-y,b.x-x)+rand(-0.4,0.4); }
+  }
+  // pads & frogs are only here outside winter dormancy
+  if(dormantNow<0.5){
+    // frogs first (they sit on top of pads): hop to a free pad, bloop on splash-down
+    for(const f of frogs){
+      if(f.jump) continue;
+      const p=pads[f.pad];
+      if(Math.hypot(x-p.x, y-(p.y-10)) < 36){
+        hopFrog(f, 0.7);
+        noteGlyph(p.x,p.y-40,'#8fb573');
+        return;
+      }
+    }
+    // flowers
+    for(const p of pads){
+      if(p.flower && Math.hypot(x-p.x, y-p.y) < p.r*0.55){
+        p.flower.open=!p.flower.open;
+        setDrone(p.flower);
+        swell(p.flower.chord, p.flower.open?0.4:0.25);
+        ripple(p.x,p.y,0.7); noteGlyph(p.x,p.y-30,'#f2d4dc');
+        return;
+      }
+    }
+  }
+  // dragonflies: dash away with a shimmer arp (gone once winter sets in)
+  for(const d of flies){
+    if(dormantNow<0.5 && Math.hypot(x-d.x,y-d.y)<40){
+      d.dash=1; d.tx=rand(40,W-40); d.ty=rand(40,H*0.7);
+      shimmer(d.y, 0.6);
+      noteGlyph(d.x,d.y-16,'#7fd4c1'); ripple(d.x,d.y,0.4);
+      return;
+    }
+  }
+  // hummingbird: startle it — bright trill as it flees
+  if(hum && !hum.flee && Math.hypot(x-hum.x,y-hum.y)<44){
+    trill(0.6);
+    noteGlyph(hum.x,hum.y-20,'#c77fd4');
+    hum.flee=true;
+    return;
+  }
+  // fish
+  let best=null, bd=70;
+  for(const f of fish){ const d=Math.hypot(x-f.x,y-f.y); if(d<bd){bd=d;best=f;} }
+  if(best){
+    best.dart=1; best.h=Math.atan2(best.y-y,best.x-x)+rand(-0.4,0.4);
+    pluck(best.y, 0.7);
+    ripple(x,y,1); noteGlyph(best.x,best.y-14,'#f0ad7e');
+    return;
+  }
+  // bare water: ripple + a very soft note so every touch answers
+  pluck(y, 0.2);
+  ripple(x,y,0.8);
+});
+// cancel the hidden hold if the finger lifts or wanders off the shore
+cv.addEventListener('pointerup',    ()=>clearTimeout(holdTimer));
+cv.addEventListener('pointercancel',()=>clearTimeout(holdTimer));
+cv.addEventListener('pointermove', (e)=>{ if(e.clientX > groundRightAt(e.clientY/H)+44) clearTimeout(holdTimer); });
+
+/* ---------- drawing helpers ---------- */
+function drawRock(rk){
+  ctx.save(); ctx.translate(rk.x,rk.y); ctx.rotate(rk.rot);
+  // contact shadow where the rock meets the water
+  ctx.fillStyle='rgba(3,10,14,0.28)';
+  ctx.beginPath(); ctx.ellipse(0,rk.r*rk.ry*0.5,rk.r*1.05,rk.r*rk.ry*0.5,0,0,TAU); ctx.fill();
+  // stony body, moonlit lighter along the top — smooth boulder outline
+  // (Catmull-Rom-ish: draw quadratic curves through the midpoints between
+  // successive rim points, so the silhouette reads as a rounded rock)
+  const n=rk.verts.length, pts=[];
+  for(let i=0;i<n;i++){ const a=i/n*TAU, rr=rk.verts[i];
+    pts.push([Math.cos(a)*rk.r*rr, Math.sin(a)*rk.r*rr*rk.ry]);
+  }
+  ctx.beginPath();
+  let mx=(pts[n-1][0]+pts[0][0])/2, my=(pts[n-1][1]+pts[0][1])/2;
+  ctx.moveTo(mx,my);
+  for(let i=0;i<n;i++){ const cur=pts[i], nx=pts[(i+1)%n];
+    ctx.quadraticCurveTo(cur[0],cur[1],(cur[0]+nx[0])/2,(cur[1]+nx[1])/2);
+  }
+  ctx.closePath();
+  const gr=ctx.createLinearGradient(0,-rk.r*rk.ry,0,rk.r*rk.ry);
+  gr.addColorStop(0,rk.tone.hi); gr.addColorStop(1,rk.tone.lo);
+  ctx.fillStyle=gr; ctx.fill();
+  ctx.strokeStyle='rgba(150,175,188,0.14)'; ctx.lineWidth=1; ctx.stroke();
+  ctx.restore();
+}
+function drawPad(p,t){
+  if(dormantNow>=0.999) return;           // died back for the winter
+  const vis=1-dormantNow;
+  const bob=Math.sin(t*0.7+p.bob)*2;
+  ctx.save(); ctx.translate(p.x,p.y+bob); ctx.rotate(p.rot);
+  ctx.globalAlpha=vis;
+  const pc=season.pad;
+  ctx.fillStyle=`rgb(${pc[0]|0},${pc[1]|0},${pc[2]|0})`;
+  ctx.beginPath(); ctx.moveTo(0,0);
+  ctx.arc(0,0,p.r, p.notch*0.4, TAU - p.notch*0.4); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle=`rgba(${(pc[0]+30)|0},${(pc[1]+35)|0},${(pc[2]+28)|0},0.9)`; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(0,0,p.r*0.72, p.notch*0.4, TAU-p.notch*0.4); ctx.stroke();
+  ctx.restore();
+  if(p.flower){
+    const f=p.flower;
+    f.anim += ((f.open?1:0)-f.anim)*0.08;
+    const o=f.anim, cx=p.x, cy=p.y+bob;
+    ctx.save(); ctx.translate(cx,cy);
+    for(let ring=0; ring<2; ring++){
+      const n=ring===0?8:6, len=(ring===0?26:16)*(0.35+0.65*o);
+      for(let i=0;i<n;i++){
+        const a=(i/n)*TAU + ring*0.4 + t*0.02;
+        ctx.save(); ctx.rotate(a);
+        ctx.fillStyle = ring===0 ? f.hue : '#fdf6ee';
+        ctx.globalAlpha = 0.9*vis;
+        ctx.beginPath(); ctx.ellipse(len*0.6,0,len*0.55,len*0.22*(0.4+0.6*o),0,0,TAU); ctx.fill();
+        ctx.restore();
+      }
+    }
+    ctx.fillStyle = o>0.5 ? '#f5c96b' : '#e8a0b4';
+    ctx.beginPath(); ctx.arc(0,0,6+4*o,0,TAU); ctx.fill();
+    ctx.restore(); ctx.globalAlpha=1;
+  }
+}
+function drawFrog(f,dt,t){
+  if(dormantNow>=0.999) return;           // hibernating on the pond floor
+  const fvis=1-dormantNow;
+  let x,y,squash=1;
+  if(f.jump){
+    const j=f.jump; j.t+=dt*2.1;
+    const k=Math.min(j.t,1);
+    x=j.from.x+(j.to.x-j.from.x)*k; y=j.from.y+(j.to.y-j.from.y)*k - Math.sin(k*Math.PI)*90;
+    squash=1+Math.sin(k*Math.PI)*0.25;
+    if(k>=1){ ripple(j.to.x,j.to.y,0.9); bloop(j.to.y,j.vel); f.jump=null; }
+  } else {
+    const p=pads[f.pad]; x=p.x; y=p.y+Math.sin(t*0.7+p.bob)*2-8;
+    f.croak-=dt;
+    if(f.croak<-f.croakT && dormantNow<0.4){ f.croak=1; f.croakT=rand(6,14)/(0.2+0.8*warmthNow); noteGlyph(x,y-36,'#8fb573'); croakSound(y); }
+  }
+  ctx.save(); ctx.translate(x,y-6); ctx.scale(1/squash, squash);
+  ctx.globalAlpha=fvis;
+  ctx.fillStyle='#5f8a4e';
+  ctx.beginPath(); ctx.ellipse(0,0,16,11,0,0,TAU); ctx.fill();       // body
+  ctx.beginPath(); ctx.ellipse(0,-9,11,8,0,0,TAU); ctx.fill();      // head
+  if(f.croak>0){ ctx.fillStyle='rgba(220,235,200,0.85)';            // throat bubble
+    ctx.beginPath(); ctx.arc(0,-2,8*f.croak,0,TAU); ctx.fill(); }
+  ctx.fillStyle='#dfeccb';
+  ctx.beginPath(); ctx.arc(-6,-14,3.6,0,TAU); ctx.arc(6,-14,3.6,0,TAU); ctx.fill();
+  ctx.fillStyle='#233b1e';
+  ctx.beginPath(); ctx.arc(-6,-14,1.6,0,TAU); ctx.arc(6,-14,1.6,0,TAU); ctx.fill();
+  ctx.restore();
+}
+function drawFly(d,dt,t){
+  if(dormantNow>=0.999) return;           // adult dragonflies are gone for the winter
+  const dvis=1-dormantNow;
+  d.wing+=dt*40;
+  const sp = d.dash>0 ? 8 : 2.2; d.dash=Math.max(0,d.dash-dt*1.2);
+  const ease=Math.min(1, dt*60*0.01*sp);
+  d.x+=(d.tx-d.x)*ease; d.y+=(d.ty-d.y)*ease;
+  if(Math.hypot(d.tx-d.x,d.ty-d.y)<20){
+    // occasionally dip to the surface: tiny ripple + one faint sparkle note
+    // (dragonflies love the warmth — they barely stir in the cold)
+    if(Math.random()<0.3*warmthNow){ ripple(d.x,d.y,0.35); flit(); }
+    d.tx=rand(40,W-40); d.ty=rand(40,H*0.7);
+  }
+  const a=Math.atan2(d.ty-d.y,d.tx-d.x);
+  ctx.save(); ctx.translate(d.x,d.y); ctx.rotate(a);
+  ctx.globalAlpha=dvis;
+  ctx.strokeStyle='#7fd4c1'; ctx.lineWidth=2.4; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(-12,0); ctx.lineTo(9,0); ctx.stroke();  // body
+  const wa=Math.abs(Math.sin(d.wing));
+  ctx.globalAlpha=(0.35+0.35*wa)*dvis; ctx.fillStyle='#bff0e4';
+  for(const side of [-1,1]){
+    ctx.beginPath(); ctx.ellipse(-2,side*7*wa,11,3.4,side*0.5,0,TAU); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(3,side*6*wa,9,3,side*0.4,0,TAU); ctx.fill();
+  }
+  ctx.restore(); ctx.globalAlpha=1;
+}
+function drawHum(h,dt,t){
+  h.t+=dt;
+  const bob=Math.sin(h.t*6)*4;
+  if(h.flee){
+    h.x+=dt*600*(h.x<W/2?-1:1); h.y-=dt*300;
+    if(h.x<-60||h.x>W+60||h.y<-60){ hum=null; return; }
+  } else {
+    const hx=h.target.x-70*h.dir, hy=h.target.y-60;
+    h.x+=(hx-h.x)*Math.min(1,dt*2); h.y+=(hy-h.y)*Math.min(1,dt*2);
+    if(!h.arrived && Math.abs(hx-h.x)<14){
+      h.arrived=true; trill(0.25); noteGlyph(h.x,h.y-20,'#c77fd4');
+    }
+    if(h.t>h.stay) h.flee=true;
+  }
+  ctx.save(); ctx.translate(h.x,h.y+bob); ctx.scale(h.dir,1);
+  const wa=Math.sin(h.t*55);
+  ctx.globalAlpha=0.5; ctx.fillStyle='#d8b4e8';                        // blurred wings
+  ctx.beginPath(); ctx.ellipse(-2,-8+wa*4,14,5,-0.6,0,TAU); ctx.fill();
+  ctx.globalAlpha=1;
+  ctx.fillStyle='#8a5fb0';
+  ctx.beginPath(); ctx.ellipse(0,0,11,7,0.25,0,TAU); ctx.fill();       // body
+  ctx.fillStyle='#c77fd4';
+  ctx.beginPath(); ctx.arc(9,-4,5,0,TAU); ctx.fill();                  // head
+  ctx.strokeStyle='#2e2038'; ctx.lineWidth=1.8; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(13,-4); ctx.lineTo(24,-2); ctx.stroke(); // beak
+  ctx.restore();
+}
+function drawFish(f,dt,t){
+  // wander / dart
+  f.wig+=dt*(6+f.dart*14)*(1-iceNow*0.6);
+  if(f.dart>0){ f.dart-=dt*0.9; }
+  // on a hot day, drift toward the nearest rock shade and loiter in the cool
+  let inShade=false;
+  if(heatNow>0.06 && f.dart<=0){
+    let best=null,bd=1e9;
+    for(const s of shadeSpots){ const d2=Math.hypot(s.x-f.x,s.y-f.y); if(d2<bd){bd=d2;best=s;} }
+    if(best){
+      inShade = bd < best.r*0.9;
+      if(!inShade){
+        const des=Math.atan2(best.y-f.y,best.x-f.x);
+        const diff=Math.atan2(Math.sin(des-f.h),Math.cos(des-f.h));
+        f.h += diff*Math.min(1, heatNow*dt*1.7);   // gentle pull, stronger when hotter
+      }
+    }
+  }
+  const sp=f.speed*(1+f.dart*9)*(1-iceNow*0.72)*(inShade?0.4:1);   // sluggish under ice; loiter in shade
+  f.h += Math.sin(t*0.35+f.wig*0.11)*0.01 + rand(-0.02,0.02);
+  f.x += Math.cos(f.h)*sp*dt; f.y += Math.sin(f.h)*sp*dt;
+  const m=60, lm=W*0.15;   // stay off the left shore
+  if(f.x<lm||f.x>W-m||f.y<m||f.y>H-m){ f.h=Math.atan2(H/2-f.y,W/2-f.x)+rand(-0.5,0.5); }
+  ctx.save(); ctx.translate(f.x,f.y); ctx.rotate(f.h);
+  ctx.globalAlpha=0.85*(1-iceNow*0.3); ctx.filter='blur(0.6px)';   // dimmer, seen through the ice
+  const s=f.size, tw=Math.sin(f.wig)*0.5;
+  ctx.fillStyle=f.c1;
+  ctx.beginPath();                                                    // tail
+  ctx.moveTo(-s*0.7,0); ctx.quadraticCurveTo(-s*1.4, tw*s*0.8 - s*0.4, -s*1.6, tw*s);
+  ctx.quadraticCurveTo(-s*1.4, tw*s*0.8 + s*0.4, -s*0.7, 0); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(0,0,s,s*0.42,0,0,TAU); ctx.fill();     // body
+  ctx.fillStyle=f.c2;
+  ctx.beginPath(); ctx.ellipse(s*0.25,-s*0.05,s*0.4,s*0.25,0,0,TAU); ctx.fill(); // patch
+  ctx.restore(); ctx.filter='none'; ctx.globalAlpha=1;
+}
+
+/* ---------- main loop ---------- */
+let last=performance.now(), idleT=rand(4,9), frogIdleT=rand(18,36);
+function frame(now){
+  const dt=Math.min((now-last)/1000, 0.05); last=now;
+  const t=now/1000;
+
+  // water — colour driven by the real local time of day (moonlit-range cycle)
+  const H24=currentHour();
+  const sky=skyAt(H24);
+  season=seasonNow(); warmthNow=season.warmth; iceNow=season.ice;   // refresh the season for every draw helper
+  // deep ice sends the lily pads into dieback and the frogs into hibernation
+  dormantNow=Math.max(0, Math.min(1, (iceNow-0.15)/0.5));
+  const nowDormant=dormantNow>0.5;
+  if(nowDormant!==wasDormant){ wasDormant=nowDormant;   // silence / restore open-flower drones across the transition
+    for(const p of pads){ if(p.flower && p.flower.gain) p.flower.gain.gain.rampTo((p.flower.open && !nowDormant)?0.1:0, 3); }
+  }
+  // outdoor cloud cover greys & flattens the water and hides sun + stars
+  const cloud=(weather.cloud||0)/100;
+  if(cloud>0.01){
+    const grey=[44,56,60];
+    sky.top=sky.top.map((v,i)=>v+(grey[i]-v)*cloud*0.55);
+    sky.bot=sky.bot.map((v,i)=>v+(grey[i]-v)*cloud*0.45);
+    sky.blobA*=1-cloud*0.85;   // overcast → no sun dapple
+    sky.glowA*=1-cloud*0.90;   // overcast → no low-sun rake
+    sky.night*=1-cloud*0.80;   // overcast → stars veiled
+  }
+  // seasonal tint — a gentle wash of the year's colour over the water
+  if(season.tintA>0.001){
+    const ta=season.tintA*(1-cloud*0.5);
+    sky.top=sky.top.map((v,i)=>v+(season.tint[i]-v)*ta);
+    sky.bot=sky.bot.map((v,i)=>v+(season.tint[i]-v)*ta*0.7);
+  }
+  // how hot is it? a live temperature reading governs; only when there's no
+  // reading do we approximate from a warm summer daytime
+  heatNow = weather.temp!=null
+    ? Math.max(0, Math.min(1, (weather.temp-24)/12))
+    : warmthNow*(1-(sky.night||0))*0.55;
+  nightNow = sky.night||0;
+  const rgb=a=>`rgb(${a[0]|0},${a[1]|0},${a[2]|0})`;
+  const g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,rgb(sky.top)); g.addColorStop(1,rgb(sky.bot));
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  // caustic dapple — brighter by day, faint at night; drifts with the current
+  for(const b of blobs){
+    b.x=(b.x + FLOW.x*0.02*dt + 1)%1; b.y=(b.y + FLOW.y*0.02*dt + 1)%1;
+    const bx=(b.x + Math.sin(t*b.s+b.p)*0.06)*W, by=(b.y + Math.cos(t*b.s*1.3+b.p)*0.06)*H;
+    const rg=ctx.createRadialGradient(bx,by,0,bx,by,b.r);
+    rg.addColorStop(0,`rgba(${sky.blob[0]|0},${sky.blob[1]|0},${sky.blob[2]|0},${sky.blobA})`);
+    rg.addColorStop(1,`rgba(${sky.blob[0]|0},${sky.blob[1]|0},${sky.blob[2]|0},0)`);
+    ctx.fillStyle=rg; ctx.fillRect(bx-b.r,by-b.r,b.r*2,b.r*2);
+  }
+  // low-sun warm rake across the water at dawn (from the east) & dusk (west)
+  if(sky.glowA>0.001){
+    const morning=H24<13, gx0=morning?0:W, gx1=morning?W:0;
+    const wg=ctx.createLinearGradient(gx0,0,gx1,H);
+    wg.addColorStop(0,`rgba(${sky.glow[0]|0},${sky.glow[1]|0},${sky.glow[2]|0},${sky.glowA})`);
+    wg.addColorStop(0.6,`rgba(${sky.glow[0]|0},${sky.glow[1]|0},${sky.glow[2]|0},0)`);
+    ctx.globalCompositeOperation='lighter';
+    ctx.fillStyle=wg; ctx.fillRect(0,0,W,H);
+    ctx.globalCompositeOperation='source-over';
+  }
+  // faint star reflections shimmering on the night water
+  if(sky.night>0.02){
+    ctx.fillStyle='#dfeef0';
+    for(const st of stars){
+      ctx.globalAlpha=sky.night*(0.15+0.3*(0.5+0.5*Math.sin(t*st.s+st.tw)));
+      ctx.beginPath(); ctx.arc(st.x*W, st.y*H, st.r, 0, TAU); ctx.fill();
+    }
+    ctx.globalAlpha=1;
+  }
+
+  // weather on the water: rain stipples the surface with little dimples,
+  // and stronger wind roughens it with faint chop (both silent — they just
+  // feed the existing ripple system, so they take the sky's ripple colour)
+  const precip=weather.precip||0, wind=weather.wind||0;
+  if(precip>0){
+    rainAcc += dt * Math.min(precip*18, 34);   // drops/sec, capped
+    while(rainAcc>=1){ rainAcc--; ripples.push({x:rand(0,W),y:rand(0,H),r:1.5,max:rand(9,18),a:0.30}); }
+  }
+  if(wind>12){
+    chopAcc += dt * Math.min((wind-12)*0.35, 7);
+    while(chopAcc>=1){ chopAcc--; ripples.push({x:rand(0,W),y:rand(0,H),r:2,max:rand(14,26),a:0.14}); }
+  }
+
+  // idle life: a fish surfaces now and then and sings softly (livelier in wind,
+  // but it can't break the surface through solid winter ice)
+  idleT-=dt;
+  if(idleT<0){ idleT=rand(4,9)*(1-Math.min(wind/60,0.45));
+    if(Math.random()>=iceNow){
+      const f=fish[Math.floor(rand(0,fish.length))];
+      ripple(f.x,f.y,0.8); noteGlyph(f.x,f.y-12,'#f0ad7e');
+      pluck(f.y, 0.3);
+    }
+  }
+  // ...a frog wanders to a new pad on its own (softer bloop) — not while hibernating
+  frogIdleT-=dt;
+  if(frogIdleT<0){ frogIdleT=rand(18,36);
+    if(dormantNow<0.5){
+      const f=frogs[Math.floor(rand(0,frogs.length))];
+      if(!f.jump){ hopFrog(f, 0.35); noteGlyph(f.jump.from.x, f.jump.from.y-40, '#8fb573'); }
+    }
+  }
+  // ...and the hummingbird pays a rare visit to a flower (only when there are flowers)
+  if(!hum){ humTimer-=dt; if(humTimer<0){ if(dormantNow<0.5) spawnHum(); humTimer=rand(45,90); } }
+
+  // water flow: faint dimples at the pump intake
+  pumpAcc+=dt;
+  if(pumpAcc>0.85){ pumpAcc=0; ripples.push({x:OUTLET.x*W+rand(-8,8), y:OUTLET.y*H+rand(-8,8), r:1.5, max:rand(8,14), a:0.15}); }
+
+  // shade the rocks throw on the water (deeper by day) — the fish rest here when it's hot
+  {
+    const dayShade=0.10+0.16*(1-(sky.night||0));
+    for(const s of shadeSpots){
+      const rg=ctx.createRadialGradient(s.x,s.y,0,s.x,s.y,s.r);
+      rg.addColorStop(0,`rgba(4,14,18,${dayShade})`); rg.addColorStop(1,'rgba(4,14,18,0)');
+      ctx.fillStyle=rg; ctx.beginPath(); ctx.ellipse(s.x,s.y,s.r,s.r*0.78,0,0,TAU); ctx.fill();
+    }
+  }
+
+  // left shore: a packed bed of small stones under the big rocks (no open water to their left)
+  {
+    const day=1-(sky.night||0), steps=26;
+    ctx.save();
+    // clip to the shore band so the stones stay on the bank
+    ctx.beginPath(); ctx.moveTo(0,0);
+    for(let i=0;i<=steps;i++){ const yf=i/steps; ctx.lineTo(groundRightAt(yf), yf*H); }
+    ctx.lineTo(0,H); ctx.closePath(); ctx.clip();
+    // dark stony base so no gaps show through the gravel
+    const bg=ctx.createLinearGradient(0,0,0,H);
+    bg.addColorStop(0,`rgb(${(26+day*18)|0},${(34+day*20)|0},${(38+day*20)|0})`);
+    bg.addColorStop(1,`rgb(${(18+day*12)|0},${(24+day*14)|0},${(27+day*14)|0})`);
+    ctx.fillStyle=bg; ctx.fillRect(0,0,W*0.2,H);
+    // the small stones
+    for(const s of gravel){
+      const gx=s.tf*groundRightAt(s.fy), gy=s.fy*H, n=s.verts.length, pts=[];
+      ctx.save(); ctx.translate(gx,gy); ctx.rotate(s.rot);
+      for(let i=0;i<n;i++){ const a=i/n*TAU, rr=s.verts[i]; pts.push([Math.cos(a)*s.r*rr, Math.sin(a)*s.r*rr*s.ry]); }
+      ctx.beginPath();
+      let mx=(pts[n-1][0]+pts[0][0])/2, my=(pts[n-1][1]+pts[0][1])/2; ctx.moveTo(mx,my);
+      for(let i=0;i<n;i++){ const c=pts[i], nx=pts[(i+1)%n]; ctx.quadraticCurveTo(c[0],c[1],(c[0]+nx[0])/2,(c[1]+nx[1])/2); }
+      ctx.closePath();
+      const grd=ctx.createLinearGradient(0,-s.r*s.ry,0,s.r*s.ry);
+      grd.addColorStop(0,s.tone.hi); grd.addColorStop(1,s.tone.lo);
+      ctx.fillStyle=grd; ctx.fill();
+      ctx.strokeStyle='rgba(150,175,188,0.10)'; ctx.lineWidth=0.6; ctx.stroke();
+      ctx.restore();
+    }
+    ctx.restore();
+    // damp waterline where the stony shore meets the pond
+    ctx.strokeStyle='rgba(16,26,26,0.4)'; ctx.lineWidth=2;
+    ctx.beginPath();
+    for(let i=0;i<=steps;i++){ const yf=i/steps, X=groundRightAt(yf), Y=yf*H; i?ctx.lineTo(X,Y):ctx.moveTo(X,Y); }
+    ctx.stroke();
+  }
+
+  fish.forEach(f=>drawFish(f,dt,t));
+
+  // baby fish — a little school of fry schooling near the surface in spring
+  if(season.young>0.02){
+    const yFade=Math.min(1, season.young*1.4), shown=Math.max(1, Math.ceil(season.young*babies.length));
+    for(let i=0;i<shown;i++){ const b=babies[i];
+      b.wig+=dt*(9+b.dart*16); if(b.dart>0) b.dart-=dt*0.9;
+      const bsp=b.sp*(1+b.dart*8);
+      b.h += Math.sin(t*0.5+b.wig*0.1)*0.02 + rand(-0.03,0.03);
+      b.x += Math.cos(b.h)*bsp*dt; b.y += Math.sin(b.h)*bsp*dt;
+      const bm=40, blm=W*0.15; if(b.x<blm||b.x>W-bm||b.y<bm||b.y>H-bm){ b.h=Math.atan2(H/2-b.y,W/2-b.x)+rand(-0.5,0.5); }
+      const s=b.size, tw=Math.sin(b.wig)*0.5;
+      ctx.save(); ctx.translate(b.x,b.y); ctx.rotate(b.h);
+      ctx.globalAlpha=0.85*yFade; ctx.fillStyle='#ecc39a';
+      ctx.beginPath(); ctx.moveTo(-s*0.7,0); ctx.quadraticCurveTo(-s*1.3,tw*s*0.7-s*0.3,-s*1.5,tw*s);
+      ctx.quadraticCurveTo(-s*1.3,tw*s*0.7+s*0.3,-s*0.7,0); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(0,0,s,s*0.45,0,0,TAU); ctx.fill();
+      ctx.restore(); ctx.globalAlpha=1;
+    }
+  }
+
+  // ripples
+  for(let i=ripples.length-1;i>=0;i--){ const r=ripples[i];
+    r.r+=90*dt; r.a-=dt*0.5;
+    if(r.a<=0||r.r>r.max){ ripples.splice(i,1); continue; }
+    ctx.strokeStyle=`rgba(${sky.rip[0]|0},${sky.rip[1]|0},${sky.rip[2]|0},${r.a})`; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(r.x,r.y,r.r,0,TAU); ctx.stroke();
+    ctx.strokeStyle=`rgba(${sky.rip[0]|0},${sky.rip[1]|0},${sky.rip[2]|0},${r.a*0.4})`;
+    ctx.beginPath(); ctx.arc(r.x,r.y,r.r*0.65,0,TAU); ctx.stroke();
+  }
+
+  // winter ice — a translucent sheet at the surface. Fish are drawn *under* it
+  // (above), so they show through faintly; pads, frogs and flies sit on top.
+  if(iceNow>0.02){
+    ctx.save();
+    ctx.globalAlpha=Math.min(0.55, iceNow*0.6);
+    const ig=ctx.createLinearGradient(0,0,W,H);
+    ig.addColorStop(0,'#cdd9e0'); ig.addColorStop(0.5,'#dce7ed'); ig.addColorStop(1,'#c6d3db');
+    ctx.fillStyle=ig; ctx.fillRect(0,0,W,H);
+    // frosted blotches
+    ctx.globalAlpha=Math.min(0.45, iceNow*0.5);
+    for(const bl of blobs){ const bx=bl.x*W, by=bl.y*H;
+      const rg=ctx.createRadialGradient(bx,by,0,bx,by,bl.r*0.85);
+      rg.addColorStop(0,'rgba(255,255,255,0.55)'); rg.addColorStop(1,'rgba(255,255,255,0)');
+      ctx.fillStyle=rg; ctx.fillRect(bx-bl.r,by-bl.r,bl.r*2,bl.r*2);
+    }
+    // cracks
+    ctx.globalAlpha=Math.min(0.6, iceNow*0.7); ctx.strokeStyle='rgba(242,249,253,0.8)'; ctx.lineWidth=1.2; ctx.lineJoin='round';
+    for(const cr of iceCracks){ ctx.beginPath();
+      cr.forEach((p,k)=>{ const X=((p[0]%1)+1)%1*W, Y=((p[1]%1)+1)%1*H; k?ctx.lineTo(X,Y):ctx.moveTo(X,Y); });
+      ctx.stroke();
+    }
+    ctx.restore(); ctx.globalAlpha=1;
+  }
+
+  pads.forEach(p=>drawPad(p,t));
+  frogs.forEach(f=>drawFrog(f,dt,t));
+  flies.forEach(d=>drawFly(d,dt,t));
+  if(hum) drawHum(hum,dt,t);
+
+  // rocks last (over the fish, so a fish can slip in behind a rock)
+  rocks.forEach(drawRock);
+  // tall water plants rise up among the rocks to break up the frame
+  plants.forEach(pl=>drawPlant(pl,t));
+
+  // rare discoveries (fireflies, basking turtle, …) drawn over the scene
+  updateDiscoveries(dt,t);
+
+  // note glyphs
+  ctx.font='20px Georgia, serif';
+  for(let i=notes.length-1;i>=0;i--){ const n=notes[i];
+    n.y+=n.vy; n.a-=0.012;
+    if(n.a<=0){ notes.splice(i,1); continue; }
+    ctx.globalAlpha=n.a; ctx.fillStyle=n.color; ctx.fillText(n.g,n.x,n.y);
+  }
+  ctx.globalAlpha=1;
+
+  // seasonal foliage — blossom petals drifting in spring, leaves in autumn
+  const fallAmt=Math.max(season.fall, season.petals);
+  if(fallAmt>0.02){
+    const isLeaf=season.fall>=season.petals;
+    const shown=Math.ceil(fallAmt*foliage.length);
+    const lc=season.leaf;
+    for(let i=0;i<shown;i++){ const fp=foliage[i];
+      fp.y += fp.vy*dt*8 + FLOW.y*0.02*dt; fp.sw += dt*fp.sws; fp.rot += fp.rs*dt;
+      fp.x += Math.sin(fp.sw)*0.0008 + (wind/9000) + FLOW.x*0.03*dt;
+      if(fp.y>1.05){ fp.y=-0.05; fp.x=rand(0,1); }
+      if(fp.x>1) fp.x-=1; if(fp.x<0) fp.x+=1;
+      ctx.save(); ctx.translate(fp.x*W, fp.y*H); ctx.rotate(fp.rot);
+      ctx.fillStyle=`rgb(${lc[0]|0},${lc[1]|0},${lc[2]|0})`;
+      if(isLeaf){
+        ctx.globalAlpha=0.72;
+        ctx.beginPath(); ctx.ellipse(0,0,5,2.4,0,0,TAU); ctx.fill();
+        ctx.strokeStyle='rgba(50,34,18,0.3)'; ctx.lineWidth=0.6;
+        ctx.beginPath(); ctx.moveTo(-5,0); ctx.lineTo(5,0); ctx.stroke();
+      } else {
+        ctx.globalAlpha=0.62;
+        ctx.beginPath(); ctx.ellipse(0,0,3,1.8,0,0,TAU); ctx.fill();
+      }
+      ctx.restore();
+    }
+    ctx.globalAlpha=1;
+  }
+
+  // snow drifting over the pond when it's actually snowing outside
+  const snow=weather.snow||0;
+  if(snow>0){
+    const shown=Math.min(flakes.length, Math.ceil(snow*flakes.length*4));
+    ctx.fillStyle='#eef4f6';
+    for(let i=0;i<shown;i++){ const fl=flakes[i];
+      fl.y += fl.sp*dt*20; fl.sw += dt;
+      fl.x += Math.sin(fl.sw)*0.0006 + (wind/8000);
+      if(fl.y>1){ fl.y-=1; fl.x=rand(0,1); }
+      if(fl.x>1) fl.x-=1; if(fl.x<0) fl.x+=1;
+      ctx.globalAlpha=fl.sa;
+      ctx.beginPath(); ctx.arc(fl.x*W, fl.y*H, fl.r, 0, TAU); ctx.fill();
+    }
+    ctx.globalAlpha=1;
+  }
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+window.addEventListener('resize', layoutPads);
+window.addEventListener('resize', layoutRocks);
+</script>
+</body>
+</html>
