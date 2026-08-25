@@ -10532,6 +10532,10 @@ function openSettings() {
   document.getElementById('settingSaverNight').checked    = !!saverNight;
   document.getElementById('settingSaverNightStart').value = saverNightStart;
   document.getElementById('settingSaverNightEnd').value   = saverNightEnd;
+  document.getElementById('settingSaverMode').value       = saverMode;
+  document.getElementById('settingSaverPondSound').checked = !!saverPondSound;
+  document.getElementById('settingSaverPondTap').value    = saverPondTap;
+  updateSaverModeFields();
   document.getElementById('settingMealAiKey').value     = mealAiKey;
   document.getElementById('settingMealPantry').value    = mealPantryDef;
   // provider is always gemini — no UI to update
@@ -10688,6 +10692,9 @@ function saveSettings() {
   saverNight    = document.getElementById('settingSaverNight').checked;
   saverNightStart = document.getElementById('settingSaverNightStart').value || '22:00';
   saverNightEnd   = document.getElementById('settingSaverNightEnd').value   || '06:30';
+  saverMode       = document.getElementById('settingSaverMode').value === 'pond' ? 'pond' : 'photos';
+  saverPondSound  = document.getElementById('settingSaverPondSound').checked;
+  saverPondTap    = document.getElementById('settingSaverPondTap').value === 'wake' ? 'wake' : 'play';
   localStorage.setItem('fh_saver',           JSON.stringify(saverEnabled));
   localStorage.setItem('fh_saverIdleMin',    String(saverIdleMin));
   localStorage.setItem('fh_saverDwellSec',   String(saverDwellSec));
@@ -10696,6 +10703,9 @@ function saveSettings() {
   localStorage.setItem('fh_saverNight',      JSON.stringify(saverNight));
   localStorage.setItem('fh_saverNightStart', JSON.stringify(saverNightStart));
   localStorage.setItem('fh_saverNightEnd',   JSON.stringify(saverNightEnd));
+  localStorage.setItem('fh_saverMode',       JSON.stringify(saverMode));
+  localStorage.setItem('fh_saverPondSound',  JSON.stringify(saverPondSound));
+  localStorage.setItem('fh_saverPondTap',    JSON.stringify(saverPondTap));
   resetSaverIdleTimer();
   mealAiKey     = document.getElementById('settingMealAiKey').value.trim();
   mealPantryDef = document.getElementById('settingMealPantry').value.trim();
@@ -11238,6 +11248,9 @@ let saverInfo     = lsGet('fh_saverInfo', true);        // temp + next event und
 let saverNight    = lsGet('fh_saverNight', true);       // night hours → dim clock only, no photos
 let saverNightStart = lsGet('fh_saverNightStart', '22:00');
 let saverNightEnd   = lsGet('fh_saverNightEnd', '06:30');
+let saverMode     = lsGet('fh_saverMode', 'photos');      // 'photos' | 'pond'
+let saverPondSound = lsGet('fh_saverPondSound', true);    // let the pond chime
+let saverPondTap  = lsGet('fh_saverPondTap', 'play');     // 'play' | 'wake'
 let saverActive   = false;
 let _saverIdleTimer = null, _saverCycleTimer = null, _saverClockTimer = null, _saverIdx = -1;
 let _saverNightOn = false;
@@ -11293,17 +11306,25 @@ function resetSaverIdleTimer() {
 }
 
 function startScreensaver() {
-  // No photos (yet) or tab hidden — re-arm and try again next idle period
-  if (!saverEnabled || saverActive || document.hidden || !bgPhotos.length) { resetSaverIdleTimer(); return; }
+  // Tab hidden, or photo mode with an empty pool — re-arm and try again next
+  // idle period. Pond mode needs no photos, so it isn't gated on the pool.
+  const pond = saverMode === 'pond';
+  if (!saverEnabled || saverActive || document.hidden || (!pond && !bgPhotos.length)) { resetSaverIdleTimer(); return; }
   if (isMobile) return;  // guard the direct path too (timer armed pre-resize)
   saverActive = true;
   document.getElementById('saverClock').style.transform = '';
   _saverNightOn = false;
   updateSaverOverlay(); // sets clock/info/night state before the first photo
   _saverClockTimer = setInterval(updateSaverOverlay, 10000);
-  document.getElementById('screensaver').classList.add('active');
-  _saverIdx = Math.floor(Math.random() * bgPhotos.length) - 1; // random starting photo
-  if (!_saverNightOn) advanceSaverPhoto();
+  const el = document.getElementById('screensaver');
+  el.classList.toggle('pond', pond);
+  el.classList.add('active');
+  if (pond) {
+    if (!_saverNightOn) startSaverPond();
+  } else {
+    _saverIdx = Math.floor(Math.random() * bgPhotos.length) - 1; // random starting photo
+    if (!_saverNightOn) advanceSaverPhoto();
+  }
 }
 
 function stopScreensaver() {
@@ -11315,13 +11336,95 @@ function stopScreensaver() {
   el.classList.remove('active');
   el.classList.remove('night');
   _saverNightOn = false;
-  // Drop the photo layers once the fade-out completes
-  setTimeout(() => { if (!saverActive) el.querySelectorAll('.saver-img').forEach(i => i.remove()); }, 1300);
+  document.getElementById('saverWakeBtn').style.display = 'none';
+  // Drop the photo/pond layers once the fade-out completes
+  setTimeout(() => {
+    if (saverActive) return;
+    el.querySelectorAll('.saver-img').forEach(i => i.remove());
+    stopSaverPond();
+    el.classList.remove('pond');
+  }, 1300);
   resetSaverIdleTimer();
 }
 
+// ── Pond Chimes screensaver mode ──
+// The pond is vendored verbatim at pond/ (git subtree of mattohara42/pond-chimes)
+// and runs in a same-origin iframe, so its globals and its `html, body` CSS reset
+// stay in their own document. The frame is created on start and destroyed on stop:
+// that's what stops its requestAnimationFrame loop, its weather interval and its
+// audio graph — nothing of the pond survives the screensaver.
+
+/** Mount the pond, handing it the hub's known coordinates so it skips its own
+    geolocation prompt and shares the weather the hub is already showing. */
+function startSaverPond() {
+  const el = document.getElementById('screensaver');
+  if (el.querySelector('#saverPond')) return;
+  const q = new URLSearchParams();
+  if (Number.isFinite(lastWxData?.lat) && Number.isFinite(lastWxData?.lon)) {
+    q.set('lat', lastWxData.lat);
+    q.set('lon', lastWxData.lon);
+  }
+  const frame = document.createElement('iframe');
+  frame.id = 'saverPond';
+  frame.title = 'Pond Chimes';
+  frame.allow = 'autoplay';          // same-origin: inherits this page's activation
+  frame.setAttribute('scrolling', 'no');
+  frame.src = 'pond/index.html' + (q.toString() ? '?' + q : '');
+  frame.addEventListener('load', () => {
+    applySaverPondSound(frame);
+    wireSaverPondWake(frame);
+    // The pond's standalone title card ("tap the pond to wake it") is wrong
+    // here — the hub has its own clock, and in 'play' mode tapping doesn't
+    // wake. Hidden from the parent so the vendored file stays untouched.
+    try { frame.contentDocument.getElementById('title').style.display = 'none'; } catch {}
+  });
+  el.insertBefore(frame, document.getElementById('saverClock'));
+  // The wake button is the only way out on a touch panel when taps play the pond
+  document.getElementById('saverWakeBtn').style.display = saverPondTap === 'play' ? '' : 'none';
+}
+
+function stopSaverPond() {
+  document.getElementById('saverPond')?.remove();
+}
+
+/** Settings: show only the options that apply to the selected mode. */
+function updateSaverModeFields() {
+  const pond = document.getElementById('settingSaverMode').value === 'pond';
+  document.getElementById('saverDwellRow').style.display   = pond ? 'none' : '';
+  document.getElementById('saverPondFields').style.display = pond ? '' : 'none';
+}
+
+/** Start (or mute) the pond's audio from the parent. Same-origin lets us reach
+    its Tone instance directly, so the vendored file stays untouched. If autoplay
+    is refused the pond just stays silent until someone taps it — its own
+    behaviour, and the reason this is wrapped in a try. */
+function applySaverPondSound(frame) {
+  try {
+    const w = frame.contentWindow;
+    if (!w) return;
+    if (saverPondSound) w.initAudio?.();
+    if (w.Tone) w.Tone.getDestination().mute = !saverPondSound;
+  } catch { /* pond not ready or autoplay blocked — silent pond, not a broken one */ }
+}
+
+/** Pointer events inside the iframe never reach the hub's window listeners, so
+    wake has to be wired into the pond's own document.
+      'wake' — any tap wakes, exactly like the photo slideshow.
+      'play' — every pointer event belongs to the pond, mouse included (waking
+               on pointermove would make the pond unplayable with a mouse:
+               you can't reach a fish without crossing the water). Wake is a
+               keypress or the corner button — both deliberate. */
+function wireSaverPondWake(frame) {
+  const doc = frame.contentDocument;
+  if (!doc) return;
+  const events = saverPondTap === 'wake'
+    ? ['pointerdown', 'touchstart', 'keydown', 'wheel']
+    : ['keydown'];
+  events.forEach(t => doc.addEventListener(t, saverActivity, { passive: true }));
+}
+
 function advanceSaverPhoto() {
-  if (!saverActive || _saverNightOn || !bgPhotos.length) return;
+  if (!saverActive || _saverNightOn || saverMode === 'pond' || !bgPhotos.length) return;
   const el = document.getElementById('screensaver');
   _saverIdx = (_saverIdx + 1) % bgPhotos.length;
   const img = document.createElement('img');
@@ -11353,8 +11456,13 @@ function updateSaverOverlay() {
     if (night) {
       clearTimeout(_saverCycleTimer);
       el.querySelectorAll('.saver-img').forEach(i => i.remove());
+      // The pond goes too: its canvas loop and audio would otherwise run all
+      // night behind a black overlay
+      stopSaverPond();
+      document.getElementById('saverWakeBtn').style.display = 'none';
     } else if (saverActive) {
-      advanceSaverPhoto();
+      if (saverMode === 'pond') startSaverPond();
+      else advanceSaverPhoto();
     }
   }
 

@@ -23,6 +23,7 @@ Shared state (shopping, todo, budget) lives in Firebase Firestore. Photos are bl
 ## Architecture Invariants (don't break these)
 
 - **No build tooling.** Any library must be a CDN `<script>`/`<link>` and respect the CSP in `family-hub.html` (`img-src` includes `'self'`).
+- **`pond/` is vendored, not ours to edit.** The Pond Chimes screensaver mode is a **git subtree** of `mattohara42/pond-chimes`, kept byte-identical so upstream work comes back with `git subtree pull --prefix=pond https://github.com/mattohara42/pond-chimes main --squash`. It runs in a same-origin iframe; anything the hub needs from it (audio, hiding its title card) is reached in from `family-hub.js` — never by editing files under `pond/`. Framing it requires CSP `frame-src 'self'` **and** `X-Frame-Options = "SAMEORIGIN"` in `netlify.toml`. (FEATURES.md §19)
 - **Full-viewport flex.** `body` is `flex-column 100dvh`. `min-height: 0` is required at every flex level to allow shrinking below content size. `.sidebar > *` must keep `flex-shrink: 0` — or cards compress instead of the sidebar scrolling.
 - **Google OAuth = GIS token client** (not code flow). Token is in-memory only (`let googleToken`), never localStorage. `file://` blocks OAuth — must serve from `localhost` or HTTPS. Any new serving origin must be added to Google Cloud Console (Authorized JS Origins) **and** Firebase Console (Authorized Domains). `generative-language` is **not** a valid OAuth scope.
 - **Touch tap-target CSS must stay inside `@media (hover: none)`** — larger button/list padding rules must never leak outside that block.
@@ -40,6 +41,8 @@ Shared state (shopping, todo, budget) lives in Firebase Firestore. Photos are bl
 | GIS token expires (~1h) | Access token is in-memory and short-lived; on an all-day wall display it silently lapses, so a later calendar write 401s and reads as a hang/"timeout." `tokenExpiresAt` tracks TTL from `resp.expires_in`; `scheduleTokenRefresh()` does a silent `prompt:''` refresh ~5 min early; `ensureFreshToken()` awaits a valid token and `calFetch()` wraps Google API writes (refresh-first, one 401 retry, 20s AbortController timeout). Route new calendar writes through `calFetch`, not raw `fetch` + `Bearer ${googleToken}` |
 | New serving origin breaks OAuth | Add to Google Cloud Console → Authorized JS Origins AND Firebase → Authorized Domains |
 | Photos Picker 403 | Must include `Authorization: Bearer ${googleToken}` header when downloading images |
+| Pond screensaver taps don't reach the hub | Pointer events inside the `#saverPond` iframe never hit the hub's `window` listeners, so wake is wired into the iframe document by `wireSaverPondWake()`. In `'play'` mode that's a keypress or the `#saverWakeBtn` corner button only — waking on `pointermove` would make the pond unplayable with a mouse |
+| Pond audio needs the parent | The pond only calls `initAudio()` on its own tap, so as a screensaver it would be silent; `applySaverPondSound()` starts and mutes it from the hub via the same-origin `contentWindow`. Autoplay inheritance is unverified on the real panel — worst case it stays silent until tapped |
 | Gemini free tier disabled | Happens when GCP billing is enabled — use an AI Studio key from a billing-free project |
 | Gemini model deprecated | Update `GEMINI_MODEL` constant; watch for `404 NOT_FOUND` |
 | `generative-language` OAuth scope | Doesn't exist — `invalid_scope`. API key only for Gemini |
@@ -103,7 +106,7 @@ When checking that a change worked in the browser, **default to `javascript_tool
 
 ## Project Files
 
-**App:** `family-hub.{html,css,js}` · `manifest.json` · `sw.js` (service worker)
+**App:** `family-hub.{html,css,js}` · `manifest.json` · `sw.js` (service worker) · `pond/` (vendored Pond Chimes subtree — screensaver mode)
 
 **Documentation:** `FEATURES.md` (detailed feature/reference map) · `family-hub-setup.md` (end-user setup) · `RETROSPECTIVE.md` (lessons learned) · `EASTER_EGGS.md` (phrase cheat sheet — what's currently live) · `CLAUDE.md` (this file)
 

@@ -2,7 +2,7 @@
 
 *Idle-triggered full-screen photo screensaver for the wall-mounted display, with photos pulled from a variety of services. Constraints: three-file no-build architecture, CDN scripts only, CSP in `family-hub.html` must be extended per photo source (`img-src` currently includes `'self'`).*
 
-Last updated: 2026-07-06
+Last updated: 2026-08-25
 
 ---
 
@@ -36,6 +36,25 @@ with keyless ambient fallbacks (Bing image of the day, NASA APOD) as the only ot
 ## ✅ DONE — S3: Ambient info overlay ("Nest Hub" mode)  (shipped 2026-07-06)
 
 **Shipped:** optional info line under the clock — current temp (reuses the in-memory Open-Meteo payload via the new `lastWxData` global) and the next calendar event (`getNextCalendarEvent()`: soonest timed event later today across enabled calendars, else tomorrow's first event; skips holidays and disabled calendars). Configurable night window (default 22:00–06:30, handles midnight wrap) switches to a dim clock-only mode: photo layers are dropped (no overnight 2.5K decodes), cycling pauses, info hides, clock dims to 35% and shows even if the clock toggle is off; photos resume when the window ends. Settings: "Weather & next event" toggle, "Night dimming" toggle + from/to time inputs. Keys: `fh_saverInfo`, `fh_saverNight`, `fh_saverNightStart`, `fh_saverNightEnd`.
+
+## ✅ DONE — S5: Pond Chimes as an alternative screensaver  (shipped 2026-08-25)
+
+**Shipped:** a **mode** setting — the screensaver shows either the photo slideshow or [Pond Chimes](https://github.com/mattohara42/pond-chimes), the self-playing ambient pond.
+
+- **Vendored, not forked.** `pond/` is a **git subtree** of `mattohara42/pond-chimes` (MIT), kept byte-identical so upstream work (M8 discoveries and beyond) comes back with one `git subtree pull`. Re-sync: `git subtree pull --prefix=pond https://github.com/mattohara42/pond-chimes main --squash`.
+- **Same-origin iframe.** Keeps the pond's globals and its `html, body { height:100% }` reset in their own document. Created on start, destroyed on stop — that's what stops its rAF loop, its 10-min weather interval and its audio graph.
+- **Two parent-side hooks, so the vendored file stays untouched:** `initAudio()` / `Tone.getDestination().mute` for sound, and hiding the pond's standalone `#title` card.
+- **Shared location.** `lastWxData.lat/lon` go in as `?lat=&lon=`, so the pond skips its geolocation prompt and shows the same weather the hub does.
+- **Tap behavior is a setting.** Pointer events inside the iframe never reach the hub's window listeners, so wake is explicit: `'play'` (default) leaves every tap to the pond and wakes on a keypress or the faint corner **Wake** button; `'wake'` restores slideshow behavior where any tap wakes.
+- **Night window applies:** the pond is torn down overnight along with the photo layers.
+- **Two infrastructure changes it needs:** CSP `frame-src 'none'` → `'self'` (`family-hub.html`), and `X-Frame-Options` `DENY` → `SAMEORIGIN` (`netlify.toml`) — cross-origin framing is still refused.
+
+Keys: `fh_saverMode`, `fh_saverPondSound`, `fh_saverPondTap`. Full map in FEATURES.md §19.
+
+**Still open:**
+- **Verify autoplay on the real panel.** The pond's audio starts from the parent on mount; a same-origin iframe should inherit the top document's user activation, and it did in headless Chromium — but headless has a permissive autoplay policy, so this needs one confirmation on the wall display. Fallback if it's refused: the pond stays silent until someone taps it (its own standalone behavior).
+- **Upstream embed API.** Mute currently works by reaching into the pond's `Tone` instance. A small PR to pond-chimes adding `?mute=1` / a `postMessage` control surface would make that a supported seam rather than a same-origin trick.
+- **Quiet hours for sound specifically** — right now the only options are night-window teardown or the sound toggle.
 
 ## S4 — Scheduling & TV-mode integration
 

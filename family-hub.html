@@ -19,7 +19,7 @@
                  img-src 'self' https: blob: data:;
                  style-src 'self' 'unsafe-inline' https://unpkg.com;
                  font-src 'self' data:;
-                 frame-src 'none';" />
+                 frame-src 'self';" />   <!-- 'self' only: the Pond Chimes screensaver runs in a same-origin iframe (pond/index.html) -->
 
   <!-- Earliest possible error catcher — runs before any other script, so a
        crash anywhere (including inside family-hub.js before its own
@@ -590,19 +590,46 @@
               <span class="toggle-track"></span>
             </label>
             <div>
-              <div class="toggle-label">🌙 Photo screensaver</div>
-              <div class="toggle-sub">After a period of inactivity, fades to a full-screen slideshow of the background images above. Touch the screen or press any key to wake.</div>
+              <div class="toggle-label">🌙 Screensaver</div>
+              <div class="toggle-sub">After a period of inactivity, fades to a full-screen ambient display. Touch the screen or press any key to wake.</div>
             </div>
+          </div>
+          <div class="field" style="margin:10px 0 0">
+            <label>Show</label>
+            <select id="settingSaverMode" onchange="updateSaverModeFields()">
+              <option value="photos">📷 Photo slideshow</option>
+              <option value="pond">🐟 Pond Chimes</option>
+            </select>
           </div>
           <div class="field-row" style="margin-top:8px">
             <label>Start after</label>
             <input type="number" id="settingSaverIdleMin" value="10" min="1" max="240" />
             <label>minutes idle</label>
           </div>
-          <div class="field-row" style="margin-top:6px">
+          <div class="field-row" style="margin-top:6px" id="saverDwellRow">
             <label>Next photo every</label>
             <input type="number" id="settingSaverDwellSec" value="20" min="5" max="600" />
             <label>seconds</label>
+          </div>
+          <!-- Pond-only options; shown/hidden by updateSaverModeFields() -->
+          <div id="saverPondFields" style="display:none">
+            <div class="toggle-row" style="margin-top:8px">
+              <label class="toggle-switch">
+                <input type="checkbox" id="settingSaverPondSound" />
+                <span class="toggle-track"></span>
+              </label>
+              <div>
+                <div class="toggle-label">🔊 Pond sound</div>
+                <div class="toggle-sub">Let the pond play its ambient chimes. Turn off for a silent pond.</div>
+              </div>
+            </div>
+            <div class="field" style="margin:10px 0 0">
+              <label>Touching the pond</label>
+              <select id="settingSaverPondTap">
+                <option value="play">Plays the pond (wake with the corner button or any key)</option>
+                <option value="wake">Wakes Family Hub</option>
+              </select>
+            </div>
           </div>
           <div class="toggle-row" style="margin-top:8px">
             <label class="toggle-switch">
@@ -631,7 +658,7 @@
             </label>
             <div>
               <div class="toggle-label">🌒 Night dimming</div>
-              <div class="toggle-sub">During night hours the screensaver shows only a dim clock — no photos.</div>
+              <div class="toggle-sub">During night hours the screensaver shows only a dim clock — no photos, no pond.</div>
             </div>
           </div>
           <div class="field-row" style="margin-top:6px">
@@ -1520,8 +1547,11 @@
 ></script>
 -->
 
-<!-- Screensaver overlay (idle-triggered photo slideshow) -->
+<!-- Screensaver overlay (idle-triggered photo slideshow / Pond Chimes) -->
 <div id="screensaver" aria-hidden="true">
+  <!-- Pond mode with "touching the pond plays it": the iframe swallows every
+       tap, so this is the only way back to the hub on a touch-only panel. -->
+  <button id="saverWakeBtn" type="button" style="display:none" onclick="stopScreensaver()">Wake</button>
   <div id="saverClock" style="display:none">
     <div id="saverClockTime"></div>
     <div id="saverClockDate"></div>
