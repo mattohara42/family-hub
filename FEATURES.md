@@ -732,7 +732,7 @@ Netlify environment variables:
 
 ### 19. Screensaver
 
-**Overview:** Idle-triggered full-screen photo slideshow with ambient info (SCREENSAVER_BACKLOG.md S1+S3). After N minutes without pointer/key/touch activity, fades to a black overlay cycling the background photo pool (`bgPhotos` — same IndexedDB pool as the background slideshow) with slow Ken Burns pan/zoom, an optional drifting clock (burn-in protection), and an optional info line (current temp + next calendar event). A configurable night window switches to a dim clock-only mode. Any interaction wakes it instantly; the waking tap is swallowed by the overlay. Doesn't activate when the photo pool is empty or the tab is hidden.
+**Overview:** Idle-triggered full-screen ambient display with two modes — a **photo slideshow** and **Pond Chimes** (SCREENSAVER_BACKLOG.md S1+S3+S5). After N minutes without pointer/key/touch activity, fades to a black overlay showing either the background photo pool (`bgPhotos` — same IndexedDB pool as the background slideshow) with slow Ken Burns pan/zoom, or the vendored Pond Chimes pond in a same-origin iframe. Both carry an optional drifting clock (burn-in protection) and an optional info line (current temp + next calendar event). A configurable night window switches to a dim clock-only mode. Doesn't activate when the tab is hidden, or — in photo mode only — when the photo pool is empty.
 
 **State:**
 ```js
@@ -744,29 +744,38 @@ let saverInfo     = lsGet('fh_saverInfo', true);    // temp + next event line
 let saverNight    = lsGet('fh_saverNight', true);   // night dimming on/off
 let saverNightStart = lsGet('fh_saverNightStart', '22:00'); // HH:MM
 let saverNightEnd   = lsGet('fh_saverNightEnd', '06:30');   // HH:MM (wraps midnight)
+let saverMode      = lsGet('fh_saverMode', 'photos');       // 'photos' | 'pond'
+let saverPondSound = lsGet('fh_saverPondSound', true);      // pond audio on/off
+let saverPondTap   = lsGet('fh_saverPondTap', 'play');      // 'play' | 'wake'
 let saverActive   = false;                          // runtime only
 let lastWxData    = null;  // set by renderWeatherData(); reused for the temp line
 ```
 
 **Key functions:**
 - `resetSaverIdleTimer()` — (re)arms the idle timeout; no-op when disabled or already active
-- `startScreensaver()` — activates overlay; guards: enabled, not active, tab visible, photos exist (else re-arms); computes night state before the first photo
-- `stopScreensaver()` — fades out, clears timers + night class, removes photo layers after the fade, re-arms
+- `startScreensaver()` — activates overlay; guards: enabled, not active, tab visible, and (photo mode only) photos exist — else re-arms; computes night state before the first photo, then mounts the pond or the first photo per `saverMode`
+- `stopScreensaver()` — fades out, clears timers + night class, hides the wake button, removes photo layers / the pond iframe after the fade, re-arms
+- `startSaverPond()` / `stopSaverPond()` — create/destroy the `#saverPond` iframe (`pond/index.html`). Destroying it is what stops the pond's rAF loop, weather interval and audio graph; `lastWxData.lat/lon` are passed as query params so the pond skips its own geolocation prompt
+- `applySaverPondSound(frame)` — same-origin reach into the pond's `initAudio()` / `Tone.getDestination().mute`; wrapped in try/catch so a refused autoplay leaves a silent pond, not a broken one
+- `wireSaverPondWake(frame)` — attaches wake listeners inside the iframe document (its pointer events never reach the hub's window listeners): `'wake'` → pointerdown/touchstart/keydown/wheel; `'play'` → keydown only, so every pointer event belongs to the pond
+- `updateSaverModeFields()` — Settings: shows the dwell row or the pond options per the selected mode
 - `advanceSaverPhoto()` — appends the next photo `<img>` (random `kb0–kb3` Ken Burns class, inline `animationDuration` = dwell + 4s), crossfades, retires the previous layer, schedules itself; no-op during night
 - `updateSaverOverlay()` — every 10s: time + date, temp (`lastWxData` + `WX_ICONS`), next event, night transitions (entering night drops photo layers + pauses cycling; exiting resumes), ±30/±20px drift
 - `getNextCalendarEvent()` — soonest timed event later today across enabled calendars (skips holidays + `disabledCals`), else tomorrow's first event; returns display text or null
 - `saverInNightWindow(d)` — HH:MM window test, handles midnight wrap
 - `saverActivity(e)` — global listener (`pointerdown`/`pointermove` throttled 1/s/`keydown`/`touchstart`/`wheel`): wakes if active, else re-arms; `visibilitychange` stops when hidden
 
-**Night mode:** `#screensaver.night` — photos hidden/dropped, info hidden, clock forced visible at 35% opacity (even if the clock toggle is off).
+**Night mode:** `#screensaver.night` — photos hidden/dropped, the pond iframe destroyed and the wake button hidden, info hidden, clock forced visible at 35% opacity (even if the clock toggle is off). Leaving the window re-mounts whichever mode is selected.
 
-**HTML anchors:** `#screensaver` (fixed overlay, `z-index: 20000` — above modals, below easter-egg layers), `#saverClock` / `#saverClockTime` / `#saverClockDate` / `#saverInfo` (`#saverInfoWx`, `#saverInfoEvent`)
+**Pond Chimes mode:** the pond is vendored verbatim at `pond/` as a **git subtree** of `mattohara42/pond-chimes` (`git subtree pull --prefix=pond https://github.com/mattohara42/pond-chimes main --squash` to re-sync). It runs in a same-origin iframe so its globals and its `html, body` CSS reset stay in their own document — nothing in `pond/` is edited, and the two parent-side tweaks (audio, hiding the pond's own title card) reach in from the hub. Requires `frame-src 'self'` in the `family-hub.html` CSP **and** `X-Frame-Options = "SAMEORIGIN"` (not `DENY`) in `netlify.toml`. `pond/` is not in the service worker's `APP_SHELL` — the fetch handler runtime-caches it on first use, like the Tactile fonts.
 
-**CSS:** `/* ── Screensaver ── */` section — `.saver-img` (crossfade + `saverKb0–3` keyframes), `#screensaver.active`, `#screensaver.night`, `#saverInfo`, tactile flavor uses `--font-display` for the clock
+**HTML anchors:** `#screensaver` (fixed overlay, `z-index: 20000` — above modals, below easter-egg layers), `#saverClock` / `#saverClockTime` / `#saverClockDate` / `#saverInfo` (`#saverInfoWx`, `#saverInfoEvent`), `#saverWakeBtn` (pond play-mode wake), `#saverPond` (created at runtime)
 
-**Settings:** Screensaver/Background tab (General group) → Screensaver section: enable toggle, idle minutes (1–240), dwell seconds (5–600), clock toggle, weather & next event toggle, night dimming toggle + from/to times. Wired in `openSettings()` / `saveSettings()`; init armed from the `load` handler.
+**CSS:** `/* ── Screensaver ── */` section — `.saver-img` (crossfade + `saverKb0–3` keyframes), `#screensaver.active`, `#screensaver.active.pond` (restores the cursor the slideshow hides), `#screensaver.night`, `#saverPond`, `#saverWakeBtn`, `#saverInfo`, tactile flavor uses `--font-display` for the clock
 
-**localStorage:** `fh_saver`, `fh_saverIdleMin`, `fh_saverDwellSec`, `fh_saverClock`, `fh_saverInfo`, `fh_saverNight`, `fh_saverNightStart`, `fh_saverNightEnd`
+**Settings:** Screensaver/Background tab (General group) → Screensaver section: enable toggle, mode select (photos / pond), idle minutes (1–240), dwell seconds (5–600, photo mode), pond sound toggle + pond tap behavior (pond mode), clock toggle, weather & next event toggle, night dimming toggle + from/to times. Wired in `openSettings()` / `saveSettings()`; init armed from the `load` handler.
+
+**localStorage:** `fh_saver`, `fh_saverIdleMin`, `fh_saverDwellSec`, `fh_saverClock`, `fh_saverInfo`, `fh_saverNight`, `fh_saverNightStart`, `fh_saverNightEnd`, `fh_saverMode`, `fh_saverPondSound`, `fh_saverPondTap`
 
 **Mobile:** never activates under 640px — `resetSaverIdleTimer()`/`startScreensaver()` bail when `isMobile` (battery + OS lock screen); crossing the breakpoint re-arms/disarms via the resize handler. The Settings toggle governs desktop/kiosk only.
 
@@ -853,6 +862,9 @@ Secondary widgets (Budget, Chores, Word, Joke, Quotes, Countdown, News, Stock, A
 | `fh_saverNight` | bool | Screensaver | Night dimming (default true) |
 | `fh_saverNightStart` | string | Screensaver | Night window start `HH:MM` (default `22:00`) |
 | `fh_saverNightEnd` | string | Screensaver | Night window end `HH:MM` (default `06:30`, wraps midnight) |
+| `fh_saverMode` | string | Screensaver | `'photos'` (default) or `'pond'` |
+| `fh_saverPondSound` | bool | Screensaver | Pond audio on/off (default true) |
+| `fh_saverPondTap` | string | Screensaver | Pond tap behavior: `'play'` (default) or `'wake'` |
 | `fh_eventLocation` | string | Event Discovery | Default search location (default `'Rochester'`) |
 | `fh_eventMaxDistance` | number | Event Discovery | Max distance in minutes driving time (default 120) |
 | `fh_mobileTab` | string | Mobile (§20) | Current mobile tab — `'cal'` or any `MOBILE_TABS` key; invalid/disabled values bounce to `'cal'` |

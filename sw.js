@@ -10,7 +10,9 @@ const CACHE_NAME    = `family-hub-${CACHE_VERSION}`;
 // Tactile fonts (fonts/*.woff2) are deliberately not pre-cached: only the
 // Tactile flavor uses them, and the fetch handler runtime-caches them on
 // first use, so they stay offline-available without a ~184 KB install cost
-// for Basic-flavor clients.
+// for Basic-flavor clients. The Pond Chimes screensaver (pond/index.html +
+// pond/vendor/Tone.js, ~426 KB) is left out for the same reason — only the
+// pond screensaver mode loads it, and one run caches it for offline.
 const APP_SHELL = [
   '/family-hub.html',
   '/family-hub.css',
