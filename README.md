@@ -1,5 +1,18 @@
 # 🏠 Family Hub
 
+> A no-build family wall dashboard — Google Calendar, keyless weather, shared
+> shopping/to-do/budget, AI meal planning, chores and an ambient screensaver.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Build step: none](https://img.shields.io/badge/build%20step-none-brightgreen.svg)](#what-it-is)
+[![Vanilla JS](https://img.shields.io/badge/vanilla-JS%20%2B%20CDN-f7df1e.svg)](family-hub.js)
+[![PWA](https://img.shields.io/badge/PWA-installable-5a67d8.svg)](manifest.json)
+[![Deploys on Netlify](https://img.shields.io/badge/deploys%20on-Netlify-00C7B7.svg)](netlify.toml)
+
+**[Setup guide](family-hub-setup.md)** · **[Feature reference](FEATURES.md)** · **[Easter eggs](EASTER_EGGS.md)** · **[Architecture notes](CLAUDE.md)**
+
+---
+
 A wall-display family dashboard — calendar, weather, shopping, meals, chores and more — built as **three plain files** with no build step, no npm install, and no framework.
 
 `family-hub.html` + `family-hub.css` + `family-hub.js`. Drop them in a folder, serve them, done.
