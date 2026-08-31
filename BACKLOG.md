@@ -1,8 +1,81 @@
 # Family Hub — Feature Backlog
 
-*Last updated: 2026-07-06*
+*Last updated: 2026-08-31*
 
 Items are grouped by theme. Each entry notes the motivation and any known implementation approach.
+
+---
+
+## ⚠️ Pending from the 2026-08-31 branch audit
+
+This repo had **more branches than any other** — 19 besides `main`. Here's what
+each pile is.
+
+### PR #19 — mobile More-tab settings — needs a rebase-vs-redo call
+
+https://github.com/mattohara42/family-hub/pull/19 (draft)
+
+Branch `claude/mobile-ui-redesign-t6bmca` (2026-07-11, never had a PR): puts
+settings sections inline on the mobile **More** tab and drops the "Full
+Settings" hop. Confirmed still unlanded — `"Full Settings"` is present in two
+files on `main`.
+
+**Blocker:** conflicts in 4 files. The branch is 22 commits behind, and the
+mobile tab system was rewritten underneath it since (the registry-driven
+`MOBILE_TABS` work in `CLAUDE.md` §20). Probably cheaper to redo against the
+current registry than to resolve — but that's a judgement call, hence a draft.
+
+### Nine stale branches to delete
+
+Each is either content-identical to `main` or already merged via a PR:
+
+```
+git push origin --delete claude/budget-week-duplicate-fix              # was 5ad9de5
+git push origin --delete claude/budget-widget-add-button-acepox        # was 2e448ec
+git push origin --delete claude/claude-md-docs-wl3mm9                  # was 0776633
+git push origin --delete claude/event-timeout-auth-persistence-bum7ny  # was 6216c80
+git push origin --delete claude/family-calendar-usage-tro8k3           # was 5e9cc36
+git push origin --delete claude/github-repo-metadata-6lhq2s            # was a44df28
+git push origin --delete claude/meal-planning-style-consistency        # was 8386a86
+git push origin --delete claude/pond-chimes-family-hub-screensaver-f1jou5 # was 21a4146
+git push origin --delete claude/update-repo-metadata-nuh7kv            # was 7fd44aa
+```
+
+Five of these looked like unmerged bug fixes at first glance and are not —
+their work is already in `main`, landed via PRs #13, #14, #15 and others.
+Verified by merge-simulation: merging any of them produces a byte-identical
+tree. Spot-checks that confirm it — `scheduleTokenRefresh`/`ensureFreshToken`/
+`calFetch` are all in `family-hub.js` on `main`; the bills-on-calendar code the
+"duplicate fix" removes is already gone; the ResizeObserver guard is in both
+`family-hub.html` and `family-hub.js`.
+
+`claude/update-repo-metadata-nuh7kv` is PR #18, merged 2026-08-31 as `2bb6879`.
+`claude/claude-md-docs-wl3mm9` is a 2026-07-07 `CLAUDE.md` refresh, 40 commits
+behind — superseded many times over.
+
+Reversible: `git push origin <sha>:refs/heads/<branch>`.
+
+### Nine branches left alone deliberately
+
+`claude/claude-md-prompt-uqe0o4`, `claude/code-review-hshu11`,
+`claude/family-hub-architecture-gcmimu`, `claude/multi-day-events-8dz5nd`,
+`claude/project-state-hdPwC`, `feat/api-quick-wins`,
+`feat/event-discovery-frontend`, `feat/mobile-redesign`, `feat/tactile-flavor`.
+
+**Git finds no merge base between any of these and `main`** — the histories are
+unrelated, an artifact of a history rewrite rather than evidence of lost work.
+They report as 218–329 commits "ahead" while being 69 behind, which is
+meaningless. Several are near-certainly already shipped: `CLAUDE.md` describes
+the tactile flavor and the mobile redesign as live features.
+
+Untangling them needs a content-level comparison, not a git one. Left for a
+deliberate session rather than swept up with the hygiene.
+
+### One setting that prevents a recurrence
+
+**Settings → General → "Automatically delete head branches"** is off. Nearly
+every stale ref above exists because squash-merging rewrites the SHA and leaves
+the branch behind.
 
 ---
 
