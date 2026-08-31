@@ -38,7 +38,7 @@ git push origin --delete claude/family-calendar-usage-tro8k3           # was 5e9
 git push origin --delete claude/github-repo-metadata-6lhq2s            # was a44df28
 git push origin --delete claude/meal-planning-style-consistency        # was 8386a86
 git push origin --delete claude/pond-chimes-family-hub-screensaver-f1jou5 # was 21a4146
-git push origin --delete claude/update-repo-metadata-nuh7kv            # was 7fd44aa
+git push origin --delete claude/update-repo-metadata-nuh7kv            # was 3920e90
 ```
 
 Five of these looked like unmerged bug fixes at first glance and are not —
@@ -49,7 +49,12 @@ tree. Spot-checks that confirm it — `scheduleTokenRefresh`/`ensureFreshToken`/
 "duplicate fix" removes is already gone; the ResizeObserver guard is in both
 `family-hub.html` and `family-hub.js`.
 
-`claude/update-repo-metadata-nuh7kv` is PR #18, merged 2026-08-31 as `2bb6879`.
+`claude/update-repo-metadata-nuh7kv` carried **two** rounds: PR #18 (merged as
+`2bb6879`) and then a follow-up commit, "Make Open Graph and Twitter URLs
+absolute", merged as PR #20 (`6f90892`) later the same day. Its tip is now
+`3920e90`, and that content is in `main` too — still safe to delete, but note
+the SHA above is the *later* one. Restoring from the earlier `7fd44aa` would
+silently drop the absolute-URL fix.
 `claude/claude-md-docs-wl3mm9` is a 2026-07-07 `CLAUDE.md` refresh, 40 commits
 behind — superseded many times over.
 
