@@ -14,16 +14,20 @@
   <!-- A private household display, not a public page — keep it out of search indexes. -->
   <meta name="robots" content="noindex, nofollow" />
 
-  <!-- Link previews (iMessage, Slack, etc.). og:url is deliberately absent: the
-       deploy origin differs per install, and a wrong absolute URL is worse than
-       none. Image paths are relative for the same reason — set them absolute if
-       you want previews to resolve on every scraper. -->
+  <!-- Link previews (iMessage, Slack, etc.). These URLs must be absolute: the
+       Open Graph spec requires it, and scrapers fetch the page out of context,
+       so a relative path has nothing to resolve against. The origin below is
+       this project's deploy (also set as the repo's homepage) — change it if
+       you serve Family Hub somewhere else, or previews will point at a site
+       that isn't yours. Nothing at runtime reads these; they are for scrapers
+       only, so localhost and LAN serving are unaffected. -->
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Family Hub" />
+  <meta property="og:url" content="https://familial.netlify.app/family-hub.html" />
   <meta property="og:title" content="Family Hub" />
   <meta property="og:description"
         content="A no-build family wall dashboard: calendar, weather, shopping, meals, chores and an ambient screensaver." />
-  <meta property="og:image" content="icon-512.png" />
+  <meta property="og:image" content="https://familial.netlify.app/icon-512.png" />
   <meta property="og:image:width" content="512" />
   <meta property="og:image:height" content="512" />
   <meta property="og:image:alt" content="Family Hub icon — a blue house on a dark background" />
@@ -31,7 +35,7 @@
   <meta name="twitter:title" content="Family Hub" />
   <meta name="twitter:description"
         content="A no-build family wall dashboard: calendar, weather, shopping, meals, chores and an ambient screensaver." />
-  <meta name="twitter:image" content="icon-512.png" />
+  <meta name="twitter:image" content="https://familial.netlify.app/icon-512.png" />
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="manifest" href="manifest.json">
