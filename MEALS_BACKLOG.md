@@ -2,13 +2,13 @@
 
 *Enhancement ideas for the Meal Planning feature (planner modal, week/day meal strips, and the meal detail popup). Constraints: Gemini API (Meals key), three-file no-build architecture, CDN only, free/keyless external services preferred.*
 
-Last updated: 2026-07-06
+Last updated: 2026-09-01
 
 ---
 
 ## Already Shipped (for reference)
 
-AI meal suggestions (per-meal-type + "all") · accept to plan · add ingredients to shopping · week-strip + day-chip display · remove buttons · **meal detail popup** (click a planned meal → photo, details, Keep / Adjust / Delete; Adjust re-generates via AI with presets + free-text).
+AI meal suggestions (per-meal-type + "all") · accept to plan · add ingredients to shopping · week-strip + day-chip display · remove buttons · **meal detail popup** (click a planned meal → photo, details, Keep / Adjust / Delete; Adjust re-generates via AI with presets + free-text) · manual entry + **Recipe Box** · **import a recipe from a URL** (schema.org/Recipe — NYT Cooking, AllRecipes, food blogs).
 
 **Key functions:** `openMealModal`, `generateMealSuggestions`, `callMealAI`, `openMealDetail`, `adjustMeal`, `fetchMealImage` in `family-hub.js`.
 
@@ -32,23 +32,24 @@ AI meal suggestions (per-meal-type + "all") · accept to plan · add ingredients
 
 ---
 
-## Priority 2 — Import recipe from URL (schema.org/Recipe)
+## ~~Priority 2 — Import recipe from URL (schema.org/Recipe)~~ ✅ SHIPPED 2026-09-01
 
-**What:** Paste a recipe URL → pull the dish name + ingredients (and optionally instructions) into the meal plan, and push ingredients to the shopping list (the Meals feature already does ingredients→shopping). Works for **any** site that emits `schema.org/Recipe` JSON-LD — NYT Cooking, AllRecipes, Serious Eats, food blogs — so it's a generic importer, not an NYT-specific integration. Motivated by "add content from our NYT Cooking account."
+**What shipped:** Paste a recipe URL in the Add-a-Meal modal's **📖 Recipe Box** tab → the dish name, ingredients, instructions, photo, servings and total time are parsed and stored in our own `recipeBox` database, then either saved for later or dropped straight into the open meal slot. Ingredients flow to the shopping list through the existing path. Generic by design — **any** site emitting `schema.org/Recipe` JSON-LD works; NYT Cooking was the motivating case, not a special case.
 
-**Feasibility — PROVEN (probe 2026-07-06):** unauthenticated server-side fetches of NYT Cooking recipe pages (`cooking.nytimes.com/recipes/...`) returned HTTP 200 with the full `schema.org/Recipe` JSON-LD intact — title, all ingredients, and instructions — **even though `isAccessibleForFree: false`** (paywalled). The paywall gates the human-facing render, not the structured metadata. So a proxy fetch + JSON-LD parse gets everything Meals needs.
+**Where it lives:**
+- `netlify/functions/recipe.js` — server-side fetch + JSON-LD parse. `GET ?url=<encoded>` → `{ok:true, recipe}` / `422 {ok:false,error:'no-recipe'}`. Browser-like User-Agent, 15s timeout, 5MB cap, content-type check, hostname SSRF guard (same pattern as `ics.js`/`news.js`).
+- `tests/recipe.test.js` — 50 offline cases: every JSON-LD shape in the wild (`@type` string vs array, `@graph`/`mainEntity` nesting, `HowToStep`/`HowToSection` instructions, ISO-8601 durations, `ImageObject`), plus handler paths with `global.fetch` stubbed.
+- `family-hub.js` — `importRecipeFromUrl()`, `renderRecipeImportPreview()`, `saveImportedRecipe()`, `useImportedRecipe()`, `recipeToMeal()`, `recipeExtras()`; the `recipeBox` record gained optional `instructions`/`sourceUrl`/`sourceName`/`image`/`servings`/`totalTime`/`author`/`cuisine`/`paywalled` fields.
+- `#mealDetailSteps` — collapsed instructions block in the meal detail popup.
 
-**Approach:**
-- **Fetch** via a small Netlify function (same pattern as `ics.js` / `news.js`) — browsers can't fetch cross-origin recipe pages directly. Send a browser-like User-Agent.
-- **Parse:** extract `<script type="application/ld+json">` blocks, find the object whose `@type` is `Recipe` (may be nested in an array or `@graph`), read `name` + `recipeIngredient[]` (+ `recipeInstructions`). ~20 lines, no dependency.
-- **Wire into Meals:** new "Import from URL" affordance in the meal planner → prefill a planned meal (`setMealInFs` with name/ingredients/description) → existing "add ingredients to shopping" applies.
+**Feasibility — PROVEN (probe 2026-07-06):** unauthenticated server-side fetches of NYT Cooking recipe pages (`cooking.nytimes.com/recipes/...`) returned HTTP 200 with the full `schema.org/Recipe` JSON-LD intact — title, all ingredients, and instructions — **even though `isAccessibleForFree: false`** (paywalled). The paywall gates the human-facing render, not the structured metadata.
 
-**Caveats / must-handle:**
-- **Fragile external dependency** — this is undocumented page behavior, not a contract; NYT could gate the JSON-LD anytime. Degrade gracefully: if no parseable `Recipe` is found, show "couldn't read a recipe from that link" and fall back to manual entry.
-- **Personal use / ToS** — one-off imports of recipes the user is entitled to, not bulk scraping. No auto-sync of a whole NYT Recipe Box (no API exists for that).
-- Respect CSP; keep the fetch server-side. Store the source URL on the meal for reference.
+**⚠️ Not re-verified live since the probe.** The implementing session (2026-09-01) could not reach `cooking.nytimes.com` — the sandbox egress policy blocked the host on both available network paths — so the parser was built and tested against fixtures shaped like the recorded probe output. **First real NYT paste is the live confirmation.** If NYT has since gated the JSON-LD, the symptom is a clean "couldn't read a recipe from that link", not a crash.
 
-**Acceptance:** Pasting an NYT Cooking (and a non-NYT) recipe URL populates a planned meal's name + ingredients; ingredients export to shopping; an unparseable URL fails cleanly to manual entry.
+**Known limits (by design):**
+- **Fragile external dependency** — undocumented page behavior, not a contract. Degrades to `no-recipe` → "Type It In".
+- **Personal use / ToS** — one-off imports of recipes you're entitled to, not bulk scraping. **No auto-sync of a whole NYT Recipe Box — no API exists for that**, and reaching a saved-recipe collection would mean authenticating as the user and scraping a logged-in page. Out of scope.
+- **Netlify-only** — like the ICS proxy, import needs the functions running (`netlify dev` on :8888 or the deployed site). Plain `python3 -m http.server` gets a clear message saying so, not a silent failure.
 
 ---
 

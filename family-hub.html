@@ -43,7 +43,7 @@
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self';
                  script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com https://accounts.google.com https://unpkg.com;
-                 connect-src https: http://localhost:8888;
+                 connect-src 'self' https: http://localhost:8888;
                  img-src 'self' https: blob: data:;
                  style-src 'self' 'unsafe-inline' https://unpkg.com;
                  font-src 'self' data:;
@@ -1356,6 +1356,20 @@
                oninput="renderRecipeBoxPicker()" />
         <div id="recipeBoxPickList" style="max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:6px"></div>
       </div>
+
+      <!-- Import from a recipe link (any site publishing schema.org/Recipe) -->
+      <div class="field" style="border-top:1px solid rgba(128,128,128,.18);padding-top:14px;margin-top:4px">
+        <label for="recipeImportUrl">🔗 Import from a recipe link</label>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <input type="url" id="recipeImportUrl" style="flex:1" inputmode="url"
+                 placeholder="Paste a recipe URL — NYT Cooking, AllRecipes, a food blog…"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();importRecipeFromUrl()}" />
+          <button class="btn btn-sm btn-secondary" id="recipeImportBtn"
+                  onclick="importRecipeFromUrl()" type="button">Import</button>
+        </div>
+        <div id="recipeImportStatus" style="font-size:.78rem;color:var(--muted);min-height:1px"></div>
+        <div id="recipeImportPreview" style="display:none;margin-top:8px"></div>
+      </div>
     </div>
 
     <div class="modal-actions" style="margin-top:10px">
@@ -1384,6 +1398,7 @@
     <p class="meal-detail-desc" id="mealDetailDesc"></p>
     <div class="meal-detail-healthy" id="mealDetailHealthy"></div>
     <div class="meal-detail-ingredients" id="mealDetailIngredients"></div>
+    <div class="meal-detail-steps" id="mealDetailSteps" style="display:none"></div>
     <a id="mealDetailRecipe" href="#" target="_blank" rel="noopener"
        class="btn btn-sm btn-secondary" style="text-decoration:none;display:none;margin-top:10px">📖 View recipe ↗</a>
 

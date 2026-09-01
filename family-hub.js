@@ -6485,6 +6485,7 @@ function openMealModal(dateKey, mealType) {
   document.getElementById('manualMealTypeSelect').value = mealType === 'all' ? 'dinner' : mealType;
   renderManualIngredientList();
   document.getElementById('recipeBoxSearch').value = '';
+  clearRecipeImport();
   renderRecipeBoxPicker();
 
   selectMealModalTab('ai');
@@ -7584,10 +7585,37 @@ function renderMealTemplateList() {
   });
 }
 
-// ── Recipe Box (manually-entered, reusable dishes) ─────────────
+// ── Recipe Box (manually-entered + imported reusable dishes) ───
 
-async function saveRecipeBoxItem(name, ingredients) {
-  const item = { name, ingredients, createdAt: new Date().toISOString().slice(0, 10) };
+// Optional fields a recipe may carry beyond {name, ingredients}. Imported
+// recipes fill these in; hand-typed ones leave them empty. Firestore rejects
+// `undefined`, and empty values would only bloat the doc, so `recipeExtras()`
+// keeps whichever are actually populated and drops the rest.
+const RECIPE_EXTRA_FIELDS = [
+  'instructions', 'description', 'image', 'sourceUrl', 'sourceName',
+  'servings', 'totalTime', 'author', 'cuisine', 'paywalled',
+];
+
+/** Pick the populated optional fields off a recipe-shaped object. */
+function recipeExtras(src) {
+  const out = {};
+  if (!src) return out;
+  for (const k of RECIPE_EXTRA_FIELDS) {
+    const v = src[k];
+    if (v == null || v === '' || v === false) continue;
+    if (Array.isArray(v) && !v.length) continue;
+    out[k] = v;
+  }
+  return out;
+}
+
+async function saveRecipeBoxItem(name, ingredients, extra) {
+  const item = {
+    name,
+    ingredients,
+    ...recipeExtras(extra),
+    createdAt: new Date().toISOString().slice(0, 10),
+  };
   if (db) {
     await db.collection('recipeBox').add(item).catch(_fsWriteError);
   } else {
@@ -7611,6 +7639,22 @@ async function deleteRecipeBoxItem(id) {
   }
 }
 
+/** Recipe record → the meal record `setMealInFs` stores, carrying imported content through. */
+function recipeToMeal(r) {
+  const meal = {
+    name: r.name,
+    description: r.description || '',
+    ingredients: r.ingredients || [],
+    ...recipeExtras(r),
+  };
+  // The meal detail popup reads `recipeUrl` for its "View recipe ↗" link and
+  // `prepTime` for the ⏱ chip; the Recipe Box stores them under its own names.
+  if (r.sourceUrl) meal.recipeUrl = r.sourceUrl;
+  if (r.totalTime) meal.prepTime  = r.totalTime;
+  delete meal.paywalled;               // a storage detail, not meal content
+  return meal;
+}
+
 // Adds a saved recipe straight to the meal slot the modal is currently open for.
 async function useRecipeBoxItem(id) {
   const r = recipeBox.find(x => x.id === id);
@@ -7618,7 +7662,144 @@ async function useRecipeBoxItem(id) {
   const mealType = _mealType === 'all'
     ? document.getElementById('manualMealTypeSelect').value
     : _mealType;
-  await setMealInFs(_mealDate, mealType, { name: r.name, description: '', ingredients: r.ingredients || [] });
+  await setMealInFs(_mealDate, mealType, recipeToMeal(r));
+  closeMealModal();
+}
+
+// ── Import a recipe from a URL (schema.org/Recipe) ─────────────
+//
+// Any site that emits Recipe JSON-LD works — NYT Cooking, AllRecipes, Serious
+// Eats, food blogs. The fetch runs server-side in /.netlify/functions/recipe
+// because browsers can't fetch cross-origin recipe pages. Nothing here is
+// NYT-specific; NYT Cooking is just the case that motivated it.
+
+let _pendingRecipeImport = null;   // last successfully parsed recipe, awaiting Save/Use
+
+function _recipeImportStatus(html, tone) {
+  const el = document.getElementById('recipeImportStatus');
+  if (!el) return;
+  const color = tone === 'error' ? 'var(--red)' : tone === 'ok' ? 'var(--green)' : 'var(--muted)';
+  el.style.color = color;
+  el.innerHTML = html;
+}
+
+async function importRecipeFromUrl() {
+  const input = document.getElementById('recipeImportUrl');
+  const btn   = document.getElementById('recipeImportBtn');
+  if (!input) return;
+  const url = input.value.trim();
+  if (!url) { input.focus(); return; }
+  if (!/^https?:\/\//i.test(url)) {
+    _recipeImportStatus('That doesn\'t look like a web address — paste the full link, starting with https://', 'error');
+    return;
+  }
+
+  _pendingRecipeImport = null;
+  document.getElementById('recipeImportPreview').style.display = 'none';
+  if (btn) btn.disabled = true;
+  _recipeImportStatus('Reading that recipe…');
+
+  // Served from plain `python3 -m http.server` the function doesn't exist, so a
+  // 404 HTML page comes back instead of JSON. Distinguish that (and a truly
+  // unreachable importer) from a page we simply couldn't parse a recipe out of.
+  const missingFnHint = 'Import needs the Netlify functions — run <code>netlify dev</code> (port 8888) or use the deployed site.';
+  const isLocalStatic = location.hostname === 'localhost' && location.port !== '8888';
+
+  let res, body;
+  try {
+    res  = await fetch(`/.netlify/functions/recipe?url=${encodeURIComponent(url)}`, { cache: 'no-store' });
+    body = await res.text();
+  } catch {
+    if (btn) btn.disabled = false;
+    _recipeImportStatus(isLocalStatic ? missingFnHint
+      : 'Couldn\'t reach the importer. Check your connection and try again.', 'error');
+    return;
+  }
+  if (btn) btn.disabled = false;
+
+  let data = null;
+  try { data = JSON.parse(body); } catch { /* not JSON — handled below */ }
+
+  if (!data) {
+    _recipeImportStatus(res.status === 404 || isLocalStatic ? missingFnHint
+      : `The importer returned an unexpected response (HTTP ${res.status}).`, 'error');
+    return;
+  }
+
+  if (!res.ok || !data.ok) {
+    const code = data.error;
+    _recipeImportStatus(code === 'no-recipe'
+      ? 'Couldn\'t read a recipe from that link — the page may not publish recipe data. Try “Type It In” instead.'
+      : esc(String(code || `Import failed (HTTP ${res.status})`)), 'error');
+    return;
+  }
+
+  _pendingRecipeImport = data.recipe;
+  renderRecipeImportPreview();
+  _recipeImportStatus('');
+}
+
+function renderRecipeImportPreview() {
+  const wrap = document.getElementById('recipeImportPreview');
+  if (!wrap) return;
+  const r = _pendingRecipeImport;
+  if (!r) { wrap.style.display = 'none'; wrap.innerHTML = ''; return; }
+
+  const bits = [];
+  if (r.sourceName) bits.push(esc(r.sourceName));
+  if (r.servings)   bits.push(esc(r.servings));
+  if (r.totalTime)  bits.push(`⏱ ${r.totalTime} min`);
+  bits.push(`${r.ingredients.length} ingredient${r.ingredients.length === 1 ? '' : 's'}`);
+  if (r.instructions.length) bits.push(`${r.instructions.length} step${r.instructions.length === 1 ? '' : 's'}`);
+
+  wrap.innerHTML = `
+    <div class="recipe-import-card">
+      ${r.image ? `<img class="recipe-import-thumb" src="${esc(safeUrl(r.image))}" alt="" onerror="this.remove()" />` : ''}
+      <div class="recipe-import-body">
+        <div class="recipe-import-name">${esc(r.name || 'Untitled recipe')}</div>
+        <div class="recipe-import-meta">${bits.join(' · ')}</div>
+        ${r.ingredients.length
+          ? `<div class="recipe-import-ings">${esc(r.ingredients.slice(0, 4).join(', '))}${r.ingredients.length > 4 ? '…' : ''}</div>`
+          : '<div class="recipe-import-ings">No ingredients found on that page.</div>'}
+      </div>
+    </div>
+    <div class="recipe-import-actions">
+      <button class="btn btn-sm btn-secondary" onclick="saveImportedRecipe()">📖 Save to Recipe Box</button>
+      <button class="btn btn-sm btn-primary"   onclick="useImportedRecipe()">+ Use for this meal</button>
+      <button class="btn btn-sm" onclick="clearRecipeImport()">Cancel</button>
+    </div>`;
+  wrap.style.display = '';
+}
+
+function clearRecipeImport() {
+  _pendingRecipeImport = null;
+  const wrap = document.getElementById('recipeImportPreview');
+  if (wrap) { wrap.style.display = 'none'; wrap.innerHTML = ''; }
+  const input = document.getElementById('recipeImportUrl');
+  if (input) input.value = '';
+  _recipeImportStatus('');
+}
+
+async function saveImportedRecipe() {
+  const r = _pendingRecipeImport;
+  if (!r) return;
+  await saveRecipeBoxItem(r.name || 'Untitled recipe', r.ingredients || [], r);
+  clearRecipeImport();
+  _recipeImportStatus('✓ Saved to your Recipe Box.', 'ok');
+  renderRecipeBoxPicker();
+  renderRecipeBoxList();
+}
+
+/** Save the import, then drop it straight into the slot the modal is open for. */
+async function useImportedRecipe() {
+  const r = _pendingRecipeImport;
+  if (!r) return;
+  const mealType = _mealType === 'all'
+    ? document.getElementById('manualMealTypeSelect').value
+    : _mealType;
+  await saveRecipeBoxItem(r.name || 'Untitled recipe', r.ingredients || [], r);
+  await setMealInFs(_mealDate, mealType, recipeToMeal(r));
+  clearRecipeImport();
   closeMealModal();
 }
 
@@ -7629,7 +7810,7 @@ function renderRecipeBoxPicker() {
   const matches = recipeBox.filter(r => !q || r.name.toLowerCase().includes(q));
   wrap.innerHTML = '';
   if (!recipeBox.length) {
-    wrap.innerHTML = '<div style="color:var(--muted);font-size:.8rem;padding:4px 0">No saved recipes yet — add a meal below and check "Save to Recipe Box."</div>';
+    wrap.innerHTML = '<div style="color:var(--muted);font-size:.8rem;padding:4px 0">No saved recipes yet — import one from a link below, or add a meal and check "Save to Recipe Box."</div>';
     return;
   }
   if (!matches.length) {
@@ -7642,7 +7823,8 @@ function renderRecipeBoxPicker() {
     const info = document.createElement('div');
     info.style.cssText = 'flex:1;min-width:0';
     const ingStr = (r.ingredients || []).join(', ');
-    info.innerHTML = `<div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.name)}</div>
+    const badge  = r.sourceName ? `<span class="recipe-src-badge">${esc(r.sourceName)}</span>` : '';
+    info.innerHTML = `<div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.name)}${badge}</div>
       <div style="font-size:.73rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(ingStr)}</div>`;
     const useBtn = document.createElement('button');
     useBtn.className = 'btn btn-sm btn-primary';
@@ -7667,8 +7849,16 @@ function renderRecipeBoxList() {
     row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--surface2);border-radius:8px';
     const info = document.createElement('div');
     info.style.cssText = 'flex:1;min-width:0';
-    info.innerHTML = `<div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.name)}</div>
-      <div style="font-size:.73rem;color:var(--muted)">${r.createdAt} · ${(r.ingredients||[]).length} ingredient${(r.ingredients||[]).length !== 1 ? 's' : ''}</div>`;
+    const nIng   = (r.ingredients || []).length;
+    const nSteps = (r.instructions || []).length;
+    const meta   = [r.createdAt, `${nIng} ingredient${nIng !== 1 ? 's' : ''}`];
+    if (nSteps) meta.push(`${nSteps} step${nSteps !== 1 ? 's' : ''}`);
+    const srcLink = r.sourceUrl
+      ? ` · <a href="${esc(safeUrl(r.sourceUrl))}" target="_blank" rel="noopener" style="color:var(--accent)">source ↗</a>`
+      : '';
+    const badge = r.sourceName ? `<span class="recipe-src-badge">${esc(r.sourceName)}</span>` : '';
+    info.innerHTML = `<div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.name)}${badge}</div>
+      <div style="font-size:.73rem;color:var(--muted)">${esc(meta.join(' · '))}${srcLink}</div>`;
     const delBtn = document.createElement('button');
     delBtn.className = 'btn btn-sm';
     delBtn.style.cssText = 'color:var(--red);background:none;border:1px solid rgba(255,255,255,.15);padding:3px 8px';
@@ -7810,13 +8000,29 @@ function openMealDetail(dateKey, mealType) {
   if (meal.ingredients && meal.ingredients.length) { ingEl.textContent = '🧅 ' + meal.ingredients.join(', '); ingEl.style.display = ''; }
   else ingEl.style.display = 'none';
 
+  // Imported recipes carry their method; AI-suggested ones don't. Collapsed by
+  // default so a long recipe doesn't push the buttons off a wall-panel screen.
+  const stepsEl = document.getElementById('mealDetailSteps');
+  if (stepsEl) {
+    const steps = meal.instructions || [];
+    if (steps.length) {
+      stepsEl.innerHTML = `<details><summary>👩‍🍳 Instructions (${steps.length} step${steps.length === 1 ? '' : 's'})</summary>
+        <ol>${steps.map(s => `<li>${esc(s)}</li>`).join('')}</ol></details>`;
+      stepsEl.style.display = '';
+    } else {
+      stepsEl.innerHTML = '';
+      stepsEl.style.display = 'none';
+    }
+  }
+
   const recipeEl  = document.getElementById('mealDetailRecipe');
   const recipeUrl = meal.recipeUrl
     || (meal.recipeSite ? (RECIPE_SITES[meal.recipeSite] || RECIPE_SITES.allrecipes).url(meal.recipeSearchQuery || meal.name) : '');
   if (recipeUrl) {
     const site = RECIPE_SITES[meal.recipeSite];
     recipeEl.href = safeUrl(recipeUrl);
-    recipeEl.textContent = `📖 ${site ? site.name : 'View recipe'} ↗`;
+    // Imported recipes know their own source; AI-suggested ones only name a site.
+    recipeEl.textContent = `📖 ${meal.sourceName || (site ? site.name : 'View recipe')} ↗`;
     recipeEl.style.display = '';
   } else recipeEl.style.display = 'none';
 
