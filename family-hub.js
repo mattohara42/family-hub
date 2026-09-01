@@ -7922,15 +7922,25 @@ async function saveManualMeal() {
 const MEAL_DETAIL_LABELS = { breakfast:'🌅 Breakfast', lunch:'☀️ Lunch', dinner:'🌙 Dinner' };
 const MEAL_DETAIL_EMOJI  = { breakfast:'🍳', lunch:'🥪', dinner:'🍽' };
 
+/** Foods TheMealDB is worth asking about by name alone — proteins and dish forms, not
+ *  cookware ("skillet", "sheet pan") or garnishes. The trailing `(?:e?s)?` matches plurals,
+ *  which is most of what AI names actually say: "Meatballs", "Refried Beans", "Potatoes". */
+const MEAL_MAIN_NOUN = /\b(chicken|beef|steak|meatloaf|meatball|pork|bacon|ham|sausage|lamb|turkey|duck|salmon|tuna|shrimp|prawn|cod|tilapia|scallop|crab|lobster|fish|lasagna|spaghetti|linguine|ravioli|gnocchi|pasta|noodle|risotto|paella|rice|pizza|burger|taco|burrito|enchilada|quesadilla|curry|chowder|stew|soup|chili|casserole|stir[-\s]?fry|salad|sandwich|wrap|omelette|omelet|frittata|pancake|waffle|tofu|chickpea|lentil|bean|potato|mushroom|eggplant|broccoli|cauliflower)(?:e?s)?\b/i;
+
 /** Best-effort dish photo. Returns { url, stock } where stock=true means a representative image.
- *  Pass 1: exact TheMealDB name. Pass 2: simplified name. Pass 3: LoremFlickr fallback. */
+ *  Pass 1: exact TheMealDB name. Pass 2: simplified name. Pass 2b: main food noun.
+ *  Pass 3: LoremFlickr fallback. */
 async function fetchMealImage(name) {
   const key = (name || '').toLowerCase().trim();
   if (!key) return null;
   if (key in _mealImgCache) return _mealImgCache[key];
 
-  // Helper: one TheMealDB lookup
+  // Helper: one TheMealDB lookup. Skips a query an earlier pass already spent.
+  const tried = new Set();
   const dbLookup = async q => {
+    const qk = (q || '').toLowerCase().trim();
+    if (!qk || tried.has(qk)) return null;
+    tried.add(qk);
     try {
       const r = await fetch(`https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(q)}`);
       const d = await r.json();
@@ -7952,8 +7962,23 @@ async function fetchMealImage(name) {
     }
   }
 
+  // Pass 2b: main ingredient / dish noun. The adjective list above stops at the first
+  // word it doesn't know, so cuisines and one-off modifiers ("Cajun", "Honey") used to
+  // sink the whole retry. Search from the food noun to the end, then the noun alone:
+  // "Creamy Tuscan Chicken Skillet" → "Chicken Skillet" → "Chicken". A noun match is a
+  // photo of the right food but not of this dish, so it counts as representative.
+  let representative = false;
+  if (!thumb) {
+    const m = name.match(MEAL_MAIN_NOUN);
+    if (m) {
+      thumb = await dbLookup(name.slice(m.index).trim());
+      if (!thumb) thumb = await dbLookup(m[0]);
+      representative = !!thumb;
+    }
+  }
+
   if (thumb) {
-    const result = { url: thumb, stock: false };
+    const result = { url: thumb, stock: representative };
     _mealImgCache[key] = result;
     return result;
   }
