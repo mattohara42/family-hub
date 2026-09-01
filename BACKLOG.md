@@ -1,6 +1,6 @@
 # Family Hub — Feature Backlog
 
-*Last updated: 2026-08-31*
+*Last updated: 2026-09-01*
 
 Items are grouped by theme. Each entry notes the motivation and any known implementation approach.
 
@@ -170,6 +170,24 @@ Allow a to-do item to have child items (sub-tasks). Collapsible in the list view
 
 ### ~~Shopping list categories~~ ✅ Done
 Items are tagged with a category (Produce, Dairy, Frozen, etc.) when added and grouped by aisle in the list view. Categories are collapsible and manageable in Settings → Shopping.
+
+### 📱 SMS delivery silently does nothing on a Raspberry Pi wall panel
+**Priority: Medium** — a live defect on the Pi, not just a missing feature.
+
+`sendToContact()` (`family-hub.js:9917`) builds an `sms:<number>?&body=…` URI and clicks a synthesised `<a>`. That works only because iOS / Android / macOS register an OS handler for the `sms:` scheme. **Raspberry Pi OS + Chromium registers none** — the click is swallowed with no error, no toast, no navigation. The popover opens, contacts render, you tap a name, nothing happens. It reads as a broken button.
+
+The Pi is only a browser here, so anything server-side stays reachable exactly as it is from a phone — the deployed Netlify functions included.
+
+Options, cheapest first:
+
+1. **QR code in the popover** *(recommended first step)* — render the same `sms:` URI as a QR; whoever is standing at the panel scans it and their own Messages app opens prefilled. Keyless, works offline, no new service, and it suits a wall panel: no keyboard, but everyone at it has a camera. Needs a CDN QR library that satisfies the CSP in `family-hub.html`, or a hand-rolled SVG encoder.
+2. **`netlify/functions/sms.js` + Twilio** — credentials as env vars like `GEMINI_KEY`; client POSTs `{to, body}`. Real SMS from any device. Two conditions: **validate the recipient server-side against known family-member phone numbers** — `getSmsContacts()` (`family-hub.js:326`) is client-side only, and without a server-side check the function is an open SMS relay — and budget for A2P 10DLC registration on US numbers. Small but non-zero recurring cost.
+3. **ntfy / Pushover push instead of SMS** — free, publishes with a plain POST, no function needed; much closer to the repo's keyless preference. But recipients need the app installed, and it isn't SMS.
+4. **Email-to-SMS gateways** (`number@vtext.com`) — free, but carrier-specific and increasingly filtered. Not recommended.
+
+**Don't try to auto-detect the missing handler** — browsers give no reliable signal for an unregistered scheme. Gate it instead: `isMobile` already exists and a Pi is never mobile, so a Settings → Family delivery-method control (`device handler` / `server` / `QR`) defaulting by platform is the clean version.
+
+**Framing note:** the feature as built assumes you want to text *someone else*. On a wall panel the commoner want is "send this list to my own phone" — which argues for option 1 or 3 over 2.
 
 ---
 
