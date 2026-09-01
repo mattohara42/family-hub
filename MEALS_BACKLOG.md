@@ -64,6 +64,41 @@ Added **pass 2b**: search from the main food noun (`MEAL_MAIN_NOUN` — proteins
 
 ---
 
+## Priority 3 — Send ingredients to a grocery cart (Instacart → Wegmans)
+
+*Raised 2026-09-01 ("can we send ingredients to the Wegmans app?"). Researched, not started.*
+
+**Short answer: not to the Wegmans app directly — Instacart is the only supported road into a Wegmans cart.**
+
+### Why not Wegmans directly
+
+`developer.wegmans.io` / `dev.wegmans.io` are live, but they serve **Wegmans Enterprise APIs** behind a sign-in — a vendor/partner portal, not self-serve developer access. The older public `api.wegmans.io` (product search, ~2018) is gone, there is no documented public cart or list-write endpoint, and no published deep-link scheme for the Wegmans app. Nothing to integrate against.
+
+### The Instacart path
+
+Wegmans has been an Instacart retailer since 2017 (delivery, pickup, EBT SNAP, loyalty integration), so an Instacart cart *is* a Wegmans cart. Two Developer Platform endpoints are relevant:
+
+| Endpoint | Fit |
+|---|---|
+| `POST https://connect.instacart.com/idp/v1/products/products_link` — **create shopping list page** | The shopping list, or one meal's ingredients. Body is an array of `line_items` (product name is the minimum); returns a shareable URL. Opening it lets the shopper pick a store and fill a cart. |
+| **create recipe page** | Maps nearly one-to-one onto a `recipeBox` record — name, image, servings, ingredients, instructions, link back to source. |
+
+**Where it would live**
+
+- `netlify/functions/instacart.js` — server-side, `INSTACART_KEY` as a Netlify env var, same shape as `ai.js` / `recipe.js`. The key must never reach the client.
+- `family-hub.js` — a "🛒 Send to Instacart" action beside the existing `📱 SMS ▾` button in `#shopCard`, and in the meal detail popup next to `addMealIngredients()` (`family-hub.js:7408`).
+- **Ingredient scrub (the risky part).** `addIngredientsToShopping()` (`family-hub.js:7388`) stores free text straight from the recipe parser — `"2 tbsp olive oil"`. Instacart matches on *product names*, so quantities and units want stripping first. We store no structured qty field, so this is new parsing work and the most likely source of disappointing matches.
+
+### ⚠️ Open questions — resolve before scheduling this
+
+- **Key access is neither keyless nor guaranteed.** Signup requires 18+ and a registered business or US/CA residency, and some docs still route key issuance through "contact your Instacart representative." That breaks this repo's free/keyless-services preference — a deliberate exception if we take it.
+- **Retailer preselect is unconfirmed.** The docs describe the shopper choosing a store *when they open the link*. Whether a request can hint or pin Wegmans is unknown: `docs.instacart.com` was blocked by the research session's sandbox egress proxy (the same wall the meal-photo and NYT probes hit). **Read the endpoint reference from an unrestricted machine first.** If the store can't be pinned, this is a "send to Instacart" feature, not "send to Wegmans", and should be named that way in the UI.
+- **Netlify-only, like recipe import.** Under plain `python3 -m http.server` the function doesn't exist; the UI must say so rather than look broken — `importRecipeFromUrl()` already models that degradation.
+
+**Sources:** [Instacart Developer Platform](https://docs.instacart.com/developer_platform_api) · [create shopping list page](https://docs.instacart.com/developer_platform_api/api/products/create_shopping_list_page) · [Wegmans Enterprise APIs](https://developer.wegmans.io/) · [Wegmans on Instacart](https://www.instacart.com/store/wegmans/storefront)
+
+---
+
 ## Notes & Constraints
 
 - **Keyless/free external services only** for images (TheMealDB, LoremFlickr). Respect the CSP in `family-hub.html` (`img-src`, `connect-src`).
