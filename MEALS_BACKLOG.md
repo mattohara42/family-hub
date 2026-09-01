@@ -8,27 +8,38 @@ Last updated: 2026-09-01
 
 ## Already Shipped (for reference)
 
-AI meal suggestions (per-meal-type + "all") · accept to plan · add ingredients to shopping · week-strip + day-chip display · remove buttons · **meal detail popup** (click a planned meal → photo, details, Keep / Adjust / Delete; Adjust re-generates via AI with presets + free-text) · manual entry + **Recipe Box** · **import a recipe from a URL** (schema.org/Recipe — NYT Cooking, AllRecipes, food blogs).
+AI meal suggestions (per-meal-type + "all") · accept to plan · add ingredients to shopping · week-strip + day-chip display · remove buttons · **meal detail popup** (click a planned meal → photo, details, Keep / Adjust / Delete; Adjust re-generates via AI with presets + free-text) · manual entry + **Recipe Box** · **import a recipe from a URL** (schema.org/Recipe — NYT Cooking, AllRecipes, food blogs) · **multi-pass dish photos** (TheMealDB exact → adjective-stripped → main food noun → labelled stock fallback, exact matches persisted).
 
-**Key functions:** `openMealModal`, `generateMealSuggestions`, `callMealAI`, `openMealDetail`, `adjustMeal`, `fetchMealImage` in `family-hub.js`.
+**Key functions:** `openMealModal`, `generateMealSuggestions`, `callMealAI`, `openMealDetail`, `adjustMeal`, `fetchMealImage`, `persistMealImage` in `family-hub.js`.
 
 ---
 
-## Priority 1 — Higher meal-photo hit rate  ⭐ NEXT UP
+## ~~Priority 1 — Higher meal-photo hit rate~~ ✅ SHIPPED
 
-**Problem:** The detail popup fetches dish photos from **TheMealDB** (free, keyless), which only matches its ~300 known dishes. Most AI-generated meal names (e.g. "Creamy Tuscan Chicken Skillet") return no match and fall back to the emoji placeholder, so photos appear less often than would be ideal.
+*Landed in two parts. Options **1**, **2** and **3** from the original plan all shipped; option 4 (AI-supplied image URLs) stays rejected — model-supplied URLs are routinely hallucinated.*
 
-**Already in place:** `openMealDetail()` checks a stored `meal.image` field **first** before falling back to TheMealDB — so any of the approaches below just needs to populate `meal.image`.
+**Part one (`c09f142`, recorded late):** `fetchMealImage()` became a multi-pass lookup returning `{ url, stock }`; exact matches are written onto the meal by `persistMealImage()` so later opens are instant and survive reloads; a LoremFlickr photo backstops a total miss and is captioned "stock photo" via `#mealStockLabel`.
 
-**Options (pick one or combine):**
-1. **Persist a found photo.** When TheMealDB *does* match, write the thumb URL onto the meal (`setMealInFs` with `image`) so it's instant next time and survives reloads. Low effort; only helps matched dishes.
-2. **Fuzzy / simplified query.** Before giving up, retry TheMealDB with a simplified name (drop adjectives, use the main protein/dish noun, e.g. "chicken skillet" → "chicken"). Cheap; modest hit-rate gain, lower accuracy.
-3. **Broader keyless image source.** Use a generic food-photo service (e.g. LoremFlickr `https://loremflickr.com/600/400/{keywords}`) as a final fallback. **Always returns a photo**, but it's *representative*, not the exact dish — flag visually (e.g. "stock photo") so it isn't mistaken for the real plate. Respect CSP `img-src`.
-4. **AI-provided image URL.** Ask the model for an `image` URL during generation/adjust. ❌ Not recommended — model-supplied URLs are frequently hallucinated/broken.
+**Part two (2026-09-01):** the simplification pass only stripped a fixed adjective list from the front and **stopped at the first word it didn't know** — so cuisines and one-off modifiers sank the whole retry. The backlog's own motivating example was among the casualties:
 
-**Recommendation:** Ship **#1 (persist matches)** + **#2 (simplified-query retry)** first — both improve accuracy without misleading stock imagery. Consider **#3** only behind a clear "representative image" label.
+| Meal name | Before | Now |
+|---|---|---|
+| Creamy Tuscan Chicken Skillet | `Tuscan Chicken Skillet` → miss → stock | → `Chicken Skillet` |
+| Cajun Shrimp Pasta | no retry at all → stock | → `Shrimp Pasta` |
+| Honey Garlic Salmon Bites | no retry at all → stock | → `Salmon Bites` → `Salmon` |
 
-**Acceptance:** More planned meals show a photo; matched photos persist across reloads; any non-exact image is clearly labeled; emoji placeholder remains the final fallback.
+Added **pass 2b**: search from the main food noun (`MEAL_MAIN_NOUN` — proteins and dish forms, deliberately no cookware) to the end of the name, then the bare noun. `dbLookup` now dedupes, so a query an earlier pass already spent is never repeated.
+
+**Honesty about the label:** a noun match is a photo of the right *food*, not of *this dish*, so pass 2b is flagged `stock:true` — it gets the "stock photo" caption and is **not** persisted. Only passes 1–2, which keep the dish noun intact, count as exact.
+
+**Verified:** `tests/meal-image.test.js` — 19 offline cases (each pass, plurals, the label flag, cache keying, dedupe, and the empty/malformed/offline paths), mirroring the shipped function verbatim per the repo's no-build test convention. Full suite green at 69.
+
+**⚠️ Not verified against the live API.** The implementing session's sandbox egress policy denied `www.themealdb.com` (same wall the recipe-import session hit with NYT), so every pass is exercised against stubs. That run did confirm the degradation path end-to-end: all lookups denied → captioned stock photo, no crash, no hang. **First real meal open on the panel is the live confirmation.**
+
+**Known limits (by design):**
+- A transient network failure is cached like a genuine miss, so an offline blip pins a stock photo for the rest of the session (a reload clears `_mealImgCache`).
+- `MEAL_MAIN_NOUN` is a fixed list — an unlisted food ("Shakshuka", "Bibimbap") still falls through to the stock photo. Extending it is a one-line change.
+- A name that is all cookware and adjectives ("Tuscan Skillet Supper") has no noun to retry on, by design — guessing there would cost a request to gain nothing.
 
 ---
 

@@ -471,7 +471,10 @@ let mealPantryDef  = localStorage.getItem('fh_mealPantry')   || '';
 **Meal Detail modal** (opens when clicking an *already-planned* meal in Week/Day view):
 - `openMealDetail(dateKey, mealType)` — populates the detail popup; falls back to `openMealModal` if the slot is empty
 - `closeMealDetail()`
-- `fetchMealImage(name)` — best-effort dish photo from TheMealDB (free, keyless); returns a thumb URL or null. Cached in `_mealImgCache`. Falls back to an emoji placeholder when no match.
+- `fetchMealImage(name)` — best-effort dish photo, four passes, returning `{ url, stock }` (or `null` for a blank name) and caching per lowercased name in `_mealImgCache`. **1.** exact name against TheMealDB (free, keyless) · **2.** name with leading adjectives/cooking methods stripped (`STRIP_WORD`) · **2b.** from the main food noun (`MEAL_MAIN_NOUN`) to the end, then the bare noun · **3.** a LoremFlickr food photo, which always returns something. A query is never spent twice across passes. `stock:true` marks a representative image (passes 2b and 3) — the UI shows `#mealStockLabel` and does **not** persist it; passes 1–2 are the actual dish, so they are persisted. Never throws: a failed lookup is a miss.
+- `MEAL_MAIN_NOUN` — proteins and dish forms TheMealDB is worth asking about alone, with a trailing `(?:e?s)?` so plurals match ("Meatballs", "Potatoes"). Cookware (`skillet`, `sheet pan`) is deliberately absent, so a name like "Tuscan Skillet Supper" finds no noun and goes straight to the stock fallback.
+- `persistMealImage(dateKey, mealType, url)` — writes an exact match onto the meal via `setMealInFs` so later opens are instant and survive reloads. `openMealDetail()` reads `meal.image` **first** and skips the lookup entirely when it's set.
+- Emoji placeholder (`#mealDetailImgPlaceholder`) shows until `img.onload` fires, so it remains the final fallback if an image fails to load. Tests: `tests/meal-image.test.js`.
 - `toggleMealAdjust()` — reveals/hides the Adjust section; seeds `_mealDetailIngredients` from the current meal and renders the chip editor
 - `addAdjustPreset(label)` — appends a quick-adjust chip's text to the instruction input (de-duped)
 - `adjustMeal()` — re-generates the current meal via `callMealAI` per the user's adjustment, replaces it via `setMealInFs` (optimistic local update), and re-opens the detail
