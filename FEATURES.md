@@ -503,14 +503,33 @@ let mealPantryDef  = localStorage.getItem('fh_mealPantry')   || '';
 **Recipe Box** (`recipeBox` collection — individual reusable dishes, distinct from `mealTemplates` which save a whole *week*):
 ```js
 let recipeBox = lsGet('fh_recipeBox', []);
-// [{ id, name, ingredients: [...], createdAt: 'YYYY-MM-DD' }]
+// [{ id, name, ingredients: [...], createdAt: 'YYYY-MM-DD',
+//    // optional — populated by URL import, absent on hand-typed recipes:
+//    instructions: [...], description, image, sourceUrl, sourceName,
+//    servings, totalTime /* minutes */, author, cuisine, paywalled }]
 ```
-- `saveRecipeBoxItem(name, ingredients)` / `deleteRecipeBoxItem(id)` — Firestore `recipeBox` collection when `db` exists, else `fh_recipeBox` localStorage fallback (same pattern as `mealTemplates`)
+- `RECIPE_EXTRA_FIELDS` / `recipeExtras(src)` — the optional field list, and the picker that keeps only populated ones. **Firestore rejects `undefined`**, so every write of a recipe-shaped object goes through `recipeExtras()` rather than spreading raw parsed data
+- `saveRecipeBoxItem(name, ingredients, extra)` / `deleteRecipeBoxItem(id)` — Firestore `recipeBox` collection when `db` exists, else `fh_recipeBox` localStorage fallback (same pattern as `mealTemplates`). `extra` is optional — hand-typed recipes omit it
+- `recipeToMeal(r)` — recipe record → meal record, mapping `sourceUrl`→`recipeUrl` and `totalTime`→`prepTime` so the existing meal-detail popup renders imported content with no changes to its own field names
 - `useRecipeBoxItem(id)` — applies a saved recipe straight to the date/meal-type the modal is open for, then closes the modal
-- `renderRecipeBoxPicker()` — filters `recipeBox` by `#recipeBoxSearch` text, renders **+ Use** rows into `#recipeBoxPickList` (inside `#mealModal`)
-- `renderRecipeBoxList()` — management list (name + delete) rendered into `#recipeBoxList` in Settings → Meals
+- `renderRecipeBoxPicker()` — filters `recipeBox` by `#recipeBoxSearch` text, renders **+ Use** rows into `#recipeBoxPickList` (inside `#mealModal`); imported recipes get a `.recipe-src-badge` source chip
+- `renderRecipeBoxList()` — management list (name + step/ingredient counts + **source ↗** link + delete) rendered into `#recipeBoxList` in Settings → Meals
 
 **localStorage:** `fh_recipeBox` — Firestore `recipeBox` collection is authoritative when `db` exists; localStorage is the no-Firebase fallback only (same migration pattern as `fh_mealTemplates`).
+
+**Import a recipe from a URL** (`schema.org/Recipe` JSON-LD) — in `#mealTabRecipebox`, below the picker. Generic: any site emitting Recipe JSON-LD works (NYT Cooking, AllRecipes, Serious Eats, food blogs). Not an NYT-specific integration; NYT Cooking is the motivating case.
+
+**Backend:** `netlify/functions/recipe.js` — `GET /.netlify/functions/recipe?url=<encoded>`
+- `200 → { ok:true, recipe }` · `422 → { ok:false, error:'no-recipe' }` (page fetched, no Recipe JSON-LD) · `4xx/5xx → { ok:false, error }`
+- Server-side because browsers can't fetch cross-origin recipe pages. Sends a browser-like User-Agent (recipe sites 403 bot UAs), 15s `AbortController` timeout, 5MB cap, content-type check, and the same hostname SSRF guard as `ics.js`/`news.js`
+- Parser handles every JSON-LD shape in the wild: `@type` as string *or* array, nesting under `@graph`/`mainEntity`, instructions as a string / string[] / `HowToStep[]` / `HowToSection` groups, `image` as string / array / `ImageObject`, ISO-8601 durations (`PT1H15M` → minutes), and `recipeYield` as string / number / array. A malformed JSON-LD block is skipped rather than failing the import
+- Pure helpers exported on `_test` → `tests/recipe.test.js` (50 cases, no network; handler tests stub `global.fetch`)
+
+**Client:** `importRecipeFromUrl()` → `renderRecipeImportPreview()` → `saveImportedRecipe()` (Recipe Box only) or `useImportedRecipe()` (saves **and** fills the open slot). `clearRecipeImport()` resets; `_pendingRecipeImport` holds the parsed recipe between fetch and save. Anchors: `#recipeImportUrl`, `#recipeImportBtn`, `#recipeImportStatus`, `#recipeImportPreview`.
+
+**Instructions display:** `#mealDetailSteps` in the meal detail popup — a collapsed `<details>` with a numbered `<ol>`, shown only when `meal.instructions` is non-empty (AI-suggested meals have none). Collapsed by default so a long method doesn't push Keep/Adjust/Delete off a wall-panel screen.
+
+**Why NYT Cooking works while paywalled:** it serves the complete Recipe JSON-LD unauthenticated even when `isAccessibleForFree: false` — the paywall gates the human-facing render, not the structured metadata (probe 2026-07-06). **This is undocumented page behavior, not a contract.** When it stops holding, the function returns `no-recipe` and the UI points at "Type It In"; `recipe.paywalled` is stored so a recipe's origin stays visible.
 
 ---
 
