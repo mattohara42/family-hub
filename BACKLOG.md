@@ -11,19 +11,26 @@ Items are grouped by theme. Each entry notes the motivation and any known implem
 This repo had **more branches than any other** — 19 besides `main`. Here's what
 each pile is.
 
-### PR #19 — mobile More-tab settings — needs a rebase-vs-redo call
+### ~~PR #19 — mobile More-tab settings~~ ❌ Closed unmerged 2026-09-05
 
-https://github.com/mattohara42/family-hub/pull/19 (draft)
+Branch `claude/mobile-ui-redesign-t6bmca` (`fce851d`, from 2026-07-11).
 
-Branch `claude/mobile-ui-redesign-t6bmca` (2026-07-11, never had a PR): puts
-settings sections inline on the mobile **More** tab and drops the "Full
-Settings" hop. Confirmed still unlanded — `"Full Settings"` is present in two
-files on `main`.
+**The claim that opened it was wrong.** The PR said "confirmed still unlanded:
+`Full Settings` is still present in two files on `main`." That count came from
+grepping the whole repo and counting files — and those two files were
+`BACKLOG.md` and `FEATURES.md`, docs *describing* the change, not the live UI.
+`git grep "Full Settings" -- family-hub.html family-hub.js family-hub.css`
+returns nothing on `main`, and returned nothing when the PR was opened either.
 
-**Blocker:** conflicts in 4 files. The branch is 22 commits behind, and the
-mobile tab system was rewritten underneath it since (the registry-driven
-`MOBILE_TABS` work in `CLAUDE.md` §20). Probably cheaper to redo against the
-current registry than to resolve — but that's a judgement call, hence a draft.
+Merging it would have changed 29 files and **deleted 5,080 lines**, including
+the whole vendored **`pond/`** subtree (an architecture invariant — see
+`CLAUDE.md`, kept byte-identical for `git subtree pull`) and
+`tests/recipe.test.js` / `tests/meal-image.test.js` from the Recipe Box work in
+#21/#22.
+
+If something is still wanted from it, it is a fresh change against the current
+`MOBILE_TABS` registry (`CLAUDE.md` §20), not this branch. Recoverable with
+`git push origin fce851d:refs/heads/claude/mobile-ui-redesign-t6bmca`.
 
 ### Nine stale branches to delete
 
