@@ -216,19 +216,19 @@ Show live commute time from home to a configured destination (e.g. work). Update
 
 ## Smart Home
 
-### Home Assistant integration
+### ~~Home Assistant integration~~ ✅ Done (v1)
+Sidebar card showing and controlling an allowlist of HA entities. Lights, switches and fans toggle, locks lock/unlock, everything else is read-only. Off by default. See FEATURES.md §21, `family-hub-setup.md` Step 6, and `docs/plans/2026-09-07-001-feat-home-assistant-integration-plan.md`.
+
+Home Assistant runs in Docker on the same Pi as the kiosk browser, reached over Tailscale Serve HTTPS. The HTTPS requirement is not optional: the hub is served over HTTPS and browsers refuse to let it call a plain `http://` LAN address.
+
+*Deliberately not in v1: thermostat setpoint control, scenes and scripts, HA automations triggered from the hub, media players, camera streams, and the HA WebSocket API (polling is 120s, which is fine for a wall panel and wrong for anything that needs to feel instant).*
+
+### Home Assistant — thermostat control
 **Priority: Low**
-Display and control smart home devices (lights, locks, thermostat, sensors) via Home Assistant's local REST API. Covers Nest thermostats, WiZ bulbs, and any other HA-connected device in one integration.
+`climate` entities currently render read-only (mode plus current temperature). Add setpoint +/− and mode selection, which is the last piece of the "Nest thermostat on the panel" want. Needs `climate.set_temperature` / `climate.set_hvac_mode` and a row layout that fits two controls without crowding the sidebar.
 
-*Note: Matt does not currently have a Home Assistant instance. HA runs on a Raspberry Pi, NAS, or similar. Once set up, enable the REST API and generate a Long-Lived Access Token in HA → Profile.*
-
-*Implementation: user provides HA base URL + token in Settings; poll `/api/states` for a user-configured list of entity IDs on a 2–3 min interval; POST to `/api/services/{domain}/{service}` to control devices. Render as a sidebar widget card with entity icons, current state, and toggle/slider controls. Token stored in localStorage only — never sent to a third party. Works on LAN only unless HA is exposed via Nabu Casa (~$7/mo) or VPN.*
-
-### WiZ smart bulb control
-**Priority: Low**
-WiZ bulbs use a local UDP API that browsers cannot reach directly. The practical path is routing through Home Assistant (which has a native WiZ integration) — see Home Assistant integration below. Noting here for reference.
-
-*Direct browser→WiZ is not feasible without a local proxy server. If Home Assistant is set up, WiZ lights would be exposed as HA entities and controllable through the HA integration at no extra effort.*
+### ~~WiZ smart bulb control~~ ✅ Done via Home Assistant
+WiZ bulbs use a local UDP API that browsers cannot reach directly, so there was never a direct browser→WiZ path. Home Assistant's native WiZ integration exposes them as `light.*` entities, which the Home Assistant card above toggles like any other light. Nothing WiZ-specific to build.
 
 ### Google Home / Nest thermostat integration
 **Priority: Low**

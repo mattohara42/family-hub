@@ -70,6 +70,10 @@ Shared state (shopping, todo, budget) lives in Firebase Firestore. Photos are bl
 | Event Discovery keys | Ticketmaster, OpenWeatherMap, LibraryWeb (per-branch), Red Wings (keyless), CitySpark (keyless) — set via Netlify env vars in production |
 | Event Discovery backend | Runs on `/.netlify/functions/events`; geocoding via OWM; exponential backoff retry (2x, 1s→4s) for API failures |
 | CitySpark sort parameter | MUST use `sort:'Time'` (soonest-first); `'Date'` returns the tail of future events and fails the 30-day filter |
+| HTTPS page can't call a LAN box | The hub is served over HTTPS, so `http://homeassistant.local:8123` is blocked three ways over (mixed content, our `connect-src`, HA's CORS). Home Assistant is reached at its Tailscale `https://….ts.net` name, which the blanket `https:` in the CSP already allows. `http://localhost:8123` is in `connect-src` for `tests/ha-mock.js` only |
+| HA CORS failure looks like a dead host | A CORS rejection reaches JS as a bare `TypeError`, identical to "the host is down". `haFetch()`'s `unreachable` message names both causes deliberately; don't "simplify" it to one |
+| HA token is per-device on purpose | `fh_haToken` is excluded from the Firestore settings sync (`haConfig` is synced, the token isn't). A long-lived HA token controls every entity its user can see, so per-device means individually revocable. Don't add it to the sync list |
+| HA service calls aren't instant | Z-Wave/Zigbee devices take seconds to report a new state. `haRecheckEntity()` re-reads at 1s and 4s before handing back to the 120s poll — a single immediate re-read reports working devices as failures |
 
 ---
 
@@ -116,3 +120,5 @@ When checking that a change worked in the browser, **default to `javascript_tool
 **Backlogs & Plans:** `WEATHER_BACKLOG.md` · `ASSISTANT_BACKLOG.md` · `MEALS_BACKLOG.md` · `EVENT_DISCOVERY_BACKLOG.md` (optional) · `SCREENSAVER_BACKLOG.md` · `docs/brainstorms/` · `docs/plans/`
 
 **Backend:** `netlify/functions/events.js` (event discovery multi-API aggregation)
+
+**Dev tools:** `tests/ha-mock.js` (fake Home Assistant on :8123, so the smart-home card is testable with no Pi in the room)

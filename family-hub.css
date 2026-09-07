@@ -4407,6 +4407,64 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
 }
 .budget-manage-toggle:hover { color: var(--text); }
 
+/* ── Home Assistant Card ── */
+.ha-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+.ha-row:last-child { border-bottom: none; }
+.ha-icon  { flex: 0 0 auto; font-size: 1rem; line-height: 1; }
+.ha-name  {
+  flex: 1 1 auto;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ha-state {
+  flex: 0 0 auto;
+  font-size: var(--text-xs);
+  color: var(--muted);
+  text-align: right;
+}
+.ha-btn {
+  flex: 0 0 auto;
+  background: var(--surface2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: var(--text-xs);
+  cursor: pointer;
+  touch-action: manipulation;
+  min-width: 62px;
+}
+.ha-btn:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); color: #fff; }
+.ha-btn:disabled { opacity: .5; cursor: default; }
+/* Offline, unknown, or a bad entity ID — state is unreliable, so say so quietly
+   rather than rendering a control that would lie about what it does. */
+.ha-row-dim .ha-name, .ha-row-dim .ha-state { opacity: .5; }
+.ha-empty {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  text-align: center;
+  padding: 6px 0;
+}
+.ha-error {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  background: var(--surface2);
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+}
+/* Settings → Home Assistant: Test connection result */
+.ha-test      { font-size: var(--text-xs); color: var(--muted); }
+.ha-test-ok   { color: var(--accent); }
+.ha-test-bad  { color: var(--muted); font-weight: 600; }
+
 /* ── TV / Display mode ─────────────────────────────────────────── */
 body.tv-mode {
   font-size: 1.15rem;

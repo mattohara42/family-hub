@@ -830,6 +830,49 @@ Secondary widgets (Budget, Chores, Word, Joke, Quotes, Countdown, News, Stock, A
 
 ---
 
+### 21. Home Assistant
+
+**Overview:** Shows and controls a hand-picked allowlist of Home Assistant entities (lights, switches, fans, locks, sensors, thermostats) from a sidebar card, over HA's REST API. Off by default; useless until configured.
+
+**The constraint:** the hub is served over HTTPS, so it cannot call a plain `http://` LAN address (mixed content, and our own `connect-src`). Home Assistant needs a real HTTPS URL. The shipped setup uses Tailscale Serve (`https://<host>.<tailnet>.ts.net`), which the blanket `https:` in the CSP already permits. HA also rejects cross-origin browser calls unless the page's origin is in `http.cors_allowed_origins`. See `family-hub-setup.md` Step 6 and `docs/plans/2026-09-07-001-feat-home-assistant-integration-plan.md`.
+
+**State:**
+```js
+const HA_DEFAULTS = { baseUrl: '', entities: [] };   // entities: [{ id, name }]
+let haConfig  = { ...HA_DEFAULTS, ...lsGet('fh_haConfig', {}) };  // synced: Firestore settings/homeAssistant
+let haToken   = localStorage.getItem('fh_haToken') || '';         // NEVER synced — per-device house key
+let haStates  = {};        // entity_id → HA state object, or { error: '…' }
+let haPending = {};        // entity_id → true while a service call settles
+let haEntityIdSuggestions = [];   // filled by Test Connection, feeds the settings datalist
+const HA_POLL_MS = 120000, HA_TIMEOUT_MS = 10000;
+const HA_TOGGLE_DOMAINS = ['light', 'switch', 'fan', 'input_boolean'];
+```
+
+**Key functions:**
+- `haFetch(path, opts)` — the `calFetch()` equivalent for HA: attaches the bearer token, 10s `AbortController`, and normalizes every failure into an error carrying `haKind` (`unconfigured` | `auth` | `notfound` | `timeout` | `unreachable` | `http`). A CORS rejection and a dead host are the same bare `TypeError` in the browser, so the `unreachable` copy names both causes on purpose
+- `refreshHaStates()` — `GET /api/states/<id>` per allowlisted entity via `Promise.allSettled`, not the full `/api/states`. Smaller, and one bad entity ID can't blank the card. Per-entity 404s render on their own row; anything else becomes one banner
+- `renderHaCard()` — rows into `#haBody`. Domain decides the control: toggle for `HA_TOGGLE_DOMAINS`, Lock/Unlock for `lock`, read-only otherwise. `unavailable` / `unknown` / errored rows dim and lose their control
+- `haToggleEntity(id)` — `POST /api/services/{domain}/{service}` with `{ entity_id }`, then `haRecheckEntity()` (fire-and-forget, so the UI isn't blocked)
+- `haRecheckEntity(id, prevState)` — re-reads at 1s and 4s before handing back to the poll. Z-Wave and Zigbee devices take seconds to report; snapping the row back would call a success a failure
+- `startHaPolling()` / `initHomeAssistant()` — 120s interval, skipped while `document.hidden`, refreshed on return to visible. No timer at all when the widget is off or unconfigured
+- `testHaConnection()` — validates the URL/token *currently in the boxes* (not the saved pair), then loads every entity ID into `#haEntityOptions` so the ID field autocompletes
+- `addHaEntity()` / `removeHaEntity(i)` / `renderHaEntitySettings()` — the allowlist editor, writing through immediately like the news-feed editor
+- Pure helpers, mirrored in `tests/home-assistant.test.js`: `haEntityDomain()`, `haServiceForToggle()`, `haActionLabel()`, `haFormatState()`, `haNormalizeBaseUrl()`
+
+**Credential handling:** an HA long-lived token can operate every entity its user can see (HA has no per-entity permission model), so the setup guide creates a non-admin `Wall Panel` account for it. The token lives in `fh_haToken` on the device that pasted it and is excluded from the Firestore settings sync, which makes it individually revocable: a lost phone costs one token, not the house.
+
+**Anchors:**
+- HTML: `#haCard` (sidebar card), `#haBody`, `#mobileNavHome`, settings panel `data-panel="homeassistant"` (`#haBaseUrl`, `#haTokenInput`, `#haTestResult`, `#haEntityList`, `#haEntityId`, `#haEntityName`, `#haEntityOptions`)
+- CSS: `/* ── Home Assistant Card ── */` — `.ha-row`, `.ha-icon`, `.ha-name`, `.ha-state`, `.ha-btn`, `.ha-row-dim`, `.ha-empty`, `.ha-error`, `.ha-test`
+- JS: `// ── Home Assistant ──`
+- Registries: `WIDGET_DEFAULTS.homeassistant` (false), `WIDGET_ORDER` (`haCard`), `MOBILE_TABS.home`, `SETTINGS_GROUPS` → Widgets
+- Firestore: `settings/homeAssistant` (`{ value: haConfig }`)
+- Mobile: the `🏠 Home` nav button is the one optional button in the bar; `applyWidgetVisibility()` hides it unless the widget is enabled
+
+**Testing without hardware:** `node tests/ha-mock.js` starts a fake HA on `http://localhost:8123` (flags for `--reject-auth` and `--no-cors`). `http://localhost:8123` is in the dev CSP alongside the Netlify dev port. `node --test tests/home-assistant.test.js` covers the pure helpers.
+
+---
+
 ## localStorage Key Index
 
 | Key | Type | Feature | Notes |
@@ -847,6 +890,8 @@ Secondary widgets (Budget, Chores, Word, Joke, Quotes, Countdown, News, Stock, A
 | `fh_slideInterval` | string | Photos | Slideshow seconds |
 | `fh_photosImportedAt` | string | Photos | Epoch ms of last photo import (staleness nudge) |
 | `fh_widgets` | JSON object | Widgets | `{ shopping: bool, todo: bool, … }` |
+| `fh_haConfig` | JSON object | Home Assistant | Fallback only — synced via Firestore `settings/homeAssistant` otherwise. `{ baseUrl, entities: [{ id, name }] }` |
+| `fh_haToken` | string | Home Assistant | Long-lived access token. **Per-device, never synced** — see FEATURES §21 |
 | `fh_widget_placement` | JSON object | Widgets | `{ shopping: 'sidebar'\|'bottom', … }` |
 | `fh_mealPlan` | JSON object | Meals | `{ dateKey: { breakfast, lunch, dinner } }` |
 | `fh_mealAiKey` | string | Meals | API key (Gemini or OpenAI) |

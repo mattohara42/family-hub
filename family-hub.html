@@ -43,7 +43,7 @@
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self';
                  script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com https://accounts.google.com https://unpkg.com;
-                 connect-src 'self' https: http://localhost:8888;
+                 connect-src 'self' https: http://localhost:8888 http://localhost:8123;
                  img-src 'self' https: blob: data:;
                  style-src 'self' 'unsafe-inline' https://unpkg.com;
                  font-src 'self' data:;
@@ -410,6 +410,17 @@
       </div>
     </div>
 
+    <!-- Home Assistant -->
+    <div class="card" id="haCard">
+      <div class="card-header">
+        <h2>🏠 Home</h2>
+        <button onclick="refreshHaStates()" title="Refresh devices" aria-label="Refresh devices" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.6rem;line-height:1">↺</button>
+      </div>
+      <div class="card-body" id="haBody" style="padding:6px 14px 10px">
+        <div class="ha-empty">Add your Home Assistant URL and token in ⚙️ Settings → 🏠 Home Assistant.</div>
+      </div>
+    </div>
+
     <!-- Countdowns -->
     <div class="card" id="countdownCard">
       <div class="card-header">
@@ -466,6 +477,10 @@
   <button class="mobile-nav-btn" id="mobileNavWeather" onclick="setMobileTab('weather')">
     <span class="mobile-nav-icon">🌤️</span>
     <span>Weather</span>
+  </button>
+  <button class="mobile-nav-btn" id="mobileNavHome" onclick="setMobileTab('home')" style="display:none">
+    <span class="mobile-nav-icon">🏠</span>
+    <span>Home</span>
   </button>
   <button class="mobile-nav-btn hamburger-btn" id="hamburgerBtn" onclick="openSettings()" aria-label="Open settings">
     <span class="mobile-nav-icon">⚙️</span>
@@ -1104,6 +1119,12 @@
               <label class="widget-placement-radio"><input type="radio" name="placement_stock" value="bottom"  /><span>Bottom</span></label>
               <label class="widget-placement-radio"><input type="radio" name="placement_stock" value="sidebar" /><span>Sidebar</span></label>
             </div>
+            <div class="widget-toggle-row">
+              <input type="checkbox" id="widget_homeassistant" />
+              <span>🏠 Home Assistant</span>
+              <label class="widget-placement-radio"><input type="radio" name="placement_homeassistant" value="bottom"  /><span>Bottom</span></label>
+              <label class="widget-placement-radio"><input type="radio" name="placement_homeassistant" value="sidebar" /><span>Sidebar</span></label>
+            </div>
 
           </div>
         </div>
@@ -1262,6 +1283,51 @@
           <select id="mowAssignee"><option value="">— no one —</option></select>
         </div>
       </div><!-- /mow -->
+
+      <!-- ── Home Assistant ── -->
+      <div class="settings-panel" data-panel="homeassistant">
+
+        <div class="lc-section">
+          <div class="lc-section-title">🏠 Connection</div>
+          <div class="field">
+            <label>Base URL</label>
+            <input id="haBaseUrl" type="url" class="lc-input" placeholder="https://familypi.tail1234.ts.net" />
+          </div>
+          <div class="field">
+            <label>Long-lived access token</label>
+            <input id="haTokenInput" type="password" class="lc-input" autocomplete="off" placeholder="Paste from HA → profile → Security" />
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+            <button class="btn btn-secondary btn-sm" onclick="testHaConnection()">Test connection</button>
+            <span id="haTestResult" class="ha-test"></span>
+          </div>
+          <p style="font-size:.75rem;color:var(--muted);margin-top:8px">
+            The token is stored <strong>on this device only</strong> and is never synced, so
+            enter it once per device. Home Assistant must be reachable over HTTPS — see
+            Step 6 of the setup guide. Add this page's address to
+            <code>cors_allowed_origins</code> in Home Assistant, or every request will fail.
+          </p>
+        </div>
+
+        <div class="lc-section">
+          <div class="lc-section-title">💡 Entities on the panel</div>
+          <div id="haEntityList" class="lc-list"></div>
+          <div class="lc-add-row" style="margin-top:6px">
+            <input id="haEntityId" type="text" class="lc-input" placeholder="light.kitchen" list="haEntityOptions"
+              onkeydown="if(event.key==='Enter')addHaEntity()" />
+            <input id="haEntityName" type="text" class="lc-input" style="flex:0 0 100px" placeholder="Label" />
+            <button class="btn btn-primary btn-sm" onclick="addHaEntity()">Add</button>
+          </div>
+          <datalist id="haEntityOptions"></datalist>
+          <p style="font-size:.75rem;color:var(--muted);margin-top:6px">
+            Only what you list here appears on the panel. Run <strong>Test connection</strong>
+            and the ID box will suggest every entity in the house; otherwise find IDs under
+            <strong>Developer&nbsp;Tools → States</strong> in Home Assistant.
+            Lights, switches and fans get a toggle, locks get lock/unlock, everything else is read-only.
+          </p>
+        </div>
+
+      </div><!-- /homeassistant -->
 
       <!-- ── Home Calendars ── -->
     </div><!-- /settings-panels -->
