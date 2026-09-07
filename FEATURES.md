@@ -697,6 +697,7 @@ A handful of triggers aren't tied to any franchise (birthday, politeness, dark-m
 3. **LibraryWeb (LibCal)** — free Monroe County (Rochester NY) public library events via iCal feeds
 4. **Red Wings** — Rochester Red Wings (AAA baseball) home games via MLB Stats API
 5. **CitySpark ("Around Town")** — broad local events via aggregator (concerts, festivals, food, art, comedy, family)
+6. **Fairport Festivals** — the village's published festival season (curated table in the function, no API)
 
 **State:**
 ```js
@@ -719,7 +720,8 @@ let eventsModalOpen     = false;
 
 **Netlify backend function:** `netlify/functions/events.js` (400+ lines)
 - `geocodeLocation()` — city name → lat/lon via OpenWeatherMap
-- `fetchTicketmaster()`, `fetchOpenStreetMap()`, `fetchLibraryWeb()`, `fetchRedWings()`, `fetchCitySpark()` — per-source fetchers
+- `fetchTicketmaster()`, `fetchOpenStreetMap()`, `fetchLibraryWeb()`, `fetchRedWings()`, `fetchCitySpark()`, `fetchFairport()` — per-source fetchers
+- `expandFairportSchedule()` / `addDaysISO()` — expand `FAIRPORT_SCHEDULE` (one-offs, `days` for multi-day runs) and `FAIRPORT_WEEKLY` (every 7 days between `start` and `end`) into one dated event per occurrence
 - `calculateDistance()` — Haversine formula
 - `deduplicateEvents()` — by title + date + venue
 - `filterEventsByDistanceAndDate()` — 30-day window, radius filtering
@@ -748,6 +750,7 @@ Netlify environment variables:
 - CitySpark requires `sort:'Time'` (not `'Date'`) for soonest-first results; `'Date'` returns tail
 - CitySpark `DateStart` is local time with spurious `Z` — read components directly, do NOT tz-convert
 - LibraryWeb: no all-branches feed exists; must fetch per-branch iCal separately + merge
+- Fairport Festivals is a **hand-maintained table for one season** (currently 2026, transcribed from the FairportFestivals.com poster). It needs re-typing from the new poster each spring. Until then the 35-day window quietly returns nothing rather than showing stale dates. All events sit at the village center, with the real venue (Kennelly Park, Center Park) carried as text in `location.address`; the card shows that in place of the distance
 - Dateless events (OpenStreetMap POIs, some library events) show "Anytime" in modal; require date selection if added to calendar
 
 ---
