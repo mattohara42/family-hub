@@ -67,7 +67,8 @@ Shared state (shopping, todo, budget) lives in Firebase Firestore. Photos are bl
 | ICS date keys are local | `injectIcsEvent` keys events by `localDateKey()` (not `toISOString()`) — UTC slicing day-shifts evening events in western zones |
 | Nautical mode migration | `localStorage 'fh_mode' === 'amazing'` auto-upgrades to `'nautical'` on load |
 | Browser caches JS during dev | Keep DevTools open with "Disable cache" or hard-reload (Cmd+Shift+R) after edits |
-| Event Discovery keys | Ticketmaster, OpenWeatherMap, LibraryWeb (per-branch), Red Wings (keyless), CitySpark (keyless) — set via Netlify env vars in production |
+| Event Discovery keys | Ticketmaster, OpenWeatherMap, LibraryWeb (per-branch), Red Wings (keyless), CitySpark (keyless), Fairport Festivals (no network at all) — set via Netlify env vars in production |
+| Fairport Festivals source is curated | `FAIRPORT_SCHEDULE`/`FAIRPORT_WEEKLY` in `netlify/functions/events.js` are the village's published season typed out by hand (2026 today) from the FairportFestivals.com poster; no feed from that site has been confirmed. Re-type it from the new poster each spring; stale years return nothing rather than wrong dates |
 | Event Discovery backend | Runs on `/.netlify/functions/events`; geocoding via OWM; exponential backoff retry (2x, 1s→4s) for API failures |
 | CitySpark sort parameter | MUST use `sort:'Time'` (soonest-first); `'Date'` returns the tail of future events and fails the 30-day filter |
 

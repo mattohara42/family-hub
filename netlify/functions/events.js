@@ -24,7 +24,8 @@ const sourceStatus = {
   osm: { ok: true, count: 0, error: null },
   libraryweb: { ok: true, count: 0, error: null },
   redwings: { ok: true, count: 0, error: null },
-  cityspark: { ok: true, count: 0, error: null }
+  cityspark: { ok: true, count: 0, error: null },
+  fairport: { ok: true, count: 0, error: null }
 };
 
 // CitySpark local-events aggregator (powers RocCityMag's calendar). Public
@@ -112,12 +113,13 @@ exports.handler = async (event) => {
     }
 
     // Step 2: Fetch from all sources in parallel
-    const [tmEvents, osmEvents, libEvents, rwEvents, csEvents] = await Promise.allSettled([
+    const [tmEvents, osmEvents, libEvents, rwEvents, csEvents, fpEvents] = await Promise.allSettled([
       fetchTicketmaster(city, state, lat, lon, { keyword, attractionId, venueId }),
       fetchOpenStreetMap(city, state, lat, lon, radiusMinutes),
       fetchLibraryWeb(city, state, lat, lon),
       fetchRedWings(city, state, lat, lon),
-      fetchCitySpark(city, state, lat, lon)
+      fetchCitySpark(city, state, lat, lon),
+      fetchFairport(city, state, lat, lon)
     ]);
 
     // Collect all results
@@ -126,7 +128,8 @@ exports.handler = async (event) => {
       ...extractSettledValue(osmEvents, 'osm'),
       ...extractSettledValue(libEvents, 'libraryweb'),
       ...extractSettledValue(rwEvents, 'redwings'),
-      ...extractSettledValue(csEvents, 'cityspark')
+      ...extractSettledValue(csEvents, 'cityspark'),
+      ...extractSettledValue(fpEvents, 'fairport')
     ];
 
     // Step 3: Remove duplicates by title + date + venue
@@ -156,7 +159,8 @@ exports.handler = async (event) => {
         osm: sourceStatus.osm.count,
         libraryweb: sourceStatus.libraryweb.count,
         redwings: sourceStatus.redwings.count,
-        cityspark: sourceStatus.cityspark.count
+        cityspark: sourceStatus.cityspark.count,
+        fairport: sourceStatus.fairport.count
       },
       warnings: Object.entries(sourceStatus)
         .filter(([, status]) => !status.ok)
@@ -877,6 +881,140 @@ async function fetchCitySpark(city, state, lat, lon) {
 }
 
 // ────────────────────────────────────────────────────────────────
+// FAIRPORT FESTIVALS (village festival & concert season — curated)
+// ────────────────────────────────────────────────────────────────
+
+/**
+ * The Fairport/Perinton festival season, transcribed from the FairportFestivals.com
+ * season poster. It is a fixed, published-once-a-year schedule that fits in a table,
+ * so it lives here as data rather than as a scrape. If the village ever publishes an
+ * ICS feed, prefer subscribing to it (either here or via the hub's ICS subscriptions)
+ * over maintaining this table.
+ *
+ * MAINTENANCE: this is the 2026 season. Once those dates pass the source simply
+ * returns nothing (everything is filtered to today..+35 days) — refresh the table
+ * from the new poster each spring.
+ *
+ * Every event is placed at the village centre. Fairport's venues (Kennelly Park,
+ * Center Park, the Village Landing) are all within about a mile of it, which is
+ * far below the resolution of the drive-time radius filter, so the real venue is
+ * carried as text in `address` instead of as its own coordinates.
+ */
+const FAIRPORT_VILLAGE = { lat: 43.0987, lon: -77.4425 };  // Fairport, NY
+const FAIRPORT_MAX_MILES = 60;      // skip the source entirely for far-away searches
+const FAIRPORT_URL = 'https://fairportfestivals.com/';
+
+// One-off events. `days` = consecutive dates the event runs (one card per day).
+// `time` is local 24h, or null for an all-day / start-time-unpublished event.
+const FAIRPORT_SCHEDULE = [
+  { date: '2026-03-01', title: 'Savor the Flavor',                        type: 'food',     host: 'Fairport Rotary' },
+  { date: '2026-03-01', title: 'Fairport Museum Opens for the Season',    type: 'art',      host: 'Perinton Historical Society' },
+  { date: '2026-04-12', title: 'Empty Bowls Fundraiser',                  type: 'food',     host: 'Fairport Perinton Partnership', note: 'Fundraiser for the Perinton Food Shelf' },
+  { date: '2026-04-22', title: 'Clean Sweep!',            days: 5,        type: 'activity', host: 'Fairport Perinton Partnership' },
+  { date: '2026-05-25', title: 'Memorial Day Parade',     time: '10:00',  type: 'activity', host: 'Perinton VFW', note: 'Ceremony begins after the parade' },
+  { date: '2026-06-05', title: 'Canal Nights / Chicken BBQ', days: 2,     type: 'food',     host: 'Fairport Perinton Merchants Association' },
+  { date: '2026-06-06', title: 'Canal Days',              days: 2,        type: 'activity', host: 'Fairport Perinton Merchants Association' },
+  { date: '2026-06-16', title: "Children's Concert at The Gazebo", time: '18:30', type: 'concert', host: 'Town of Perinton', venue: 'Kennelly Park' },
+  { date: '2026-07-04', title: 'Independence Day Run',    time: '08:00',  type: 'sports',   host: 'Fairport Perinton Chamber of Commerce' },
+  { date: '2026-07-04', title: 'Independence Day Parade', time: '10:00',  type: 'activity', host: 'Fairport Perinton Chamber of Commerce' },
+  { date: '2026-07-04', title: 'Party in the Park',       time: '12:00',  type: 'activity', host: 'Fairport Perinton Chamber of Commerce' },
+  { date: '2026-07-13', title: 'Cycle the Erie Canal',                    type: 'hike',     host: 'Fairport Perinton Partnership' },
+  { date: '2026-07-21', title: "Children's Concert at The Gazebo", time: '18:30', type: 'concert', host: 'Town of Perinton', venue: 'Kennelly Park' },
+  { date: '2026-07-25', title: 'Steel Rail Festival',                     type: 'activity', host: 'Steel Rail Festival' },
+  { date: '2026-08-18', title: "Children's Concert at The Gazebo", time: '18:30', type: 'concert', host: 'Town of Perinton', venue: 'Kennelly Park' },
+  { date: '2026-08-28', title: 'Fairport Music Festival', days: 2,        type: 'concert',  host: 'Fairport Music Festival' },
+  { date: '2026-09-24', title: 'Oktoberfest',             days: 3,        type: 'food',     host: 'Fairport Perinton Partnership' },
+  { date: '2026-09-26', title: 'Scarecrow Festival',                      type: 'activity', host: 'Fairport Perinton Merchants Association' },
+  { date: '2026-09-26', title: 'Plein Air Paint-Out',                     type: 'art',      host: 'Fairport Public Art Committee' },
+  { date: '2026-11-21', title: 'Savor the Season',                        type: 'food',     host: 'Perinton Historical Society' },
+  { date: '2026-12-05', title: 'Come Home for the Holidays', days: 2,     type: 'activity', host: 'FPMA & Fairport Perinton Partnership' }
+];
+
+// Weekly series — one occurrence every 7 days from `start` through `end` inclusive.
+const FAIRPORT_WEEKLY = [
+  { title: "Fairport Farmers Market",   start: '2026-05-09', end: '2026-11-21', time: '08:00', type: 'food',    host: 'Village of Fairport', note: '8am–noon, Saturdays' },
+  { title: 'Gazebo Concerts',           start: '2026-06-11', end: '2026-08-13', time: '19:00', type: 'concert', host: 'Town of Perinton & Fairport Library', venue: 'Kennelly Park', note: 'Thursday evenings' },
+  { title: 'Sunday Center Stage Concert', start: '2026-06-28', end: '2026-08-23', time: '18:00', type: 'concert', host: 'Town of Perinton', venue: 'Center Park', note: 'Start times may vary' }
+];
+
+/** Add `n` days to a YYYY-MM-DD string and return YYYY-MM-DD (DST-safe: noon UTC). */
+function addDaysISO(iso, n) {
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().split('T')[0];
+}
+
+/** Expand the curated tables into one dated event per occurrence. */
+function expandFairportSchedule() {
+  const out = [];
+
+  const push = (entry, date, dayIndex, dayCount) => {
+    const venue = entry.venue || 'Fairport Village';
+    const parts = [entry.host];
+    if (entry.note) parts.push(entry.note);
+    if (dayCount > 1) parts.push(`Day ${dayIndex + 1} of ${dayCount}`);
+    out.push({
+      id: `fp_${date}_${entry.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      title: entry.title,
+      type: entry.type,
+      source: 'fairport',
+      sourceUrl: FAIRPORT_URL,
+      date,
+      time: entry.time || null,
+      duration: null,
+      location: {
+        city: 'Fairport', state: 'NY',
+        address: venue,
+        lat: FAIRPORT_VILLAGE.lat,
+        lon: FAIRPORT_VILLAGE.lon,
+        distanceMiles: null
+      },
+      description: parts.filter(Boolean).join(' · '),
+      image: null,
+      weather: null
+    });
+  };
+
+  for (const entry of FAIRPORT_SCHEDULE) {
+    const days = entry.days || 1;
+    for (let i = 0; i < days; i++) push(entry, addDaysISO(entry.date, i), i, days);
+  }
+
+  for (const series of FAIRPORT_WEEKLY) {
+    for (let date = series.start; date <= series.end; date = addDaysISO(date, 7)) {
+      push(series, date, 0, 1);
+    }
+  }
+
+  return out;
+}
+
+async function fetchFairport(city, state, lat, lon) {
+  try {
+    // Region gate — a village calendar is only worth showing to nearby searches
+    if (calculateDistance(lat, lon, FAIRPORT_VILLAGE.lat, FAIRPORT_VILLAGE.lon) > FAIRPORT_MAX_MILES) {
+      sourceStatus.fairport.count = 0;
+      return [];
+    }
+
+    // Local data, but still windowed so an out-of-date table quietly returns nothing
+    const today = new Date().toISOString().split('T')[0];
+    const horizon = addDaysISO(today, 35);
+    const events = expandFairportSchedule().filter(e => e.date >= today && e.date <= horizon);
+
+    sourceStatus.fairport.count = events.length;
+    sourceStatus.fairport.ok = true;
+    sourceStatus.fairport.error = null;
+    return events;
+  } catch (err) {
+    console.warn('[Events] Fairport error:', err);
+    sourceStatus.fairport.ok = false;
+    sourceStatus.fairport.error = err.message;
+    return [];
+  }
+}
+
+// ────────────────────────────────────────────────────────────────
 // HELPERS
 // ────────────────────────────────────────────────────────────────
 
@@ -1017,5 +1155,8 @@ exports._test = {
   icalUnescape,
   icalToLocal,
   parseICal,
-  dateToEastern
+  dateToEastern,
+  addDaysISO,
+  expandFairportSchedule,
+  fetchFairport
 };

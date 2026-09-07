@@ -11916,7 +11916,7 @@ let eventsData = [];           // Current displayed events
 let eventsRawData = [];        // Full result set from backend
 let eventsFetchTimestamp = 0;  // When we last fetched
 let eventsSort = 'distance';   // Current sort mode
-let eventsSourceTab = 'ticketmaster';  // Active source tab: ticketmaster | osm | libraryweb
+let eventsSourceTab = 'ticketmaster';  // Active source tab: ticketmaster | osm | libraryweb | redwings | cityspark | fairport
 let eventsSubTab = 'all';              // Active category sub-tab within the source
 let eventsTabFilter = 'all';   // Current tab filter
 let eventsCategoryFilter = null;  // Category filter (null = all)
@@ -12147,7 +12147,7 @@ function selectEventSubTab(btn) {
 
 // Update the count badge on each source tab from the full result set
 function updateSourceTabCounts(rawEvents) {
-  const counts = { ticketmaster: 0, osm: 0, libraryweb: 0, redwings: 0, cityspark: 0 };
+  const counts = { ticketmaster: 0, osm: 0, libraryweb: 0, redwings: 0, cityspark: 0, fairport: 0 };
   for (const e of (rawEvents || [])) {
     if (counts[e.source] !== undefined) counts[e.source]++;
   }
@@ -12158,7 +12158,7 @@ function updateSourceTabCounts(rawEvents) {
 }
 
 function renderEventsList(events) {
-  const emptyLabels = { ticketmaster: 'live events', osm: 'things to do', libraryweb: 'library events', redwings: 'Red Wings home games', cityspark: 'local events' };
+  const emptyLabels = { ticketmaster: 'live events', osm: 'things to do', libraryweb: 'library events', redwings: 'Red Wings home games', cityspark: 'local events', fairport: 'Fairport festivals' };
   const html = events.length > 0
     ? events.map(e => renderEventCard(e)).join('')
     : `<p style="color:var(--muted);padding:20px;text-align:center">No ${emptyLabels[eventsSourceTab] || 'events'} found nearby. Try expanding your distance or changing your location.</p>`;
@@ -12226,7 +12226,9 @@ function renderEventCard(event) {
       ? event.description.substring(0, 110) + (event.description.length > 110 ? '…' : '')
       : '';
     const timeLabel = event.time ? ` ${formatTime12(event.time)}` : '';
-    const rightMeta = event.source === 'libraryweb'
+    // Sources whose venue matters more than the distance (every Fairport
+    // festival is in the same village, so the park name is the useful bit).
+    const rightMeta = (event.source === 'libraryweb' || event.source === 'fairport')
       ? escapeHtml(event.location.address || 'Library')
       : distLabel;
     return `
