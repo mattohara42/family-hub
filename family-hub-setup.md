@@ -23,7 +23,7 @@ Google OAuth and the Photos Picker **will not work** when you open the HTML file
 
 ### Option A — Netlify (recommended, accessible from any device)
 
-Family Hub is deployed as a static site on Netlify. If the site is already set up at a Netlify URL, skip to Step 1 below. To deploy your own instance:
+Family Hub is deployed as a static site on Netlify at **https://familial.netlify.app**. If you're using that instance, skip to Step 1 below. To deploy your own:
 
 1. Push the three files to a GitHub repository
 2. Go to [app.netlify.com](https://app.netlify.com) → **Add new site → Import an existing project**

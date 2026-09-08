@@ -11,6 +11,8 @@
 
 **[Setup guide](family-hub-setup.md)** · **[Feature reference](FEATURES.md)** · **[Easter eggs](EASTER_EGGS.md)** · **[Architecture notes](CLAUDE.md)**
 
+![Family Hub running in dark theme, showing a week calendar and the weather widget](docs/images/social-preview.png)
+
 ---
 
 A wall-display family dashboard — calendar, weather, shopping, meals, chores and more — built as **three plain files** with no build step, no npm install, and no framework.
@@ -46,7 +48,7 @@ you edit is what the browser runs.
 **Ambient**
 - **Weather** — current conditions, forecast, RainViewer radar and NWS alerts, all keyless (Open-Meteo)
 - **Outdoor task advisor** — scores the coming week's forecast against your calendar to pick the best window to mow the lawn
-- **Event discovery** — nearby things to do, aggregated from Ticketmaster, library feeds, Red Wings and CitySpark
+- **Event discovery** — nearby things to do, aggregated from Ticketmaster, library feeds, Red Wings, CitySpark and the Fairport/Pittsford town calendars
 - **Word of the Day**, **Dad Joke of the Day**, quotes, news headlines and stock tickers as optional widgets, plus a set of [easter eggs](EASTER_EGGS.md)
 - **Google Photos background slideshow** (photos cached as blobs in IndexedDB)
 - **Screensaver** — photo slideshow, clock, or the [Pond Chimes](https://github.com/mattohara42/pond-chimes) ambient pond, vendored in `pond/`
@@ -76,7 +78,7 @@ full walkthrough (Google Cloud OAuth client, Firebase project, API keys, authori
 
 ## Deploying
 
-Production runs on Netlify as a static site plus a handful of serverless functions:
+Production runs on Netlify as a static site at **[familial.netlify.app](https://familial.netlify.app)**, plus a handful of serverless functions:
 
 | Function | Purpose |
 |---|---|
@@ -116,9 +118,11 @@ docs/                  brainstorms, plans, prototypes
 npm test        # node --test tests/*.test.js
 ```
 
-Covers event-discovery aggregation, the event date/time shift helper, and the outdoor-task
-scorer. Because the app is a no-build browser monolith, each test carries its own copy of the
-pure function it exercises — keep the two in sync. See
+Covers the Netlify functions (event-discovery aggregation, recipe scraping, Home Assistant)
+and the browser app's pure helpers (the event date/time shift, the outdoor-task scorer, meal
+images). Function tests import the real code through its `_test` export; browser-app tests
+cannot — `family-hub.js` is a no-build monolith with nothing to `require` — so each of those
+carries its own copy of the function it exercises, and the two must be kept in sync. See
 [BACKEND_TESTING_SETUP.md](BACKEND_TESTING_SETUP.md) for running the functions locally.
 
 ## Documentation
