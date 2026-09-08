@@ -675,6 +675,7 @@ A handful of triggers aren't tied to any franchise (birthday, politeness, dark-m
 3. **LibraryWeb (LibCal)** — free Monroe County (Rochester NY) public library events via iCal feeds
 4. **Red Wings** — Rochester Red Wings (AAA baseball) home games via MLB Stats API
 5. **CitySpark ("Around Town")** — broad local events via aggregator (concerts, festivals, food, art, comedy, family)
+6. **Town of Pittsford** — municipal community calendar (concerts, movie nights, festivals). Rides in the "Library & Town" tab with `source: 'libraryweb'` so it groups next to the library feeds; gets its own sub-tab via `location.address = 'Town of Pittsford'`
 
 **State:**
 ```js
@@ -697,7 +698,7 @@ let eventsModalOpen     = false;
 
 **Netlify backend function:** `netlify/functions/events.js` (400+ lines)
 - `geocodeLocation()` — city name → lat/lon via OpenWeatherMap
-- `fetchTicketmaster()`, `fetchOpenStreetMap()`, `fetchLibraryWeb()`, `fetchRedWings()`, `fetchCitySpark()` — per-source fetchers
+- `fetchTicketmaster()`, `fetchOpenStreetMap()`, `fetchLibraryWeb()`, `fetchRedWings()`, `fetchCitySpark()`, `fetchPittsford()` — per-source fetchers
 - `calculateDistance()` — Haversine formula
 - `deduplicateEvents()` — by title + date + venue
 - `filterEventsByDistanceAndDate()` — 30-day window, radius filtering
@@ -726,6 +727,7 @@ Netlify environment variables:
 - CitySpark requires `sort:'Time'` (not `'Date'`) for soonest-first results; `'Date'` returns tail
 - CitySpark `DateStart` is local time with spurious `Z` — read components directly, do NOT tz-convert
 - LibraryWeb: no all-branches feed exists; must fetch per-branch iCal separately + merge
+- Pittsford: no iCal/feed — the Drupal `fullcalendar_view` page embeds the *whole* event list (~1400 items, 1.4 MB) as JSON in `drupal-settings-json`, so one fetch gets everything; cached 6 h. Their taxonomy is unreliable (the Food Truck Festival is tagged "Board Meeting"), so noise is filtered by colour for holidays/closures **only** (`#ac394b`, `#987b2a`) plus a title regex for the actual boards. `netlify/functions/events.pittsford.test.js` fails if either stops working
 - Dateless events (OpenStreetMap POIs, some library events) show "Anytime" in modal; require date selection if added to calendar
 
 ---

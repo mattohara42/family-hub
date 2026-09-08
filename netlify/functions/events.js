@@ -24,7 +24,8 @@ const sourceStatus = {
   osm: { ok: true, count: 0, error: null },
   libraryweb: { ok: true, count: 0, error: null },
   redwings: { ok: true, count: 0, error: null },
-  cityspark: { ok: true, count: 0, error: null }
+  cityspark: { ok: true, count: 0, error: null },
+  pittsford: { ok: true, count: 0, error: null }
 };
 
 // CitySpark local-events aggregator (powers RocCityMag's calendar). Public
@@ -81,6 +82,24 @@ const LIBRARYWEB_PER_BRANCH_LIMIT = 8;  // soonest N per branch, so libraries do
 let librarywebCache = { events: null, timestamp: 0 };
 const LIBRARYWEB_CACHE_TTL = 30 * 60 * 1000;  // 30 minutes
 
+// Town of Pittsford municipal calendar. Drupal fullcalendar_view embeds the
+// whole event list as JSON in drupalSettings, so one page fetch gets everything
+// — no per-event scraping. Events carry a taxonomy colour: board meetings,
+// holidays/closures and library-closure notices are noise for a family hub, so
+// only the rest survives (their tagging is unreliable, hence the title filter
+// too — "Food Truck and Music Festival" is tagged "Board Meeting").
+const PITTSFORD_URL = 'https://www.townofpittsfordny.gov/calendar';
+const PITTSFORD_VENUE = { name: 'Town of Pittsford', lat: 43.0906, lon: -77.5147 };
+const PITTSFORD_MAX_MILES = 90;
+// Colour is the taxonomy term. Holidays and library-closure notices are always
+// noise so they go by colour; board meetings are NOT filtered by colour because
+// real events get mistagged as "Board Meeting" (e.g. the Food Truck Festival) —
+// the title regex catches the actual boards instead.
+const PITTSFORD_SKIP_COLORS = ['#ac394b', '#987b2a'];  // holiday / library closure
+const PITTSFORD_SKIP_TITLE = /board|meeting|closure|closed|cancell?ed|committee|public hearing|holiday|deadline/i;
+let pittsfordCache = { events: null, timestamp: 0 };
+const PITTSFORD_CACHE_TTL = 6 * 60 * 60 * 1000;  // 6 hours (municipal calendar changes rarely)
+
 // Retry configuration
 const RETRY_CONFIG = {
   maxRetries: 2,
@@ -112,12 +131,13 @@ exports.handler = async (event) => {
     }
 
     // Step 2: Fetch from all sources in parallel
-    const [tmEvents, osmEvents, libEvents, rwEvents, csEvents] = await Promise.allSettled([
+    const [tmEvents, osmEvents, libEvents, rwEvents, csEvents, pfEvents] = await Promise.allSettled([
       fetchTicketmaster(city, state, lat, lon, { keyword, attractionId, venueId }),
       fetchOpenStreetMap(city, state, lat, lon, radiusMinutes),
       fetchLibraryWeb(city, state, lat, lon),
       fetchRedWings(city, state, lat, lon),
-      fetchCitySpark(city, state, lat, lon)
+      fetchCitySpark(city, state, lat, lon),
+      fetchPittsford(city, state, lat, lon)
     ]);
 
     // Collect all results
@@ -126,7 +146,8 @@ exports.handler = async (event) => {
       ...extractSettledValue(osmEvents, 'osm'),
       ...extractSettledValue(libEvents, 'libraryweb'),
       ...extractSettledValue(rwEvents, 'redwings'),
-      ...extractSettledValue(csEvents, 'cityspark')
+      ...extractSettledValue(csEvents, 'cityspark'),
+      ...extractSettledValue(pfEvents, 'pittsford')
     ];
 
     // Step 3: Remove duplicates by title + date + venue
@@ -156,7 +177,8 @@ exports.handler = async (event) => {
         osm: sourceStatus.osm.count,
         libraryweb: sourceStatus.libraryweb.count,
         redwings: sourceStatus.redwings.count,
-        cityspark: sourceStatus.cityspark.count
+        cityspark: sourceStatus.cityspark.count,
+        pittsford: sourceStatus.pittsford.count
       },
       warnings: Object.entries(sourceStatus)
         .filter(([, status]) => !status.ok)
@@ -681,6 +703,101 @@ async function fetchLibraryWeb(city, state, lat, lon) {
     console.warn('[Events] LibraryWeb error:', err);
     sourceStatus.libraryweb.ok = false;
     sourceStatus.libraryweb.error = err.message;
+    return [];
+  }
+}
+
+// ────────────────────────────────────────────────────────────────
+// TOWN OF PITTSFORD (municipal calendar — Drupal fullcalendar_view)
+// ────────────────────────────────────────────────────────────────
+
+// Strip tags/entities from the Drupal description HTML and collapse whitespace
+function stripHtml(s) {
+  return String(s || '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&#0?39;/g, "'").replace(/&quot;/g, '"').replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function fetchPittsford(city, state, lat, lon) {
+  try {
+    if (calculateDistance(lat, lon, PITTSFORD_VENUE.lat, PITTSFORD_VENUE.lon) > PITTSFORD_MAX_MILES) {
+      sourceStatus.pittsford.count = 0;
+      return [];
+    }
+
+    if (pittsfordCache.events && Date.now() - pittsfordCache.timestamp < PITTSFORD_CACHE_TTL) {
+      sourceStatus.pittsford.count = pittsfordCache.events.length;
+      sourceStatus.pittsford.ok = true;
+      return pittsfordCache.events;
+    }
+
+    const html = await fetchWithRetry(async () => {
+      const r = await fetch(PITTSFORD_URL, { headers: { 'User-Agent': 'FamilyHub/1.0 (event discovery)' } });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.text();
+    }, 'Pittsford', 1);
+
+    const m = html.match(/<script type="application\/json" data-drupal-selector="drupal-settings-json">([\s\S]*?)<\/script>/);
+    if (!m) throw new Error('drupalSettings JSON not found (page markup changed?)');
+    const view = JSON.parse(m[1]).fullCalendarView?.[0];
+    const raw = JSON.parse(view?.calendar_options || '{}').events || [];
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const events = [];
+    for (const e of raw) {
+      const date = (e.start || '').split('T')[0];
+      if (!date || date < todayStr) continue;
+      if (PITTSFORD_SKIP_COLORS.includes(e.backgroundColor)) continue;
+      const title = stripHtml(e.title);
+      if (!title || PITTSFORD_SKIP_TITLE.test(title)) continue;
+
+      const time = (e.start.split('T')[1] || '').slice(0, 5) || null;
+      const endTime = e.end ? (e.end.split('T')[1] || '').slice(0, 5) : null;
+      const duration = (time && endTime && e.end.split('T')[0] === date)
+        ? Math.round((new Date(`${date}T${endTime}`) - new Date(`${date}T${time}`)) / 60000) || null
+        : null;
+
+      events.push({
+        id: `pf_${e.eid || e.id}`,
+        title,
+        // ponytail: title keyword → type, just for the card emoji. Their taxonomy
+        // is too unreliable to map properly.
+        type: /concert|music|band/i.test(title) ? 'concert'
+            : /food|truck|farmers|market/i.test(title) ? 'food'
+            : /movie|festival|parade/i.test(title) ? 'show' : 'activity',
+        // Rides in the Library tab alongside the library feeds — same "local
+        // community calendar" shelf, own sub-tab via location.address.
+        source: 'libraryweb',
+        sourceUrl: e.url ? `https://www.townofpittsfordny.gov${e.url}` : PITTSFORD_URL,
+        date,
+        time,
+        duration,
+        location: {
+          city, state,
+          address: PITTSFORD_VENUE.name,
+          lat: PITTSFORD_VENUE.lat,
+          lon: PITTSFORD_VENUE.lon,
+          distanceMiles: null
+        },
+        description: stripHtml(e.des).slice(0, 400) || `Town of Pittsford community event`,
+        image: null,
+        weather: null
+      });
+    }
+
+    events.sort((a, b) => `${a.date}${a.time || ''}`.localeCompare(`${b.date}${b.time || ''}`));
+    pittsfordCache = { events, timestamp: Date.now() };
+    sourceStatus.pittsford.count = events.length;
+    sourceStatus.pittsford.ok = true;
+    sourceStatus.pittsford.error = null;
+    return events;
+  } catch (err) {
+    console.warn('[Events] Pittsford error:', err);
+    sourceStatus.pittsford.ok = false;
+    sourceStatus.pittsford.error = err.message;
     return [];
   }
 }

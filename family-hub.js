@@ -11819,7 +11819,7 @@ function updateSourceTabCounts(rawEvents) {
 }
 
 function renderEventsList(events) {
-  const emptyLabels = { ticketmaster: 'live events', osm: 'things to do', libraryweb: 'library events', redwings: 'Red Wings home games', cityspark: 'local events' };
+  const emptyLabels = { ticketmaster: 'live events', osm: 'things to do', libraryweb: 'library or town events', redwings: 'Red Wings home games', cityspark: 'local events' };
   const html = events.length > 0
     ? events.map(e => renderEventCard(e)).join('')
     : `<p style="color:var(--muted);padding:20px;text-align:center">No ${emptyLabels[eventsSourceTab] || 'events'} found nearby. Try expanding your distance or changing your location.</p>`;

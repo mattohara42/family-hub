@@ -61,7 +61,8 @@ Shared state (shopping, todo, budget) lives in Firebase Firestore. Photos are bl
 | ICS date keys are local | `injectIcsEvent` keys events by `localDateKey()` (not `toISOString()`) — UTC slicing day-shifts evening events in western zones |
 | Nautical mode migration | `localStorage 'fh_mode' === 'amazing'` auto-upgrades to `'nautical'` on load |
 | Browser caches JS during dev | Keep DevTools open with "Disable cache" or hard-reload (Cmd+Shift+R) after edits |
-| Event Discovery keys | Ticketmaster, OpenWeatherMap, LibraryWeb (per-branch), Red Wings (keyless), CitySpark (keyless) — set via Netlify env vars in production |
+| Event Discovery keys | Ticketmaster, OpenWeatherMap, LibraryWeb (per-branch), Red Wings (keyless), CitySpark (keyless), Town of Pittsford (keyless page scrape) — set via Netlify env vars in production |
+| Pittsford calendar is scraped | No feed exists — `fetchPittsford()` pulls the whole event list out of the Drupal `drupal-settings-json` blob on `/calendar`. Board meetings/closures are filtered out; their event tagging is unreliable so don't filter boards by taxonomy colour. `node netlify/functions/events.pittsford.test.js` checks it still parses |
 | Event Discovery backend | Runs on `/.netlify/functions/events`; geocoding via OWM; exponential backoff retry (2x, 1s→4s) for API failures |
 | CitySpark sort parameter | MUST use `sort:'Time'` (soonest-first); `'Date'` returns the tail of future events and fails the 30-day filter |
 
