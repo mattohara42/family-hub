@@ -393,7 +393,7 @@ const ASSISTANT_QUICK_PROMPTS = [
   "When should I mow the lawn?",
 ];
 // ── Widget visibility & placement ────────────────────────────────────────────
-const WIDGET_DEFAULTS = { shopping: true, todo: true, budget: true, chores: true, wotd: true, quote: true, dadjoke: true, yearstrip: false, assistant: true, countdown: true, news: false, stock: false };
+const WIDGET_DEFAULTS = { shopping: true, todo: true, budget: true, chores: true, wotd: true, quote: true, dadjoke: true, yearstrip: false, assistant: true, countdown: true, news: false, stock: false, homeassistant: false };
 let widgetVisibility = { ...WIDGET_DEFAULTS, ...lsGet('fh_widgets', {}) };
 
 // Placement: 'sidebar' (right column) or 'bottom' (full-width strip below layout)
@@ -401,7 +401,7 @@ const WIDGET_PLACEMENT_DEFAULTS = {
   shopping: 'sidebar', todo: 'sidebar', budget: 'sidebar', chores: 'sidebar',
   wotd: 'sidebar', quote: 'sidebar', dadjoke: 'sidebar',
   yearstrip: 'bottom', assistant: 'sidebar', countdown: 'sidebar',
-  news: 'sidebar', stock: 'sidebar',
+  news: 'sidebar', stock: 'sidebar', homeassistant: 'sidebar',
 };
 let widgetPlacement = { ...WIDGET_PLACEMENT_DEFAULTS, ...lsGet('fh_widget_placement', {}) };
 
@@ -419,6 +419,7 @@ const WIDGET_ORDER = [
   { key: 'countdown', id: 'countdownCard' },
   { key: 'news',      id: 'newsCard'      },
   { key: 'stock',     id: 'stockCard'     },
+  { key: 'homeassistant', id: 'haCard'    },
 ];
 
 // Mobile tab registry — tab name → the one card shown full-screen on that tab.
@@ -431,6 +432,7 @@ const MOBILE_TABS = {
   todo:      { cardId: 'todoCard',      widget: 'todo'      },
   shop:      { cardId: 'shopCard',      widget: 'shopping'  },
   weather:   { cardId: 'weatherCard'                        },
+  home:      { cardId: 'haCard',        widget: 'homeassistant' },
 };
 
 // User-defined widget order (keys only). Persisted in fh_widget_order.
@@ -554,11 +556,17 @@ function applyWidgetVisibility() {
     countdown:'countdownCard',
     news:     'newsCard',
     stock:    'stockCard',
+    homeassistant: 'haCard',
   };
   Object.entries(MAP).forEach(([key, id]) => {
     const el = document.getElementById(id);
     if (el) el.style.display = widgetVisibility[key] ? '' : 'none';
   });
+
+  // The Home nav button is the only optional one in the bar — hide it unless the
+  // widget is on, so nobody who doesn't run Home Assistant pays for the crowding.
+  const homeNav = document.getElementById('mobileNavHome');
+  if (homeNav) homeNav.style.display = widgetVisibility.homeassistant ? '' : 'none';
 
   // Re-evaluate bottom strip container visibility
   const bottomStrip = document.getElementById('bottomStrip');
@@ -1108,6 +1116,7 @@ window.addEventListener('load', () => {
   loadQuote();
   loadNewsFeeds();
   loadStockQuotes();
+  initHomeAssistant();
   if (eggCategories.ui) setupKonamiCode();
   if (eggCategories.ui) setupEmojiFireworks();
   initAssistantVoice();
@@ -5351,6 +5360,10 @@ function attachFirestoreListeners() {
   _fsUnsub.push(db.collection('settings').doc('mealDietPrefs').onSnapshot(doc => {
     if (doc.exists) mealDietPrefs = doc.data().value;
   }, _fsError));
+  _fsUnsub.push(db.collection('settings').doc('homeAssistant').onSnapshot(doc => {
+    if (doc.exists) haConfig = { ...HA_DEFAULTS, ...doc.data().value };
+    renderHaEntitySettings(); startHaPolling();
+  }, _fsError));
   _fsUnsub.push(db.collection('settings').doc('mowConfig').onSnapshot(doc => {
     if (doc.exists) mowConfig = { ...MOW_CONFIG, ...doc.data().value };
     _mowReco = null;
@@ -5479,6 +5492,7 @@ function runFirestoreMigrations() {
     { ls: 'fh_wlocations',     key: 'weatherLocations' },
     { ls: 'fh_mealDietPrefs',  key: 'mealDietPrefs' },
     { ls: 'fh_mowConfig',      key: 'mowConfig' },
+    { ls: 'fh_haConfig',       key: 'homeAssistant' },   // token is NOT synced — see the Home Assistant section
   ].forEach(({ ls, key }) => {
     const raw = localStorage.getItem(ls);
     if (raw === null) return; // never customized on this device
@@ -6872,6 +6886,374 @@ function removeStockTicker(i) {
   saveStockTickers();
   renderStockTickerList();
   loadStockQuotes(true);
+}
+
+// ── Home Assistant ────────────────────────────────────────────────────────────
+// Shows and controls a hand-picked allowlist of Home Assistant entities over its
+// REST API. The hub is served over HTTPS, so Home Assistant has to be too — see
+// family-hub-setup.md Step 6 (Tailscale Serve) and
+// docs/plans/2026-09-07-001-feat-home-assistant-integration-plan.md.
+//
+// Base URL + entity list are shared family config (Firestore settings/homeAssistant).
+// The token is a house key: it stays in localStorage on the device that pasted it
+// and is deliberately never synced, so a lost phone costs one revocable token.
+
+const HA_DEFAULTS = { baseUrl: '', entities: [] };   // entities: [{ id, name }]
+let haConfig  = { ...HA_DEFAULTS, ...lsGet('fh_haConfig', {}) };
+let haToken   = localStorage.getItem('fh_haToken') || '';
+let haStates  = {};        // entity_id → HA state object, or { error: '…' }
+let haPending = {};        // entity_id → true while a service call is settling
+let haEntityIdSuggestions = [];   // filled by Test Connection, for the settings datalist
+let _haPollTimer = null;
+let _haLastError = '';
+
+const HA_POLL_MS    = 120000;
+const HA_TIMEOUT_MS = 10000;
+
+// Domains we can operate with a plain on/off. Everything else renders read-only,
+// except `lock`, which is handled separately because its services aren't turn_on/off.
+const HA_TOGGLE_DOMAINS = ['light', 'switch', 'fan', 'input_boolean'];
+
+const HA_DOMAIN_ICONS = {
+  light: '💡', switch: '🔌', fan: '🌀', lock: '🔒', climate: '🌡️',
+  sensor: '📊', binary_sensor: '📍', cover: '🪟', media_player: '📺',
+  input_boolean: '🎚️', person: '🧍', device_tracker: '📶',
+};
+
+// ── Pure helpers (mirrored in tests/home-assistant.test.js) ──
+
+/** 'light.kitchen' → 'light'. '' for anything that isn't an entity ID. */
+function haEntityDomain(entityId) {
+  const s = String(entityId || '');
+  const i = s.indexOf('.');
+  return i > 0 ? s.slice(0, i) : '';
+}
+
+/**
+ * Which service call flips this entity from its current state, or null if the
+ * entity is display-only. Unknown lock states resolve to 'lock' — the safe way.
+ */
+function haServiceForToggle(entityId, state) {
+  const domain = haEntityDomain(entityId);
+  if (HA_TOGGLE_DOMAINS.includes(domain)) {
+    return { domain, service: state === 'on' ? 'turn_off' : 'turn_on' };
+  }
+  if (domain === 'lock') {
+    return { domain: 'lock', service: state === 'locked' ? 'unlock' : 'lock' };
+  }
+  return null;
+}
+
+/** Button label for a controllable row. */
+function haActionLabel(entityId, state) {
+  const call = haServiceForToggle(entityId, state);
+  if (!call) return '';
+  return { turn_on: 'Turn on', turn_off: 'Turn off', lock: 'Lock', unlock: 'Unlock' }[call.service] || call.service;
+}
+
+/** Human-readable state text for a row. */
+function haFormatState(entityId, st) {
+  if (!st) return '—';
+  if (st.error) return st.error;
+  const raw = st.state;
+  if (raw === 'unavailable' || raw === 'unknown') return raw;
+  const unit = st.attributes && st.attributes.unit_of_measurement;
+  if (unit) return `${raw} ${unit}`;
+  const word = { on: 'On', off: 'Off', locked: 'Locked', unlocked: 'Unlocked',
+                 open: 'Open', closed: 'Closed', home: 'Home', not_home: 'Away' }[raw] || raw;
+  // Thermostats read better with the current temperature alongside the mode.
+  // The friendly word comes first so an off thermostat isn't the only 'off' in
+  // the card rendered lowercase.
+  if (haEntityDomain(entityId) === 'climate') {
+    const cur = st.attributes && st.attributes.current_temperature;
+    return cur != null ? `${word} · ${cur}°` : word;
+  }
+  return word;
+}
+
+/**
+ * Normalize a user-entered base URL. Returns { url } or { error }.
+ * Plain http:// is rejected up front (localhost aside) rather than saved as
+ * something the browser will refuse to call from an HTTPS page.
+ */
+function haNormalizeBaseUrl(raw) {
+  const s = String(raw || '').trim().replace(/\/+$/, '');
+  if (!s) return { url: '' };
+  if (!/^https?:\/\//i.test(s)) {
+    return { error: 'Include the scheme, e.g. https://familypi.tail1234.ts.net' };
+  }
+  let u;
+  try { u = new URL(s); } catch { return { error: "That doesn't look like a valid URL." }; }
+  const isLocal = u.hostname === 'localhost' || u.hostname === '127.0.0.1';
+  if (u.protocol === 'http:' && !isLocal) {
+    return { error: "Family Hub is served over HTTPS, so the browser won't let it call a plain http:// address. Use the Tailscale https://….ts.net URL (setup guide, Step 6d)." };
+  }
+  return { url: s };
+}
+
+// ── Fetch layer ──
+
+function haConfigured() { return !!(haConfig.baseUrl && haToken); }
+
+function haErr(kind, message) { const e = new Error(message); e.haKind = kind; return e; }
+
+/**
+ * One place that attaches the token, enforces a timeout, and turns every failure
+ * into something we can print. Mirrors what calFetch() does for Google.
+ */
+async function haFetch(path, opts = {}, creds = null) {
+  const baseUrl = creds ? creds.baseUrl : haConfig.baseUrl;
+  const token   = creds ? creds.token   : haToken;
+  if (!baseUrl || !token) throw haErr('unconfigured', "Home Assistant isn't set up yet.");
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), HA_TIMEOUT_MS);
+  let resp;
+  try {
+    resp = await fetch(baseUrl + path, {
+      ...opts,
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        ...(opts.headers || {}),
+      },
+    });
+  } catch (e) {
+    clearTimeout(t);
+    if (e.name === 'AbortError') {
+      throw haErr('timeout', 'Home Assistant took too long to answer. Is the Pi awake?');
+    }
+    // A CORS rejection and a dead host arrive as the same bare TypeError — the
+    // browser deliberately won't say which — so the message names both causes.
+    throw haErr('unreachable',
+      `Couldn't reach Home Assistant. Either it's offline (or Tailscale is down), or its cors_allowed_origins doesn't list ${location.origin}.`);
+  }
+  clearTimeout(t);
+  if (resp.status === 401 || resp.status === 403) {
+    throw haErr('auth', 'Home Assistant rejected the token. Generate a new one in HA → your profile → Security.');
+  }
+  if (resp.status === 404) {
+    throw haErr('notfound', 'Not found in Home Assistant. Check the entity ID under Developer Tools → States.');
+  }
+  if (!resp.ok) throw haErr('http', `Home Assistant returned ${resp.status}.`);
+  return resp.json();
+}
+
+/**
+ * Fetch each allowlisted entity individually rather than GET /api/states, which
+ * returns every entity in the house. A handful of tiny requests is smaller, and
+ * one bad entity ID then can't blank the whole card.
+ */
+async function refreshHaStates() {
+  const entities = haConfig.entities || [];
+  if (!haConfigured() || !entities.length) { renderHaCard(); return; }
+
+  const results = await Promise.allSettled(
+    entities.map(e => haFetch('/api/states/' + encodeURIComponent(e.id)))
+  );
+
+  const next = {};
+  let firstErr = '';
+  results.forEach((r, i) => {
+    const id = entities[i].id;
+    if (r.status === 'fulfilled') { next[id] = r.value; return; }
+    const kind = r.reason && r.reason.haKind;
+    next[id] = { error: kind === 'notfound' ? 'not found' : 'error' };
+    // Per-entity 404s are shown on their own row; anything else is a whole-card
+    // problem (offline, CORS, bad token) and gets one banner rather than N.
+    if (!firstErr && kind !== 'notfound') firstErr = r.reason.message;
+  });
+  haStates = next;
+  _haLastError = firstErr;
+  renderHaCard();
+}
+
+// ── Card ──
+
+function renderHaCard() {
+  const body = document.getElementById('haBody');
+  if (!body) return;
+
+  if (!haConfigured()) {
+    body.innerHTML = '<div class="ha-empty">Add your Home Assistant URL and token in ⚙️ Settings → 🏠 Home Assistant.</div>';
+    return;
+  }
+  const entities = haConfig.entities || [];
+  if (!entities.length) {
+    body.innerHTML = '<div class="ha-empty">No entities yet. Add the ones you want on the panel in ⚙️ Settings → 🏠 Home Assistant.</div>';
+    return;
+  }
+
+  const rows = entities.map((ent, i) => {
+    const st      = haStates[ent.id];
+    const state   = st && st.state;
+    const dead    = !st || st.error || state === 'unavailable' || state === 'unknown';
+    const pending = !!haPending[ent.id];
+    const label   = ent.name || (st && st.attributes && st.attributes.friendly_name) || ent.id;
+    const icon    = HA_DOMAIN_ICONS[haEntityDomain(ent.id)] || '•';
+    const action  = haActionLabel(ent.id, state);
+    const control = (action && !dead)
+      ? `<button class="ha-btn" ${pending ? 'disabled' : ''} onclick="haToggleEntityAt(${i})">${pending ? '…' : esc(action)}</button>`
+      : '';
+    return `
+      <div class="ha-row${dead ? ' ha-row-dim' : ''}">
+        <span class="ha-icon">${icon}</span>
+        <span class="ha-name" title="${esc(ent.id)}">${esc(label)}</span>
+        <span class="ha-state">${esc(haFormatState(ent.id, st))}</span>
+        ${control}
+      </div>`;
+  }).join('');
+
+  body.innerHTML = (_haLastError ? `<div class="ha-error">${esc(_haLastError)}</div>` : '') + rows;
+}
+
+// ── Controls ──
+
+/** Row click handler. Rows address entities by position, never by interpolated ID. */
+function haToggleEntityAt(i) {
+  const ent = (haConfig.entities || [])[i];
+  if (ent) haToggleEntity(ent.id);
+}
+
+async function haToggleEntity(entityId) {
+  const st   = haStates[entityId];
+  const prev = st && st.state;
+  const call = haServiceForToggle(entityId, prev);
+  if (!call || haPending[entityId]) return;
+
+  haPending[entityId] = true;
+  renderHaCard();
+
+  try {
+    await haFetch(`/api/services/${call.domain}/${call.service}`, {
+      method: 'POST',
+      body: JSON.stringify({ entity_id: entityId }),
+    });
+  } catch (e) {
+    delete haPending[entityId];
+    showToast('⚠️ ' + e.message, 5000);
+    renderHaCard();
+    return;
+  }
+  haRecheckEntity(entityId, prev);
+}
+
+/**
+ * Confirm a service call actually landed. Z-Wave and Zigbee devices can take
+ * seconds to report the new state, so re-check twice before handing it back to
+ * the poll — better than snapping the row back and calling it a failure.
+ */
+async function haRecheckEntity(entityId, prevState) {
+  for (const delay of [1000, 4000]) {
+    await new Promise(r => setTimeout(r, delay));
+    try {
+      const st = await haFetch('/api/states/' + encodeURIComponent(entityId));
+      haStates[entityId] = st;
+      if (st.state !== prevState) break;
+    } catch { break; }
+  }
+  delete haPending[entityId];
+  renderHaCard();
+}
+
+// ── Polling ──
+
+function startHaPolling() {
+  clearInterval(_haPollTimer);
+  _haPollTimer = null;
+  if (!widgetVisibility.homeassistant || !haConfigured()) { renderHaCard(); return; }
+  refreshHaStates();
+  _haPollTimer = setInterval(() => { if (!document.hidden) refreshHaStates(); }, HA_POLL_MS);
+}
+
+function initHomeAssistant() {
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && _haPollTimer) refreshHaStates();
+  });
+  startHaPolling();
+}
+
+// ── Settings ──
+
+function haSaveConfig() {
+  saveFsSetting('homeAssistant', 'fh_haConfig', haConfig);
+}
+
+function renderHaEntitySettings() {
+  const el = document.getElementById('haEntityList');
+  if (!el) return;
+  const entities = haConfig.entities || [];
+  if (!entities.length) {
+    el.innerHTML = '<div style="color:var(--muted);font-size:.78rem;padding:4px 0">No entities yet.</div>';
+    return;
+  }
+  el.innerHTML = entities.map((ent, i) => `
+    <div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid rgba(128,128,128,.1)">
+      <span style="flex:0 0 90px;font-size:.8rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(ent.name || '—')}</span>
+      <span style="flex:1;font-size:.75rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(ent.id)}</span>
+      <button style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem" onclick="removeHaEntity(${i})">✕</button>
+    </div>`).join('');
+}
+
+function addHaEntity() {
+  const idEl   = document.getElementById('haEntityId');
+  const nameEl = document.getElementById('haEntityName');
+  const id     = (idEl.value || '').trim().toLowerCase();
+  if (!id) return;
+  if (!haEntityDomain(id)) {
+    showToast('⚠️ Entity IDs look like light.kitchen — domain, dot, name.', 4000);
+    return;
+  }
+  if ((haConfig.entities || []).some(e => e.id === id)) {
+    showToast('Already on the panel.', 2500);
+    return;
+  }
+  haConfig.entities = [...(haConfig.entities || []), { id, name: (nameEl.value || '').trim() }];
+  idEl.value = ''; nameEl.value = '';
+  haSaveConfig();
+  renderHaEntitySettings();
+  refreshHaStates();
+}
+
+function removeHaEntity(i) {
+  haConfig.entities = (haConfig.entities || []).filter((_, idx) => idx !== i);
+  haSaveConfig();
+  renderHaEntitySettings();
+  renderHaCard();
+}
+
+/**
+ * Verify the URL/token the user just typed (not the saved ones), then load every
+ * entity ID in the house into a datalist. Typing `light.kitchen_ceiling_2` from
+ * memory is otherwise miserable, and this costs one request on an explicit click.
+ */
+async function testHaConnection() {
+  const out = document.getElementById('haTestResult');
+  const { url, error } = haNormalizeBaseUrl(document.getElementById('haBaseUrl').value);
+  if (error) { out.className = 'ha-test ha-test-bad'; out.textContent = '⚠️ ' + error; return; }
+  if (!url)  { out.className = 'ha-test ha-test-bad'; out.textContent = '⚠️ Enter your Home Assistant URL first.'; return; }
+
+  const token = (document.getElementById('haTokenInput').value || '').trim();
+  if (!token) { out.className = 'ha-test ha-test-bad'; out.textContent = '⚠️ Enter a long-lived access token first.'; return; }
+
+  out.className = 'ha-test';
+  out.textContent = 'Testing…';
+
+  // Test what's in the boxes, not what was saved last time — passed explicitly so
+  // a poll firing mid-test can't pick up half-entered credentials.
+  const creds = { baseUrl: url, token };
+  try {
+    await haFetch('/api/', {}, creds);
+    const all = await haFetch('/api/states', {}, creds);
+    haEntityIdSuggestions = all.map(s => s.entity_id).sort();
+    const dl = document.getElementById('haEntityOptions');
+    if (dl) dl.innerHTML = haEntityIdSuggestions.map(id => `<option value="${esc(id)}"></option>`).join('');
+    out.className = 'ha-test ha-test-ok';
+    out.textContent = `✅ Connected. ${haEntityIdSuggestions.length} entities found — the entity ID box will now suggest them.`;
+  } catch (e) {
+    out.className = 'ha-test ha-test-bad';
+    out.textContent = '⚠️ ' + e.message;
+  }
 }
 
 // ── Word of the Day ──────────────────────────────────────────────────────────
@@ -10275,6 +10657,8 @@ function setMobileTab(tab) {
   if (todoBtn)    todoBtn.classList.toggle('active', tab === 'todo');
   if (shopBtn)    shopBtn.classList.toggle('active', tab === 'shop');
   if (weatherBtn) weatherBtn.classList.toggle('active', tab === 'weather');
+  const homeBtn = document.getElementById('mobileNavHome');
+  if (homeBtn) homeBtn.classList.toggle('active', tab === 'home');
 }
 
 const THEME_COLORS = {
@@ -10678,6 +11062,7 @@ const SETTINGS_GROUPS = [
     { tab: 'shopping', label: '🛒 Shopping' },
     { tab: 'chores',   label: '⭐ Chores' },
     { tab: 'meals',    label: '🍽 Meals' },
+    { tab: 'homeassistant', label: '🏠 Home Assistant' },
   ]},
   { label: 'Advanced', gated: true, items: [
     { tab: 'eggs', label: '🥚 Easter Eggs' },
@@ -10855,6 +11240,11 @@ function openSettings() {
     if (el) el.checked = eggCategories[cat];
   });
   renderEggFranchiseChips();
+  document.getElementById('haBaseUrl').value    = haConfig.baseUrl || '';
+  document.getElementById('haTokenInput').value = haToken;
+  document.getElementById('haTestResult').textContent = '';
+  document.getElementById('haTestResult').className   = 'ha-test';
+  renderHaEntitySettings();
   document.getElementById('settingsModal').style.display = 'flex';
   applySafePaletteMode();
   trapFocus(document.querySelector('#settingsModal .modal'), document.getElementById('settingsBtn'), closeSettings);
@@ -10983,7 +11373,25 @@ function saveSettings() {
     eggFranchises[btn.dataset.eggId] = btn.classList.contains('btn-mode-active');
   });
   localStorage.setItem('fh_eggFranchises', JSON.stringify(eggFranchises));
+  // Home Assistant. The token never leaves this device; the URL is shared config.
+  // An unusable URL is refused rather than saved — the toast fires after the modal
+  // closes, which is why it isn't an inline field error.
+  const haUrlEl = document.getElementById('haBaseUrl');
+  let haUrlError = '';
+  if (haUrlEl) {
+    const { url, error } = haNormalizeBaseUrl(haUrlEl.value);
+    if (error) haUrlError = error;
+    else if (url !== haConfig.baseUrl) { haConfig.baseUrl = url; haSaveConfig(); }
+  }
+  const haTokenEl = document.getElementById('haTokenInput');
+  if (haTokenEl) {
+    haToken = (haTokenEl.value || '').trim();
+    if (haToken) localStorage.setItem('fh_haToken', haToken);
+    else localStorage.removeItem('fh_haToken');
+  }
   closeSettings();
+  if (haUrlError) showToast('⚠️ Home Assistant URL not saved: ' + haUrlError, 6000);
+  startHaPolling();
   injectLocalEvents();
   renderCurrentView();
   renderCalendarTabs();
