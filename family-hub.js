@@ -393,7 +393,7 @@ const ASSISTANT_QUICK_PROMPTS = [
   "When should I mow the lawn?",
 ];
 // ── Widget visibility & placement ────────────────────────────────────────────
-const WIDGET_DEFAULTS = { shopping: true, todo: true, budget: true, chores: true, wotd: true, quote: true, dadjoke: true, yearstrip: false, assistant: true, countdown: true, news: false, stock: false };
+const WIDGET_DEFAULTS = { shopping: true, todo: true, budget: true, chores: true, wotd: true, quote: true, dadjoke: true, yearstrip: false, assistant: true, countdown: true, news: false, stock: false, homeassistant: false };
 let widgetVisibility = { ...WIDGET_DEFAULTS, ...lsGet('fh_widgets', {}) };
 
 // Placement: 'sidebar' (right column) or 'bottom' (full-width strip below layout)
@@ -401,7 +401,7 @@ const WIDGET_PLACEMENT_DEFAULTS = {
   shopping: 'sidebar', todo: 'sidebar', budget: 'sidebar', chores: 'sidebar',
   wotd: 'sidebar', quote: 'sidebar', dadjoke: 'sidebar',
   yearstrip: 'bottom', assistant: 'sidebar', countdown: 'sidebar',
-  news: 'sidebar', stock: 'sidebar',
+  news: 'sidebar', stock: 'sidebar', homeassistant: 'sidebar',
 };
 let widgetPlacement = { ...WIDGET_PLACEMENT_DEFAULTS, ...lsGet('fh_widget_placement', {}) };
 
@@ -419,6 +419,7 @@ const WIDGET_ORDER = [
   { key: 'countdown', id: 'countdownCard' },
   { key: 'news',      id: 'newsCard'      },
   { key: 'stock',     id: 'stockCard'     },
+  { key: 'homeassistant', id: 'haCard'    },
 ];
 
 // Mobile tab registry — tab name → the one card shown full-screen on that tab.
@@ -431,6 +432,7 @@ const MOBILE_TABS = {
   todo:      { cardId: 'todoCard',      widget: 'todo'      },
   shop:      { cardId: 'shopCard',      widget: 'shopping'  },
   weather:   { cardId: 'weatherCard'                        },
+  home:      { cardId: 'haCard',        widget: 'homeassistant' },
 };
 
 // User-defined widget order (keys only). Persisted in fh_widget_order.
@@ -554,11 +556,17 @@ function applyWidgetVisibility() {
     countdown:'countdownCard',
     news:     'newsCard',
     stock:    'stockCard',
+    homeassistant: 'haCard',
   };
   Object.entries(MAP).forEach(([key, id]) => {
     const el = document.getElementById(id);
     if (el) el.style.display = widgetVisibility[key] ? '' : 'none';
   });
+
+  // The Home nav button is the only optional one in the bar — hide it unless the
+  // widget is on, so nobody who doesn't run Home Assistant pays for the crowding.
+  const homeNav = document.getElementById('mobileNavHome');
+  if (homeNav) homeNav.style.display = widgetVisibility.homeassistant ? '' : 'none';
 
   // Re-evaluate bottom strip container visibility
   const bottomStrip = document.getElementById('bottomStrip');
@@ -1108,6 +1116,7 @@ window.addEventListener('load', () => {
   loadQuote();
   loadNewsFeeds();
   loadStockQuotes();
+  initHomeAssistant();
   if (eggCategories.ui) setupKonamiCode();
   if (eggCategories.ui) setupEmojiFireworks();
   initAssistantVoice();
@@ -5351,6 +5360,10 @@ function attachFirestoreListeners() {
   _fsUnsub.push(db.collection('settings').doc('mealDietPrefs').onSnapshot(doc => {
     if (doc.exists) mealDietPrefs = doc.data().value;
   }, _fsError));
+  _fsUnsub.push(db.collection('settings').doc('homeAssistant').onSnapshot(doc => {
+    if (doc.exists) haConfig = { ...HA_DEFAULTS, ...doc.data().value };
+    renderHaEntitySettings(); startHaPolling();
+  }, _fsError));
   _fsUnsub.push(db.collection('settings').doc('mowConfig').onSnapshot(doc => {
     if (doc.exists) mowConfig = { ...MOW_CONFIG, ...doc.data().value };
     _mowReco = null;
@@ -5479,6 +5492,7 @@ function runFirestoreMigrations() {
     { ls: 'fh_wlocations',     key: 'weatherLocations' },
     { ls: 'fh_mealDietPrefs',  key: 'mealDietPrefs' },
     { ls: 'fh_mowConfig',      key: 'mowConfig' },
+    { ls: 'fh_haConfig',       key: 'homeAssistant' },   // token is NOT synced — see the Home Assistant section
   ].forEach(({ ls, key }) => {
     const raw = localStorage.getItem(ls);
     if (raw === null) return; // never customized on this device
@@ -6485,6 +6499,7 @@ function openMealModal(dateKey, mealType) {
   document.getElementById('manualMealTypeSelect').value = mealType === 'all' ? 'dinner' : mealType;
   renderManualIngredientList();
   document.getElementById('recipeBoxSearch').value = '';
+  clearRecipeImport();
   renderRecipeBoxPicker();
 
   selectMealModalTab('ai');
@@ -6871,6 +6886,374 @@ function removeStockTicker(i) {
   saveStockTickers();
   renderStockTickerList();
   loadStockQuotes(true);
+}
+
+// ── Home Assistant ────────────────────────────────────────────────────────────
+// Shows and controls a hand-picked allowlist of Home Assistant entities over its
+// REST API. The hub is served over HTTPS, so Home Assistant has to be too — see
+// family-hub-setup.md Step 6 (Tailscale Serve) and
+// docs/plans/2026-09-07-001-feat-home-assistant-integration-plan.md.
+//
+// Base URL + entity list are shared family config (Firestore settings/homeAssistant).
+// The token is a house key: it stays in localStorage on the device that pasted it
+// and is deliberately never synced, so a lost phone costs one revocable token.
+
+const HA_DEFAULTS = { baseUrl: '', entities: [] };   // entities: [{ id, name }]
+let haConfig  = { ...HA_DEFAULTS, ...lsGet('fh_haConfig', {}) };
+let haToken   = localStorage.getItem('fh_haToken') || '';
+let haStates  = {};        // entity_id → HA state object, or { error: '…' }
+let haPending = {};        // entity_id → true while a service call is settling
+let haEntityIdSuggestions = [];   // filled by Test Connection, for the settings datalist
+let _haPollTimer = null;
+let _haLastError = '';
+
+const HA_POLL_MS    = 120000;
+const HA_TIMEOUT_MS = 10000;
+
+// Domains we can operate with a plain on/off. Everything else renders read-only,
+// except `lock`, which is handled separately because its services aren't turn_on/off.
+const HA_TOGGLE_DOMAINS = ['light', 'switch', 'fan', 'input_boolean'];
+
+const HA_DOMAIN_ICONS = {
+  light: '💡', switch: '🔌', fan: '🌀', lock: '🔒', climate: '🌡️',
+  sensor: '📊', binary_sensor: '📍', cover: '🪟', media_player: '📺',
+  input_boolean: '🎚️', person: '🧍', device_tracker: '📶',
+};
+
+// ── Pure helpers (mirrored in tests/home-assistant.test.js) ──
+
+/** 'light.kitchen' → 'light'. '' for anything that isn't an entity ID. */
+function haEntityDomain(entityId) {
+  const s = String(entityId || '');
+  const i = s.indexOf('.');
+  return i > 0 ? s.slice(0, i) : '';
+}
+
+/**
+ * Which service call flips this entity from its current state, or null if the
+ * entity is display-only. Unknown lock states resolve to 'lock' — the safe way.
+ */
+function haServiceForToggle(entityId, state) {
+  const domain = haEntityDomain(entityId);
+  if (HA_TOGGLE_DOMAINS.includes(domain)) {
+    return { domain, service: state === 'on' ? 'turn_off' : 'turn_on' };
+  }
+  if (domain === 'lock') {
+    return { domain: 'lock', service: state === 'locked' ? 'unlock' : 'lock' };
+  }
+  return null;
+}
+
+/** Button label for a controllable row. */
+function haActionLabel(entityId, state) {
+  const call = haServiceForToggle(entityId, state);
+  if (!call) return '';
+  return { turn_on: 'Turn on', turn_off: 'Turn off', lock: 'Lock', unlock: 'Unlock' }[call.service] || call.service;
+}
+
+/** Human-readable state text for a row. */
+function haFormatState(entityId, st) {
+  if (!st) return '—';
+  if (st.error) return st.error;
+  const raw = st.state;
+  if (raw === 'unavailable' || raw === 'unknown') return raw;
+  const unit = st.attributes && st.attributes.unit_of_measurement;
+  if (unit) return `${raw} ${unit}`;
+  const word = { on: 'On', off: 'Off', locked: 'Locked', unlocked: 'Unlocked',
+                 open: 'Open', closed: 'Closed', home: 'Home', not_home: 'Away' }[raw] || raw;
+  // Thermostats read better with the current temperature alongside the mode.
+  // The friendly word comes first so an off thermostat isn't the only 'off' in
+  // the card rendered lowercase.
+  if (haEntityDomain(entityId) === 'climate') {
+    const cur = st.attributes && st.attributes.current_temperature;
+    return cur != null ? `${word} · ${cur}°` : word;
+  }
+  return word;
+}
+
+/**
+ * Normalize a user-entered base URL. Returns { url } or { error }.
+ * Plain http:// is rejected up front (localhost aside) rather than saved as
+ * something the browser will refuse to call from an HTTPS page.
+ */
+function haNormalizeBaseUrl(raw) {
+  const s = String(raw || '').trim().replace(/\/+$/, '');
+  if (!s) return { url: '' };
+  if (!/^https?:\/\//i.test(s)) {
+    return { error: 'Include the scheme, e.g. https://familypi.tail1234.ts.net' };
+  }
+  let u;
+  try { u = new URL(s); } catch { return { error: "That doesn't look like a valid URL." }; }
+  const isLocal = u.hostname === 'localhost' || u.hostname === '127.0.0.1';
+  if (u.protocol === 'http:' && !isLocal) {
+    return { error: "Family Hub is served over HTTPS, so the browser won't let it call a plain http:// address. Use the Tailscale https://….ts.net URL (setup guide, Step 6d)." };
+  }
+  return { url: s };
+}
+
+// ── Fetch layer ──
+
+function haConfigured() { return !!(haConfig.baseUrl && haToken); }
+
+function haErr(kind, message) { const e = new Error(message); e.haKind = kind; return e; }
+
+/**
+ * One place that attaches the token, enforces a timeout, and turns every failure
+ * into something we can print. Mirrors what calFetch() does for Google.
+ */
+async function haFetch(path, opts = {}, creds = null) {
+  const baseUrl = creds ? creds.baseUrl : haConfig.baseUrl;
+  const token   = creds ? creds.token   : haToken;
+  if (!baseUrl || !token) throw haErr('unconfigured', "Home Assistant isn't set up yet.");
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), HA_TIMEOUT_MS);
+  let resp;
+  try {
+    resp = await fetch(baseUrl + path, {
+      ...opts,
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        ...(opts.headers || {}),
+      },
+    });
+  } catch (e) {
+    clearTimeout(t);
+    if (e.name === 'AbortError') {
+      throw haErr('timeout', 'Home Assistant took too long to answer. Is the Pi awake?');
+    }
+    // A CORS rejection and a dead host arrive as the same bare TypeError — the
+    // browser deliberately won't say which — so the message names both causes.
+    throw haErr('unreachable',
+      `Couldn't reach Home Assistant. Either it's offline (or Tailscale is down), or its cors_allowed_origins doesn't list ${location.origin}.`);
+  }
+  clearTimeout(t);
+  if (resp.status === 401 || resp.status === 403) {
+    throw haErr('auth', 'Home Assistant rejected the token. Generate a new one in HA → your profile → Security.');
+  }
+  if (resp.status === 404) {
+    throw haErr('notfound', 'Not found in Home Assistant. Check the entity ID under Developer Tools → States.');
+  }
+  if (!resp.ok) throw haErr('http', `Home Assistant returned ${resp.status}.`);
+  return resp.json();
+}
+
+/**
+ * Fetch each allowlisted entity individually rather than GET /api/states, which
+ * returns every entity in the house. A handful of tiny requests is smaller, and
+ * one bad entity ID then can't blank the whole card.
+ */
+async function refreshHaStates() {
+  const entities = haConfig.entities || [];
+  if (!haConfigured() || !entities.length) { renderHaCard(); return; }
+
+  const results = await Promise.allSettled(
+    entities.map(e => haFetch('/api/states/' + encodeURIComponent(e.id)))
+  );
+
+  const next = {};
+  let firstErr = '';
+  results.forEach((r, i) => {
+    const id = entities[i].id;
+    if (r.status === 'fulfilled') { next[id] = r.value; return; }
+    const kind = r.reason && r.reason.haKind;
+    next[id] = { error: kind === 'notfound' ? 'not found' : 'error' };
+    // Per-entity 404s are shown on their own row; anything else is a whole-card
+    // problem (offline, CORS, bad token) and gets one banner rather than N.
+    if (!firstErr && kind !== 'notfound') firstErr = r.reason.message;
+  });
+  haStates = next;
+  _haLastError = firstErr;
+  renderHaCard();
+}
+
+// ── Card ──
+
+function renderHaCard() {
+  const body = document.getElementById('haBody');
+  if (!body) return;
+
+  if (!haConfigured()) {
+    body.innerHTML = '<div class="ha-empty">Add your Home Assistant URL and token in ⚙️ Settings → 🏠 Home Assistant.</div>';
+    return;
+  }
+  const entities = haConfig.entities || [];
+  if (!entities.length) {
+    body.innerHTML = '<div class="ha-empty">No entities yet. Add the ones you want on the panel in ⚙️ Settings → 🏠 Home Assistant.</div>';
+    return;
+  }
+
+  const rows = entities.map((ent, i) => {
+    const st      = haStates[ent.id];
+    const state   = st && st.state;
+    const dead    = !st || st.error || state === 'unavailable' || state === 'unknown';
+    const pending = !!haPending[ent.id];
+    const label   = ent.name || (st && st.attributes && st.attributes.friendly_name) || ent.id;
+    const icon    = HA_DOMAIN_ICONS[haEntityDomain(ent.id)] || '•';
+    const action  = haActionLabel(ent.id, state);
+    const control = (action && !dead)
+      ? `<button class="ha-btn" ${pending ? 'disabled' : ''} onclick="haToggleEntityAt(${i})">${pending ? '…' : esc(action)}</button>`
+      : '';
+    return `
+      <div class="ha-row${dead ? ' ha-row-dim' : ''}">
+        <span class="ha-icon">${icon}</span>
+        <span class="ha-name" title="${esc(ent.id)}">${esc(label)}</span>
+        <span class="ha-state">${esc(haFormatState(ent.id, st))}</span>
+        ${control}
+      </div>`;
+  }).join('');
+
+  body.innerHTML = (_haLastError ? `<div class="ha-error">${esc(_haLastError)}</div>` : '') + rows;
+}
+
+// ── Controls ──
+
+/** Row click handler. Rows address entities by position, never by interpolated ID. */
+function haToggleEntityAt(i) {
+  const ent = (haConfig.entities || [])[i];
+  if (ent) haToggleEntity(ent.id);
+}
+
+async function haToggleEntity(entityId) {
+  const st   = haStates[entityId];
+  const prev = st && st.state;
+  const call = haServiceForToggle(entityId, prev);
+  if (!call || haPending[entityId]) return;
+
+  haPending[entityId] = true;
+  renderHaCard();
+
+  try {
+    await haFetch(`/api/services/${call.domain}/${call.service}`, {
+      method: 'POST',
+      body: JSON.stringify({ entity_id: entityId }),
+    });
+  } catch (e) {
+    delete haPending[entityId];
+    showToast('⚠️ ' + e.message, 5000);
+    renderHaCard();
+    return;
+  }
+  haRecheckEntity(entityId, prev);
+}
+
+/**
+ * Confirm a service call actually landed. Z-Wave and Zigbee devices can take
+ * seconds to report the new state, so re-check twice before handing it back to
+ * the poll — better than snapping the row back and calling it a failure.
+ */
+async function haRecheckEntity(entityId, prevState) {
+  for (const delay of [1000, 4000]) {
+    await new Promise(r => setTimeout(r, delay));
+    try {
+      const st = await haFetch('/api/states/' + encodeURIComponent(entityId));
+      haStates[entityId] = st;
+      if (st.state !== prevState) break;
+    } catch { break; }
+  }
+  delete haPending[entityId];
+  renderHaCard();
+}
+
+// ── Polling ──
+
+function startHaPolling() {
+  clearInterval(_haPollTimer);
+  _haPollTimer = null;
+  if (!widgetVisibility.homeassistant || !haConfigured()) { renderHaCard(); return; }
+  refreshHaStates();
+  _haPollTimer = setInterval(() => { if (!document.hidden) refreshHaStates(); }, HA_POLL_MS);
+}
+
+function initHomeAssistant() {
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && _haPollTimer) refreshHaStates();
+  });
+  startHaPolling();
+}
+
+// ── Settings ──
+
+function haSaveConfig() {
+  saveFsSetting('homeAssistant', 'fh_haConfig', haConfig);
+}
+
+function renderHaEntitySettings() {
+  const el = document.getElementById('haEntityList');
+  if (!el) return;
+  const entities = haConfig.entities || [];
+  if (!entities.length) {
+    el.innerHTML = '<div style="color:var(--muted);font-size:.78rem;padding:4px 0">No entities yet.</div>';
+    return;
+  }
+  el.innerHTML = entities.map((ent, i) => `
+    <div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid rgba(128,128,128,.1)">
+      <span style="flex:0 0 90px;font-size:.8rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(ent.name || '—')}</span>
+      <span style="flex:1;font-size:.75rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(ent.id)}</span>
+      <button style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem" onclick="removeHaEntity(${i})">✕</button>
+    </div>`).join('');
+}
+
+function addHaEntity() {
+  const idEl   = document.getElementById('haEntityId');
+  const nameEl = document.getElementById('haEntityName');
+  const id     = (idEl.value || '').trim().toLowerCase();
+  if (!id) return;
+  if (!haEntityDomain(id)) {
+    showToast('⚠️ Entity IDs look like light.kitchen — domain, dot, name.', 4000);
+    return;
+  }
+  if ((haConfig.entities || []).some(e => e.id === id)) {
+    showToast('Already on the panel.', 2500);
+    return;
+  }
+  haConfig.entities = [...(haConfig.entities || []), { id, name: (nameEl.value || '').trim() }];
+  idEl.value = ''; nameEl.value = '';
+  haSaveConfig();
+  renderHaEntitySettings();
+  refreshHaStates();
+}
+
+function removeHaEntity(i) {
+  haConfig.entities = (haConfig.entities || []).filter((_, idx) => idx !== i);
+  haSaveConfig();
+  renderHaEntitySettings();
+  renderHaCard();
+}
+
+/**
+ * Verify the URL/token the user just typed (not the saved ones), then load every
+ * entity ID in the house into a datalist. Typing `light.kitchen_ceiling_2` from
+ * memory is otherwise miserable, and this costs one request on an explicit click.
+ */
+async function testHaConnection() {
+  const out = document.getElementById('haTestResult');
+  const { url, error } = haNormalizeBaseUrl(document.getElementById('haBaseUrl').value);
+  if (error) { out.className = 'ha-test ha-test-bad'; out.textContent = '⚠️ ' + error; return; }
+  if (!url)  { out.className = 'ha-test ha-test-bad'; out.textContent = '⚠️ Enter your Home Assistant URL first.'; return; }
+
+  const token = (document.getElementById('haTokenInput').value || '').trim();
+  if (!token) { out.className = 'ha-test ha-test-bad'; out.textContent = '⚠️ Enter a long-lived access token first.'; return; }
+
+  out.className = 'ha-test';
+  out.textContent = 'Testing…';
+
+  // Test what's in the boxes, not what was saved last time — passed explicitly so
+  // a poll firing mid-test can't pick up half-entered credentials.
+  const creds = { baseUrl: url, token };
+  try {
+    await haFetch('/api/', {}, creds);
+    const all = await haFetch('/api/states', {}, creds);
+    haEntityIdSuggestions = all.map(s => s.entity_id).sort();
+    const dl = document.getElementById('haEntityOptions');
+    if (dl) dl.innerHTML = haEntityIdSuggestions.map(id => `<option value="${esc(id)}"></option>`).join('');
+    out.className = 'ha-test ha-test-ok';
+    out.textContent = `✅ Connected. ${haEntityIdSuggestions.length} entities found — the entity ID box will now suggest them.`;
+  } catch (e) {
+    out.className = 'ha-test ha-test-bad';
+    out.textContent = '⚠️ ' + e.message;
+  }
 }
 
 // ── Word of the Day ──────────────────────────────────────────────────────────
@@ -7584,10 +7967,37 @@ function renderMealTemplateList() {
   });
 }
 
-// ── Recipe Box (manually-entered, reusable dishes) ─────────────
+// ── Recipe Box (manually-entered + imported reusable dishes) ───
 
-async function saveRecipeBoxItem(name, ingredients) {
-  const item = { name, ingredients, createdAt: new Date().toISOString().slice(0, 10) };
+// Optional fields a recipe may carry beyond {name, ingredients}. Imported
+// recipes fill these in; hand-typed ones leave them empty. Firestore rejects
+// `undefined`, and empty values would only bloat the doc, so `recipeExtras()`
+// keeps whichever are actually populated and drops the rest.
+const RECIPE_EXTRA_FIELDS = [
+  'instructions', 'description', 'image', 'sourceUrl', 'sourceName',
+  'servings', 'totalTime', 'author', 'cuisine', 'paywalled',
+];
+
+/** Pick the populated optional fields off a recipe-shaped object. */
+function recipeExtras(src) {
+  const out = {};
+  if (!src) return out;
+  for (const k of RECIPE_EXTRA_FIELDS) {
+    const v = src[k];
+    if (v == null || v === '' || v === false) continue;
+    if (Array.isArray(v) && !v.length) continue;
+    out[k] = v;
+  }
+  return out;
+}
+
+async function saveRecipeBoxItem(name, ingredients, extra) {
+  const item = {
+    name,
+    ingredients,
+    ...recipeExtras(extra),
+    createdAt: new Date().toISOString().slice(0, 10),
+  };
   if (db) {
     await db.collection('recipeBox').add(item).catch(_fsWriteError);
   } else {
@@ -7611,6 +8021,22 @@ async function deleteRecipeBoxItem(id) {
   }
 }
 
+/** Recipe record → the meal record `setMealInFs` stores, carrying imported content through. */
+function recipeToMeal(r) {
+  const meal = {
+    name: r.name,
+    description: r.description || '',
+    ingredients: r.ingredients || [],
+    ...recipeExtras(r),
+  };
+  // The meal detail popup reads `recipeUrl` for its "View recipe ↗" link and
+  // `prepTime` for the ⏱ chip; the Recipe Box stores them under its own names.
+  if (r.sourceUrl) meal.recipeUrl = r.sourceUrl;
+  if (r.totalTime) meal.prepTime  = r.totalTime;
+  delete meal.paywalled;               // a storage detail, not meal content
+  return meal;
+}
+
 // Adds a saved recipe straight to the meal slot the modal is currently open for.
 async function useRecipeBoxItem(id) {
   const r = recipeBox.find(x => x.id === id);
@@ -7618,7 +8044,144 @@ async function useRecipeBoxItem(id) {
   const mealType = _mealType === 'all'
     ? document.getElementById('manualMealTypeSelect').value
     : _mealType;
-  await setMealInFs(_mealDate, mealType, { name: r.name, description: '', ingredients: r.ingredients || [] });
+  await setMealInFs(_mealDate, mealType, recipeToMeal(r));
+  closeMealModal();
+}
+
+// ── Import a recipe from a URL (schema.org/Recipe) ─────────────
+//
+// Any site that emits Recipe JSON-LD works — NYT Cooking, AllRecipes, Serious
+// Eats, food blogs. The fetch runs server-side in /.netlify/functions/recipe
+// because browsers can't fetch cross-origin recipe pages. Nothing here is
+// NYT-specific; NYT Cooking is just the case that motivated it.
+
+let _pendingRecipeImport = null;   // last successfully parsed recipe, awaiting Save/Use
+
+function _recipeImportStatus(html, tone) {
+  const el = document.getElementById('recipeImportStatus');
+  if (!el) return;
+  const color = tone === 'error' ? 'var(--red)' : tone === 'ok' ? 'var(--green)' : 'var(--muted)';
+  el.style.color = color;
+  el.innerHTML = html;
+}
+
+async function importRecipeFromUrl() {
+  const input = document.getElementById('recipeImportUrl');
+  const btn   = document.getElementById('recipeImportBtn');
+  if (!input) return;
+  const url = input.value.trim();
+  if (!url) { input.focus(); return; }
+  if (!/^https?:\/\//i.test(url)) {
+    _recipeImportStatus('That doesn\'t look like a web address — paste the full link, starting with https://', 'error');
+    return;
+  }
+
+  _pendingRecipeImport = null;
+  document.getElementById('recipeImportPreview').style.display = 'none';
+  if (btn) btn.disabled = true;
+  _recipeImportStatus('Reading that recipe…');
+
+  // Served from plain `python3 -m http.server` the function doesn't exist, so a
+  // 404 HTML page comes back instead of JSON. Distinguish that (and a truly
+  // unreachable importer) from a page we simply couldn't parse a recipe out of.
+  const missingFnHint = 'Import needs the Netlify functions — run <code>netlify dev</code> (port 8888) or use the deployed site.';
+  const isLocalStatic = location.hostname === 'localhost' && location.port !== '8888';
+
+  let res, body;
+  try {
+    res  = await fetch(`/.netlify/functions/recipe?url=${encodeURIComponent(url)}`, { cache: 'no-store' });
+    body = await res.text();
+  } catch {
+    if (btn) btn.disabled = false;
+    _recipeImportStatus(isLocalStatic ? missingFnHint
+      : 'Couldn\'t reach the importer. Check your connection and try again.', 'error');
+    return;
+  }
+  if (btn) btn.disabled = false;
+
+  let data = null;
+  try { data = JSON.parse(body); } catch { /* not JSON — handled below */ }
+
+  if (!data) {
+    _recipeImportStatus(res.status === 404 || isLocalStatic ? missingFnHint
+      : `The importer returned an unexpected response (HTTP ${res.status}).`, 'error');
+    return;
+  }
+
+  if (!res.ok || !data.ok) {
+    const code = data.error;
+    _recipeImportStatus(code === 'no-recipe'
+      ? 'Couldn\'t read a recipe from that link — the page may not publish recipe data. Try “Type It In” instead.'
+      : esc(String(code || `Import failed (HTTP ${res.status})`)), 'error');
+    return;
+  }
+
+  _pendingRecipeImport = data.recipe;
+  renderRecipeImportPreview();
+  _recipeImportStatus('');
+}
+
+function renderRecipeImportPreview() {
+  const wrap = document.getElementById('recipeImportPreview');
+  if (!wrap) return;
+  const r = _pendingRecipeImport;
+  if (!r) { wrap.style.display = 'none'; wrap.innerHTML = ''; return; }
+
+  const bits = [];
+  if (r.sourceName) bits.push(esc(r.sourceName));
+  if (r.servings)   bits.push(esc(r.servings));
+  if (r.totalTime)  bits.push(`⏱ ${r.totalTime} min`);
+  bits.push(`${r.ingredients.length} ingredient${r.ingredients.length === 1 ? '' : 's'}`);
+  if (r.instructions.length) bits.push(`${r.instructions.length} step${r.instructions.length === 1 ? '' : 's'}`);
+
+  wrap.innerHTML = `
+    <div class="recipe-import-card">
+      ${r.image ? `<img class="recipe-import-thumb" src="${esc(safeUrl(r.image))}" alt="" onerror="this.remove()" />` : ''}
+      <div class="recipe-import-body">
+        <div class="recipe-import-name">${esc(r.name || 'Untitled recipe')}</div>
+        <div class="recipe-import-meta">${bits.join(' · ')}</div>
+        ${r.ingredients.length
+          ? `<div class="recipe-import-ings">${esc(r.ingredients.slice(0, 4).join(', '))}${r.ingredients.length > 4 ? '…' : ''}</div>`
+          : '<div class="recipe-import-ings">No ingredients found on that page.</div>'}
+      </div>
+    </div>
+    <div class="recipe-import-actions">
+      <button class="btn btn-sm btn-secondary" onclick="saveImportedRecipe()">📖 Save to Recipe Box</button>
+      <button class="btn btn-sm btn-primary"   onclick="useImportedRecipe()">+ Use for this meal</button>
+      <button class="btn btn-sm" onclick="clearRecipeImport()">Cancel</button>
+    </div>`;
+  wrap.style.display = '';
+}
+
+function clearRecipeImport() {
+  _pendingRecipeImport = null;
+  const wrap = document.getElementById('recipeImportPreview');
+  if (wrap) { wrap.style.display = 'none'; wrap.innerHTML = ''; }
+  const input = document.getElementById('recipeImportUrl');
+  if (input) input.value = '';
+  _recipeImportStatus('');
+}
+
+async function saveImportedRecipe() {
+  const r = _pendingRecipeImport;
+  if (!r) return;
+  await saveRecipeBoxItem(r.name || 'Untitled recipe', r.ingredients || [], r);
+  clearRecipeImport();
+  _recipeImportStatus('✓ Saved to your Recipe Box.', 'ok');
+  renderRecipeBoxPicker();
+  renderRecipeBoxList();
+}
+
+/** Save the import, then drop it straight into the slot the modal is open for. */
+async function useImportedRecipe() {
+  const r = _pendingRecipeImport;
+  if (!r) return;
+  const mealType = _mealType === 'all'
+    ? document.getElementById('manualMealTypeSelect').value
+    : _mealType;
+  await saveRecipeBoxItem(r.name || 'Untitled recipe', r.ingredients || [], r);
+  await setMealInFs(_mealDate, mealType, recipeToMeal(r));
+  clearRecipeImport();
   closeMealModal();
 }
 
@@ -7629,7 +8192,7 @@ function renderRecipeBoxPicker() {
   const matches = recipeBox.filter(r => !q || r.name.toLowerCase().includes(q));
   wrap.innerHTML = '';
   if (!recipeBox.length) {
-    wrap.innerHTML = '<div style="color:var(--muted);font-size:.8rem;padding:4px 0">No saved recipes yet — add a meal below and check "Save to Recipe Box."</div>';
+    wrap.innerHTML = '<div style="color:var(--muted);font-size:.8rem;padding:4px 0">No saved recipes yet — import one from a link below, or add a meal and check "Save to Recipe Box."</div>';
     return;
   }
   if (!matches.length) {
@@ -7642,7 +8205,8 @@ function renderRecipeBoxPicker() {
     const info = document.createElement('div');
     info.style.cssText = 'flex:1;min-width:0';
     const ingStr = (r.ingredients || []).join(', ');
-    info.innerHTML = `<div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.name)}</div>
+    const badge  = r.sourceName ? `<span class="recipe-src-badge">${esc(r.sourceName)}</span>` : '';
+    info.innerHTML = `<div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.name)}${badge}</div>
       <div style="font-size:.73rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(ingStr)}</div>`;
     const useBtn = document.createElement('button');
     useBtn.className = 'btn btn-sm btn-primary';
@@ -7667,8 +8231,16 @@ function renderRecipeBoxList() {
     row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--surface2);border-radius:8px';
     const info = document.createElement('div');
     info.style.cssText = 'flex:1;min-width:0';
-    info.innerHTML = `<div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.name)}</div>
-      <div style="font-size:.73rem;color:var(--muted)">${r.createdAt} · ${(r.ingredients||[]).length} ingredient${(r.ingredients||[]).length !== 1 ? 's' : ''}</div>`;
+    const nIng   = (r.ingredients || []).length;
+    const nSteps = (r.instructions || []).length;
+    const meta   = [r.createdAt, `${nIng} ingredient${nIng !== 1 ? 's' : ''}`];
+    if (nSteps) meta.push(`${nSteps} step${nSteps !== 1 ? 's' : ''}`);
+    const srcLink = r.sourceUrl
+      ? ` · <a href="${esc(safeUrl(r.sourceUrl))}" target="_blank" rel="noopener" style="color:var(--accent)">source ↗</a>`
+      : '';
+    const badge = r.sourceName ? `<span class="recipe-src-badge">${esc(r.sourceName)}</span>` : '';
+    info.innerHTML = `<div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.name)}${badge}</div>
+      <div style="font-size:.73rem;color:var(--muted)">${esc(meta.join(' · '))}${srcLink}</div>`;
     const delBtn = document.createElement('button');
     delBtn.className = 'btn btn-sm';
     delBtn.style.cssText = 'color:var(--red);background:none;border:1px solid rgba(255,255,255,.15);padding:3px 8px';
@@ -7732,15 +8304,25 @@ async function saveManualMeal() {
 const MEAL_DETAIL_LABELS = { breakfast:'🌅 Breakfast', lunch:'☀️ Lunch', dinner:'🌙 Dinner' };
 const MEAL_DETAIL_EMOJI  = { breakfast:'🍳', lunch:'🥪', dinner:'🍽' };
 
+/** Foods TheMealDB is worth asking about by name alone — proteins and dish forms, not
+ *  cookware ("skillet", "sheet pan") or garnishes. The trailing `(?:e?s)?` matches plurals,
+ *  which is most of what AI names actually say: "Meatballs", "Refried Beans", "Potatoes". */
+const MEAL_MAIN_NOUN = /\b(chicken|beef|steak|meatloaf|meatball|pork|bacon|ham|sausage|lamb|turkey|duck|salmon|tuna|shrimp|prawn|cod|tilapia|scallop|crab|lobster|fish|lasagna|spaghetti|linguine|ravioli|gnocchi|pasta|noodle|risotto|paella|rice|pizza|burger|taco|burrito|enchilada|quesadilla|curry|chowder|stew|soup|chili|casserole|stir[-\s]?fry|salad|sandwich|wrap|omelette|omelet|frittata|pancake|waffle|tofu|chickpea|lentil|bean|potato|mushroom|eggplant|broccoli|cauliflower)(?:e?s)?\b/i;
+
 /** Best-effort dish photo. Returns { url, stock } where stock=true means a representative image.
- *  Pass 1: exact TheMealDB name. Pass 2: simplified name. Pass 3: LoremFlickr fallback. */
+ *  Pass 1: exact TheMealDB name. Pass 2: simplified name. Pass 2b: main food noun.
+ *  Pass 3: LoremFlickr fallback. */
 async function fetchMealImage(name) {
   const key = (name || '').toLowerCase().trim();
   if (!key) return null;
   if (key in _mealImgCache) return _mealImgCache[key];
 
-  // Helper: one TheMealDB lookup
+  // Helper: one TheMealDB lookup. Skips a query an earlier pass already spent.
+  const tried = new Set();
   const dbLookup = async q => {
+    const qk = (q || '').toLowerCase().trim();
+    if (!qk || tried.has(qk)) return null;
+    tried.add(qk);
     try {
       const r = await fetch(`https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(q)}`);
       const d = await r.json();
@@ -7762,8 +8344,23 @@ async function fetchMealImage(name) {
     }
   }
 
+  // Pass 2b: main ingredient / dish noun. The adjective list above stops at the first
+  // word it doesn't know, so cuisines and one-off modifiers ("Cajun", "Honey") used to
+  // sink the whole retry. Search from the food noun to the end, then the noun alone:
+  // "Creamy Tuscan Chicken Skillet" → "Chicken Skillet" → "Chicken". A noun match is a
+  // photo of the right food but not of this dish, so it counts as representative.
+  let representative = false;
+  if (!thumb) {
+    const m = name.match(MEAL_MAIN_NOUN);
+    if (m) {
+      thumb = await dbLookup(name.slice(m.index).trim());
+      if (!thumb) thumb = await dbLookup(m[0]);
+      representative = !!thumb;
+    }
+  }
+
   if (thumb) {
-    const result = { url: thumb, stock: false };
+    const result = { url: thumb, stock: representative };
     _mealImgCache[key] = result;
     return result;
   }
@@ -7810,13 +8407,29 @@ function openMealDetail(dateKey, mealType) {
   if (meal.ingredients && meal.ingredients.length) { ingEl.textContent = '🧅 ' + meal.ingredients.join(', '); ingEl.style.display = ''; }
   else ingEl.style.display = 'none';
 
+  // Imported recipes carry their method; AI-suggested ones don't. Collapsed by
+  // default so a long recipe doesn't push the buttons off a wall-panel screen.
+  const stepsEl = document.getElementById('mealDetailSteps');
+  if (stepsEl) {
+    const steps = meal.instructions || [];
+    if (steps.length) {
+      stepsEl.innerHTML = `<details><summary>👩‍🍳 Instructions (${steps.length} step${steps.length === 1 ? '' : 's'})</summary>
+        <ol>${steps.map(s => `<li>${esc(s)}</li>`).join('')}</ol></details>`;
+      stepsEl.style.display = '';
+    } else {
+      stepsEl.innerHTML = '';
+      stepsEl.style.display = 'none';
+    }
+  }
+
   const recipeEl  = document.getElementById('mealDetailRecipe');
   const recipeUrl = meal.recipeUrl
     || (meal.recipeSite ? (RECIPE_SITES[meal.recipeSite] || RECIPE_SITES.allrecipes).url(meal.recipeSearchQuery || meal.name) : '');
   if (recipeUrl) {
     const site = RECIPE_SITES[meal.recipeSite];
     recipeEl.href = safeUrl(recipeUrl);
-    recipeEl.textContent = `📖 ${site ? site.name : 'View recipe'} ↗`;
+    // Imported recipes know their own source; AI-suggested ones only name a site.
+    recipeEl.textContent = `📖 ${meal.sourceName || (site ? site.name : 'View recipe')} ↗`;
     recipeEl.style.display = '';
   } else recipeEl.style.display = 'none';
 
@@ -10044,6 +10657,8 @@ function setMobileTab(tab) {
   if (todoBtn)    todoBtn.classList.toggle('active', tab === 'todo');
   if (shopBtn)    shopBtn.classList.toggle('active', tab === 'shop');
   if (weatherBtn) weatherBtn.classList.toggle('active', tab === 'weather');
+  const homeBtn = document.getElementById('mobileNavHome');
+  if (homeBtn) homeBtn.classList.toggle('active', tab === 'home');
 }
 
 const THEME_COLORS = {
@@ -10447,6 +11062,7 @@ const SETTINGS_GROUPS = [
     { tab: 'shopping', label: '🛒 Shopping' },
     { tab: 'chores',   label: '⭐ Chores' },
     { tab: 'meals',    label: '🍽 Meals' },
+    { tab: 'homeassistant', label: '🏠 Home Assistant' },
   ]},
   { label: 'Advanced', gated: true, items: [
     { tab: 'eggs', label: '🥚 Easter Eggs' },
@@ -10532,6 +11148,10 @@ function openSettings() {
   document.getElementById('settingSaverNight').checked    = !!saverNight;
   document.getElementById('settingSaverNightStart').value = saverNightStart;
   document.getElementById('settingSaverNightEnd').value   = saverNightEnd;
+  document.getElementById('settingSaverMode').value       = saverMode;
+  document.getElementById('settingSaverPondSound').checked = !!saverPondSound;
+  document.getElementById('settingSaverPondTap').value    = saverPondTap;
+  updateSaverModeFields();
   document.getElementById('settingMealAiKey').value     = mealAiKey;
   document.getElementById('settingMealPantry').value    = mealPantryDef;
   // provider is always gemini — no UI to update
@@ -10620,6 +11240,11 @@ function openSettings() {
     if (el) el.checked = eggCategories[cat];
   });
   renderEggFranchiseChips();
+  document.getElementById('haBaseUrl').value    = haConfig.baseUrl || '';
+  document.getElementById('haTokenInput').value = haToken;
+  document.getElementById('haTestResult').textContent = '';
+  document.getElementById('haTestResult').className   = 'ha-test';
+  renderHaEntitySettings();
   document.getElementById('settingsModal').style.display = 'flex';
   applySafePaletteMode();
   trapFocus(document.querySelector('#settingsModal .modal'), document.getElementById('settingsBtn'), closeSettings);
@@ -10688,6 +11313,9 @@ function saveSettings() {
   saverNight    = document.getElementById('settingSaverNight').checked;
   saverNightStart = document.getElementById('settingSaverNightStart').value || '22:00';
   saverNightEnd   = document.getElementById('settingSaverNightEnd').value   || '06:30';
+  saverMode       = document.getElementById('settingSaverMode').value === 'pond' ? 'pond' : 'photos';
+  saverPondSound  = document.getElementById('settingSaverPondSound').checked;
+  saverPondTap    = document.getElementById('settingSaverPondTap').value === 'wake' ? 'wake' : 'play';
   localStorage.setItem('fh_saver',           JSON.stringify(saverEnabled));
   localStorage.setItem('fh_saverIdleMin',    String(saverIdleMin));
   localStorage.setItem('fh_saverDwellSec',   String(saverDwellSec));
@@ -10696,6 +11324,9 @@ function saveSettings() {
   localStorage.setItem('fh_saverNight',      JSON.stringify(saverNight));
   localStorage.setItem('fh_saverNightStart', JSON.stringify(saverNightStart));
   localStorage.setItem('fh_saverNightEnd',   JSON.stringify(saverNightEnd));
+  localStorage.setItem('fh_saverMode',       JSON.stringify(saverMode));
+  localStorage.setItem('fh_saverPondSound',  JSON.stringify(saverPondSound));
+  localStorage.setItem('fh_saverPondTap',    JSON.stringify(saverPondTap));
   resetSaverIdleTimer();
   mealAiKey     = document.getElementById('settingMealAiKey').value.trim();
   mealPantryDef = document.getElementById('settingMealPantry').value.trim();
@@ -10742,7 +11373,25 @@ function saveSettings() {
     eggFranchises[btn.dataset.eggId] = btn.classList.contains('btn-mode-active');
   });
   localStorage.setItem('fh_eggFranchises', JSON.stringify(eggFranchises));
+  // Home Assistant. The token never leaves this device; the URL is shared config.
+  // An unusable URL is refused rather than saved — the toast fires after the modal
+  // closes, which is why it isn't an inline field error.
+  const haUrlEl = document.getElementById('haBaseUrl');
+  let haUrlError = '';
+  if (haUrlEl) {
+    const { url, error } = haNormalizeBaseUrl(haUrlEl.value);
+    if (error) haUrlError = error;
+    else if (url !== haConfig.baseUrl) { haConfig.baseUrl = url; haSaveConfig(); }
+  }
+  const haTokenEl = document.getElementById('haTokenInput');
+  if (haTokenEl) {
+    haToken = (haTokenEl.value || '').trim();
+    if (haToken) localStorage.setItem('fh_haToken', haToken);
+    else localStorage.removeItem('fh_haToken');
+  }
   closeSettings();
+  if (haUrlError) showToast('⚠️ Home Assistant URL not saved: ' + haUrlError, 6000);
+  startHaPolling();
   injectLocalEvents();
   renderCurrentView();
   renderCalendarTabs();
@@ -11238,6 +11887,9 @@ let saverInfo     = lsGet('fh_saverInfo', true);        // temp + next event und
 let saverNight    = lsGet('fh_saverNight', true);       // night hours → dim clock only, no photos
 let saverNightStart = lsGet('fh_saverNightStart', '22:00');
 let saverNightEnd   = lsGet('fh_saverNightEnd', '06:30');
+let saverMode     = lsGet('fh_saverMode', 'photos');      // 'photos' | 'pond'
+let saverPondSound = lsGet('fh_saverPondSound', true);    // let the pond chime
+let saverPondTap  = lsGet('fh_saverPondTap', 'play');     // 'play' | 'wake'
 let saverActive   = false;
 let _saverIdleTimer = null, _saverCycleTimer = null, _saverClockTimer = null, _saverIdx = -1;
 let _saverNightOn = false;
@@ -11293,17 +11945,25 @@ function resetSaverIdleTimer() {
 }
 
 function startScreensaver() {
-  // No photos (yet) or tab hidden — re-arm and try again next idle period
-  if (!saverEnabled || saverActive || document.hidden || !bgPhotos.length) { resetSaverIdleTimer(); return; }
+  // Tab hidden, or photo mode with an empty pool — re-arm and try again next
+  // idle period. Pond mode needs no photos, so it isn't gated on the pool.
+  const pond = saverMode === 'pond';
+  if (!saverEnabled || saverActive || document.hidden || (!pond && !bgPhotos.length)) { resetSaverIdleTimer(); return; }
   if (isMobile) return;  // guard the direct path too (timer armed pre-resize)
   saverActive = true;
   document.getElementById('saverClock').style.transform = '';
   _saverNightOn = false;
   updateSaverOverlay(); // sets clock/info/night state before the first photo
   _saverClockTimer = setInterval(updateSaverOverlay, 10000);
-  document.getElementById('screensaver').classList.add('active');
-  _saverIdx = Math.floor(Math.random() * bgPhotos.length) - 1; // random starting photo
-  if (!_saverNightOn) advanceSaverPhoto();
+  const el = document.getElementById('screensaver');
+  el.classList.toggle('pond', pond);
+  el.classList.add('active');
+  if (pond) {
+    if (!_saverNightOn) startSaverPond();
+  } else {
+    _saverIdx = Math.floor(Math.random() * bgPhotos.length) - 1; // random starting photo
+    if (!_saverNightOn) advanceSaverPhoto();
+  }
 }
 
 function stopScreensaver() {
@@ -11315,13 +11975,95 @@ function stopScreensaver() {
   el.classList.remove('active');
   el.classList.remove('night');
   _saverNightOn = false;
-  // Drop the photo layers once the fade-out completes
-  setTimeout(() => { if (!saverActive) el.querySelectorAll('.saver-img').forEach(i => i.remove()); }, 1300);
+  document.getElementById('saverWakeBtn').style.display = 'none';
+  // Drop the photo/pond layers once the fade-out completes
+  setTimeout(() => {
+    if (saverActive) return;
+    el.querySelectorAll('.saver-img').forEach(i => i.remove());
+    stopSaverPond();
+    el.classList.remove('pond');
+  }, 1300);
   resetSaverIdleTimer();
 }
 
+// ── Pond Chimes screensaver mode ──
+// The pond is vendored verbatim at pond/ (git subtree of mattohara42/pond-chimes)
+// and runs in a same-origin iframe, so its globals and its `html, body` CSS reset
+// stay in their own document. The frame is created on start and destroyed on stop:
+// that's what stops its requestAnimationFrame loop, its weather interval and its
+// audio graph — nothing of the pond survives the screensaver.
+
+/** Mount the pond, handing it the hub's known coordinates so it skips its own
+    geolocation prompt and shares the weather the hub is already showing. */
+function startSaverPond() {
+  const el = document.getElementById('screensaver');
+  if (el.querySelector('#saverPond')) return;
+  const q = new URLSearchParams();
+  if (Number.isFinite(lastWxData?.lat) && Number.isFinite(lastWxData?.lon)) {
+    q.set('lat', lastWxData.lat);
+    q.set('lon', lastWxData.lon);
+  }
+  const frame = document.createElement('iframe');
+  frame.id = 'saverPond';
+  frame.title = 'Pond Chimes';
+  frame.allow = 'autoplay';          // same-origin: inherits this page's activation
+  frame.setAttribute('scrolling', 'no');
+  frame.src = 'pond/index.html' + (q.toString() ? '?' + q : '');
+  frame.addEventListener('load', () => {
+    applySaverPondSound(frame);
+    wireSaverPondWake(frame);
+    // The pond's standalone title card ("tap the pond to wake it") is wrong
+    // here — the hub has its own clock, and in 'play' mode tapping doesn't
+    // wake. Hidden from the parent so the vendored file stays untouched.
+    try { frame.contentDocument.getElementById('title').style.display = 'none'; } catch {}
+  });
+  el.insertBefore(frame, document.getElementById('saverClock'));
+  // The wake button is the only way out on a touch panel when taps play the pond
+  document.getElementById('saverWakeBtn').style.display = saverPondTap === 'play' ? '' : 'none';
+}
+
+function stopSaverPond() {
+  document.getElementById('saverPond')?.remove();
+}
+
+/** Settings: show only the options that apply to the selected mode. */
+function updateSaverModeFields() {
+  const pond = document.getElementById('settingSaverMode').value === 'pond';
+  document.getElementById('saverDwellRow').style.display   = pond ? 'none' : '';
+  document.getElementById('saverPondFields').style.display = pond ? '' : 'none';
+}
+
+/** Start (or mute) the pond's audio from the parent. Same-origin lets us reach
+    its Tone instance directly, so the vendored file stays untouched. If autoplay
+    is refused the pond just stays silent until someone taps it — its own
+    behaviour, and the reason this is wrapped in a try. */
+function applySaverPondSound(frame) {
+  try {
+    const w = frame.contentWindow;
+    if (!w) return;
+    if (saverPondSound) w.initAudio?.();
+    if (w.Tone) w.Tone.getDestination().mute = !saverPondSound;
+  } catch { /* pond not ready or autoplay blocked — silent pond, not a broken one */ }
+}
+
+/** Pointer events inside the iframe never reach the hub's window listeners, so
+    wake has to be wired into the pond's own document.
+      'wake' — any tap wakes, exactly like the photo slideshow.
+      'play' — every pointer event belongs to the pond, mouse included (waking
+               on pointermove would make the pond unplayable with a mouse:
+               you can't reach a fish without crossing the water). Wake is a
+               keypress or the corner button — both deliberate. */
+function wireSaverPondWake(frame) {
+  const doc = frame.contentDocument;
+  if (!doc) return;
+  const events = saverPondTap === 'wake'
+    ? ['pointerdown', 'touchstart', 'keydown', 'wheel']
+    : ['keydown'];
+  events.forEach(t => doc.addEventListener(t, saverActivity, { passive: true }));
+}
+
 function advanceSaverPhoto() {
-  if (!saverActive || _saverNightOn || !bgPhotos.length) return;
+  if (!saverActive || _saverNightOn || saverMode === 'pond' || !bgPhotos.length) return;
   const el = document.getElementById('screensaver');
   _saverIdx = (_saverIdx + 1) % bgPhotos.length;
   const img = document.createElement('img');
@@ -11353,8 +12095,13 @@ function updateSaverOverlay() {
     if (night) {
       clearTimeout(_saverCycleTimer);
       el.querySelectorAll('.saver-img').forEach(i => i.remove());
+      // The pond goes too: its canvas loop and audio would otherwise run all
+      // night behind a black overlay
+      stopSaverPond();
+      document.getElementById('saverWakeBtn').style.display = 'none';
     } else if (saverActive) {
-      advanceSaverPhoto();
+      if (saverMode === 'pond') startSaverPond();
+      else advanceSaverPhoto();
     }
   }
 
@@ -11577,7 +12324,7 @@ let eventsData = [];           // Current displayed events
 let eventsRawData = [];        // Full result set from backend
 let eventsFetchTimestamp = 0;  // When we last fetched
 let eventsSort = 'distance';   // Current sort mode
-let eventsSourceTab = 'ticketmaster';  // Active source tab: ticketmaster | osm | libraryweb
+let eventsSourceTab = 'ticketmaster';  // Active source tab: ticketmaster | osm | libraryweb | redwings | cityspark | towns
 let eventsSubTab = 'all';              // Active category sub-tab within the source
 let eventsTabFilter = 'all';   // Current tab filter
 let eventsCategoryFilter = null;  // Category filter (null = all)
@@ -11808,7 +12555,7 @@ function selectEventSubTab(btn) {
 
 // Update the count badge on each source tab from the full result set
 function updateSourceTabCounts(rawEvents) {
-  const counts = { ticketmaster: 0, osm: 0, libraryweb: 0, redwings: 0, cityspark: 0 };
+  const counts = { ticketmaster: 0, osm: 0, libraryweb: 0, redwings: 0, cityspark: 0, towns: 0 };
   for (const e of (rawEvents || [])) {
     if (counts[e.source] !== undefined) counts[e.source]++;
   }
@@ -11819,7 +12566,7 @@ function updateSourceTabCounts(rawEvents) {
 }
 
 function renderEventsList(events) {
-  const emptyLabels = { ticketmaster: 'live events', osm: 'things to do', libraryweb: 'library or town events', redwings: 'Red Wings home games', cityspark: 'local events' };
+  const emptyLabels = { ticketmaster: 'live events', osm: 'things to do', libraryweb: 'library events', redwings: 'Red Wings home games', cityspark: 'local events', towns: 'town events' };
   const html = events.length > 0
     ? events.map(e => renderEventCard(e)).join('')
     : `<p style="color:var(--muted);padding:20px;text-align:center">No ${emptyLabels[eventsSourceTab] || 'events'} found nearby. Try expanding your distance or changing your location.</p>`;
@@ -11887,7 +12634,9 @@ function renderEventCard(event) {
       ? event.description.substring(0, 110) + (event.description.length > 110 ? '…' : '')
       : '';
     const timeLabel = event.time ? ` ${formatTime12(event.time)}` : '';
-    const rightMeta = event.source === 'libraryweb'
+    // Sources whose venue matters more than the distance (every Fairport
+    // festival is in the same village, so the park name is the useful bit).
+    const rightMeta = (event.source === 'libraryweb' || event.source === 'towns')
       ? escapeHtml(event.location.address || 'Library')
       : distLabel;
     return `

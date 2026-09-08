@@ -15,7 +15,10 @@ const {
   icalUnescape,
   icalToLocal,
   parseICal,
-  dateToEastern
+  dateToEastern,
+  addDaysISO,
+  expandFairportSchedule,
+  fetchFairport
 } = require('../netlify/functions/events.js')._test;
 
 test('normalizeEventType maps Ticketmaster segments to canonical types', () => {
@@ -79,4 +82,49 @@ test('dateToEastern converts a UTC Date to Eastern date/time', () => {
     date: '2026-07-19',
     time: '21:00'
   });
+});
+
+test('addDaysISO steps dates without DST drift', () => {
+  assert.equal(addDaysISO('2026-06-06', 1), '2026-06-07');
+  assert.equal(addDaysISO('2026-02-28', 1), '2026-03-01');
+  // Across the US DST boundaries (Mar 8 and Nov 1, 2026)
+  assert.equal(addDaysISO('2026-03-07', 7), '2026-03-14');
+  assert.equal(addDaysISO('2026-10-31', 7), '2026-11-07');
+});
+
+test('expandFairportSchedule expands multi-day events one card per day', () => {
+  const canalDays = expandFairportSchedule().filter(e => e.title === 'Canal Days');
+  assert.deepEqual(canalDays.map(e => e.date), ['2026-06-06', '2026-06-07']);
+  assert.match(canalDays[1].description, /Day 2 of 2/);
+  assert.equal(canalDays[0].source, 'towns');  // shared "Town Events" tab, with Pittsford
+  assert.equal(canalDays[0].location.state, 'NY');
+});
+
+test('expandFairportSchedule expands weekly series on the same weekday, ends inclusive', () => {
+  const market = expandFairportSchedule().filter(e => e.title === 'Fairport Farmers Market');
+  assert.equal(market[0].date, '2026-05-09');
+  assert.equal(market[market.length - 1].date, '2026-11-21');
+  // Every occurrence is a Saturday, and the run is unbroken
+  for (const e of market) {
+    assert.equal(new Date(`${e.date}T12:00:00Z`).getUTCDay(), 6, `${e.date} is not a Saturday`);
+    assert.equal(e.time, '08:00');
+  }
+  assert.equal(market.length, 29);
+});
+
+test('expandFairportSchedule gives every occurrence a unique id and village coordinates', () => {
+  const events = expandFairportSchedule();
+  assert.equal(new Set(events.map(e => e.id)).size, events.length);
+  assert.ok(events.every(e => e.location.lat && e.location.lon && e.sourceUrl));
+});
+
+test('fetchFairport is gated to the region and windowed to the next 35 days', async () => {
+  // Portland, OR — far outside the region gate
+  assert.deepEqual(await fetchFairport('Portland', 'OR', 45.52, -122.68), []);
+
+  const near = await fetchFairport('Fairport', 'NY', 43.0987, -77.4425);
+  const today = new Date().toISOString().split('T')[0];
+  const horizon = addDaysISO(today, 35);
+  assert.ok(near.every(e => e.date >= today && e.date <= horizon));
+  assert.ok(near.every(e => e.source === 'towns'));
 });

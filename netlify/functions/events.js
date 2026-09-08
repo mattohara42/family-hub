@@ -25,6 +25,7 @@ const sourceStatus = {
   libraryweb: { ok: true, count: 0, error: null },
   redwings: { ok: true, count: 0, error: null },
   cityspark: { ok: true, count: 0, error: null },
+  towns: { ok: true, count: 0, error: null },
   pittsford: { ok: true, count: 0, error: null }
 };
 
@@ -131,12 +132,13 @@ exports.handler = async (event) => {
     }
 
     // Step 2: Fetch from all sources in parallel
-    const [tmEvents, osmEvents, libEvents, rwEvents, csEvents, pfEvents] = await Promise.allSettled([
+    const [tmEvents, osmEvents, libEvents, rwEvents, csEvents, fpEvents, pfEvents] = await Promise.allSettled([
       fetchTicketmaster(city, state, lat, lon, { keyword, attractionId, venueId }),
       fetchOpenStreetMap(city, state, lat, lon, radiusMinutes),
       fetchLibraryWeb(city, state, lat, lon),
       fetchRedWings(city, state, lat, lon),
       fetchCitySpark(city, state, lat, lon),
+      fetchFairport(city, state, lat, lon),
       fetchPittsford(city, state, lat, lon)
     ]);
 
@@ -147,6 +149,7 @@ exports.handler = async (event) => {
       ...extractSettledValue(libEvents, 'libraryweb'),
       ...extractSettledValue(rwEvents, 'redwings'),
       ...extractSettledValue(csEvents, 'cityspark'),
+      ...extractSettledValue(fpEvents, 'towns'),
       ...extractSettledValue(pfEvents, 'pittsford')
     ];
 
@@ -178,6 +181,7 @@ exports.handler = async (event) => {
         libraryweb: sourceStatus.libraryweb.count,
         redwings: sourceStatus.redwings.count,
         cityspark: sourceStatus.cityspark.count,
+        towns: sourceStatus.towns.count,
         pittsford: sourceStatus.pittsford.count
       },
       warnings: Object.entries(sourceStatus)
@@ -721,6 +725,63 @@ function stripHtml(s) {
     .trim();
 }
 
+/**
+ * Pull the town's event list out of the page and drop the municipal noise.
+ * Pure (no network) so it can be unit-tested against a fixture.
+ * Throws if the drupalSettings blob is missing — that means the page changed.
+ */
+function parsePittsfordEvents(html, city, state) {
+  const m = html.match(/<script type="application\/json" data-drupal-selector="drupal-settings-json">([\s\S]*?)<\/script>/);
+  if (!m) throw new Error('drupalSettings JSON not found (page markup changed?)');
+  const view = JSON.parse(m[1]).fullCalendarView?.[0];
+  const raw = JSON.parse(view?.calendar_options || '{}').events || [];
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const events = [];
+  for (const e of raw) {
+    const date = (e.start || '').split('T')[0];
+    if (!date || date < todayStr) continue;
+    if (PITTSFORD_SKIP_COLORS.includes(e.backgroundColor)) continue;
+    const title = stripHtml(e.title);
+    if (!title || PITTSFORD_SKIP_TITLE.test(title)) continue;
+
+    const time = (e.start.split('T')[1] || '').slice(0, 5) || null;
+    const endTime = e.end ? (e.end.split('T')[1] || '').slice(0, 5) : null;
+    const duration = (time && endTime && e.end.split('T')[0] === date)
+      ? Math.round((new Date(`${date}T${endTime}`) - new Date(`${date}T${time}`)) / 60000) || null
+      : null;
+
+    events.push({
+      id: `pf_${e.eid || e.id}`,
+      title,
+      // ponytail: first matching title keyword wins — this only picks the card
+      // emoji. Their taxonomy is too unreliable to map properly.
+      type: /concert|music|band/i.test(title) ? 'concert'
+          : /food|truck|farmers|market/i.test(title) ? 'food'
+          : /movie|festival|parade/i.test(title) ? 'show' : 'activity',
+      // Shares the "Town Events" tab with the Fairport village schedule —
+      // same shelf, told apart by location.address.
+      source: 'towns',
+      sourceUrl: e.url ? `https://www.townofpittsfordny.gov${e.url}` : PITTSFORD_URL,
+      date,
+      time,
+      duration,
+      location: {
+        city, state,
+        address: PITTSFORD_VENUE.name,
+        lat: PITTSFORD_VENUE.lat,
+        lon: PITTSFORD_VENUE.lon,
+        distanceMiles: null
+      },
+      description: stripHtml(e.des).slice(0, 400) || 'Town of Pittsford community event',
+      image: null,
+      weather: null
+    });
+  }
+  events.sort((a, b) => `${a.date}${a.time || ''}`.localeCompare(`${b.date}${b.time || ''}`));
+  return events;
+}
+
 async function fetchPittsford(city, state, lat, lon) {
   try {
     if (calculateDistance(lat, lon, PITTSFORD_VENUE.lat, PITTSFORD_VENUE.lon) > PITTSFORD_MAX_MILES) {
@@ -740,55 +801,8 @@ async function fetchPittsford(city, state, lat, lon) {
       return r.text();
     }, 'Pittsford', 1);
 
-    const m = html.match(/<script type="application\/json" data-drupal-selector="drupal-settings-json">([\s\S]*?)<\/script>/);
-    if (!m) throw new Error('drupalSettings JSON not found (page markup changed?)');
-    const view = JSON.parse(m[1]).fullCalendarView?.[0];
-    const raw = JSON.parse(view?.calendar_options || '{}').events || [];
+    const events = parsePittsfordEvents(html, city, state);
 
-    const todayStr = new Date().toISOString().split('T')[0];
-    const events = [];
-    for (const e of raw) {
-      const date = (e.start || '').split('T')[0];
-      if (!date || date < todayStr) continue;
-      if (PITTSFORD_SKIP_COLORS.includes(e.backgroundColor)) continue;
-      const title = stripHtml(e.title);
-      if (!title || PITTSFORD_SKIP_TITLE.test(title)) continue;
-
-      const time = (e.start.split('T')[1] || '').slice(0, 5) || null;
-      const endTime = e.end ? (e.end.split('T')[1] || '').slice(0, 5) : null;
-      const duration = (time && endTime && e.end.split('T')[0] === date)
-        ? Math.round((new Date(`${date}T${endTime}`) - new Date(`${date}T${time}`)) / 60000) || null
-        : null;
-
-      events.push({
-        id: `pf_${e.eid || e.id}`,
-        title,
-        // ponytail: title keyword → type, just for the card emoji. Their taxonomy
-        // is too unreliable to map properly.
-        type: /concert|music|band/i.test(title) ? 'concert'
-            : /food|truck|farmers|market/i.test(title) ? 'food'
-            : /movie|festival|parade/i.test(title) ? 'show' : 'activity',
-        // Rides in the Library tab alongside the library feeds — same "local
-        // community calendar" shelf, own sub-tab via location.address.
-        source: 'libraryweb',
-        sourceUrl: e.url ? `https://www.townofpittsfordny.gov${e.url}` : PITTSFORD_URL,
-        date,
-        time,
-        duration,
-        location: {
-          city, state,
-          address: PITTSFORD_VENUE.name,
-          lat: PITTSFORD_VENUE.lat,
-          lon: PITTSFORD_VENUE.lon,
-          distanceMiles: null
-        },
-        description: stripHtml(e.des).slice(0, 400) || `Town of Pittsford community event`,
-        image: null,
-        weather: null
-      });
-    }
-
-    events.sort((a, b) => `${a.date}${a.time || ''}`.localeCompare(`${b.date}${b.time || ''}`));
     pittsfordCache = { events, timestamp: Date.now() };
     sourceStatus.pittsford.count = events.length;
     sourceStatus.pittsford.ok = true;
@@ -994,6 +1008,141 @@ async function fetchCitySpark(city, state, lat, lon) {
 }
 
 // ────────────────────────────────────────────────────────────────
+// FAIRPORT FESTIVALS (village festival & concert season — curated)
+// Emits source:'towns' — the shared "Town Events" tab it shares with Pittsford.
+// ────────────────────────────────────────────────────────────────
+
+/**
+ * The Fairport/Perinton festival season, transcribed from the FairportFestivals.com
+ * season poster. It is a fixed, published-once-a-year schedule that fits in a table,
+ * so it lives here as data rather than as a scrape. If the village ever publishes an
+ * ICS feed, prefer subscribing to it (either here or via the hub's ICS subscriptions)
+ * over maintaining this table.
+ *
+ * MAINTENANCE: this is the 2026 season. Once those dates pass the source simply
+ * returns nothing (everything is filtered to today..+35 days) — refresh the table
+ * from the new poster each spring.
+ *
+ * Every event is placed at the village centre. Fairport's venues (Kennelly Park,
+ * Center Park, the Village Landing) are all within about a mile of it, which is
+ * far below the resolution of the drive-time radius filter, so the real venue is
+ * carried as text in `address` instead of as its own coordinates.
+ */
+const FAIRPORT_VILLAGE = { lat: 43.0987, lon: -77.4425 };  // Fairport, NY
+const FAIRPORT_MAX_MILES = 60;      // skip the source entirely for far-away searches
+const FAIRPORT_URL = 'https://fairportfestivals.com/';
+
+// One-off events. `days` = consecutive dates the event runs (one card per day).
+// `time` is local 24h, or null for an all-day / start-time-unpublished event.
+const FAIRPORT_SCHEDULE = [
+  { date: '2026-03-01', title: 'Savor the Flavor',                        type: 'food',     host: 'Fairport Rotary' },
+  { date: '2026-03-01', title: 'Fairport Museum Opens for the Season',    type: 'art',      host: 'Perinton Historical Society' },
+  { date: '2026-04-12', title: 'Empty Bowls Fundraiser',                  type: 'food',     host: 'Fairport Perinton Partnership', note: 'Fundraiser for the Perinton Food Shelf' },
+  { date: '2026-04-22', title: 'Clean Sweep!',            days: 5,        type: 'activity', host: 'Fairport Perinton Partnership' },
+  { date: '2026-05-25', title: 'Memorial Day Parade',     time: '10:00',  type: 'activity', host: 'Perinton VFW', note: 'Ceremony begins after the parade' },
+  { date: '2026-06-05', title: 'Canal Nights / Chicken BBQ', days: 2,     type: 'food',     host: 'Fairport Perinton Merchants Association' },
+  { date: '2026-06-06', title: 'Canal Days',              days: 2,        type: 'activity', host: 'Fairport Perinton Merchants Association' },
+  { date: '2026-06-16', title: "Children's Concert at The Gazebo", time: '18:30', type: 'concert', host: 'Town of Perinton', venue: 'Kennelly Park' },
+  { date: '2026-07-04', title: 'Independence Day Run',    time: '08:00',  type: 'sports',   host: 'Fairport Perinton Chamber of Commerce' },
+  { date: '2026-07-04', title: 'Independence Day Parade', time: '10:00',  type: 'activity', host: 'Fairport Perinton Chamber of Commerce' },
+  { date: '2026-07-04', title: 'Party in the Park',       time: '12:00',  type: 'activity', host: 'Fairport Perinton Chamber of Commerce' },
+  { date: '2026-07-13', title: 'Cycle the Erie Canal',                    type: 'hike',     host: 'Fairport Perinton Partnership' },
+  { date: '2026-07-21', title: "Children's Concert at The Gazebo", time: '18:30', type: 'concert', host: 'Town of Perinton', venue: 'Kennelly Park' },
+  { date: '2026-07-25', title: 'Steel Rail Festival',                     type: 'activity', host: 'Steel Rail Festival' },
+  { date: '2026-08-18', title: "Children's Concert at The Gazebo", time: '18:30', type: 'concert', host: 'Town of Perinton', venue: 'Kennelly Park' },
+  { date: '2026-08-28', title: 'Fairport Music Festival', days: 2,        type: 'concert',  host: 'Fairport Music Festival' },
+  { date: '2026-09-24', title: 'Oktoberfest',             days: 3,        type: 'food',     host: 'Fairport Perinton Partnership' },
+  { date: '2026-09-26', title: 'Scarecrow Festival',                      type: 'activity', host: 'Fairport Perinton Merchants Association' },
+  { date: '2026-09-26', title: 'Plein Air Paint-Out',                     type: 'art',      host: 'Fairport Public Art Committee' },
+  { date: '2026-11-21', title: 'Savor the Season',                        type: 'food',     host: 'Perinton Historical Society' },
+  { date: '2026-12-05', title: 'Come Home for the Holidays', days: 2,     type: 'activity', host: 'FPMA & Fairport Perinton Partnership' }
+];
+
+// Weekly series — one occurrence every 7 days from `start` through `end` inclusive.
+const FAIRPORT_WEEKLY = [
+  { title: "Fairport Farmers Market",   start: '2026-05-09', end: '2026-11-21', time: '08:00', type: 'food',    host: 'Village of Fairport', note: '8am–noon, Saturdays' },
+  { title: 'Gazebo Concerts',           start: '2026-06-11', end: '2026-08-13', time: '19:00', type: 'concert', host: 'Town of Perinton & Fairport Library', venue: 'Kennelly Park', note: 'Thursday evenings' },
+  { title: 'Sunday Center Stage Concert', start: '2026-06-28', end: '2026-08-23', time: '18:00', type: 'concert', host: 'Town of Perinton', venue: 'Center Park', note: 'Start times may vary' }
+];
+
+/** Add `n` days to a YYYY-MM-DD string and return YYYY-MM-DD (DST-safe: noon UTC). */
+function addDaysISO(iso, n) {
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().split('T')[0];
+}
+
+/** Expand the curated tables into one dated event per occurrence. */
+function expandFairportSchedule() {
+  const out = [];
+
+  const push = (entry, date, dayIndex, dayCount) => {
+    const venue = entry.venue || 'Fairport Village';
+    const parts = [entry.host];
+    if (entry.note) parts.push(entry.note);
+    if (dayCount > 1) parts.push(`Day ${dayIndex + 1} of ${dayCount}`);
+    out.push({
+      id: `fp_${date}_${entry.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      title: entry.title,
+      type: entry.type,
+      source: 'towns',
+      sourceUrl: FAIRPORT_URL,
+      date,
+      time: entry.time || null,
+      duration: null,
+      location: {
+        city: 'Fairport', state: 'NY',
+        address: venue,
+        lat: FAIRPORT_VILLAGE.lat,
+        lon: FAIRPORT_VILLAGE.lon,
+        distanceMiles: null
+      },
+      description: parts.filter(Boolean).join(' · '),
+      image: null,
+      weather: null
+    });
+  };
+
+  for (const entry of FAIRPORT_SCHEDULE) {
+    const days = entry.days || 1;
+    for (let i = 0; i < days; i++) push(entry, addDaysISO(entry.date, i), i, days);
+  }
+
+  for (const series of FAIRPORT_WEEKLY) {
+    for (let date = series.start; date <= series.end; date = addDaysISO(date, 7)) {
+      push(series, date, 0, 1);
+    }
+  }
+
+  return out;
+}
+
+async function fetchFairport(city, state, lat, lon) {
+  try {
+    // Region gate — a village calendar is only worth showing to nearby searches
+    if (calculateDistance(lat, lon, FAIRPORT_VILLAGE.lat, FAIRPORT_VILLAGE.lon) > FAIRPORT_MAX_MILES) {
+      sourceStatus.towns.count = 0;
+      return [];
+    }
+
+    // Local data, but still windowed so an out-of-date table quietly returns nothing
+    const today = new Date().toISOString().split('T')[0];
+    const horizon = addDaysISO(today, 35);
+    const events = expandFairportSchedule().filter(e => e.date >= today && e.date <= horizon);
+
+    sourceStatus.towns.count = events.length;
+    sourceStatus.towns.ok = true;
+    sourceStatus.towns.error = null;
+    return events;
+  } catch (err) {
+    console.warn('[Events] Fairport error:', err);
+    sourceStatus.towns.ok = false;
+    sourceStatus.towns.error = err.message;
+    return [];
+  }
+}
+
+// ────────────────────────────────────────────────────────────────
 // HELPERS
 // ────────────────────────────────────────────────────────────────
 
@@ -1134,5 +1283,10 @@ exports._test = {
   icalUnescape,
   icalToLocal,
   parseICal,
-  dateToEastern
+  dateToEastern,
+  addDaysISO,
+  expandFairportSchedule,
+  fetchFairport,
+  stripHtml,
+  parsePittsfordEvents
 };

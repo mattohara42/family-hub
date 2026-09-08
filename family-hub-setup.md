@@ -236,6 +236,198 @@ Once all the above is done, open the app (your Netlify URL or `http://localhost:
 
 ---
 
+## Step 6 — Home Assistant (optional, smart home control)
+
+Adds a 🏠 Home widget that shows and controls lights, switches, locks and sensors.
+Skip this entirely if you don't run Home Assistant — every other feature works without it.
+
+This guide covers the setup we chose: **Home Assistant in Docker on the same Raspberry Pi
+that runs the wall panel**, reached over **Tailscale HTTPS**.
+
+### Why not just use `http://homeassistant.local:8123`?
+
+Because Family Hub is served over HTTPS from Netlify, and browsers refuse to let an HTTPS
+page call a plain `http://` address. There is no setting that turns that off. Home Assistant
+therefore needs a real HTTPS URL, which is what Tailscale gives you for free.
+
+### What you need
+
+- A Raspberry Pi 4 or 5 with **4 GB RAM or more** (2 GB will thrash once Chromium and Home Assistant are both running)
+- Raspberry Pi OS 64-bit
+- Strongly recommended: boot from a **USB SSD rather than an SD card**. Home Assistant writes to its database constantly, and SD cards die from it.
+- A free Tailscale account
+
+> **Note on the shared Pi.** The official "Home Assistant OS" image is an appliance and
+> cannot run a desktop browser, so it can't share the Pi with your wall panel. That's why
+> this guide uses Home Assistant in Docker on top of Raspberry Pi OS. The trade: no add-on
+> store and no built-in backups. Tailscale gets installed natively instead (simpler anyway),
+> and backups are a manual tar (step 6h).
+
+### 6a. Install Docker
+
+```bash
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+sudo usermod -aG docker $USER
+```
+
+Log out and back in so the group change takes effect, then confirm with `docker ps`.
+
+### 6b. Start Home Assistant
+
+```bash
+mkdir -p ~/homeassistant
+docker run -d \
+  --name homeassistant \
+  --restart=unless-stopped \
+  --privileged \
+  --network=host \
+  -e TZ=America/Detroit \
+  -v ~/homeassistant:/config \
+  -v /run/dbus:/run/dbus:ro \
+  ghcr.io/home-assistant/home-assistant:stable
+```
+
+First start takes a few minutes. On the Pi itself, open `http://localhost:8123` and complete
+the onboarding wizard (create your admin account, set your location). Home Assistant will
+auto-discover a lot of your house on its own, WiZ bulbs and Nest thermostats included.
+
+To update later: `docker pull ghcr.io/home-assistant/home-assistant:stable && docker restart homeassistant`.
+
+### 6c. Turn down the disk writes
+
+Edit `~/homeassistant/configuration.yaml` and add:
+
+```yaml
+recorder:
+  purge_keep_days: 3
+  commit_interval: 30
+```
+
+This keeps three days of history and batches writes every 30 seconds instead of every second.
+If you're on an SD card, this is the single biggest thing you can do to keep it alive. Skip it
+only if you're booting from an SSD and actually want long history.
+
+### 6d. Install Tailscale and get an HTTPS URL
+
+On the Pi:
+
+```bash
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up
+```
+
+Follow the login link it prints. Then in the [Tailscale admin console](https://login.tailscale.com/admin/dns):
+
+1. **DNS → MagicDNS**: enabled
+2. **DNS → HTTPS Certificates**: enabled
+
+Back on the Pi:
+
+```bash
+sudo tailscale serve --bg 8123
+sudo tailscale serve status
+```
+
+`serve status` prints your HTTPS URL, something like `https://familypi.tail1234.ts.net/`.
+That's the base URL Family Hub will use. Test it in a browser on any device that's signed
+into your tailnet.
+
+> On older Tailscale versions the command is `sudo tailscale serve https / http://localhost:8123`.
+> If `--bg` isn't recognised, use that form.
+
+> ⚠️ **Do not use `tailscale funnel`.** Funnel publishes the URL to the open internet.
+> `serve` keeps it private to your own devices, which is the whole point.
+
+Install Tailscale on any phone that should control the house, and sign into the same tailnet.
+A guest phone on your wifi will *not* be able to use the widget. That's intentional.
+
+### 6e. Let Family Hub talk to Home Assistant (CORS)
+
+Home Assistant rejects browser requests from other websites unless you name them. Add this to
+`~/homeassistant/configuration.yaml`:
+
+```yaml
+http:
+  use_x_forwarded_for: true
+  trusted_proxies:
+    - 127.0.0.1
+    - ::1
+  cors_allowed_origins:
+    - https://your-site.netlify.app
+    - http://localhost:8080
+```
+
+Use your real Netlify URL, with **no trailing slash and no path**. Keep the `localhost:8080`
+line only if you also run Family Hub locally for development.
+
+`trusted_proxies` is required whenever `use_x_forwarded_for` is on. Home Assistant refuses to
+start without it, and without both, every request looks like it came from `127.0.0.1` and the
+brute-force protection misbehaves.
+
+Restart to apply: `docker restart homeassistant`.
+
+### 6f. Create a panel account and a token
+
+Don't use your own admin account for this. A wall display hanging in the kitchen shouldn't be
+holding admin credentials.
+
+1. In Home Assistant: **Settings → People → Add Person**
+2. Name it `Wall Panel`, turn on **Allow person to login**, set a username and password
+3. Leave **Administrator** OFF
+4. Leave **Can only log in from the local network** OFF (Tailscale doesn't count as local)
+5. Open a private browser window, go to your `ts.net` URL, and sign in as `Wall Panel`
+6. Click the user avatar (bottom left) → **Security** tab → **Long-lived access tokens** → **Create token**
+7. Copy it now. Home Assistant shows it exactly once.
+
+If you ever lose a device, revoke just that device's token from this same screen.
+
+### 6g. Connect Family Hub
+
+On the wall panel (and again on each phone, since the token is stored per device):
+
+1. ⚙️ Settings → **🧩 Widget Layout** → enable **Home Assistant**
+2. ⚙️ Settings → **🏠 Home Assistant**
+3. **Base URL**: your `https://….ts.net` address
+4. **Token**: the long-lived token from step 6f
+5. Click **Test connection**. On success it also loads the list of every entity in your house.
+6. Add the entities you want on the panel: `light.kitchen`, `lock.front_door`, and so on.
+   You can find any entity ID in Home Assistant under **Developer Tools → States**.
+7. Save
+
+Only the entities you list here ever appear in the widget. Lights, switches and fans get a
+toggle, locks get lock/unlock, everything else displays read-only.
+
+> **The token is stored on that device only** and is never synced to Firebase. That means
+> pasting it once per device, and it means a lost phone costs you one revocable token
+> instead of access to your house.
+
+### 6h. Backups
+
+Home Assistant in Docker has no built-in backup, so take one before any risky change:
+
+```bash
+docker stop homeassistant
+tar czf ~/ha-backup-$(date +%F).tar.gz -C ~ homeassistant
+docker start homeassistant
+```
+
+Copy the tarball somewhere off the Pi. If the SD card dies, this file is your house.
+
+### Home Assistant troubleshooting
+
+| Problem | Fix |
+|---|---|
+| Widget says it can't reach Home Assistant | Two causes look identical to the browser. Check `tailscale status` on both the Pi and the device, then check that `cors_allowed_origins` lists this exact origin (scheme + host, no trailing slash) and that you restarted HA after editing it. |
+| "Home Assistant rejected the token" | The token was revoked, or copied short. Generate a new one (step 6f); it's only displayed once. |
+| "Entity not found" | The entity ID changed or has a typo. Look it up in **Developer Tools → States** and re-add it. |
+| Works on the panel but not on a phone | The phone isn't signed into the tailnet, or the token wasn't entered on that device. Both are per-device. |
+| Home Assistant won't start after editing YAML | Check `docker logs homeassistant`. Almost always indentation, or `use_x_forwarded_for` without `trusted_proxies`. |
+| Panel gets sluggish after a few weeks | The recorder database is growing. Confirm step 6c is in place, and consider moving off the SD card. |
+| Toggle flips back after a second | The device didn't actually change state. Some Z-Wave and Zigbee devices take several seconds; the widget re-checks twice before giving up. If it never takes, try the same control inside Home Assistant to see whether the problem is the hub or the device. |
+
+---
+
 ## Feature Configuration Reference
 
 ### Appearance Themes

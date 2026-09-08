@@ -2,53 +2,100 @@
 
 *Enhancement ideas for the Meal Planning feature (planner modal, week/day meal strips, and the meal detail popup). Constraints: Gemini API (Meals key), three-file no-build architecture, CDN only, free/keyless external services preferred.*
 
-Last updated: 2026-07-06
+Last updated: 2026-09-01
 
 ---
 
 ## Already Shipped (for reference)
 
-AI meal suggestions (per-meal-type + "all") · accept to plan · add ingredients to shopping · week-strip + day-chip display · remove buttons · **meal detail popup** (click a planned meal → photo, details, Keep / Adjust / Delete; Adjust re-generates via AI with presets + free-text).
+AI meal suggestions (per-meal-type + "all") · accept to plan · add ingredients to shopping · week-strip + day-chip display · remove buttons · **meal detail popup** (click a planned meal → photo, details, Keep / Adjust / Delete; Adjust re-generates via AI with presets + free-text) · manual entry + **Recipe Box** · **import a recipe from a URL** (schema.org/Recipe — NYT Cooking, AllRecipes, food blogs) · **multi-pass dish photos** (TheMealDB exact → adjective-stripped → main food noun → labelled stock fallback, exact matches persisted).
 
-**Key functions:** `openMealModal`, `generateMealSuggestions`, `callMealAI`, `openMealDetail`, `adjustMeal`, `fetchMealImage` in `family-hub.js`.
-
----
-
-## Priority 1 — Higher meal-photo hit rate  ⭐ NEXT UP
-
-**Problem:** The detail popup fetches dish photos from **TheMealDB** (free, keyless), which only matches its ~300 known dishes. Most AI-generated meal names (e.g. "Creamy Tuscan Chicken Skillet") return no match and fall back to the emoji placeholder, so photos appear less often than would be ideal.
-
-**Already in place:** `openMealDetail()` checks a stored `meal.image` field **first** before falling back to TheMealDB — so any of the approaches below just needs to populate `meal.image`.
-
-**Options (pick one or combine):**
-1. **Persist a found photo.** When TheMealDB *does* match, write the thumb URL onto the meal (`setMealInFs` with `image`) so it's instant next time and survives reloads. Low effort; only helps matched dishes.
-2. **Fuzzy / simplified query.** Before giving up, retry TheMealDB with a simplified name (drop adjectives, use the main protein/dish noun, e.g. "chicken skillet" → "chicken"). Cheap; modest hit-rate gain, lower accuracy.
-3. **Broader keyless image source.** Use a generic food-photo service (e.g. LoremFlickr `https://loremflickr.com/600/400/{keywords}`) as a final fallback. **Always returns a photo**, but it's *representative*, not the exact dish — flag visually (e.g. "stock photo") so it isn't mistaken for the real plate. Respect CSP `img-src`.
-4. **AI-provided image URL.** Ask the model for an `image` URL during generation/adjust. ❌ Not recommended — model-supplied URLs are frequently hallucinated/broken.
-
-**Recommendation:** Ship **#1 (persist matches)** + **#2 (simplified-query retry)** first — both improve accuracy without misleading stock imagery. Consider **#3** only behind a clear "representative image" label.
-
-**Acceptance:** More planned meals show a photo; matched photos persist across reloads; any non-exact image is clearly labeled; emoji placeholder remains the final fallback.
+**Key functions:** `openMealModal`, `generateMealSuggestions`, `callMealAI`, `openMealDetail`, `adjustMeal`, `fetchMealImage`, `persistMealImage` in `family-hub.js`.
 
 ---
 
-## Priority 2 — Import recipe from URL (schema.org/Recipe)
+## ~~Priority 1 — Higher meal-photo hit rate~~ ✅ SHIPPED
 
-**What:** Paste a recipe URL → pull the dish name + ingredients (and optionally instructions) into the meal plan, and push ingredients to the shopping list (the Meals feature already does ingredients→shopping). Works for **any** site that emits `schema.org/Recipe` JSON-LD — NYT Cooking, AllRecipes, Serious Eats, food blogs — so it's a generic importer, not an NYT-specific integration. Motivated by "add content from our NYT Cooking account."
+*Landed in two parts. Options **1**, **2** and **3** from the original plan all shipped; option 4 (AI-supplied image URLs) stays rejected — model-supplied URLs are routinely hallucinated.*
 
-**Feasibility — PROVEN (probe 2026-07-06):** unauthenticated server-side fetches of NYT Cooking recipe pages (`cooking.nytimes.com/recipes/...`) returned HTTP 200 with the full `schema.org/Recipe` JSON-LD intact — title, all ingredients, and instructions — **even though `isAccessibleForFree: false`** (paywalled). The paywall gates the human-facing render, not the structured metadata. So a proxy fetch + JSON-LD parse gets everything Meals needs.
+**Part one (`c09f142`, recorded late):** `fetchMealImage()` became a multi-pass lookup returning `{ url, stock }`; exact matches are written onto the meal by `persistMealImage()` so later opens are instant and survive reloads; a LoremFlickr photo backstops a total miss and is captioned "stock photo" via `#mealStockLabel`.
 
-**Approach:**
-- **Fetch** via a small Netlify function (same pattern as `ics.js` / `news.js`) — browsers can't fetch cross-origin recipe pages directly. Send a browser-like User-Agent.
-- **Parse:** extract `<script type="application/ld+json">` blocks, find the object whose `@type` is `Recipe` (may be nested in an array or `@graph`), read `name` + `recipeIngredient[]` (+ `recipeInstructions`). ~20 lines, no dependency.
-- **Wire into Meals:** new "Import from URL" affordance in the meal planner → prefill a planned meal (`setMealInFs` with name/ingredients/description) → existing "add ingredients to shopping" applies.
+**Part two (2026-09-01):** the simplification pass only stripped a fixed adjective list from the front and **stopped at the first word it didn't know** — so cuisines and one-off modifiers sank the whole retry. The backlog's own motivating example was among the casualties:
 
-**Caveats / must-handle:**
-- **Fragile external dependency** — this is undocumented page behavior, not a contract; NYT could gate the JSON-LD anytime. Degrade gracefully: if no parseable `Recipe` is found, show "couldn't read a recipe from that link" and fall back to manual entry.
-- **Personal use / ToS** — one-off imports of recipes the user is entitled to, not bulk scraping. No auto-sync of a whole NYT Recipe Box (no API exists for that).
-- Respect CSP; keep the fetch server-side. Store the source URL on the meal for reference.
+| Meal name | Before | Now |
+|---|---|---|
+| Creamy Tuscan Chicken Skillet | `Tuscan Chicken Skillet` → miss → stock | → `Chicken Skillet` |
+| Cajun Shrimp Pasta | no retry at all → stock | → `Shrimp Pasta` |
+| Honey Garlic Salmon Bites | no retry at all → stock | → `Salmon Bites` → `Salmon` |
 
-**Acceptance:** Pasting an NYT Cooking (and a non-NYT) recipe URL populates a planned meal's name + ingredients; ingredients export to shopping; an unparseable URL fails cleanly to manual entry.
+Added **pass 2b**: search from the main food noun (`MEAL_MAIN_NOUN` — proteins and dish forms, deliberately no cookware) to the end of the name, then the bare noun. `dbLookup` now dedupes, so a query an earlier pass already spent is never repeated.
+
+**Honesty about the label:** a noun match is a photo of the right *food*, not of *this dish*, so pass 2b is flagged `stock:true` — it gets the "stock photo" caption and is **not** persisted. Only passes 1–2, which keep the dish noun intact, count as exact.
+
+**Verified:** `tests/meal-image.test.js` — 19 offline cases (each pass, plurals, the label flag, cache keying, dedupe, and the empty/malformed/offline paths), mirroring the shipped function verbatim per the repo's no-build test convention. Full suite green at 69.
+
+**⚠️ Not verified against the live API.** The implementing session's sandbox egress policy denied `www.themealdb.com` (same wall the recipe-import session hit with NYT), so every pass is exercised against stubs. That run did confirm the degradation path end-to-end: all lookups denied → captioned stock photo, no crash, no hang. **First real meal open on the panel is the live confirmation.**
+
+**Known limits (by design):**
+- A transient network failure is cached like a genuine miss, so an offline blip pins a stock photo for the rest of the session (a reload clears `_mealImgCache`).
+- `MEAL_MAIN_NOUN` is a fixed list — an unlisted food ("Shakshuka", "Bibimbap") still falls through to the stock photo. Extending it is a one-line change.
+- A name that is all cookware and adjectives ("Tuscan Skillet Supper") has no noun to retry on, by design — guessing there would cost a request to gain nothing.
+
+---
+
+## ~~Priority 2 — Import recipe from URL (schema.org/Recipe)~~ ✅ SHIPPED 2026-09-01
+
+**What shipped:** Paste a recipe URL in the Add-a-Meal modal's **📖 Recipe Box** tab → the dish name, ingredients, instructions, photo, servings and total time are parsed and stored in our own `recipeBox` database, then either saved for later or dropped straight into the open meal slot. Ingredients flow to the shopping list through the existing path. Generic by design — **any** site emitting `schema.org/Recipe` JSON-LD works; NYT Cooking was the motivating case, not a special case.
+
+**Where it lives:**
+- `netlify/functions/recipe.js` — server-side fetch + JSON-LD parse. `GET ?url=<encoded>` → `{ok:true, recipe}` / `422 {ok:false,error:'no-recipe'}`. Browser-like User-Agent, 15s timeout, 5MB cap, content-type check, hostname SSRF guard (same pattern as `ics.js`/`news.js`).
+- `tests/recipe.test.js` — 50 offline cases: every JSON-LD shape in the wild (`@type` string vs array, `@graph`/`mainEntity` nesting, `HowToStep`/`HowToSection` instructions, ISO-8601 durations, `ImageObject`), plus handler paths with `global.fetch` stubbed.
+- `family-hub.js` — `importRecipeFromUrl()`, `renderRecipeImportPreview()`, `saveImportedRecipe()`, `useImportedRecipe()`, `recipeToMeal()`, `recipeExtras()`; the `recipeBox` record gained optional `instructions`/`sourceUrl`/`sourceName`/`image`/`servings`/`totalTime`/`author`/`cuisine`/`paywalled` fields.
+- `#mealDetailSteps` — collapsed instructions block in the meal detail popup.
+
+**Feasibility — PROVEN (probe 2026-07-06):** unauthenticated server-side fetches of NYT Cooking recipe pages (`cooking.nytimes.com/recipes/...`) returned HTTP 200 with the full `schema.org/Recipe` JSON-LD intact — title, all ingredients, and instructions — **even though `isAccessibleForFree: false`** (paywalled). The paywall gates the human-facing render, not the structured metadata.
+
+**⚠️ Not re-verified live since the probe.** The implementing session (2026-09-01) could not reach `cooking.nytimes.com` — the sandbox egress policy blocked the host on both available network paths — so the parser was built and tested against fixtures shaped like the recorded probe output. **First real NYT paste is the live confirmation.** If NYT has since gated the JSON-LD, the symptom is a clean "couldn't read a recipe from that link", not a crash.
+
+**Known limits (by design):**
+- **Fragile external dependency** — undocumented page behavior, not a contract. Degrades to `no-recipe` → "Type It In".
+- **Personal use / ToS** — one-off imports of recipes you're entitled to, not bulk scraping. **No auto-sync of a whole NYT Recipe Box — no API exists for that**, and reaching a saved-recipe collection would mean authenticating as the user and scraping a logged-in page. Out of scope.
+- **Netlify-only** — like the ICS proxy, import needs the functions running (`netlify dev` on :8888 or the deployed site). Plain `python3 -m http.server` gets a clear message saying so, not a silent failure.
+
+---
+
+## Priority 3 — Send ingredients to a grocery cart (Instacart → Wegmans)
+
+*Raised 2026-09-01 ("can we send ingredients to the Wegmans app?"). Researched, not started.*
+
+**Short answer: not to the Wegmans app directly — Instacart is the only supported road into a Wegmans cart.**
+
+### Why not Wegmans directly
+
+`developer.wegmans.io` / `dev.wegmans.io` are live, but they serve **Wegmans Enterprise APIs** behind a sign-in — a vendor/partner portal, not self-serve developer access. The older public `api.wegmans.io` (product search, ~2018) is gone, there is no documented public cart or list-write endpoint, and no published deep-link scheme for the Wegmans app. Nothing to integrate against.
+
+### The Instacart path
+
+Wegmans has been an Instacart retailer since 2017 (delivery, pickup, EBT SNAP, loyalty integration), so an Instacart cart *is* a Wegmans cart. Two Developer Platform endpoints are relevant:
+
+| Endpoint | Fit |
+|---|---|
+| `POST https://connect.instacart.com/idp/v1/products/products_link` — **create shopping list page** | The shopping list, or one meal's ingredients. Body is an array of `line_items` (product name is the minimum); returns a shareable URL. Opening it lets the shopper pick a store and fill a cart. |
+| **create recipe page** | Maps nearly one-to-one onto a `recipeBox` record — name, image, servings, ingredients, instructions, link back to source. |
+
+**Where it would live**
+
+- `netlify/functions/instacart.js` — server-side, `INSTACART_KEY` as a Netlify env var, same shape as `ai.js` / `recipe.js`. The key must never reach the client.
+- `family-hub.js` — a "🛒 Send to Instacart" action beside the existing `📱 SMS ▾` button in `#shopCard`, and in the meal detail popup next to `addMealIngredients()` (`family-hub.js:7408`).
+- **Ingredient scrub (the risky part).** `addIngredientsToShopping()` (`family-hub.js:7388`) stores free text straight from the recipe parser — `"2 tbsp olive oil"`. Instacart matches on *product names*, so quantities and units want stripping first. We store no structured qty field, so this is new parsing work and the most likely source of disappointing matches.
+
+### ⚠️ Open questions — resolve before scheduling this
+
+- **Key access is neither keyless nor guaranteed.** Signup requires 18+ and a registered business or US/CA residency, and some docs still route key issuance through "contact your Instacart representative." That breaks this repo's free/keyless-services preference — a deliberate exception if we take it.
+- **Retailer preselect is unconfirmed.** The docs describe the shopper choosing a store *when they open the link*. Whether a request can hint or pin Wegmans is unknown: `docs.instacart.com` was blocked by the research session's sandbox egress proxy (the same wall the meal-photo and NYT probes hit). **Read the endpoint reference from an unrestricted machine first.** If the store can't be pinned, this is a "send to Instacart" feature, not "send to Wegmans", and should be named that way in the UI.
+- **Netlify-only, like recipe import.** Under plain `python3 -m http.server` the function doesn't exist; the UI must say so rather than look broken — `importRecipeFromUrl()` already models that degradation.
+
+**Sources:** [Instacart Developer Platform](https://docs.instacart.com/developer_platform_api) · [create shopping list page](https://docs.instacart.com/developer_platform_api/api/products/create_shopping_list_page) · [Wegmans Enterprise APIs](https://developer.wegmans.io/) · [Wegmans on Instacart](https://www.instacart.com/store/wegmans/storefront)
 
 ---
 

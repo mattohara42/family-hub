@@ -1,8 +1,93 @@
 # Family Hub — Feature Backlog
 
-*Last updated: 2026-07-06*
+*Last updated: 2026-09-01*
 
 Items are grouped by theme. Each entry notes the motivation and any known implementation approach.
+
+---
+
+## ⚠️ Pending from the 2026-08-31 branch audit
+
+This repo had **more branches than any other** — 19 besides `main`. Here's what
+each pile is.
+
+### ~~PR #19 — mobile More-tab settings~~ ❌ Closed unmerged 2026-09-05
+
+Branch `claude/mobile-ui-redesign-t6bmca` (`fce851d`, from 2026-07-11).
+
+**The claim that opened it was wrong.** The PR said "confirmed still unlanded:
+`Full Settings` is still present in two files on `main`." That count came from
+grepping the whole repo and counting files — and those two files were
+`BACKLOG.md` and `FEATURES.md`, docs *describing* the change, not the live UI.
+`git grep "Full Settings" -- family-hub.html family-hub.js family-hub.css`
+returns nothing on `main`, and returned nothing when the PR was opened either.
+
+Merging it would have changed 29 files and **deleted 5,080 lines**, including
+the whole vendored **`pond/`** subtree (an architecture invariant — see
+`CLAUDE.md`, kept byte-identical for `git subtree pull`) and
+`tests/recipe.test.js` / `tests/meal-image.test.js` from the Recipe Box work in
+#21/#22.
+
+If something is still wanted from it, it is a fresh change against the current
+`MOBILE_TABS` registry (`CLAUDE.md` §20), not this branch. Recoverable with
+`git push origin fce851d:refs/heads/claude/mobile-ui-redesign-t6bmca`.
+
+### Nine stale branches to delete
+
+Each is either content-identical to `main` or already merged via a PR:
+
+```
+git push origin --delete claude/budget-week-duplicate-fix              # was 5ad9de5
+git push origin --delete claude/budget-widget-add-button-acepox        # was 2e448ec
+git push origin --delete claude/claude-md-docs-wl3mm9                  # was 0776633
+git push origin --delete claude/event-timeout-auth-persistence-bum7ny  # was 6216c80
+git push origin --delete claude/family-calendar-usage-tro8k3           # was 5e9cc36
+git push origin --delete claude/github-repo-metadata-6lhq2s            # was a44df28
+git push origin --delete claude/meal-planning-style-consistency        # was 8386a86
+git push origin --delete claude/pond-chimes-family-hub-screensaver-f1jou5 # was 21a4146
+git push origin --delete claude/update-repo-metadata-nuh7kv            # was 3920e90
+```
+
+Five of these looked like unmerged bug fixes at first glance and are not —
+their work is already in `main`, landed via PRs #13, #14, #15 and others.
+Verified by merge-simulation: merging any of them produces a byte-identical
+tree. Spot-checks that confirm it — `scheduleTokenRefresh`/`ensureFreshToken`/
+`calFetch` are all in `family-hub.js` on `main`; the bills-on-calendar code the
+"duplicate fix" removes is already gone; the ResizeObserver guard is in both
+`family-hub.html` and `family-hub.js`.
+
+`claude/update-repo-metadata-nuh7kv` carried **two** rounds: PR #18 (merged as
+`2bb6879`) and then a follow-up commit, "Make Open Graph and Twitter URLs
+absolute", merged as PR #20 (`6f90892`) later the same day. Its tip is now
+`3920e90`, and that content is in `main` too — still safe to delete, but note
+the SHA above is the *later* one. Restoring from the earlier `7fd44aa` would
+silently drop the absolute-URL fix.
+`claude/claude-md-docs-wl3mm9` is a 2026-07-07 `CLAUDE.md` refresh, 40 commits
+behind — superseded many times over.
+
+Reversible: `git push origin <sha>:refs/heads/<branch>`.
+
+### Nine branches left alone deliberately
+
+`claude/claude-md-prompt-uqe0o4`, `claude/code-review-hshu11`,
+`claude/family-hub-architecture-gcmimu`, `claude/multi-day-events-8dz5nd`,
+`claude/project-state-hdPwC`, `feat/api-quick-wins`,
+`feat/event-discovery-frontend`, `feat/mobile-redesign`, `feat/tactile-flavor`.
+
+**Git finds no merge base between any of these and `main`** — the histories are
+unrelated, an artifact of a history rewrite rather than evidence of lost work.
+They report as 218–329 commits "ahead" while being 69 behind, which is
+meaningless. Several are near-certainly already shipped: `CLAUDE.md` describes
+the tactile flavor and the mobile redesign as live features.
+
+Untangling them needs a content-level comparison, not a git one. Left for a
+deliberate session rather than swept up with the hygiene.
+
+### One setting that prevents a recurrence
+
+**Settings → General → "Automatically delete head branches"** is off. Nearly
+every stale ref above exists because squash-merging rewrites the SHA and leaves
+the branch behind.
 
 ---
 
@@ -93,6 +178,24 @@ Allow a to-do item to have child items (sub-tasks). Collapsible in the list view
 ### ~~Shopping list categories~~ ✅ Done
 Items are tagged with a category (Produce, Dairy, Frozen, etc.) when added and grouped by aisle in the list view. Categories are collapsible and manageable in Settings → Shopping.
 
+### 📱 SMS delivery silently does nothing on a Raspberry Pi wall panel
+**Priority: Medium** — a live defect on the Pi, not just a missing feature.
+
+`sendToContact()` (`family-hub.js:9917`) builds an `sms:<number>?&body=…` URI and clicks a synthesised `<a>`. That works only because iOS / Android / macOS register an OS handler for the `sms:` scheme. **Raspberry Pi OS + Chromium registers none** — the click is swallowed with no error, no toast, no navigation. The popover opens, contacts render, you tap a name, nothing happens. It reads as a broken button.
+
+The Pi is only a browser here, so anything server-side stays reachable exactly as it is from a phone — the deployed Netlify functions included.
+
+Options, cheapest first:
+
+1. **QR code in the popover** *(recommended first step)* — render the same `sms:` URI as a QR; whoever is standing at the panel scans it and their own Messages app opens prefilled. Keyless, works offline, no new service, and it suits a wall panel: no keyboard, but everyone at it has a camera. Needs a CDN QR library that satisfies the CSP in `family-hub.html`, or a hand-rolled SVG encoder.
+2. **`netlify/functions/sms.js` + Twilio** — credentials as env vars like `GEMINI_KEY`; client POSTs `{to, body}`. Real SMS from any device. Two conditions: **validate the recipient server-side against known family-member phone numbers** — `getSmsContacts()` (`family-hub.js:326`) is client-side only, and without a server-side check the function is an open SMS relay — and budget for A2P 10DLC registration on US numbers. Small but non-zero recurring cost.
+3. **ntfy / Pushover push instead of SMS** — free, publishes with a plain POST, no function needed; much closer to the repo's keyless preference. But recipients need the app installed, and it isn't SMS.
+4. **Email-to-SMS gateways** (`number@vtext.com`) — free, but carrier-specific and increasingly filtered. Not recommended.
+
+**Don't try to auto-detect the missing handler** — browsers give no reliable signal for an unregistered scheme. Gate it instead: `isMobile` already exists and a Pi is never mobile, so a Settings → Family delivery-method control (`device handler` / `server` / `QR`) defaulting by platform is the clean version.
+
+**Framing note:** the feature as built assumes you want to text *someone else*. On a wall panel the commoner want is "send this list to my own phone" — which argues for option 1 or 3 over 2.
+
 ---
 
 ## Weather
@@ -113,19 +216,19 @@ Show live commute time from home to a configured destination (e.g. work). Update
 
 ## Smart Home
 
-### Home Assistant integration
+### ~~Home Assistant integration~~ ✅ Done (v1)
+Sidebar card showing and controlling an allowlist of HA entities. Lights, switches and fans toggle, locks lock/unlock, everything else is read-only. Off by default. See FEATURES.md §21, `family-hub-setup.md` Step 6, and `docs/plans/2026-09-07-001-feat-home-assistant-integration-plan.md`.
+
+Home Assistant runs in Docker on the same Pi as the kiosk browser, reached over Tailscale Serve HTTPS. The HTTPS requirement is not optional: the hub is served over HTTPS and browsers refuse to let it call a plain `http://` LAN address.
+
+*Deliberately not in v1: thermostat setpoint control, scenes and scripts, HA automations triggered from the hub, media players, camera streams, and the HA WebSocket API (polling is 120s, which is fine for a wall panel and wrong for anything that needs to feel instant).*
+
+### Home Assistant — thermostat control
 **Priority: Low**
-Display and control smart home devices (lights, locks, thermostat, sensors) via Home Assistant's local REST API. Covers Nest thermostats, WiZ bulbs, and any other HA-connected device in one integration.
+`climate` entities currently render read-only (mode plus current temperature). Add setpoint +/− and mode selection, which is the last piece of the "Nest thermostat on the panel" want. Needs `climate.set_temperature` / `climate.set_hvac_mode` and a row layout that fits two controls without crowding the sidebar.
 
-*Note: Matt does not currently have a Home Assistant instance. HA runs on a Raspberry Pi, NAS, or similar. Once set up, enable the REST API and generate a Long-Lived Access Token in HA → Profile.*
-
-*Implementation: user provides HA base URL + token in Settings; poll `/api/states` for a user-configured list of entity IDs on a 2–3 min interval; POST to `/api/services/{domain}/{service}` to control devices. Render as a sidebar widget card with entity icons, current state, and toggle/slider controls. Token stored in localStorage only — never sent to a third party. Works on LAN only unless HA is exposed via Nabu Casa (~$7/mo) or VPN.*
-
-### WiZ smart bulb control
-**Priority: Low**
-WiZ bulbs use a local UDP API that browsers cannot reach directly. The practical path is routing through Home Assistant (which has a native WiZ integration) — see Home Assistant integration below. Noting here for reference.
-
-*Direct browser→WiZ is not feasible without a local proxy server. If Home Assistant is set up, WiZ lights would be exposed as HA entities and controllable through the HA integration at no extra effort.*
+### ~~WiZ smart bulb control~~ ✅ Done via Home Assistant
+WiZ bulbs use a local UDP API that browsers cannot reach directly, so there was never a direct browser→WiZ path. Home Assistant's native WiZ integration exposes them as `light.*` entities, which the Home Assistant card above toggles like any other light. Nothing WiZ-specific to build.
 
 ### Google Home / Nest thermostat integration
 **Priority: Low**

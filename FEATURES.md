@@ -471,7 +471,10 @@ let mealPantryDef  = localStorage.getItem('fh_mealPantry')   || '';
 **Meal Detail modal** (opens when clicking an *already-planned* meal in Week/Day view):
 - `openMealDetail(dateKey, mealType)` — populates the detail popup; falls back to `openMealModal` if the slot is empty
 - `closeMealDetail()`
-- `fetchMealImage(name)` — best-effort dish photo from TheMealDB (free, keyless); returns a thumb URL or null. Cached in `_mealImgCache`. Falls back to an emoji placeholder when no match.
+- `fetchMealImage(name)` — best-effort dish photo, four passes, returning `{ url, stock }` (or `null` for a blank name) and caching per lowercased name in `_mealImgCache`. **1.** exact name against TheMealDB (free, keyless) · **2.** name with leading adjectives/cooking methods stripped (`STRIP_WORD`) · **2b.** from the main food noun (`MEAL_MAIN_NOUN`) to the end, then the bare noun · **3.** a LoremFlickr food photo, which always returns something. A query is never spent twice across passes. `stock:true` marks a representative image (passes 2b and 3) — the UI shows `#mealStockLabel` and does **not** persist it; passes 1–2 are the actual dish, so they are persisted. Never throws: a failed lookup is a miss.
+- `MEAL_MAIN_NOUN` — proteins and dish forms TheMealDB is worth asking about alone, with a trailing `(?:e?s)?` so plurals match ("Meatballs", "Potatoes"). Cookware (`skillet`, `sheet pan`) is deliberately absent, so a name like "Tuscan Skillet Supper" finds no noun and goes straight to the stock fallback.
+- `persistMealImage(dateKey, mealType, url)` — writes an exact match onto the meal via `setMealInFs` so later opens are instant and survive reloads. `openMealDetail()` reads `meal.image` **first** and skips the lookup entirely when it's set.
+- Emoji placeholder (`#mealDetailImgPlaceholder`) shows until `img.onload` fires, so it remains the final fallback if an image fails to load. Tests: `tests/meal-image.test.js`.
 - `toggleMealAdjust()` — reveals/hides the Adjust section; seeds `_mealDetailIngredients` from the current meal and renders the chip editor
 - `addAdjustPreset(label)` — appends a quick-adjust chip's text to the instruction input (de-duped)
 - `adjustMeal()` — re-generates the current meal via `callMealAI` per the user's adjustment, replaces it via `setMealInFs` (optimistic local update), and re-opens the detail
@@ -503,14 +506,33 @@ let mealPantryDef  = localStorage.getItem('fh_mealPantry')   || '';
 **Recipe Box** (`recipeBox` collection — individual reusable dishes, distinct from `mealTemplates` which save a whole *week*):
 ```js
 let recipeBox = lsGet('fh_recipeBox', []);
-// [{ id, name, ingredients: [...], createdAt: 'YYYY-MM-DD' }]
+// [{ id, name, ingredients: [...], createdAt: 'YYYY-MM-DD',
+//    // optional — populated by URL import, absent on hand-typed recipes:
+//    instructions: [...], description, image, sourceUrl, sourceName,
+//    servings, totalTime /* minutes */, author, cuisine, paywalled }]
 ```
-- `saveRecipeBoxItem(name, ingredients)` / `deleteRecipeBoxItem(id)` — Firestore `recipeBox` collection when `db` exists, else `fh_recipeBox` localStorage fallback (same pattern as `mealTemplates`)
+- `RECIPE_EXTRA_FIELDS` / `recipeExtras(src)` — the optional field list, and the picker that keeps only populated ones. **Firestore rejects `undefined`**, so every write of a recipe-shaped object goes through `recipeExtras()` rather than spreading raw parsed data
+- `saveRecipeBoxItem(name, ingredients, extra)` / `deleteRecipeBoxItem(id)` — Firestore `recipeBox` collection when `db` exists, else `fh_recipeBox` localStorage fallback (same pattern as `mealTemplates`). `extra` is optional — hand-typed recipes omit it
+- `recipeToMeal(r)` — recipe record → meal record, mapping `sourceUrl`→`recipeUrl` and `totalTime`→`prepTime` so the existing meal-detail popup renders imported content with no changes to its own field names
 - `useRecipeBoxItem(id)` — applies a saved recipe straight to the date/meal-type the modal is open for, then closes the modal
-- `renderRecipeBoxPicker()` — filters `recipeBox` by `#recipeBoxSearch` text, renders **+ Use** rows into `#recipeBoxPickList` (inside `#mealModal`)
-- `renderRecipeBoxList()` — management list (name + delete) rendered into `#recipeBoxList` in Settings → Meals
+- `renderRecipeBoxPicker()` — filters `recipeBox` by `#recipeBoxSearch` text, renders **+ Use** rows into `#recipeBoxPickList` (inside `#mealModal`); imported recipes get a `.recipe-src-badge` source chip
+- `renderRecipeBoxList()` — management list (name + step/ingredient counts + **source ↗** link + delete) rendered into `#recipeBoxList` in Settings → Meals
 
 **localStorage:** `fh_recipeBox` — Firestore `recipeBox` collection is authoritative when `db` exists; localStorage is the no-Firebase fallback only (same migration pattern as `fh_mealTemplates`).
+
+**Import a recipe from a URL** (`schema.org/Recipe` JSON-LD) — in `#mealTabRecipebox`, below the picker. Generic: any site emitting Recipe JSON-LD works (NYT Cooking, AllRecipes, Serious Eats, food blogs). Not an NYT-specific integration; NYT Cooking is the motivating case.
+
+**Backend:** `netlify/functions/recipe.js` — `GET /.netlify/functions/recipe?url=<encoded>`
+- `200 → { ok:true, recipe }` · `422 → { ok:false, error:'no-recipe' }` (page fetched, no Recipe JSON-LD) · `4xx/5xx → { ok:false, error }`
+- Server-side because browsers can't fetch cross-origin recipe pages. Sends a browser-like User-Agent (recipe sites 403 bot UAs), 15s `AbortController` timeout, 5MB cap, content-type check, and the same hostname SSRF guard as `ics.js`/`news.js`
+- Parser handles every JSON-LD shape in the wild: `@type` as string *or* array, nesting under `@graph`/`mainEntity`, instructions as a string / string[] / `HowToStep[]` / `HowToSection` groups, `image` as string / array / `ImageObject`, ISO-8601 durations (`PT1H15M` → minutes), and `recipeYield` as string / number / array. A malformed JSON-LD block is skipped rather than failing the import
+- Pure helpers exported on `_test` → `tests/recipe.test.js` (50 cases, no network; handler tests stub `global.fetch`)
+
+**Client:** `importRecipeFromUrl()` → `renderRecipeImportPreview()` → `saveImportedRecipe()` (Recipe Box only) or `useImportedRecipe()` (saves **and** fills the open slot). `clearRecipeImport()` resets; `_pendingRecipeImport` holds the parsed recipe between fetch and save. Anchors: `#recipeImportUrl`, `#recipeImportBtn`, `#recipeImportStatus`, `#recipeImportPreview`.
+
+**Instructions display:** `#mealDetailSteps` in the meal detail popup — a collapsed `<details>` with a numbered `<ol>`, shown only when `meal.instructions` is non-empty (AI-suggested meals have none). Collapsed by default so a long method doesn't push Keep/Adjust/Delete off a wall-panel screen.
+
+**Why NYT Cooking works while paywalled:** it serves the complete Recipe JSON-LD unauthenticated even when `isAccessibleForFree: false` — the paywall gates the human-facing render, not the structured metadata (probe 2026-07-06). **This is undocumented page behavior, not a contract.** When it stops holding, the function returns `no-recipe` and the UI points at "Type It In"; `recipe.paywalled` is stored so a recipe's origin stays visible.
 
 ---
 
@@ -675,7 +697,10 @@ A handful of triggers aren't tied to any franchise (birthday, politeness, dark-m
 3. **LibraryWeb (LibCal)** — free Monroe County (Rochester NY) public library events via iCal feeds
 4. **Red Wings** — Rochester Red Wings (AAA baseball) home games via MLB Stats API
 5. **CitySpark ("Around Town")** — broad local events via aggregator (concerts, festivals, food, art, comedy, family)
-6. **Town of Pittsford** — municipal community calendar (concerts, movie nights, festivals). Rides in the "Library & Town" tab with `source: 'libraryweb'` so it groups next to the library feeds; gets its own sub-tab via `location.address = 'Town of Pittsford'`
+6. **Fairport Festivals** — the village's published festival season (curated table in the function, no API)
+7. **Town of Pittsford** — the town's municipal calendar (concerts, movie nights, festivals), scraped from its Drupal page
+
+Sources 6 and 7 both emit `source: 'towns'` and share the single "🎪 Town Events" tab; cards are told apart by `location.address` ("Fairport Village" / "Town of Pittsford"). `sourceStatus` keeps a separate entry per source so `sourceStats` still shows which one produced what.
 
 **State:**
 ```js
@@ -698,7 +723,9 @@ let eventsModalOpen     = false;
 
 **Netlify backend function:** `netlify/functions/events.js` (400+ lines)
 - `geocodeLocation()` — city name → lat/lon via OpenWeatherMap
-- `fetchTicketmaster()`, `fetchOpenStreetMap()`, `fetchLibraryWeb()`, `fetchRedWings()`, `fetchCitySpark()`, `fetchPittsford()` — per-source fetchers
+- `fetchTicketmaster()`, `fetchOpenStreetMap()`, `fetchLibraryWeb()`, `fetchRedWings()`, `fetchCitySpark()`, `fetchFairport()`, `fetchPittsford()` — per-source fetchers
+- `expandFairportSchedule()` / `addDaysISO()` — expand `FAIRPORT_SCHEDULE` (one-offs, `days` for multi-day runs) and `FAIRPORT_WEEKLY` (every 7 days between `start` and `end`) into one dated event per occurrence
+- `parsePittsfordEvents(html)` — pull the event list out of the town page's `drupal-settings-json` blob and drop the municipal noise (pure; unit-tested)
 - `calculateDistance()` — Haversine formula
 - `deduplicateEvents()` — by title + date + venue
 - `filterEventsByDistanceAndDate()` — 30-day window, radius filtering
@@ -727,14 +754,15 @@ Netlify environment variables:
 - CitySpark requires `sort:'Time'` (not `'Date'`) for soonest-first results; `'Date'` returns tail
 - CitySpark `DateStart` is local time with spurious `Z` — read components directly, do NOT tz-convert
 - LibraryWeb: no all-branches feed exists; must fetch per-branch iCal separately + merge
-- Pittsford: no iCal/feed — the Drupal `fullcalendar_view` page embeds the *whole* event list (~1400 items, 1.4 MB) as JSON in `drupal-settings-json`, so one fetch gets everything; cached 6 h. Their taxonomy is unreliable (the Food Truck Festival is tagged "Board Meeting"), so noise is filtered by colour for holidays/closures **only** (`#ac394b`, `#987b2a`) plus a title regex for the actual boards. `netlify/functions/events.pittsford.test.js` fails if either stops working
+- Fairport Festivals is a **hand-maintained table for one season** (currently 2026, transcribed from the FairportFestivals.com poster). It needs re-typing from the new poster each spring. Until then the 35-day window quietly returns nothing rather than showing stale dates. All events sit at the village center, with the real venue (Kennelly Park, Center Park) carried as text in `location.address`; the card shows that in place of the distance
+- Pittsford: no iCal/feed — the Drupal `fullcalendar_view` page embeds the *whole* event list (~1400 items, 1.4 MB) as JSON in `drupal-settings-json`, so one fetch gets everything; cached 6 h. Their taxonomy is unreliable (the Food Truck Festival is tagged "Board Meeting"), so noise is filtered by colour for holidays/closures **only** (`#ac394b`, `#987b2a`) plus a title regex for the actual boards. Being a scrape it will break on a redesign — the failure is visible as `pittsford` in the response `warnings`
 - Dateless events (OpenStreetMap POIs, some library events) show "Anytime" in modal; require date selection if added to calendar
 
 ---
 
 ### 19. Screensaver
 
-**Overview:** Idle-triggered full-screen photo slideshow with ambient info (SCREENSAVER_BACKLOG.md S1+S3). After N minutes without pointer/key/touch activity, fades to a black overlay cycling the background photo pool (`bgPhotos` — same IndexedDB pool as the background slideshow) with slow Ken Burns pan/zoom, an optional drifting clock (burn-in protection), and an optional info line (current temp + next calendar event). A configurable night window switches to a dim clock-only mode. Any interaction wakes it instantly; the waking tap is swallowed by the overlay. Doesn't activate when the photo pool is empty or the tab is hidden.
+**Overview:** Idle-triggered full-screen ambient display with two modes — a **photo slideshow** and **Pond Chimes** (SCREENSAVER_BACKLOG.md S1+S3+S5). After N minutes without pointer/key/touch activity, fades to a black overlay showing either the background photo pool (`bgPhotos` — same IndexedDB pool as the background slideshow) with slow Ken Burns pan/zoom, or the vendored Pond Chimes pond in a same-origin iframe. Both carry an optional drifting clock (burn-in protection) and an optional info line (current temp + next calendar event). A configurable night window switches to a dim clock-only mode. Doesn't activate when the tab is hidden, or — in photo mode only — when the photo pool is empty.
 
 **State:**
 ```js
@@ -746,29 +774,38 @@ let saverInfo     = lsGet('fh_saverInfo', true);    // temp + next event line
 let saverNight    = lsGet('fh_saverNight', true);   // night dimming on/off
 let saverNightStart = lsGet('fh_saverNightStart', '22:00'); // HH:MM
 let saverNightEnd   = lsGet('fh_saverNightEnd', '06:30');   // HH:MM (wraps midnight)
+let saverMode      = lsGet('fh_saverMode', 'photos');       // 'photos' | 'pond'
+let saverPondSound = lsGet('fh_saverPondSound', true);      // pond audio on/off
+let saverPondTap   = lsGet('fh_saverPondTap', 'play');      // 'play' | 'wake'
 let saverActive   = false;                          // runtime only
 let lastWxData    = null;  // set by renderWeatherData(); reused for the temp line
 ```
 
 **Key functions:**
 - `resetSaverIdleTimer()` — (re)arms the idle timeout; no-op when disabled or already active
-- `startScreensaver()` — activates overlay; guards: enabled, not active, tab visible, photos exist (else re-arms); computes night state before the first photo
-- `stopScreensaver()` — fades out, clears timers + night class, removes photo layers after the fade, re-arms
+- `startScreensaver()` — activates overlay; guards: enabled, not active, tab visible, and (photo mode only) photos exist — else re-arms; computes night state before the first photo, then mounts the pond or the first photo per `saverMode`
+- `stopScreensaver()` — fades out, clears timers + night class, hides the wake button, removes photo layers / the pond iframe after the fade, re-arms
+- `startSaverPond()` / `stopSaverPond()` — create/destroy the `#saverPond` iframe (`pond/index.html`). Destroying it is what stops the pond's rAF loop, weather interval and audio graph; `lastWxData.lat/lon` are passed as query params so the pond skips its own geolocation prompt
+- `applySaverPondSound(frame)` — same-origin reach into the pond's `initAudio()` / `Tone.getDestination().mute`; wrapped in try/catch so a refused autoplay leaves a silent pond, not a broken one
+- `wireSaverPondWake(frame)` — attaches wake listeners inside the iframe document (its pointer events never reach the hub's window listeners): `'wake'` → pointerdown/touchstart/keydown/wheel; `'play'` → keydown only, so every pointer event belongs to the pond
+- `updateSaverModeFields()` — Settings: shows the dwell row or the pond options per the selected mode
 - `advanceSaverPhoto()` — appends the next photo `<img>` (random `kb0–kb3` Ken Burns class, inline `animationDuration` = dwell + 4s), crossfades, retires the previous layer, schedules itself; no-op during night
 - `updateSaverOverlay()` — every 10s: time + date, temp (`lastWxData` + `WX_ICONS`), next event, night transitions (entering night drops photo layers + pauses cycling; exiting resumes), ±30/±20px drift
 - `getNextCalendarEvent()` — soonest timed event later today across enabled calendars (skips holidays + `disabledCals`), else tomorrow's first event; returns display text or null
 - `saverInNightWindow(d)` — HH:MM window test, handles midnight wrap
 - `saverActivity(e)` — global listener (`pointerdown`/`pointermove` throttled 1/s/`keydown`/`touchstart`/`wheel`): wakes if active, else re-arms; `visibilitychange` stops when hidden
 
-**Night mode:** `#screensaver.night` — photos hidden/dropped, info hidden, clock forced visible at 35% opacity (even if the clock toggle is off).
+**Night mode:** `#screensaver.night` — photos hidden/dropped, the pond iframe destroyed and the wake button hidden, info hidden, clock forced visible at 35% opacity (even if the clock toggle is off). Leaving the window re-mounts whichever mode is selected.
 
-**HTML anchors:** `#screensaver` (fixed overlay, `z-index: 20000` — above modals, below easter-egg layers), `#saverClock` / `#saverClockTime` / `#saverClockDate` / `#saverInfo` (`#saverInfoWx`, `#saverInfoEvent`)
+**Pond Chimes mode:** the pond is vendored verbatim at `pond/` as a **git subtree** of `mattohara42/pond-chimes` (`git subtree pull --prefix=pond https://github.com/mattohara42/pond-chimes main --squash` to re-sync). It runs in a same-origin iframe so its globals and its `html, body` CSS reset stay in their own document — nothing in `pond/` is edited, and the two parent-side tweaks (audio, hiding the pond's own title card) reach in from the hub. Requires `frame-src 'self'` in the `family-hub.html` CSP **and** `X-Frame-Options = "SAMEORIGIN"` (not `DENY`) in `netlify.toml`. `pond/` is not in the service worker's `APP_SHELL` — the fetch handler runtime-caches it on first use, like the Tactile fonts.
 
-**CSS:** `/* ── Screensaver ── */` section — `.saver-img` (crossfade + `saverKb0–3` keyframes), `#screensaver.active`, `#screensaver.night`, `#saverInfo`, tactile flavor uses `--font-display` for the clock
+**HTML anchors:** `#screensaver` (fixed overlay, `z-index: 20000` — above modals, below easter-egg layers), `#saverClock` / `#saverClockTime` / `#saverClockDate` / `#saverInfo` (`#saverInfoWx`, `#saverInfoEvent`), `#saverWakeBtn` (pond play-mode wake), `#saverPond` (created at runtime)
 
-**Settings:** Screensaver/Background tab (General group) → Screensaver section: enable toggle, idle minutes (1–240), dwell seconds (5–600), clock toggle, weather & next event toggle, night dimming toggle + from/to times. Wired in `openSettings()` / `saveSettings()`; init armed from the `load` handler.
+**CSS:** `/* ── Screensaver ── */` section — `.saver-img` (crossfade + `saverKb0–3` keyframes), `#screensaver.active`, `#screensaver.active.pond` (restores the cursor the slideshow hides), `#screensaver.night`, `#saverPond`, `#saverWakeBtn`, `#saverInfo`, tactile flavor uses `--font-display` for the clock
 
-**localStorage:** `fh_saver`, `fh_saverIdleMin`, `fh_saverDwellSec`, `fh_saverClock`, `fh_saverInfo`, `fh_saverNight`, `fh_saverNightStart`, `fh_saverNightEnd`
+**Settings:** Screensaver/Background tab (General group) → Screensaver section: enable toggle, mode select (photos / pond), idle minutes (1–240), dwell seconds (5–600, photo mode), pond sound toggle + pond tap behavior (pond mode), clock toggle, weather & next event toggle, night dimming toggle + from/to times. Wired in `openSettings()` / `saveSettings()`; init armed from the `load` handler.
+
+**localStorage:** `fh_saver`, `fh_saverIdleMin`, `fh_saverDwellSec`, `fh_saverClock`, `fh_saverInfo`, `fh_saverNight`, `fh_saverNightStart`, `fh_saverNightEnd`, `fh_saverMode`, `fh_saverPondSound`, `fh_saverPondTap`
 
 **Mobile:** never activates under 640px — `resetSaverIdleTimer()`/`startScreensaver()` bail when `isMobile` (battery + OS lock screen); crossing the breakpoint re-arms/disarms via the resize handler. The Settings toggle governs desktop/kiosk only.
 
@@ -801,6 +838,49 @@ Secondary widgets (Budget, Chores, Word, Joke, Quotes, Countdown, News, Stock, A
 
 ---
 
+### 21. Home Assistant
+
+**Overview:** Shows and controls a hand-picked allowlist of Home Assistant entities (lights, switches, fans, locks, sensors, thermostats) from a sidebar card, over HA's REST API. Off by default; useless until configured.
+
+**The constraint:** the hub is served over HTTPS, so it cannot call a plain `http://` LAN address (mixed content, and our own `connect-src`). Home Assistant needs a real HTTPS URL. The shipped setup uses Tailscale Serve (`https://<host>.<tailnet>.ts.net`), which the blanket `https:` in the CSP already permits. HA also rejects cross-origin browser calls unless the page's origin is in `http.cors_allowed_origins`. See `family-hub-setup.md` Step 6 and `docs/plans/2026-09-07-001-feat-home-assistant-integration-plan.md`.
+
+**State:**
+```js
+const HA_DEFAULTS = { baseUrl: '', entities: [] };   // entities: [{ id, name }]
+let haConfig  = { ...HA_DEFAULTS, ...lsGet('fh_haConfig', {}) };  // synced: Firestore settings/homeAssistant
+let haToken   = localStorage.getItem('fh_haToken') || '';         // NEVER synced — per-device house key
+let haStates  = {};        // entity_id → HA state object, or { error: '…' }
+let haPending = {};        // entity_id → true while a service call settles
+let haEntityIdSuggestions = [];   // filled by Test Connection, feeds the settings datalist
+const HA_POLL_MS = 120000, HA_TIMEOUT_MS = 10000;
+const HA_TOGGLE_DOMAINS = ['light', 'switch', 'fan', 'input_boolean'];
+```
+
+**Key functions:**
+- `haFetch(path, opts)` — the `calFetch()` equivalent for HA: attaches the bearer token, 10s `AbortController`, and normalizes every failure into an error carrying `haKind` (`unconfigured` | `auth` | `notfound` | `timeout` | `unreachable` | `http`). A CORS rejection and a dead host are the same bare `TypeError` in the browser, so the `unreachable` copy names both causes on purpose
+- `refreshHaStates()` — `GET /api/states/<id>` per allowlisted entity via `Promise.allSettled`, not the full `/api/states`. Smaller, and one bad entity ID can't blank the card. Per-entity 404s render on their own row; anything else becomes one banner
+- `renderHaCard()` — rows into `#haBody`. Domain decides the control: toggle for `HA_TOGGLE_DOMAINS`, Lock/Unlock for `lock`, read-only otherwise. `unavailable` / `unknown` / errored rows dim and lose their control
+- `haToggleEntity(id)` — `POST /api/services/{domain}/{service}` with `{ entity_id }`, then `haRecheckEntity()` (fire-and-forget, so the UI isn't blocked)
+- `haRecheckEntity(id, prevState)` — re-reads at 1s and 4s before handing back to the poll. Z-Wave and Zigbee devices take seconds to report; snapping the row back would call a success a failure
+- `startHaPolling()` / `initHomeAssistant()` — 120s interval, skipped while `document.hidden`, refreshed on return to visible. No timer at all when the widget is off or unconfigured
+- `testHaConnection()` — validates the URL/token *currently in the boxes* (not the saved pair), then loads every entity ID into `#haEntityOptions` so the ID field autocompletes
+- `addHaEntity()` / `removeHaEntity(i)` / `renderHaEntitySettings()` — the allowlist editor, writing through immediately like the news-feed editor
+- Pure helpers, mirrored in `tests/home-assistant.test.js`: `haEntityDomain()`, `haServiceForToggle()`, `haActionLabel()`, `haFormatState()`, `haNormalizeBaseUrl()`
+
+**Credential handling:** an HA long-lived token can operate every entity its user can see (HA has no per-entity permission model), so the setup guide creates a non-admin `Wall Panel` account for it. The token lives in `fh_haToken` on the device that pasted it and is excluded from the Firestore settings sync, which makes it individually revocable: a lost phone costs one token, not the house.
+
+**Anchors:**
+- HTML: `#haCard` (sidebar card), `#haBody`, `#mobileNavHome`, settings panel `data-panel="homeassistant"` (`#haBaseUrl`, `#haTokenInput`, `#haTestResult`, `#haEntityList`, `#haEntityId`, `#haEntityName`, `#haEntityOptions`)
+- CSS: `/* ── Home Assistant Card ── */` — `.ha-row`, `.ha-icon`, `.ha-name`, `.ha-state`, `.ha-btn`, `.ha-row-dim`, `.ha-empty`, `.ha-error`, `.ha-test`
+- JS: `// ── Home Assistant ──`
+- Registries: `WIDGET_DEFAULTS.homeassistant` (false), `WIDGET_ORDER` (`haCard`), `MOBILE_TABS.home`, `SETTINGS_GROUPS` → Widgets
+- Firestore: `settings/homeAssistant` (`{ value: haConfig }`)
+- Mobile: the `🏠 Home` nav button is the one optional button in the bar; `applyWidgetVisibility()` hides it unless the widget is enabled
+
+**Testing without hardware:** `node tests/ha-mock.js` starts a fake HA on `http://localhost:8123` (flags for `--reject-auth` and `--no-cors`). `http://localhost:8123` is in the dev CSP alongside the Netlify dev port. `node --test tests/home-assistant.test.js` covers the pure helpers.
+
+---
+
 ## localStorage Key Index
 
 | Key | Type | Feature | Notes |
@@ -818,6 +898,8 @@ Secondary widgets (Budget, Chores, Word, Joke, Quotes, Countdown, News, Stock, A
 | `fh_slideInterval` | string | Photos | Slideshow seconds |
 | `fh_photosImportedAt` | string | Photos | Epoch ms of last photo import (staleness nudge) |
 | `fh_widgets` | JSON object | Widgets | `{ shopping: bool, todo: bool, … }` |
+| `fh_haConfig` | JSON object | Home Assistant | Fallback only — synced via Firestore `settings/homeAssistant` otherwise. `{ baseUrl, entities: [{ id, name }] }` |
+| `fh_haToken` | string | Home Assistant | Long-lived access token. **Per-device, never synced** — see FEATURES §21 |
 | `fh_widget_placement` | JSON object | Widgets | `{ shopping: 'sidebar'\|'bottom', … }` |
 | `fh_mealPlan` | JSON object | Meals | `{ dateKey: { breakfast, lunch, dinner } }` |
 | `fh_mealAiKey` | string | Meals | API key (Gemini or OpenAI) |
@@ -855,6 +937,9 @@ Secondary widgets (Budget, Chores, Word, Joke, Quotes, Countdown, News, Stock, A
 | `fh_saverNight` | bool | Screensaver | Night dimming (default true) |
 | `fh_saverNightStart` | string | Screensaver | Night window start `HH:MM` (default `22:00`) |
 | `fh_saverNightEnd` | string | Screensaver | Night window end `HH:MM` (default `06:30`, wraps midnight) |
+| `fh_saverMode` | string | Screensaver | `'photos'` (default) or `'pond'` |
+| `fh_saverPondSound` | bool | Screensaver | Pond audio on/off (default true) |
+| `fh_saverPondTap` | string | Screensaver | Pond tap behavior: `'play'` (default) or `'wake'` |
 | `fh_eventLocation` | string | Event Discovery | Default search location (default `'Rochester'`) |
 | `fh_eventMaxDistance` | number | Event Discovery | Max distance in minutes driving time (default 120) |
 | `fh_mobileTab` | string | Mobile (§20) | Current mobile tab — `'cal'` or any `MOBILE_TABS` key; invalid/disabled values bounce to `'cal'` |

@@ -7,7 +7,35 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Family Hub" />
+  <meta name="application-name" content="Family Hub" />
   <title>Family Hub</title>
+  <meta name="description"
+        content="A no-build family wall dashboard: Google Calendar, keyless weather, shared shopping, to-do and budget lists, AI meal planning, chores and an ambient screensaver." />
+  <!-- A private household display, not a public page — keep it out of search indexes. -->
+  <meta name="robots" content="noindex, nofollow" />
+
+  <!-- Link previews (iMessage, Slack, etc.). These URLs must be absolute: the
+       Open Graph spec requires it, and scrapers fetch the page out of context,
+       so a relative path has nothing to resolve against. The origin below is
+       this project's deploy (also set as the repo's homepage) — change it if
+       you serve Family Hub somewhere else, or previews will point at a site
+       that isn't yours. Nothing at runtime reads these; they are for scrapers
+       only, so localhost and LAN serving are unaffected. -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Family Hub" />
+  <meta property="og:url" content="https://familial.netlify.app/family-hub.html" />
+  <meta property="og:title" content="Family Hub" />
+  <meta property="og:description"
+        content="A no-build family wall dashboard: calendar, weather, shopping, meals, chores and an ambient screensaver." />
+  <meta property="og:image" content="https://familial.netlify.app/icon-512.png" />
+  <meta property="og:image:width" content="512" />
+  <meta property="og:image:height" content="512" />
+  <meta property="og:image:alt" content="Family Hub icon — a blue house on a dark background" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Family Hub" />
+  <meta name="twitter:description"
+        content="A no-build family wall dashboard: calendar, weather, shopping, meals, chores and an ambient screensaver." />
+  <meta name="twitter:image" content="https://familial.netlify.app/icon-512.png" />
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="manifest" href="manifest.json">
@@ -15,11 +43,11 @@
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self';
                  script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com https://accounts.google.com https://unpkg.com;
-                 connect-src https: http://localhost:8888;
+                 connect-src 'self' https: http://localhost:8888 http://localhost:8123;
                  img-src 'self' https: blob: data:;
                  style-src 'self' 'unsafe-inline' https://unpkg.com;
                  font-src 'self' data:;
-                 frame-src 'none';" />
+                 frame-src 'self';" />   <!-- 'self' only: the Pond Chimes screensaver runs in a same-origin iframe (pond/index.html) -->
 
   <!-- Earliest possible error catcher — runs before any other script, so a
        crash anywhere (including inside family-hub.js before its own
@@ -382,6 +410,17 @@
       </div>
     </div>
 
+    <!-- Home Assistant -->
+    <div class="card" id="haCard">
+      <div class="card-header">
+        <h2>🏠 Home</h2>
+        <button onclick="refreshHaStates()" title="Refresh devices" aria-label="Refresh devices" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.6rem;line-height:1">↺</button>
+      </div>
+      <div class="card-body" id="haBody" style="padding:6px 14px 10px">
+        <div class="ha-empty">Add your Home Assistant URL and token in ⚙️ Settings → 🏠 Home Assistant.</div>
+      </div>
+    </div>
+
     <!-- Countdowns -->
     <div class="card" id="countdownCard">
       <div class="card-header">
@@ -438,6 +477,10 @@
   <button class="mobile-nav-btn" id="mobileNavWeather" onclick="setMobileTab('weather')">
     <span class="mobile-nav-icon">🌤️</span>
     <span>Weather</span>
+  </button>
+  <button class="mobile-nav-btn" id="mobileNavHome" onclick="setMobileTab('home')" style="display:none">
+    <span class="mobile-nav-icon">🏠</span>
+    <span>Home</span>
   </button>
   <button class="mobile-nav-btn hamburger-btn" id="hamburgerBtn" onclick="openSettings()" aria-label="Open settings">
     <span class="mobile-nav-icon">⚙️</span>
@@ -590,19 +633,46 @@
               <span class="toggle-track"></span>
             </label>
             <div>
-              <div class="toggle-label">🌙 Photo screensaver</div>
-              <div class="toggle-sub">After a period of inactivity, fades to a full-screen slideshow of the background images above. Touch the screen or press any key to wake.</div>
+              <div class="toggle-label">🌙 Screensaver</div>
+              <div class="toggle-sub">After a period of inactivity, fades to a full-screen ambient display. Touch the screen or press any key to wake.</div>
             </div>
+          </div>
+          <div class="field" style="margin:10px 0 0">
+            <label>Show</label>
+            <select id="settingSaverMode" onchange="updateSaverModeFields()">
+              <option value="photos">📷 Photo slideshow</option>
+              <option value="pond">🐟 Pond Chimes</option>
+            </select>
           </div>
           <div class="field-row" style="margin-top:8px">
             <label>Start after</label>
             <input type="number" id="settingSaverIdleMin" value="10" min="1" max="240" />
             <label>minutes idle</label>
           </div>
-          <div class="field-row" style="margin-top:6px">
+          <div class="field-row" style="margin-top:6px" id="saverDwellRow">
             <label>Next photo every</label>
             <input type="number" id="settingSaverDwellSec" value="20" min="5" max="600" />
             <label>seconds</label>
+          </div>
+          <!-- Pond-only options; shown/hidden by updateSaverModeFields() -->
+          <div id="saverPondFields" style="display:none">
+            <div class="toggle-row" style="margin-top:8px">
+              <label class="toggle-switch">
+                <input type="checkbox" id="settingSaverPondSound" />
+                <span class="toggle-track"></span>
+              </label>
+              <div>
+                <div class="toggle-label">🔊 Pond sound</div>
+                <div class="toggle-sub">Let the pond play its ambient chimes. Turn off for a silent pond.</div>
+              </div>
+            </div>
+            <div class="field" style="margin:10px 0 0">
+              <label>Touching the pond</label>
+              <select id="settingSaverPondTap">
+                <option value="play">Plays the pond (wake with the corner button or any key)</option>
+                <option value="wake">Wakes Family Hub</option>
+              </select>
+            </div>
           </div>
           <div class="toggle-row" style="margin-top:8px">
             <label class="toggle-switch">
@@ -631,7 +701,7 @@
             </label>
             <div>
               <div class="toggle-label">🌒 Night dimming</div>
-              <div class="toggle-sub">During night hours the screensaver shows only a dim clock — no photos.</div>
+              <div class="toggle-sub">During night hours the screensaver shows only a dim clock — no photos, no pond.</div>
             </div>
           </div>
           <div class="field-row" style="margin-top:6px">
@@ -1049,6 +1119,12 @@
               <label class="widget-placement-radio"><input type="radio" name="placement_stock" value="bottom"  /><span>Bottom</span></label>
               <label class="widget-placement-radio"><input type="radio" name="placement_stock" value="sidebar" /><span>Sidebar</span></label>
             </div>
+            <div class="widget-toggle-row">
+              <input type="checkbox" id="widget_homeassistant" />
+              <span>🏠 Home Assistant</span>
+              <label class="widget-placement-radio"><input type="radio" name="placement_homeassistant" value="bottom"  /><span>Bottom</span></label>
+              <label class="widget-placement-radio"><input type="radio" name="placement_homeassistant" value="sidebar" /><span>Sidebar</span></label>
+            </div>
 
           </div>
         </div>
@@ -1208,6 +1284,51 @@
         </div>
       </div><!-- /mow -->
 
+      <!-- ── Home Assistant ── -->
+      <div class="settings-panel" data-panel="homeassistant">
+
+        <div class="lc-section">
+          <div class="lc-section-title">🏠 Connection</div>
+          <div class="field">
+            <label>Base URL</label>
+            <input id="haBaseUrl" type="url" class="lc-input" placeholder="https://familypi.tail1234.ts.net" />
+          </div>
+          <div class="field">
+            <label>Long-lived access token</label>
+            <input id="haTokenInput" type="password" class="lc-input" autocomplete="off" placeholder="Paste from HA → profile → Security" />
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+            <button class="btn btn-secondary btn-sm" onclick="testHaConnection()">Test connection</button>
+            <span id="haTestResult" class="ha-test"></span>
+          </div>
+          <p style="font-size:.75rem;color:var(--muted);margin-top:8px">
+            The token is stored <strong>on this device only</strong> and is never synced, so
+            enter it once per device. Home Assistant must be reachable over HTTPS — see
+            Step 6 of the setup guide. Add this page's address to
+            <code>cors_allowed_origins</code> in Home Assistant, or every request will fail.
+          </p>
+        </div>
+
+        <div class="lc-section">
+          <div class="lc-section-title">💡 Entities on the panel</div>
+          <div id="haEntityList" class="lc-list"></div>
+          <div class="lc-add-row" style="margin-top:6px">
+            <input id="haEntityId" type="text" class="lc-input" placeholder="light.kitchen" list="haEntityOptions"
+              onkeydown="if(event.key==='Enter')addHaEntity()" />
+            <input id="haEntityName" type="text" class="lc-input" style="flex:0 0 100px" placeholder="Label" />
+            <button class="btn btn-primary btn-sm" onclick="addHaEntity()">Add</button>
+          </div>
+          <datalist id="haEntityOptions"></datalist>
+          <p style="font-size:.75rem;color:var(--muted);margin-top:6px">
+            Only what you list here appears on the panel. Run <strong>Test connection</strong>
+            and the ID box will suggest every entity in the house; otherwise find IDs under
+            <strong>Developer&nbsp;Tools → States</strong> in Home Assistant.
+            Lights, switches and fans get a toggle, locks get lock/unlock, everything else is read-only.
+          </p>
+        </div>
+
+      </div><!-- /homeassistant -->
+
       <!-- ── Home Calendars ── -->
     </div><!-- /settings-panels -->
       </div><!-- /settings-content -->
@@ -1301,6 +1422,20 @@
                oninput="renderRecipeBoxPicker()" />
         <div id="recipeBoxPickList" style="max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:6px"></div>
       </div>
+
+      <!-- Import from a recipe link (any site publishing schema.org/Recipe) -->
+      <div class="field" style="border-top:1px solid rgba(128,128,128,.18);padding-top:14px;margin-top:4px">
+        <label for="recipeImportUrl">🔗 Import from a recipe link</label>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <input type="url" id="recipeImportUrl" style="flex:1" inputmode="url"
+                 placeholder="Paste a recipe URL — NYT Cooking, AllRecipes, a food blog…"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();importRecipeFromUrl()}" />
+          <button class="btn btn-sm btn-secondary" id="recipeImportBtn"
+                  onclick="importRecipeFromUrl()" type="button">Import</button>
+        </div>
+        <div id="recipeImportStatus" style="font-size:.78rem;color:var(--muted);min-height:1px"></div>
+        <div id="recipeImportPreview" style="display:none;margin-top:8px"></div>
+      </div>
     </div>
 
     <div class="modal-actions" style="margin-top:10px">
@@ -1329,6 +1464,7 @@
     <p class="meal-detail-desc" id="mealDetailDesc"></p>
     <div class="meal-detail-healthy" id="mealDetailHealthy"></div>
     <div class="meal-detail-ingredients" id="mealDetailIngredients"></div>
+    <div class="meal-detail-steps" id="mealDetailSteps" style="display:none"></div>
     <a id="mealDetailRecipe" href="#" target="_blank" rel="noopener"
        class="btn btn-sm btn-secondary" style="text-decoration:none;display:none;margin-top:10px">📖 View recipe ↗</a>
 
@@ -1379,9 +1515,10 @@
       <div class="events-source-tabs" style="display:flex;gap:6px;overflow-x:auto;flex:1">
         <button class="event-tab active" data-source="ticketmaster" onclick="selectEventSource(this)">🎟️ Live Events <span class="event-tab-count" id="count-ticketmaster"></span></button>
         <button class="event-tab" data-source="osm" onclick="selectEventSource(this)">📍 Things to Do <span class="event-tab-count" id="count-osm"></span></button>
-        <button class="event-tab" data-source="libraryweb" onclick="selectEventSource(this)">📚 Library &amp; Town <span class="event-tab-count" id="count-libraryweb"></span></button>
+        <button class="event-tab" data-source="libraryweb" onclick="selectEventSource(this)">📚 Library <span class="event-tab-count" id="count-libraryweb"></span></button>
         <button class="event-tab" data-source="redwings" onclick="selectEventSource(this)">⚾ Red Wings <span class="event-tab-count" id="count-redwings"></span></button>
         <button class="event-tab" data-source="cityspark" onclick="selectEventSource(this)">🎡 Around Town <span class="event-tab-count" id="count-cityspark"></span></button>
+        <button class="event-tab" data-source="towns" onclick="selectEventSource(this)">🎪 Town Events <span class="event-tab-count" id="count-towns"></span></button>
       </div>
       <button class="btn btn-primary btn-sm" onclick="refreshEvents()" title="Refresh" style="flex-shrink:0">🔄</button>
     </div>
@@ -1520,8 +1657,11 @@
 ></script>
 -->
 
-<!-- Screensaver overlay (idle-triggered photo slideshow) -->
+<!-- Screensaver overlay (idle-triggered photo slideshow / Pond Chimes) -->
 <div id="screensaver" aria-hidden="true">
+  <!-- Pond mode with "touching the pond plays it": the iframe swallows every
+       tap, so this is the only way back to the hub on a touch-only panel. -->
+  <button id="saverWakeBtn" type="button" style="display:none" onclick="stopScreensaver()">Wake</button>
   <div id="saverClock" style="display:none">
     <div id="saverClockTime"></div>
     <div id="saverClockDate"></div>

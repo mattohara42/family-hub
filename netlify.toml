@@ -10,8 +10,11 @@
 
 [[headers]]
   for = "/*"
+  # SAMEORIGIN, not DENY: the Pond Chimes screensaver runs pond/index.html in a
+  # same-origin iframe, which DENY blocks. Cross-origin framing — the actual
+  # clickjacking risk — is still refused, and the CSP pins frame-src to 'self'.
   [headers.values]
-    X-Frame-Options = "DENY"
+    X-Frame-Options = "SAMEORIGIN"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
     Permissions-Policy = "geolocation=(self), microphone=(self), camera=()"
