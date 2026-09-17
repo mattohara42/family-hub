@@ -1028,7 +1028,22 @@ body:not(.force-landscape).auto-portrait #bottomStrip {
 
 /* Large mobile */
 @media (max-width: 640px) {
-  body { padding: 12px 10px; }
+  /* Edge-to-edge: the outer gutter and the card's border/radius/shadow are
+     desktop prettification that just cramp a phone screen. Safe-area insets
+     stay — that's hardware (notch/home indicator), not decoration. */
+  body {
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+             env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  }
+  /* !important: the nautical/aurora/tactile theme overrides further down
+     target .card.cal-card with more classes in the selector, which outranks
+     a plain .cal-card rule regardless of source order — this has to win
+     over all of them, in every theme, so it doesn't chase each one. */
+  .cal-card {
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
   .cal-app-title { font-size: var(--text-base); }
   .layout { gap: 10px; }
 
@@ -1070,7 +1085,6 @@ body:not(.force-landscape).auto-portrait #bottomStrip {
 
 /* Small mobile */
 @media (max-width: 400px) {
-  body { padding: 8px; }
   .cal-view-tab { padding: 3px 7px; font-size: var(--text-xs); }
   .cal-day { min-height: 44px; }
   .cal-event { display: none; } /* hide pills, keep day number readable */
@@ -4208,94 +4222,20 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
   .settings-panels { max-height: unset; flex: 1; overflow-y: auto; }
 }
 
-/* ── 8. Mobile bottom navigation ── */
+/* ── 8. Mobile shell: quick-add FAB + Lists sheet ──
+   Calendar is the permanent mobile surface — no bottom nav bar. Two floating
+   buttons replace it (add event, open the Lists sheet); Shopping/To-Do/Home
+   Assistant are reparented into the sheet by applyWidgetPlacement() (see
+   MOBILE_SHEET_SECTIONS in family-hub.js) rather than duplicating markup.
+   Everything else in the sidebar simply stays hidden on mobile, as it always
+   was — none of it was ever tab-reachable before this either. */
 
 /* Hidden on desktop — shown only inside the 640px media query below */
-.mobile-bottom-nav { display: none; }
-.hamburger-btn { display: none; } /* shown only via .mobile-bottom-nav on mobile */
+.mobile-fab { display: none; }
+.mobile-sheet-overlay { display: none; }
 
 @media (max-width: 640px) {
-  /* Registry-driven tabs: setMobileTab() stamps .mobile-tab-active on the one
-     card named in MOBILE_TABS (family-hub.js); everything else in the sidebar
-     is hidden by the generic rules below. 'cal' shows the calendar column and
-     no sidebar. Adding a card to mobile needs no CSS here. */
-
-  body[data-mobile-tab="cal"] .sidebar { display: none; }
-  body[data-mobile-tab]:not([data-mobile-tab="cal"]) .cal-column { display: none; }
-
-  /* Column layout regardless of portrait-mode class */
-  body[data-mobile-tab]:not([data-mobile-tab="cal"]) .sidebar {
-    display: flex !important;
-    flex-direction: column !important;
-    flex-wrap: nowrap !important;
-    align-items: stretch;
-    overflow-y: auto !important;
-    flex: 1;
-    min-height: 0;
-    width: 100%;
-  }
-
-  body[data-mobile-tab]:not([data-mobile-tab="cal"]) .sidebar > .card { display: none; }
-
-  /* The active card fills the tab. No min-height: 0 — the auto minimum is what
-     lets tall content grow the card so the sidebar scrolls. !important also
-     overrides the inline display:none applyWidgetVisibility() puts on disabled
-     widgets (setMobileTab never activates one, but a synced pref change must
-     not blank the screen before the tab bounces). */
-  body[data-mobile-tab] .sidebar > .card.mobile-tab-active {
-    display: block !important;
-    flex: 1 !important;
-    width: 100%;
-    box-sizing: border-box;
-  }
-
-  /* Bottom nav bar */
-  .mobile-bottom-nav {
-    display: flex;
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 56px;
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-    background: var(--surface);
-    border-top: 1px solid var(--line); /* hardcoded white was invisible in light themes */
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    z-index: 200;
-  }
-  .mobile-nav-btn {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 2px;
-    background: none;
-    border: none;
-    color: var(--muted);
-    font-family: inherit; /* buttons don't inherit — UA Arial otherwise */
-    font-size: 0.65rem;
-    font-weight: var(--weight-semi);
-    letter-spacing: 0.04em;
-    cursor: pointer;
-    padding: 6px 0;
-    touch-action: manipulation;
-    user-select: none;
-    -webkit-user-select: none;
-    transition: color 0.15s;
-  }
-  .mobile-nav-btn.active { color: var(--accent); }
-  .mobile-nav-icon { font-size: 1.3rem; line-height: 1; }
-
-  /* Pad body bottom so content doesn't sit under the nav bar */
-  body { padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px)); }
-
-  /* Safe-area left/right (notched phones in landscape) */
-  body {
-    padding-left:  max(10px, env(safe-area-inset-left));
-    padding-right: max(10px, env(safe-area-inset-right));
-  }
+  .sidebar { display: none; }
 
   /* iOS: prevent auto-zoom when focusing any text input */
   input:not([type=checkbox]):not([type=radio]),
@@ -4304,16 +4244,121 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
     font-size: max(16px, 1em);
   }
 
-  /* Hamburger button — lives in the bottom nav as a regular nav item */
-  .hamburger-btn { font-size: inherit; }
+  .mobile-fab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    border: none;
+    font-size: 1.4rem;
+    line-height: 1;
+    cursor: pointer;
+    touch-action: manipulation;
+    box-shadow: var(--shadow);
+    z-index: 150;
+  }
+  .mobile-fab-add {
+    right: 16px;
+    background: var(--accent);
+    color: #fff;
+  }
+  .mobile-fab-lists {
+    left: 16px;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--line);
+    font-size: 1.2rem;
+  }
 
-  /* Secondary tabs (budget, wotd, chores, assistant, …) need no per-tab rules:
-     the registry rules at the top of this media query cover every tab. */
-}
+  /* Lists sheet — a bottom sheet, not a full-page tab swap. Shown/hidden by
+     toggling inline display (openMobileLists/closeMobileLists in
+     family-hub.js), not a class — display:none above is the closed state. */
+  .mobile-sheet-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.5);
+    z-index: 200;
+    align-items: flex-end;
+  }
+  .mobile-sheet {
+    background: var(--surface);
+    width: 100%;
+    max-height: 80svh;
+    border-radius: 16px 16px 0 0;
+    display: flex;
+    flex-direction: column;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .mobile-sheet-handle {
+    width: 36px;
+    height: 4px;
+    background: var(--line);
+    border-radius: 2px;
+    margin: 10px auto 6px;
+  }
+  .mobile-sheet-tabs {
+    display: flex;
+    gap: 6px;
+    padding: 4px 12px 10px;
+    border-bottom: 1px solid var(--line);
+  }
+  .mobile-sheet-tab {
+    flex: 1;
+    background: var(--surface2);
+    border: none;
+    color: var(--muted);
+    padding: 8px 6px;
+    border-radius: 8px;
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semi);
+    font-family: inherit;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  .mobile-sheet-tab.active { background: var(--accent); color: #fff; }
 
-/* ≤400px: re-apply bottom padding (that breakpoint resets padding shorthand) */
-@media (max-width: 400px) {
-  body { padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px)); }
+  .mobile-sheet-body { flex: 1; overflow-y: auto; min-height: 0; }
+  .mobile-sheet-section { display: none; }
+  .mobile-sheet-section.active { display: block; }
+  /* Cards reparented into the sheet lose their standalone card chrome —
+     the sheet itself is already the "card" */
+  .mobile-sheet-body .card {
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .mobile-sheet-footer {
+    display: flex;
+    gap: 8px;
+    padding: 10px 12px;
+    border-top: 1px solid var(--line);
+  }
+  .mobile-sheet-footer button {
+    flex: 1;
+    background: var(--surface2);
+    border: none;
+    color: var(--text);
+    font-family: inherit;
+    padding: 10px 6px;
+    border-radius: 8px;
+    font-size: var(--text-sm);
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  .mobile-sheet-close { background: var(--accent) !important; color: #fff !important; }
+
+  /* The 💡 discover-events trigger lives in the sheet footer instead */
+  #eventsDiscoverBtn { display: none; }
+
+  /* Collapse the 4-way view toggle to just Day/Agenda; Month/Week are
+     desktop-only (Agenda's rolling list already covers "week at a glance") */
+  #viewTab_month, #viewTab_week { display: none; }
 }
 
 /* ── Budget Card ── */
@@ -5426,18 +5471,15 @@ body.flavor-tactile #saverClockTime { font-family: var(--font-display); }
   }
 }
 
-/* ── Tactile mobile chrome (bottom nav) — neutral tokens only,
+/* ── Tactile mobile chrome (FABs + Lists sheet) — neutral tokens only,
       so it stays KTD-4-safe under colorblind-mode/safe-palette-on ── */
 @media (max-width: 640px) {
-  body.flavor-tactile .mobile-bottom-nav {
+  body.flavor-tactile .mobile-sheet {
     background: linear-gradient(180deg, var(--surface-hi) 0%, var(--surface-solid) 40%);
-    border-top: 1px solid var(--line);
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
     box-shadow: 0 -2px 10px rgba(0,0,0,.18);
   }
-  body.flavor-tactile.light-mode .mobile-bottom-nav,
-  body.flavor-tactile.aurora-mode .mobile-bottom-nav {
+  body.flavor-tactile.light-mode .mobile-sheet,
+  body.flavor-tactile.aurora-mode .mobile-sheet {
     box-shadow: 0 -2px 10px rgba(70,55,30,.10);
   }
 }

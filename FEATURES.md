@@ -130,10 +130,10 @@ const DADJOKE_API_BASE = 'https://icanhazdadjoke.com';
 
 ### 1. Calendar
 
-**Views:** Month · Week · Day
+**Views:** Month · Week · Day · Agenda
 **State:**
 ```js
-let calView     = localStorage.getItem('fh_calView') || 'month'; // 'month'|'week'|'day'
+let calView     = localStorage.getItem('fh_calView') || (isMobile ? 'agenda' : 'week'); // 'month'|'week'|'day'|'agenda'
 let calViewDate = new Date();
 let calEventCache = {}; // { calId: { 'YYYY-MM-DD': [{summary, color, holiday, allDay, startDT, endDT}] } }
 let disabledCals = new Set(); // calendar IDs toggled off by user
@@ -361,8 +361,8 @@ const WIDGET_ORDER = [
 ];
 ```
 **Key functions:**
-- `applyWidgetPlacement()` — moves each card DOM node to `.sidebar` or `#bottomStrip` in canonical order, then calls `applyWidgetVisibility()`. **Placement is desktop-only:** under 640px every card stays in `.sidebar` so the mobile tab system can reach it; crossing the breakpoint re-distributes (resize handler).
-- `applyWidgetVisibility()` — shows/hides each card; handles yearstrip special case (sidebar→`#yearCard`, bottom→`#yearStrip`). On mobile, if the open tab's widget was just disabled (locally or via settings sync) it bounces the tab to Calendar (see §20).
+- `applyWidgetPlacement()` — moves each card DOM node to `.sidebar`, `#bottomStrip`, or (under 640px, for shopping/todo/homeassistant only) its section wrapper in the mobile Lists sheet, in canonical order, then calls `applyWidgetVisibility()`. **Placement is desktop-only** otherwise: `.sidebar` itself is hidden on mobile (see §20); crossing the breakpoint re-distributes (resize handler).
+- `applyWidgetVisibility()` — shows/hides each card; handles yearstrip special case (sidebar→`#yearCard`, bottom→`#yearStrip`). On mobile, if Home Assistant's widget was just disabled (locally or via settings sync) while its Lists-sheet section was open, it bounces the sheet to Shopping (see §20).
 
 **Special case — Year at a Glance:**
 - In **sidebar**: `#yearCard` (shows 2 months with ‹/› navigation)
@@ -811,30 +811,33 @@ let lastWxData    = null;  // set by renderWeatherData(); reused for the temp li
 
 ---
 
-### 20. Mobile Layout (bottom nav + tab registry)
+### 20. Mobile Layout (permanent Calendar + Lists sheet)
 
-**Overview:** Under 640px the app becomes a tab-per-card layout: a fixed bottom nav with five buttons — Calendar · To-Do · Shopping · Weather · ⚙️ Settings. The first four are tabs (`data-mobile-tab`); Settings opens the Full Settings modal directly (`openSettings()`) rather than switching tabs — there's no intermediate mobile-only settings screen. A mobile tab shows exactly one sidebar card full-screen ('cal' shows `.cal-column` instead).
+**Overview (redesigned 2026-09-16, replacing the old bottom-nav/tab-registry system):** Under 640px there is no bottom nav bar. `.sidebar` is unconditionally hidden and Calendar (`.cal-column`) is the only permanent surface — mirrors "mostly on Day/Agenda, want to glance at the week, want to add fast" over the old always-visible five-tab bar. Two floating buttons take its place: `#mobileAddFab` (bottom-right, calls `openEventEditor(null)` — quick-add defaulting to today) and `#mobileListsBtn` (bottom-left, calls `openMobileLists()` — opens the Lists sheet). The 💡 Find Events trigger and the ⚙️ Settings gear are hidden from the calendar header/sidebar chrome on mobile and live in the sheet's footer instead.
 
-**Registry (single source of truth):**
+**Lists sheet — registry (single source of truth):**
 ```js
-const MOBILE_TABS = { todo: { cardId, widget }, shop: { cardId, widget }, weather: { cardId } };
-// cardId — the card shown full-screen on that tab
-// widget — optional widgetVisibility key gating the tab (bounces to 'cal' when off)
+const MOBILE_SHEET_SECTIONS = { shopping: 'mobileSheetShop', todo: 'mobileSheetTodo', homeassistant: 'mobileSheetHome' };
+// widget key → id of the section wrapper (in the sheet markup) it's reparented into
 ```
-Adding a card to mobile = one registry entry. **No per-tab CSS:** `setMobileTab()` stamps `.mobile-tab-active` on the tab's card and generic rules in the 640px media query (family-hub.css §8) hide everything else. The active-card rule is `!important` so a synced `display:none` from `applyWidgetVisibility()` can't blank the screen before the tab bounces.
+`applyWidgetPlacement()` reparents the real card (`#shopCard`/`#todoCard`/`#haCard`) into its section wrapper when `isMobile`, instead of `sidebar`/`bottomStrip` — no duplicated markup, so every existing render function (`addShop()`, `renderShopList()`, etc.) keeps working unmodified regardless of which container holds the card. `setMobileListsSection(section)` toggles `.active` on the matching tab button and section wrapper; not persisted — the sheet always opens on Shopping (`mobileListsSection` starts `'shop'`). Home Assistant's tab (`#mobileListsHomeTab`) is hidden unless `widgetVisibility.homeassistant`, same as its old nav-button gating; `applyWidgetVisibility()` also bounces the sheet off `'home'` if that widget gets disabled while it's the open section.
 
-Secondary widgets (Budget, Chores, Word, Joke, Quotes, Countdown, News, Stock, Assistant) have no mobile surface — reachable only via Full Settings' configuration panels, not for day-to-day use on a phone. This is a deliberate scope cut (2026-07-11): the prior "More tab" feature grid that routed to them was removed along with the settings duplication it lived next to.
+Secondary widgets (Budget, Chores, Word, Joke, Quotes, Countdown, News, Stock, Assistant, Year-at-a-Glance) still have no mobile surface — unchanged from before this redesign; they're reachable only via Full Settings' configuration panels, not for day-to-day use on a phone.
 
 **Key functions:**
-- `setMobileTab(tab)` — validates (unknown tab or disabled widget → `'cal'`), persists, stamps the active card, highlights the nav button
-- `getInitialMobileTab()` / `getTimeBasedDefaultTab()` — time-of-day default on first visit of the day (`fh_mobileTabDate`), else last tab
-- `updateIsMobile()` + resize handler — `isMobile` (<640px); breakpoint crossings re-run `applyWidgetPlacement()` and `resetSaverIdleTimer()`
+- `openMobileLists()` / `closeMobileLists()` — show/hide `#mobileListsOverlay` (inline `style.display`, not a CSS class)
+- `setMobileListsSection(section)` — switches which of Shopping/To-Do/Home is showing inside the sheet
+- `updateIsMobile()` + resize handler — `isMobile` (<640px); breakpoint crossings re-run `applyWidgetPlacement()` (moves cards between sidebar/bottomStrip/sheet) and `resetSaverIdleTimer()`
 
-**Tactile/theming:** nav chrome derives from tokens (`--line`, `--surface-solid/-hi`, `--accent`); Tactile mobile rules use neutral tokens only (KTD-4-safe). Touch tap-target sizing (nav buttons, assistant send/mic 42px) lives inside `@media (hover: none)` per the CLAUDE.md invariant.
+**View toggle:** Month and Week are hidden under 640px (`#viewTab_month`, `#viewTab_week`) — Agenda's rolling 30-day list already covers "week at a glance," so only Day/Agenda remain. First-ever load (`fh_calView` unset) defaults to `'agenda'` on mobile, `'week'` on desktop; a saved value always wins either way.
 
-**HTML anchors:** `.mobile-bottom-nav` / `#mobileNav`, `#hamburgerBtn` (opens Settings)
+**Edge-to-edge:** the 640px query zeroes `body` padding down to safe-area insets only (notch/home indicator stay — that's hardware, not decoration) and strips `.cal-card`'s border/radius/shadow with `!important` — needed because the nautical/aurora/tactile theme overrides target `.card.cal-card` with more classes in the selector, which otherwise outranks a plain `.cal-card` rule regardless of source order.
 
-**localStorage:** `fh_mobileTab`, `fh_mobileTabDate`. Default calendar view (`fh_calView`, unset) is `'week'` on both mobile and desktop.
+**Tactile/theming:** sheet/FAB chrome derives from tokens (`--line`, `--surface-solid/-hi`, `--accent`); Tactile mobile rules (`body.flavor-tactile .mobile-sheet`) use neutral tokens only (KTD-4-safe). Touch tap-target sizing lives inside `@media (hover: none)` per the CLAUDE.md invariant.
+
+**HTML anchors:** `.mobile-fab` / `#mobileAddFab` / `#mobileListsBtn`, `#mobileListsOverlay` / `.mobile-sheet` / `#mobileListsTabs` / `#mobileListsBody` (containing `#mobileSheetShop` / `#mobileSheetTodo` / `#mobileSheetHome`) / `.mobile-sheet-footer`
+
+**localStorage:** none specific to the mobile shell — `mobileListsSection` is in-memory only, always resets to Shopping. `fh_calView` is shared with desktop (see View toggle above).
 
 ---
 
@@ -870,10 +873,10 @@ const HA_TOGGLE_DOMAINS = ['light', 'switch', 'fan', 'input_boolean'];
 **Credential handling:** an HA long-lived token can operate every entity its user can see (HA has no per-entity permission model), so the setup guide creates a non-admin `Wall Panel` account for it. The token lives in `fh_haToken` on the device that pasted it and is excluded from the Firestore settings sync, which makes it individually revocable: a lost phone costs one token, not the house.
 
 **Anchors:**
-- HTML: `#haCard` (sidebar card), `#haBody`, `#mobileNavHome`, settings panel `data-panel="homeassistant"` (`#haBaseUrl`, `#haTokenInput`, `#haTestResult`, `#haEntityList`, `#haEntityId`, `#haEntityName`, `#haEntityOptions`)
+- HTML: `#haCard` (sidebar card, reparented into `#mobileSheetHome` on mobile — §20), `#haBody`, `#mobileListsHomeTab`, settings panel `data-panel="homeassistant"` (`#haBaseUrl`, `#haTokenInput`, `#haTestResult`, `#haEntityList`, `#haEntityId`, `#haEntityName`, `#haEntityOptions`)
 - CSS: `/* ── Home Assistant Card ── */` — `.ha-row`, `.ha-icon`, `.ha-name`, `.ha-state`, `.ha-btn`, `.ha-row-dim`, `.ha-empty`, `.ha-error`, `.ha-test`
 - JS: `// ── Home Assistant ──`
-- Registries: `WIDGET_DEFAULTS.homeassistant` (false), `WIDGET_ORDER` (`haCard`), `MOBILE_TABS.home`, `SETTINGS_GROUPS` → Widgets
+- Registries: `WIDGET_DEFAULTS.homeassistant` (false), `WIDGET_ORDER` (`haCard`), `MOBILE_SHEET_SECTIONS.homeassistant`, `SETTINGS_GROUPS` → Widgets
 - Firestore: `settings/homeAssistant` (`{ value: haConfig }`)
 - Mobile: the `🏠 Home` nav button is the one optional button in the bar; `applyWidgetVisibility()` hides it unless the widget is enabled
 
@@ -888,7 +891,7 @@ const HA_TOGGLE_DOMAINS = ['light', 'switch', 'fan', 'input_boolean'];
 | `fh_name` | string | Settings | Display name |
 | `fh_mode` | string | Theme | `'light'` \| `'dark'` \| `'nautical'` \| `'aurora'` \| `'colorblind'` |
 | `fh_flavor` | string | Flavor | `'basic'` \| `'tactile'` — design-system axis, orthogonal to theme |
-| `fh_calView` | string | Calendar | `'month'` \| `'week'` \| `'day'` |
+| `fh_calView` | string | Calendar | `'month'` \| `'week'` \| `'day'` \| `'agenda'` — unset defaults to `'agenda'` on mobile, `'week'` on desktop (§20) |
 | `fh_calIds` | JSON array | Calendar | Google Calendar IDs |
 | `fh_calMeta` | JSON object | Calendar | `{ calId: { label, color } }` |
 | `fh_wkey` | string | Weather | OpenWeatherMap API key |
@@ -942,8 +945,6 @@ const HA_TOGGLE_DOMAINS = ['light', 'switch', 'fan', 'input_boolean'];
 | `fh_saverPondTap` | string | Screensaver | Pond tap behavior: `'play'` (default) or `'wake'` |
 | `fh_eventLocation` | string | Event Discovery | Default search location (default `'Rochester'`) |
 | `fh_eventMaxDistance` | number | Event Discovery | Max distance in minutes driving time (default 120) |
-| `fh_mobileTab` | string | Mobile (§20) | Current mobile tab — `'cal'` or any `MOBILE_TABS` key; invalid/disabled values bounce to `'cal'` |
-| `fh_mobileTabDate` | string | Mobile (§20) | YYYY-MM-DD of last mobile tab switch (for time-based defaults) |
 
 **Firestore collections:**
 

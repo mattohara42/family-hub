@@ -97,7 +97,7 @@
 
   <link rel="stylesheet" href="family-hub.css" />
 </head>
-<body class="colors" data-mobile-tab="cal">
+<body class="colors">
 
 <div id="bgPhoto"></div>
 
@@ -460,33 +460,37 @@
 
 </div><!-- /layout -->
 
-<!-- Mobile bottom navigation (shown only on small screens via CSS) -->
-<nav class="mobile-bottom-nav" id="mobileNav">
-  <button class="mobile-nav-btn" id="mobileNavCal" onclick="setMobileTab('cal')">
-    <span class="mobile-nav-icon">📅</span>
-    <span>Calendar</span>
-  </button>
-  <button class="mobile-nav-btn" id="mobileNavTodo" onclick="setMobileTab('todo')">
-    <span class="mobile-nav-icon">✅</span>
-    <span>To-Do</span>
-  </button>
-  <button class="mobile-nav-btn" id="mobileNavShop" onclick="setMobileTab('shop')">
-    <span class="mobile-nav-icon">🛒</span>
-    <span>Shopping</span>
-  </button>
-  <button class="mobile-nav-btn" id="mobileNavWeather" onclick="setMobileTab('weather')">
-    <span class="mobile-nav-icon">🌤️</span>
-    <span>Weather</span>
-  </button>
-  <button class="mobile-nav-btn" id="mobileNavHome" onclick="setMobileTab('home')" style="display:none">
-    <span class="mobile-nav-icon">🏠</span>
-    <span>Home</span>
-  </button>
-  <button class="mobile-nav-btn hamburger-btn" id="hamburgerBtn" onclick="openSettings()" aria-label="Open settings">
-    <span class="mobile-nav-icon">⚙️</span>
-    <span>Settings</span>
-  </button>
-</nav>
+<!-- Mobile shell (shown only on small screens via CSS): Calendar is the
+     permanent surface, these two floating buttons replace the old bottom
+     nav bar — one for quick-add, one for the Lists sheet. -->
+<button class="mobile-fab mobile-fab-lists" id="mobileListsBtn" onclick="openMobileLists()"
+        aria-label="Shopping and To-Do lists" title="Lists">📋</button>
+<button class="mobile-fab mobile-fab-add" id="mobileAddFab" onclick="openEventEditor(null)"
+        aria-label="Add event" title="Add event">＋</button>
+
+<div class="mobile-sheet-overlay" id="mobileListsOverlay" onclick="if(event.target===this)closeMobileLists()">
+  <div class="mobile-sheet" role="dialog" aria-modal="true" aria-label="Shopping and To-Do lists">
+    <div class="mobile-sheet-handle"></div>
+    <div class="mobile-sheet-tabs" id="mobileListsTabs">
+      <button class="mobile-sheet-tab active" data-section="shop" onclick="setMobileListsSection('shop')">🛒 Shopping</button>
+      <button class="mobile-sheet-tab" data-section="todo" onclick="setMobileListsSection('todo')">✅ To-Do</button>
+      <button class="mobile-sheet-tab" id="mobileListsHomeTab" data-section="home" onclick="setMobileListsSection('home')" style="display:none">🏠 Home</button>
+    </div>
+    <!-- Shopping/To-Do/Home Assistant cards are reparented in here by
+         applyWidgetPlacement() on mobile (see MOBILE_SHEET_SECTIONS in
+         family-hub.js) — no duplicated markup. -->
+    <div class="mobile-sheet-body" id="mobileListsBody">
+      <div class="mobile-sheet-section active" data-section="shop" id="mobileSheetShop"></div>
+      <div class="mobile-sheet-section" data-section="todo" id="mobileSheetTodo"></div>
+      <div class="mobile-sheet-section" data-section="home" id="mobileSheetHome"></div>
+    </div>
+    <div class="mobile-sheet-footer">
+      <button onclick="closeMobileLists();openEventsModal()">💡 Find Events</button>
+      <button onclick="closeMobileLists();openSettings()">⚙️ Settings</button>
+      <button class="mobile-sheet-close" onclick="closeMobileLists()">Done</button>
+    </div>
+  </div>
+</div>
 
 <!-- Settings Modal -->
 <div class="modal-overlay" id="settingsModal" onclick="if(event.target===this)closeSettings()">

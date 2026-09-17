@@ -242,8 +242,6 @@ let todoItems       = []; // in-memory mirror of Firestore 'todo' collection for
 // Migrate old mode names
 if (localStorage.getItem('fh_mode') === 'amazing')        localStorage.setItem('fh_mode', 'nautical');
 if (localStorage.getItem('fh_mode') === 'nautical-light') localStorage.setItem('fh_mode', 'nautical');
-// The 'members' mobile tab was replaced by Settings → Family; its CSS is gone
-if (localStorage.getItem('fh_mobileTab') === 'members')   localStorage.setItem('fh_mobileTab', 'cal');
 const _savedMode    = localStorage.getItem('fh_mode');
 let appMode         = _savedMode || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');  // 'light' | 'dark' | 'nautical'
 // Flavor registry — to ship a new flavor, add an entry here AND a matching
@@ -254,33 +252,6 @@ const FLAVORS = [
 ];
 const _savedFlavor  = localStorage.getItem('fh_flavor');
 let appFlavor       = FLAVORS.some(f => f.id === _savedFlavor) ? _savedFlavor : 'basic';  // design-system layer, orthogonal to appMode
-// Compute smart tab default: time-based on first daily visit, saved on return visits
-function getTimeBasedDefaultTab() {
-  const hour = new Date().getHours();
-  if (hour >= 6 && hour < 12) return 'cal';
-  if (hour >= 12 && hour < 18) return 'shop';
-  if (hour >= 18 && hour < 23) return 'todo';
-  return 'cal';  // 11 PM–6 AM
-}
-
-function getInitialMobileTab() {
-  const today = localDateKey(new Date());  // local YYYY-MM-DD — UTC would roll the day over at ~8 PM Eastern
-  const savedDate = localStorage.getItem('fh_mobileTabDate');
-  const savedTab = localStorage.getItem('fh_mobileTab');
-
-  // If we have a saved tab from today, use it
-  if (savedDate === today && savedTab) {
-    return savedTab;
-  }
-
-  // Otherwise, use time-based default for first visit of the day
-  const defaultTab = getTimeBasedDefaultTab();
-  localStorage.setItem('fh_mobileTabDate', today);
-  return defaultTab;
-}
-
-let mobileTab       = getInitialMobileTab();  // 'cal' | any MOBILE_TABS key
-
 // Compute isMobile boolean for viewport-width-dependent logic
 function updateIsMobile() {
   return window.innerWidth < 640;
@@ -422,17 +393,14 @@ const WIDGET_ORDER = [
   { key: 'homeassistant', id: 'haCard'    },
 ];
 
-// Mobile tab registry — tab name → the one card shown full-screen on that tab.
-// 'cal' is special-cased in CSS (shows .cal-column, hides the sidebar). These
-// are the tabs pinned in the bottom nav; the hamburger button opens Full
-// Settings directly instead of routing through a tab. `widget` gates the tab
-// on widgetVisibility (active tab bounced to Calendar when the widget is
-// turned off — locally or by a synced pref change).
-const MOBILE_TABS = {
-  todo:      { cardId: 'todoCard',      widget: 'todo'      },
-  shop:      { cardId: 'shopCard',      widget: 'shopping'  },
-  weather:   { cardId: 'weatherCard'                        },
-  home:      { cardId: 'haCard',        widget: 'homeassistant' },
+// Mobile sheet registry — widget key → the section wrapper it's reparented
+// into when isMobile (see applyWidgetPlacement). Calendar is the permanent
+// mobile surface; Shopping/To-Do/Home Assistant live in the Lists sheet
+// instead of getting their own screen.
+const MOBILE_SHEET_SECTIONS = {
+  shopping:      'mobileSheetShop',
+  todo:          'mobileSheetTodo',
+  homeassistant: 'mobileSheetHome',
 };
 
 // User-defined widget order (keys only). Persisted in fh_widget_order.
@@ -454,15 +422,18 @@ function applyWidgetPlacement() {
   if (!sidebar || !bottomStrip) return;
 
   // Distribute each widget card to the right container in user-defined order.
-  // Placement is a desktop-layout concept: on mobile every card stays in the
-  // sidebar, where the tab system (MOBILE_TABS) can reach it — a 'bottom' card
-  // would otherwise ride along inside .cal-column and leave its tab blank.
+  // Placement ('sidebar'/'bottom') is a desktop-layout concept — the sidebar
+  // itself is hidden on mobile. Shopping/To-Do/Home Assistant are the three
+  // reachable on mobile there instead, reparented into the Lists sheet
+  // (MOBILE_SHEET_SECTIONS); everything else just rides along in the hidden
+  // sidebar, same as before this redesign.
   resolvedWidgetOrder().forEach(key => {
     const entry = WIDGET_ORDER.find(w => w.key === key);
     if (!entry) return;
     const card = document.getElementById(entry.id);
     if (!card) return;
-    const dest = (!isMobile && widgetPlacement[key] === 'bottom') ? bottomStrip : sidebar;
+    const sheetSection = isMobile && document.getElementById(MOBILE_SHEET_SECTIONS[key]);
+    const dest = sheetSection || ((!isMobile && widgetPlacement[key] === 'bottom') ? bottomStrip : sidebar);
     dest.appendChild(card);
   });
 
@@ -563,10 +534,14 @@ function applyWidgetVisibility() {
     if (el) el.style.display = widgetVisibility[key] ? '' : 'none';
   });
 
-  // The Home nav button is the only optional one in the bar — hide it unless the
-  // widget is on, so nobody who doesn't run Home Assistant pays for the crowding.
-  const homeNav = document.getElementById('mobileNavHome');
-  if (homeNav) homeNav.style.display = widgetVisibility.homeassistant ? '' : 'none';
+  // Home Assistant's tab in the mobile Lists sheet is the only optional one —
+  // hide it unless the widget is on, so nobody who doesn't run Home Assistant
+  // pays for the crowding.
+  const homeTab = document.getElementById('mobileListsHomeTab');
+  if (homeTab) homeTab.style.display = widgetVisibility.homeassistant ? '' : 'none';
+  // If Home was the open sheet section and got disabled (here or via a synced
+  // pref change), bounce to Shopping instead of a blank section.
+  if (mobileListsSection === 'home' && !widgetVisibility.homeassistant) setMobileListsSection('shop');
 
   // Re-evaluate bottom strip container visibility
   const bottomStrip = document.getElementById('bottomStrip');
@@ -574,11 +549,6 @@ function applyWidgetVisibility() {
     const hasVisible = [...bottomStrip.children].some(c => c.style.display !== 'none');
     bottomStrip.style.display = hasVisible ? '' : 'none';
   }
-
-  // Mobile: if the open tab's widget was just disabled (here or via settings
-  // sync from another device), bounce to Calendar instead of a blank screen.
-  const activeTab = MOBILE_TABS[mobileTab];
-  if (activeTab && activeTab.widget && !widgetVisibility[activeTab.widget]) setMobileTab('cal');
 }
 
 // ── Budget ───────────────────────────────────────────────────────────────────
@@ -1089,7 +1059,6 @@ window.addEventListener('load', () => {
   applyLayoutMode();
   if (new URLSearchParams(location.search).get('tv') === '1') tvMode = true;
   applyTvMode();
-  setMobileTab(mobileTab);
   lockPortraitOrientation();
   if (!db) migrateSmsContactsToMembers(); // with Firestore this runs on the first members snapshot instead
   resetSaverIdleTimer(); // arm the screensaver idle timer (no-op when disabled)
@@ -1369,7 +1338,10 @@ const CAL_COLORS = DEFAULT_COLORS;
 const DOW_LABELS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
 let calViewDate    = new Date();  // anchor date for any view
-let calView        = localStorage.getItem('fh_calView') || 'week'; // 'month'|'week'|'day'
+// First-ever load defaults to Agenda on mobile (a rolling list — the best
+// fit for "quick glance, then quickly add") and Week on desktop; a saved
+// fh_calView always wins.
+let calView        = localStorage.getItem('fh_calView') || (isMobile ? 'agenda' : 'week'); // 'month'|'week'|'day'|'agenda'
 // calEventCache: { [calId]: { [YYYY-MM-DD]: [{summary, color, holiday, allDay, startDT, endDT}] } }
 let calEventCache  = {};
 // IDs currently hidden by the user clicking a pill
@@ -10637,29 +10609,31 @@ async function lcDelTrash(id) {
   }
 }
 
-// ── Appearance mode ────────────────────────────────────────────
-function setMobileTab(tab) {
-  if (tab !== 'cal' && !MOBILE_TABS[tab]) tab = 'cal';  // stale fh_mobileTab from a removed tab
-  const gate = MOBILE_TABS[tab] && MOBILE_TABS[tab].widget;
-  if (gate && !widgetVisibility[gate]) tab = 'cal';     // widget disabled (possibly on another device)
-  mobileTab = tab;
-  localStorage.setItem('fh_mobileTab', tab);
-  document.body.setAttribute('data-mobile-tab', tab);
-  // Stamp the tab's card; generic CSS hides every other sidebar card
-  document.querySelectorAll('.card.mobile-tab-active').forEach(c => c.classList.remove('mobile-tab-active'));
-  const activeCard = MOBILE_TABS[tab] && document.getElementById(MOBILE_TABS[tab].cardId);
-  if (activeCard) activeCard.classList.add('mobile-tab-active');
-  const calBtn     = document.getElementById('mobileNavCal');
-  const todoBtn    = document.getElementById('mobileNavTodo');
-  const shopBtn    = document.getElementById('mobileNavShop');
-  const weatherBtn = document.getElementById('mobileNavWeather');
-  if (calBtn)     calBtn.classList.toggle('active', tab === 'cal');
-  if (todoBtn)    todoBtn.classList.toggle('active', tab === 'todo');
-  if (shopBtn)    shopBtn.classList.toggle('active', tab === 'shop');
-  if (weatherBtn) weatherBtn.classList.toggle('active', tab === 'weather');
-  const homeBtn = document.getElementById('mobileNavHome');
-  if (homeBtn) homeBtn.classList.toggle('active', tab === 'home');
+// ── Mobile Lists Sheet ──────────────────────────────────────────
+// Calendar is the permanent mobile surface; Shopping/To-Do/Home Assistant
+// (reparented here by applyWidgetPlacement, see MOBILE_SHEET_SECTIONS) live
+// in this overlay instead of their own tab. Not persisted — always opens on
+// Shopping, the same "first" widget the desktop sidebar leads with.
+let mobileListsSection = 'shop'; // 'shop' | 'todo' | 'home'
+
+function openMobileLists() {
+  setMobileListsSection(mobileListsSection);
+  document.getElementById('mobileListsOverlay').style.display = 'flex';
 }
+
+function closeMobileLists() {
+  document.getElementById('mobileListsOverlay').style.display = 'none';
+}
+
+function setMobileListsSection(section) {
+  mobileListsSection = section;
+  document.querySelectorAll('#mobileListsTabs .mobile-sheet-tab').forEach(b =>
+    b.classList.toggle('active', b.dataset.section === section));
+  document.querySelectorAll('#mobileListsBody .mobile-sheet-section').forEach(s =>
+    s.classList.toggle('active', s.dataset.section === section));
+}
+
+// ── Appearance mode ────────────────────────────────────────────
 
 const THEME_COLORS = {
   dark:             '#0f1117',
