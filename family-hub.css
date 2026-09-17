@@ -31,6 +31,17 @@
   --red: #e06c75;
   --text: #e8eaf6;
   --muted: #7b7f96;
+  /* ── Agenda event pastel fills — fixed 6-swatch palette, keyed by a
+     stable hash of the event title (see agendaPastelClass() in
+     family-hub.js). Dusty/deep tones here since dark theme's light --text
+     needs a dark-enough fill to stay AA; body.light-mode below swaps in
+     true pale pastels for its dark --text. Both checked at ≥8:1. ── */
+  --agenda-pastel-1: #4a2c30; /* dusty maroon */
+  --agenda-pastel-2: #4a4326; /* dusty olive */
+  --agenda-pastel-3: #24402f; /* dusty green */
+  --agenda-pastel-4: #263a52; /* dusty blue */
+  --agenda-pastel-5: #3a2f4a; /* dusty purple */
+  --agenda-pastel-6: #4a3527; /* dusty terracotta */
   /* ── Tactile flavor shared tokens (consumed only under body.flavor-tactile) ── */
   --ink: var(--text);
   --ink-soft: var(--muted);
@@ -63,6 +74,14 @@
   --text-md:   1.00rem;
   --text-lg:   1.15rem;
   --text-xl:   1.50rem;
+
+  /* Day/Agenda typography consolidation — semantic names aliased into the
+     ladder above (not a second scale) so the two stay in sync: bumping
+     --text-md still moves --fs-title. Use these for new markup instead of
+     ad hoc font-size values. */
+  --fs-title: var(--text-md);   /* row/section headline: event title, "Bills Due Today" */
+  --fs-item:  var(--text-base); /* regular row content: bill/task line, event time */
+  --fs-meta:  var(--text-sm);   /* secondary annotation: assignee badge, placeholder text */
 
   /* Weights */
   --weight-normal:  400;
@@ -623,6 +642,12 @@ body.light-mode {
   --text: #1a1d2e;
   --muted: #6b7080;
   --line: rgba(60,64,90,0.13);
+  --agenda-pastel-1: #FDE2E4; /* blush pink */
+  --agenda-pastel-2: #FFF1D0; /* cream yellow */
+  --agenda-pastel-3: #D8F3DC; /* mint green */
+  --agenda-pastel-4: #D6E4FF; /* periwinkle blue */
+  --agenda-pastel-5: #E8DFF5; /* lavender */
+  --agenda-pastel-6: #FFE5D4; /* peach */
   --surface-solid: #fbfcfe;
   --surface-hi:    #ffffff;
   --surface-lo:    #e9ecf4;
@@ -1425,33 +1450,41 @@ body.has-bg .cal-day.today {
 }
 .agenda-day-header:first-child { padding-top: 6px; }
 .agenda-day-header.agenda-today { color: var(--accent); }
+/* Left border carries the calendar color (set inline per event — dynamic,
+   can't be a class); background fill is one of the 6 pastel custom
+   properties above, picked by agendaPastelClass() in family-hub.js.
+   Margin-bottom (not gap on the parent) so fills don't visually merge. */
 .agenda-event {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: 10px 10px;
+  padding: 8px 10px 8px 12px;
+  border-left: 3px solid var(--muted);
   border-radius: 8px;
   cursor: default;
   flex-shrink: 0;
-  transition: background .12s;
+  margin-bottom: 6px;
+  transition: filter .12s;
 }
+.agenda-event:last-child { margin-bottom: 0; }
 .agenda-event.agenda-clickable { cursor: pointer; }
-.agenda-event.agenda-clickable:hover { background: var(--surface2); }
-.agenda-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  margin-top: 5px;
-}
+.agenda-event.agenda-clickable:hover  { filter: brightness(1.08); }
+.agenda-event.agenda-clickable:active { filter: brightness(0.96); }
+.agenda-pastel-1 { background: var(--agenda-pastel-1); }
+.agenda-pastel-2 { background: var(--agenda-pastel-2); }
+.agenda-pastel-3 { background: var(--agenda-pastel-3); }
+.agenda-pastel-4 { background: var(--agenda-pastel-4); }
+.agenda-pastel-5 { background: var(--agenda-pastel-5); }
+.agenda-pastel-6 { background: var(--agenda-pastel-6); }
 .agenda-info { flex: 1; min-width: 0; }
 .agenda-time {
-  font-size: var(--text-sm);
+  font-size: var(--fs-meta);
   color: var(--muted);
   margin-bottom: 3px;
+  font-variant-numeric: tabular-nums;
 }
 .agenda-title {
-  font-size: var(--text-md);
+  font-size: var(--fs-title);
   font-weight: var(--weight-semi);
   color: var(--text);
   white-space: nowrap;
@@ -1950,22 +1983,23 @@ body.nautical-mode .wx-ticker { background: rgba(200,169,110,.06); border-top-co
 }
 
 /* ── View Switcher ── */
+/* Individual pills carry their own surface + hairline border (chosen over a
+   shared dark track) so an unselected segment stays visible against the
+   page background in both themes, rather than a transparent tab blending
+   into whatever's behind the whole control. */
 .cal-view-tabs {
   display: flex;
-  background: var(--surface2);
-  border-radius: 8px;
-  padding: 2px;
-  gap: 2px;
+  gap: 6px;
 }
 .cal-view-tab {
   padding: 4px 13px;
-  border: none; border-radius: 6px;
-  background: none; color: var(--muted);
+  border: 1px solid var(--line); border-radius: 6px;
+  background: var(--surface); color: var(--text);
   cursor: pointer; font-size: var(--text-sm); font-weight: var(--weight-semi);
   transition: all .15s; white-space: nowrap;
 }
-.cal-view-tab.active { background: var(--accent); color: #fff; }
-.cal-view-tab:hover:not(.active) { color: var(--text); }
+.cal-view-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.cal-view-tab:hover:not(.active) { border-color: var(--accent); }
 
 /* ── Week View ── */
 #weekView {
@@ -2058,10 +2092,11 @@ body.has-bg.light-mode .week-day-col.today { background: rgba(190,198,225,0.75);
   margin-bottom: 2px; min-height: 34px;
 }
 .day-time-label {
-  font-size: var(--text-xs); color: var(--muted);
+  font-size: var(--fs-meta); color: var(--muted);
   white-space: nowrap; padding-top: 3px;
   width: 56px; flex-shrink: 0;
   text-align: right; padding-right: 10px;
+  font-variant-numeric: tabular-nums;
 }
 .day-allday-pills { flex: 1; display: flex; flex-wrap: wrap; gap: 3px; }
 .day-timeline { flex: 1; overflow-y: auto; min-height: 0; }
@@ -2080,9 +2115,10 @@ body.has-bg .day-hour-row.current-hour { background: rgba(110,125,200,0.55); }
 body.has-bg.light-mode .day-hour-row.current-hour { background: rgba(190,198,225,0.75); }
 .day-hour-row.current-hour .day-hour-label { color: var(--accent); font-weight: var(--weight-bold); }
 .day-hour-label {
-  font-size: var(--text-xs); color: var(--muted);
+  font-size: var(--fs-meta); color: var(--muted);
   text-align: right; padding: 4px 10px 0 0;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 .day-hour-slot {
   border-left: 1px solid rgba(128,128,128,.1);
@@ -2095,7 +2131,7 @@ body.has-bg.light-mode .day-hour-row.current-hour { background: rgba(190,198,225
   display: flex; flex-direction: column;
 }
 .day-event-pill .evt-title { font-weight: var(--weight-semi); }
-.day-event-pill .evt-time  { font-size: var(--text-xs); opacity: .85; }
+.day-event-pill .evt-time  { font-size: var(--fs-meta); opacity: .85; font-variant-numeric: tabular-nums; }
 
 /* ── Meal Planning — Week strip ── */
 .week-meals-strip {
@@ -2359,7 +2395,36 @@ body.nautical-mode .meal-adjust-chip:hover { background: var(--accent2); border-
 }
 .budget-day-item:last-child { border-bottom: none; }
 .budget-day-name { color: var(--text); }
-.budget-day-amt  { font-weight: var(--weight-semi); color: #e57373; }
+.budget-day-amt  { font-weight: var(--weight-semi); color: #e57373; font-variant-numeric: tabular-nums; }
+.budget-day-total {
+  display: flex; justify-content: space-between;
+  font-size: var(--fs-item); font-weight: var(--weight-bold);
+  padding-top: 5px; margin-top: 3px;
+  border-top: 1px solid rgba(255,193,7,.2);
+}
+.budget-day-total .budget-day-total-label { color: var(--muted); }
+.budget-day-total .budget-day-total-amt   { color: #e57373; font-variant-numeric: tabular-nums; }
+
+/* ── Day view: section headers + secondary rows (shared by budget/to-do) ── */
+.day-section-header {
+  font-size: var(--fs-title); font-weight: var(--weight-bold);
+  margin-bottom: 6px;
+}
+.day-todo-section {
+  background: rgba(108,142,245,.07); border-radius: 8px;
+  padding: 8px 10px; margin-bottom: 8px;
+  border: 1px solid rgba(108,142,245,.2);
+}
+.day-todo-row {
+  display: flex; justify-content: space-between;
+  font-size: var(--fs-item); padding: 3px 0;
+  border-bottom: 1px solid rgba(108,142,245,.1);
+}
+.day-todo-row:last-child { border-bottom: none; }
+.day-todo-text { color: var(--text); }
+.day-todo-assignee { color: var(--accent); font-size: var(--fs-meta); }
+.day-add-btn { font-size: var(--fs-meta); color: var(--accent); cursor: pointer; margin-left: 4px; }
+.day-allday-empty { font-size: var(--fs-meta); color: var(--muted); padding-top: 3px; }
 .week-budget-strip {
   border-top: 1px solid rgba(229,115,115,.25);
   padding: 4px 5px 5px; background: rgba(229,115,115,.07);
@@ -2800,7 +2865,7 @@ body.light-mode .shop-cat-header { border-bottom-color: rgba(0,0,0,.08); }
   margin: auto;
 }
 #settingsModal .modal {
-  max-width: min(92vw, 860px);
+  max-width: min(calc(100vw - 2rem), 860px);
   max-height: min(88vh, 620px);
   display: flex; flex-direction: column;
   /* Always fully opaque — no background-photo bleed-through */
@@ -2904,6 +2969,9 @@ body.eggs-unlocked .settings-nav-group--gated { display: block; }
 
 .settings-content {
   flex: 1;
+  min-width: 0;  /* flex items default to min-width:auto — without this a
+                    wide descendant (a long calendar name, an input row)
+                    keeps this pane from shrinking to the modal's width */
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -2980,8 +3048,14 @@ body.eggs-unlocked .settings-nav-group--gated { display: block; }
   background: var(--surface2); font-size: var(--text-xs);
 }
 .lc-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.lc-item-label { flex: 1; font-weight: var(--weight-semi); }
-.lc-item-meta  { color: var(--muted); white-space: nowrap; }
+.lc-item-label {
+  flex: 1;
+  min-width: 0; /* let a long calendar name shrink + ellipsize instead of
+                   forcing the whole row (and .lc-del beside it) wider */
+  font-weight: var(--weight-semi);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.lc-item-meta  { color: var(--muted); white-space: nowrap; flex-shrink: 0; }
 .lc-del {
   background: none; border: none; color: var(--muted);
   cursor: pointer; font-size: .85rem; padding: 0 2px; line-height: 1;
@@ -4102,7 +4176,7 @@ a, button, input, select, textarea, label,
   .btn:hover                     { opacity: 1; }
   .cal-tab:hover                 { opacity: 1; }
   .cal-tab.cal-tab-off:hover     { opacity: .45; }
-  .cal-view-tab:hover:not(.active) { color: var(--muted); }
+  .cal-view-tab:hover:not(.active) { border-color: var(--line); }
   .modal-tab:hover:not(.active)  { color: var(--muted); }
   .cal-month-nav button:hover    { background: var(--surface2); }
   .budget-pill:hover             { background: rgba(229,115,115,.18); }

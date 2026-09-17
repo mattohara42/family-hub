@@ -1676,6 +1676,27 @@ function renderWeekGrid() {
   container.appendChild(bulkBar);
 }
 
+// ── Compact numeric date labels (Day/Agenda headers) ──
+// Locale-aware via Intl instead of hardcoded en-US string slicing; Month
+// view keeps its own toLocaleDateString call ("September 2026") untouched.
+const _weekdayShortFmt = new Intl.DateTimeFormat(undefined, { weekday: 'short' });
+const _numericMDFmt    = new Intl.DateTimeFormat(undefined, { month: 'numeric', day: 'numeric' });
+function shortWeekdayNumericDate(d) {
+  return `${_weekdayShortFmt.format(d)} ${_numericMDFmt.format(d)}`;
+}
+
+// ── Agenda pastel fills ──
+// Stable hash of the event title → one of 6 fixed pastel swatches
+// (--agenda-pastel-1..6 in family-hub.css). Same title always gets the same
+// swatch, so e.g. every "ER SCHOOLS: Early Release" event matches across
+// reloads, while different titles within one calendar stay visually
+// distinguishable from each other.
+function agendaPastelClass(title) {
+  let hash = 0;
+  for (let i = 0; i < title.length; i++) hash = (hash * 31 + title.charCodeAt(i)) | 0;
+  return 'agenda-pastel-' + (Math.abs(hash) % 6 + 1);
+}
+
 // ── Day View ──────────────────────────────────────────────────
 function renderDayGrid() {
   const container = document.getElementById('dayView');
@@ -1683,9 +1704,8 @@ function renderDayGrid() {
   const d       = calViewDate;
   const dateKey = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 
-  // Nav label
-  document.getElementById('calMonthLabel').textContent =
-    d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  // Nav label — compact so it doesn't truncate under the view toggle
+  document.getElementById('calMonthLabel').textContent = shortWeekdayNumericDate(d);
 
   const evts = Object.entries(calEventCache)
     .filter(([calId]) => !disabledCals.has(calId))
@@ -1704,7 +1724,7 @@ function renderDayGrid() {
   const adLabel = document.createElement('div');
   adLabel.className = 'day-time-label';
   adLabel.innerHTML = googleToken
-    ? `All day <span style="font-size:.7rem;color:var(--accent);cursor:pointer;margin-left:4px" title="Add all-day event" onclick="openEventEditor(null,'${dateKey}',null,null,true)">＋</span>`
+    ? `All day <span class="day-add-btn" title="Add all-day event" onclick="openEventEditor(null,'${dateKey}',null,null,true)">＋</span>`
     : 'All day';
   const adPills = document.createElement('div');
   adPills.className = 'day-allday-pills';
@@ -1722,7 +1742,7 @@ function renderDayGrid() {
       adPills.appendChild(p);
     });
   } else {
-    adPills.style.cssText = 'font-size:.75rem;color:var(--muted);padding-top:3px';
+    adPills.className += ' day-allday-empty';
     adPills.textContent = 'No all-day events';
   }
   allDayRow.appendChild(adLabel);
@@ -1738,7 +1758,8 @@ function renderDayGrid() {
     budgetSection.style.cursor = 'pointer';
     budgetSection.onclick = scrollToBudgetCard;
     const budgetHdr = document.createElement('div');
-    budgetHdr.style.cssText = 'font-size:.78rem;font-weight:700;color:#e57373;margin-bottom:6px';
+    budgetHdr.className = 'day-section-header';
+    budgetHdr.style.color = '#e57373';
     budgetHdr.textContent = '💰 Bills Due Today';
     budgetSection.appendChild(budgetHdr);
     budgetDayItems.forEach(item => {
@@ -1750,8 +1771,8 @@ function renderDayGrid() {
     });
     const dayTotal = budgetDayItems.reduce((s, it) => s + it.amount, 0);
     const totRow = document.createElement('div');
-    totRow.style.cssText = 'display:flex;justify-content:space-between;font-size:.8rem;font-weight:700;padding-top:5px;border-top:1px solid rgba(255,193,7,.2);margin-top:3px';
-    totRow.innerHTML = `<span style="color:var(--muted)">Total</span><span style="color:#e57373">${fmt$(dayTotal)}</span>`;
+    totRow.className = 'budget-day-total';
+    totRow.innerHTML = `<span class="budget-day-total-label">Total</span><span class="budget-day-total-amt">${fmt$(dayTotal)}</span>`;
     budgetSection.appendChild(totRow);
     wrap.appendChild(budgetSection);
   }
@@ -1760,16 +1781,17 @@ function renderDayGrid() {
   const dayTodos = todosDueOnDate(dateKey);
   if (dayTodos.length) {
     const todoSection = document.createElement('div');
-    todoSection.style.cssText = 'background:rgba(108,142,245,.07);border-radius:8px;padding:8px 10px;margin-bottom:8px;border:1px solid rgba(108,142,245,.2)';
+    todoSection.className = 'day-todo-section';
     const todoHdr = document.createElement('div');
-    todoHdr.style.cssText = 'font-size:.78rem;font-weight:700;color:var(--accent);margin-bottom:6px';
+    todoHdr.className = 'day-section-header';
+    todoHdr.style.color = 'var(--accent)';
     todoHdr.textContent = '✅ To-Dos Due Today';
     todoSection.appendChild(todoHdr);
     dayTodos.forEach(todo => {
       const r = document.createElement('div');
-      r.style.cssText = 'display:flex;justify-content:space-between;font-size:.82rem;padding:3px 0;border-bottom:1px solid rgba(108,142,245,.1)';
-      r.innerHTML = `<span style="color:var(--text)">${esc(todo.text)}</span>
-                     ${todo.assignedTo ? `<span style="color:var(--accent);font-size:.75rem">👤 ${todo.assignedTo}</span>` : ''}`;
+      r.className = 'day-todo-row';
+      r.innerHTML = `<span class="day-todo-text">${esc(todo.text)}</span>
+                     ${todo.assignedTo ? `<span class="day-todo-assignee">👤 ${todo.assignedTo}</span>` : ''}`;
       todoSection.appendChild(r);
     });
     wrap.appendChild(todoSection);
@@ -2369,12 +2391,9 @@ function renderAgendaView() {
     evts.forEach(ev => {
       const row = document.createElement('div');
       const clickable = !ev.holiday && ev.eventId;
-      row.className = 'agenda-event' + (clickable ? ' agenda-clickable' : '');
+      row.className = 'agenda-event' + (clickable ? ' agenda-clickable' : '') + ' ' + agendaPastelClass(ev.summary || '');
+      row.style.borderLeftColor = ev.color;
       if (clickable) row.onclick = () => openEventEditor(ev);
-
-      const dot = document.createElement('div');
-      dot.className = 'agenda-dot';
-      dot.style.background = ev.color;
 
       const info = document.createElement('div');
       info.className = 'agenda-info';
@@ -2398,7 +2417,6 @@ function renderAgendaView() {
 
       info.appendChild(timeEl);
       info.appendChild(title);
-      row.appendChild(dot);
       row.appendChild(info);
       el.appendChild(row);
     });
@@ -2411,11 +2429,10 @@ function renderAgendaView() {
     el.appendChild(empty);
   }
 
-  // Update header label
+  // Update header label — compact so it doesn't truncate under the view toggle
   const endDate = new Date(start); endDate.setDate(endDate.getDate() + days - 1);
   const lbl = document.getElementById('calMonthLabel');
-  if (lbl) lbl.textContent = start.toLocaleDateString(undefined, { month:'short', day:'numeric' })
-    + ' – ' + endDate.toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' });
+  if (lbl) lbl.textContent = _numericMDFmt.format(start) + ' – ' + _numericMDFmt.format(endDate);
 }
 
 function renderCalendarTabs() {
