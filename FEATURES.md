@@ -172,7 +172,8 @@ render in every calendar view, the countdown picker, and conflict detection.
 **Key functions:**
 - `parseIcs(text)` — VEVENT parser: summary/description, all-day vs timed, **TZID** (→ UTC via `tzWallToUTCISO`), **RRULE** + **EXDATE**, RFC line unfolding.
 - `expandRecurrence(ev, winStart, winEnd)` — expands `FREQ=DAILY/WEEKLY/MONTHLY/YEARLY` with `INTERVAL`/`COUNT`/`UNTIL`/`BYDAY`(weekly)/`EXDATE` across the load window (~2 mo back → ~14 mo forward). Non-recurring events pass through unchanged.
-- `fetchIcsSub(sub)` — direct fetch, falling back to the same-origin `/.netlify/functions/ics` proxy (keeps private feed URLs in your own infra; only on a Netlify deploy).
+- `normalizeIcsUrl(url)` — trims and rewrites a leading `webcal://`/`webcals://` to `https://`. Sports, TV and school feeds are published with that scheme, `fetch()` can't speak it, and `ics.js` rejects any non-http(s) scheme, so without this a pasted webcal link died with the generic "could not fetch" status. Applied in `addIcsSub()` (so the stored record and the dedupe-by-URL check both use the normalized form) and again in `fetchIcsSub()` (for subs stored before it existed, or synced in from another device).
+- `fetchIcsSub(sub)` — direct fetch of the normalized URL, falling back to the same-origin `/.netlify/functions/ics` proxy (keeps private feed URLs in your own infra; only on a Netlify deploy).
 - `loadIcsSubs()` — rebuilds each sub's `calEventCache` slice from scratch (no duplicate injection); `injectIcsEvent()` keys events by **local** date (no UTC day-shift).
 - `addIcsSub()` / `removeIcsSub(id)` / `renderIcsSubList()` — Settings → Calendar UI.
 
@@ -182,7 +183,7 @@ render in every calendar view, the countdown picker, and conflict detection.
 
 **Server:** `netlify/functions/ics.js` proxies a single feed URL server-side (keyless; SSRF-guards loopback/private hosts).
 
-**Gotchas:** Recurrence is pragmatic — no `BYMONTHDAY`/nth-weekday/`RDATE`/`RECURRENCE-ID` overrides. `TZID` resolves via `Intl` (unknown zones fall back to floating/local). Local dev without Netlify can't use the proxy, so CORS-restricted feeds (e.g. Google's `.ics`) only load when deployed.
+**Gotchas:** A feed URL pasted as `webcal://` works (see `normalizeIcsUrl`), but the failure status is still one message for every cause (bad URL, CORS, non-calendar response, 404), so diagnosing a rejected feed means `curl`ing it by hand. Recurrence is pragmatic — no `BYMONTHDAY`/nth-weekday/`RDATE`/`RECURRENCE-ID` overrides. `TZID` resolves via `Intl` (unknown zones fall back to floating/local). Local dev without Netlify can't use the proxy, so CORS-restricted feeds (e.g. Google's `.ics`) only load when deployed.
 
 ---
 

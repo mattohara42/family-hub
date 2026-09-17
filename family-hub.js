@@ -2818,18 +2818,31 @@ function expandRecurrence(ev, winStart, winEnd) {
   return out;
 }
 
+/** Rewrite a `webcal://` feed link to `https://`. Sports/TV/school feeds are
+ *  handed out with that scheme because it makes a desktop calendar app subscribe
+ *  instead of downloading the file, but `fetch()` can't speak it and
+ *  `netlify/functions/ics.js` refuses any non-http(s) scheme — so a pasted
+ *  webcal link failed with the generic "could not fetch" message. Same host,
+ *  same bytes, so swapping the scheme is all that's needed. */
+function normalizeIcsUrl(url) {
+  return String(url || '').trim().replace(/^webcals?:\/\//i, 'https://');
+}
+
 /** Fetch one ICS URL (direct, falling back to the same-origin Netlify proxy),
  *  parse, and return its events. The proxy keeps private feed URLs in your own
  *  infra (only available on a Netlify deploy; local dev relies on direct fetch). */
 async function fetchIcsSub(sub) {
   let text = null;
+  // Normalize here too, not just in addIcsSub(): subs stored before this existed
+  // (and any synced in from another device) still carry the raw webcal URL.
+  const url = normalizeIcsUrl(sub.url);
   try {
-    const r = await fetch(sub.url, { cache: 'no-store' });
+    const r = await fetch(url, { cache: 'no-store' });
     if (r.ok) text = await r.text();
   } catch {}
   if (!text || !text.includes('BEGIN:VCALENDAR')) {
     try {
-      const r = await fetch(`/.netlify/functions/ics?url=${encodeURIComponent(sub.url)}`, { cache: 'no-store' });
+      const r = await fetch(`/.netlify/functions/ics?url=${encodeURIComponent(url)}`, { cache: 'no-store' });
       if (r.ok) text = await r.text();
     } catch {}
   }
@@ -2897,7 +2910,7 @@ async function loadIcsSubs() {
 
 /** Add a new ICS subscription from the settings UI. */
 async function addIcsSub() {
-  const url   = document.getElementById('icsUrlInput').value.trim();
+  const url   = normalizeIcsUrl(document.getElementById('icsUrlInput').value);
   const label = document.getElementById('icsLabelInput').value.trim();
   const color = document.getElementById('icsColorInput').value;
   const statusEl = document.getElementById('icsSubStatus');
