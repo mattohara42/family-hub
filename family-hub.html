@@ -474,14 +474,16 @@
       <button class="mobile-sheet-tab active" data-section="shop" onclick="setMobileListsSection('shop')">🛒 Shopping</button>
       <button class="mobile-sheet-tab" data-section="todo" onclick="setMobileListsSection('todo')">✅ To-Do</button>
       <button class="mobile-sheet-tab" id="mobileListsHomeTab" data-section="home" onclick="setMobileListsSection('home')" style="display:none">🏠 Home</button>
+      <button class="mobile-sheet-tab" id="mobileListsAssistantTab" data-section="assistant" onclick="setMobileListsSection('assistant')" style="display:none">🤖 Assistant</button>
     </div>
-    <!-- Shopping/To-Do/Home Assistant cards are reparented in here by
+    <!-- Shopping/To-Do/Home Assistant/Assistant cards are reparented in here by
          applyWidgetPlacement() on mobile (see MOBILE_SHEET_SECTIONS in
          family-hub.js) — no duplicated markup. -->
     <div class="mobile-sheet-body" id="mobileListsBody">
       <div class="mobile-sheet-section active" data-section="shop" id="mobileSheetShop"></div>
       <div class="mobile-sheet-section" data-section="todo" id="mobileSheetTodo"></div>
       <div class="mobile-sheet-section" data-section="home" id="mobileSheetHome"></div>
+      <div class="mobile-sheet-section" data-section="assistant" id="mobileSheetAssistant"></div>
     </div>
     <div class="mobile-sheet-footer">
       <button onclick="closeMobileLists();openEventsModal()">💡 Find Events</button>
@@ -527,6 +529,11 @@
         <div class="field">
           <label>Appearance</label>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button id="modeAuto" class="btn btn-sm"
+                    onclick="setAppMode('auto')" title="Follow this device's system light/dark setting"
+                    style="flex:1;min-width:70px;display:flex;align-items:center;justify-content:center;gap:5px">
+              🌓 Auto
+            </button>
             <button id="modeLight" class="btn btn-sm"
                     onclick="setAppMode('light')"
                     style="flex:1;min-width:70px;display:flex;align-items:center;justify-content:center;gap:5px">

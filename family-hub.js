@@ -243,7 +243,7 @@ let todoItems       = []; // in-memory mirror of Firestore 'todo' collection for
 if (localStorage.getItem('fh_mode') === 'amazing')        localStorage.setItem('fh_mode', 'nautical');
 if (localStorage.getItem('fh_mode') === 'nautical-light') localStorage.setItem('fh_mode', 'nautical');
 const _savedMode    = localStorage.getItem('fh_mode');
-let appMode         = _savedMode || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');  // 'light' | 'dark' | 'nautical'
+let appMode         = _savedMode || 'auto';  // 'auto' | 'light' | 'dark' | 'nautical' | 'aurora' | 'colorblind'
 // Flavor registry — to ship a new flavor, add an entry here AND a matching
 // `body.flavor-<id>` section in family-hub.css. Everything else is data-driven.
 const FLAVORS = [
@@ -395,12 +395,13 @@ const WIDGET_ORDER = [
 
 // Mobile sheet registry — widget key → the section wrapper it's reparented
 // into when isMobile (see applyWidgetPlacement). Calendar is the permanent
-// mobile surface; Shopping/To-Do/Home Assistant live in the Lists sheet
-// instead of getting their own screen.
+// mobile surface; Shopping/To-Do/Home Assistant/Assistant live in the Lists
+// sheet instead of getting their own screen.
 const MOBILE_SHEET_SECTIONS = {
   shopping:      'mobileSheetShop',
   todo:          'mobileSheetTodo',
   homeassistant: 'mobileSheetHome',
+  assistant:     'mobileSheetAssistant',
 };
 
 // User-defined widget order (keys only). Persisted in fh_widget_order.
@@ -423,7 +424,7 @@ function applyWidgetPlacement() {
 
   // Distribute each widget card to the right container in user-defined order.
   // Placement ('sidebar'/'bottom') is a desktop-layout concept — the sidebar
-  // itself is hidden on mobile. Shopping/To-Do/Home Assistant are the three
+  // itself is hidden on mobile. Shopping/To-Do/Home Assistant/Assistant are
   // reachable on mobile there instead, reparented into the Lists sheet
   // (MOBILE_SHEET_SECTIONS); everything else just rides along in the hidden
   // sidebar, same as before this redesign.
@@ -534,14 +535,17 @@ function applyWidgetVisibility() {
     if (el) el.style.display = widgetVisibility[key] ? '' : 'none';
   });
 
-  // Home Assistant's tab in the mobile Lists sheet is the only optional one —
-  // hide it unless the widget is on, so nobody who doesn't run Home Assistant
-  // pays for the crowding.
+  // Home Assistant's and Assistant's tabs in the mobile Lists sheet are
+  // optional — hide each unless its widget is on, so nobody who doesn't run
+  // Home Assistant or use the AI assistant pays for the crowding.
   const homeTab = document.getElementById('mobileListsHomeTab');
   if (homeTab) homeTab.style.display = widgetVisibility.homeassistant ? '' : 'none';
-  // If Home was the open sheet section and got disabled (here or via a synced
-  // pref change), bounce to Shopping instead of a blank section.
+  const assistantTab = document.getElementById('mobileListsAssistantTab');
+  if (assistantTab) assistantTab.style.display = widgetVisibility.assistant ? '' : 'none';
+  // If the open sheet section got disabled (here or via a synced pref
+  // change), bounce to Shopping instead of a blank section.
   if (mobileListsSection === 'home' && !widgetVisibility.homeassistant) setMobileListsSection('shop');
+  if (mobileListsSection === 'assistant' && !widgetVisibility.assistant) setMobileListsSection('shop');
 
   // Re-evaluate bottom strip container visibility
   const bottomStrip = document.getElementById('bottomStrip');
@@ -3506,13 +3510,18 @@ function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
       chip.dataset.memberName = m.name;
       chip.textContent = m.name;
       const selected = ev?.members?.includes(m.name) || false;
+      // Unselected chips tint from the member's own color (via currentColor,
+      // see .evt-member-chip in CSS); selected chips go solid + white text,
+      // so leave color unset there and let the .selected CSS rule apply it.
+      chip.style.color = selected ? '' : (m.color || '');
       if (selected) {
         chip.classList.add('selected');
         chip.style.background = m.color || 'var(--accent)';
       }
       chip.onclick = () => {
-        chip.classList.toggle('selected');
-        chip.style.background = chip.classList.contains('selected') ? (m.color || 'var(--accent)') : '';
+        const nowSelected = chip.classList.toggle('selected');
+        chip.style.background = nowSelected ? (m.color || 'var(--accent)') : '';
+        chip.style.color = nowSelected ? '' : (m.color || '');
       };
       membersContainer.appendChild(chip);
     });
@@ -10045,7 +10054,13 @@ function setMicState(state) {
   }
 }
 
-/** Show a Chrome-specific step-by-step help message in the chat. */
+/** Rough iOS check — Safari has no in-page address-bar permission icon, so
+ *  the denied-help copy needs a different (Settings app) path than Chrome. */
+function isIOSDevice() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent);
+}
+
+/** Show a step-by-step help message for enabling mic access in the chat. */
 function showMicDeniedHelp() {
   const container = document.getElementById('assistantMessages');
   if (!container) return;
@@ -10055,9 +10070,16 @@ function showMicDeniedHelp() {
 
   const div = document.createElement('div');
   div.className = 'assistant-msg ai assistant-mic-help';
-  div.innerHTML = `
+  div.innerHTML = isIOSDevice() ? `
     <strong>🎤 Microphone blocked</strong><br>
-    To enable voice input in Chrome:<br><br>
+    To enable voice input on iPhone/iPad:<br><br>
+    <span class="mic-help-step">1</span> Open <strong>Settings</strong> → <strong>Safari</strong> → <strong>Microphone</strong><br>
+    <span class="mic-help-step">2</span> Set it to <strong>Allow</strong><br>
+    <span class="mic-help-step">3</span> Refresh this page<br><br>
+    <span style="color:var(--muted);font-size:.78rem">Or type your question below — voice is optional.</span>
+  ` : `
+    <strong>🎤 Microphone blocked</strong><br>
+    To enable voice input:<br><br>
     <span class="mic-help-step">1</span> Click the <strong>🔒</strong> or <strong>ⓘ</strong> icon in the address bar<br>
     <span class="mic-help-step">2</span> Click <strong>Site settings</strong><br>
     <span class="mic-help-step">3</span> Find <strong>Microphone</strong> → change to <strong>Allow</strong><br>
@@ -10074,7 +10096,7 @@ function showMicPrimingMessage() {
   if (!container) return;
   const div = document.createElement('div');
   div.className = 'assistant-msg ai assistant-mic-priming';
-  div.innerHTML = `🎤 Chrome will ask for microphone access — click <strong>Allow</strong> to enable voice input.`;
+  div.innerHTML = `🎤 Your browser will ask for microphone access — tap <strong>Allow</strong> to enable voice input.`;
   container.appendChild(div);
   container.scrollTop = container.scrollHeight;
 }
@@ -10132,7 +10154,7 @@ async function initAssistantVoice() {
         appendAssistantNote('No microphone found. Check that one is connected.');
         break;
       case 'network':
-        appendAssistantNote('Voice recognition needs an internet connection (Chrome sends audio to Google).');
+        appendAssistantNote('Voice recognition needs an internet connection (your browser sends audio to a speech-recognition service).');
         break;
       case 'aborted':
         // user cancelled — silent
@@ -10627,11 +10649,12 @@ async function lcDelTrash(id) {
 }
 
 // ── Mobile Lists Sheet ──────────────────────────────────────────
-// Calendar is the permanent mobile surface; Shopping/To-Do/Home Assistant
-// (reparented here by applyWidgetPlacement, see MOBILE_SHEET_SECTIONS) live
-// in this overlay instead of their own tab. Not persisted — always opens on
-// Shopping, the same "first" widget the desktop sidebar leads with.
-let mobileListsSection = 'shop'; // 'shop' | 'todo' | 'home'
+// Calendar is the permanent mobile surface; Shopping/To-Do/Home
+// Assistant/Assistant (reparented here by applyWidgetPlacement, see
+// MOBILE_SHEET_SECTIONS) live in this overlay instead of their own tab. Not
+// persisted — always opens on Shopping, the same "first" widget the desktop
+// sidebar leads with.
+let mobileListsSection = 'shop'; // 'shop' | 'todo' | 'home' | 'assistant'
 
 function openMobileLists() {
   if (!isMobile) return; // the sheet's CSS only exists under the 640px query
@@ -10735,15 +10758,23 @@ function applyAssistantName() {
   if (widgetLabel) widgetLabel.textContent = '🤖 ' + name;
 }
 
+// 'auto' only ever resolves to light/dark — Nautical/Aurora/Accessible are
+// deliberate manual palettes, not something a day/night switch should pick.
+function resolveAppMode(mode) {
+  if (mode !== 'auto') return mode;
+  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+}
+
 function applyAppMode(mode) {
   appMode = mode;
+  const effective = resolveAppMode(mode);
   document.body.classList.remove('light-mode', 'nautical-mode', 'aurora-mode', 'colorblind-mode');
-  if (mode === 'light')      document.body.classList.add('light-mode');
-  if (mode === 'nautical')   document.body.classList.add('nautical-mode');
-  if (mode === 'aurora')     document.body.classList.add('aurora-mode');
-  if (mode === 'colorblind') document.body.classList.add('colorblind-mode');
+  if (effective === 'light')      document.body.classList.add('light-mode');
+  if (effective === 'nautical')   document.body.classList.add('nautical-mode');
+  if (effective === 'aurora')     document.body.classList.add('aurora-mode');
+  if (effective === 'colorblind') document.body.classList.add('colorblind-mode');
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.content = THEME_COLORS[mode] || THEME_COLORS.dark;
+  if (meta) meta.content = THEME_COLORS[effective] || THEME_COLORS.dark;
 }
 
 // Flavor = design-system layer, orthogonal to the theme/mode. Basic is the
@@ -10757,8 +10788,10 @@ function applyFlavor(flavor) {
   });
 }
 
-window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', e => {
-  if (!localStorage.getItem('fh_mode')) applyAppMode(e.matches ? 'light' : 'dark');
+// Keep 'auto' in sync with the device's day/night switch — mirrors the
+// 'auto' layout-orientation listener below.
+window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
+  if (appMode === 'auto') applyAppMode('auto');
 });
 
 function applyTvMode(on) {
@@ -10806,6 +10839,7 @@ window.matchMedia('(orientation: portrait)').addEventListener('change', () => {
 function setAppMode(mode) {
   applyAppMode(mode);
   localStorage.setItem('fh_mode', mode);
+  document.getElementById('modeAuto').className           = 'btn btn-sm' + (mode === 'auto'           ? ' btn-mode-active' : '');
   document.getElementById('modeLight').className          = 'btn btn-sm' + (mode === 'light'          ? ' btn-mode-active' : '');
   document.getElementById('modeDark').className           = 'btn btn-sm' + (mode === 'dark'           ? ' btn-mode-active' : '');
   document.getElementById('modeNautical').className       = 'btn btn-sm' + (mode === 'nautical'       ? ' btn-mode-active' : '');
@@ -11036,17 +11070,19 @@ function releaseFocusTrap() {
 // Grouped nav structure — single source of truth for the settings shell.
 // Add/reorder settings by editing this; the nav renders from it.
 // `desktopOnly` marks settings for a feature with no mobile surface at all —
-// the screensaver (never runs under 640px), the Assistant/Mowing widgets
-// (sidebar-only, unreachable on mobile), and widget placement/Weather/Feeds/
-// Chores (either a desktop-only concept or a widget with no mobile card).
-// renderSettingsNav() drops these on mobile so Preferences only lists things
-// that actually do something from a phone.
+// the screensaver (never runs under 640px), the Mowing widget (sidebar-only,
+// unreachable on mobile), and widget placement/Weather/Feeds/Chores (either
+// a desktop-only concept or a widget with no mobile card). renderSettingsNav()
+// drops these on mobile so Preferences only lists things that actually do
+// something from a phone. Assistant is reachable here (its API key needs
+// setting from a phone too) since its card now has a mobile surface — see
+// MOBILE_SHEET_SECTIONS.
 const SETTINGS_GROUPS = [
   { label: 'General', items: [
     { tab: 'look',        label: '🎨 Look & Feel' },
     { tab: 'screensaver', label: '🖼 Images', desktopOnly: true },
     { tab: 'family',      label: '👨‍👩‍👧 Family' },
-    { tab: 'assistant',   label: '🤖 Assistant', desktopOnly: true },
+    { tab: 'assistant',   label: '🤖 Assistant' },
   ]},
   { label: 'Calendar', items: [
     { tab: 'calendar', label: '📅 Calendar' },
@@ -11190,10 +11226,12 @@ function openSettings() {
     dietGrid.appendChild(label);
   });
   // Highlight active mode button
-  document.getElementById('modeLight').className          = 'btn btn-sm' + (appMode === 'light'          ? ' btn-mode-active' : '');
-  document.getElementById('modeDark').className           = 'btn btn-sm' + (appMode === 'dark'           ? ' btn-mode-active' : '');
-  document.getElementById('modeNautical').className       = 'btn btn-sm' + (appMode === 'nautical'       ? ' btn-mode-active' : '');
-  document.getElementById('modeColorblind').className     = 'btn btn-sm' + (appMode === 'colorblind'     ? ' btn-mode-active' : '');
+  document.getElementById('modeAuto').className            = 'btn btn-sm' + (appMode === 'auto'           ? ' btn-mode-active' : '');
+  document.getElementById('modeLight').className           = 'btn btn-sm' + (appMode === 'light'          ? ' btn-mode-active' : '');
+  document.getElementById('modeDark').className            = 'btn btn-sm' + (appMode === 'dark'           ? ' btn-mode-active' : '');
+  document.getElementById('modeNautical').className        = 'btn btn-sm' + (appMode === 'nautical'       ? ' btn-mode-active' : '');
+  document.getElementById('modeAurora').className          = 'btn btn-sm' + (appMode === 'aurora'         ? ' btn-mode-active' : '');
+  document.getElementById('modeColorblind').className      = 'btn btn-sm' + (appMode === 'colorblind'     ? ' btn-mode-active' : '');
   highlightFlavorButtons();
   renderBgPreview();
   const statusEl = document.getElementById('bgStatus');
