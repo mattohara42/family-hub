@@ -2667,6 +2667,25 @@ body.nautical-mode #eventEditorModal .modal {
   transform: perspective(800px) rotateX(2deg) translateY(-4px);
   transform-origin: 50% 0%;
 }
+/* Brighter, more colorful interior than the plain .field defaults elsewhere
+   (Settings etc. are untouched — this only targets the event editor) */
+#eventEditorModal .field label {
+  color: var(--text);
+  font-weight: var(--weight-semi);
+  opacity: .82;
+}
+#eventEditorModal .field input,
+#eventEditorModal .field textarea,
+#eventEditorModal .field select {
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line));
+  background: color-mix(in srgb, var(--accent) 4%, var(--surface2));
+}
+#eventEditorModal .field input:focus,
+#eventEditorModal .field textarea:focus,
+#eventEditorModal .field select:focus {
+  background: var(--surface2);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+}
 .evt-editor-close-btn {
   display: flex; align-items: center; justify-content: center;
   width: 32px; height: 32px;
@@ -2689,11 +2708,15 @@ body.nautical-mode #eventEditorModal .modal {
   display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px;
 }
 .evt-editor-cal-opt {
-  padding: 4px 12px; border-radius: 20px; border: 2px solid transparent;
+  padding: 4px 12px; border-radius: 20px;
+  border: 2px solid color-mix(in srgb, currentColor 32%, transparent);
   font-size: .8rem; cursor: pointer; transition: all .15s;
-  background: var(--surface2); color: var(--text);
+  background: color-mix(in srgb, currentColor 14%, var(--surface2)); color: var(--text);
 }
-.evt-editor-cal-opt.selected { border-color: currentColor; font-weight: 700; }
+.evt-editor-cal-opt.selected {
+  border-color: currentColor; font-weight: 700;
+  background: color-mix(in srgb, currentColor 28%, var(--surface2));
+}
 .evt-editor-time-row {
   display: flex; gap: 8px; align-items: center;
 }
@@ -2717,9 +2740,10 @@ body.nautical-mode #eventEditorModal .modal {
 }
 .evt-editor-members { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .evt-member-chip {
-  padding: 4px 12px; border-radius: 20px; border: 2px solid rgba(255,255,255,.18);
+  padding: 4px 12px; border-radius: 20px;
+  border: 2px solid color-mix(in srgb, currentColor 38%, transparent);
   font-size: .8rem; cursor: pointer; transition: all .15s;
-  background: var(--surface2); color: var(--text);
+  background: color-mix(in srgb, currentColor 12%, var(--surface2)); color: var(--text);
 }
 .evt-member-chip.selected { border-color: transparent; color: #fff; font-weight: 600; }
 .evt-member-badge {
