@@ -4359,6 +4359,10 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
   /* Collapse the 4-way view toggle to just Day/Agenda; Month/Week are
      desktop-only (Agenda's rolling list already covers "week at a glance") */
   #viewTab_month, #viewTab_week { display: none; }
+
+  /* Prev/next period arrows are redundant with the swipe gesture
+     (setupCalSwipe() in family-hub.js) and just eat header space */
+  .cal-month-nav button { display: none; }
 }
 
 /* ── Budget Card ── */
