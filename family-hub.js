@@ -10634,6 +10634,7 @@ async function lcDelTrash(id) {
 let mobileListsSection = 'shop'; // 'shop' | 'todo' | 'home'
 
 function openMobileLists() {
+  if (!isMobile) return; // the sheet's CSS only exists under the 640px query
   setMobileListsSection(mobileListsSection);
   document.getElementById('mobileListsOverlay').style.display = 'flex';
 }
@@ -10717,7 +10718,7 @@ function applyAppTitle() {
   } else {
     textHtml = '<span>' + title + '</span>';
   }
-  el.innerHTML = `<em class="cal-app-emoji">${emoji}</em><span class="cal-app-title-text">${textHtml}</span>`;
+  el.innerHTML = `<button type="button" class="cal-app-emoji" onclick="openMobileLists()" aria-label="Open lists and settings" title="Lists">${emoji}</button><span class="cal-app-title-text">${textHtml}</span>`;
   document.title = title;
 }
 

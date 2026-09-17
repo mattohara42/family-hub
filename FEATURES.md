@@ -813,7 +813,9 @@ let lastWxData    = null;  // set by renderWeatherData(); reused for the temp li
 
 ### 20. Mobile Layout (permanent Calendar + Lists sheet)
 
-**Overview (redesigned 2026-09-16, replacing the old bottom-nav/tab-registry system):** Under 640px there is no bottom nav bar. `.sidebar` is unconditionally hidden and Calendar (`.cal-column`) is the only permanent surface — mirrors "mostly on Day/Agenda, want to glance at the week, want to add fast" over the old always-visible five-tab bar. Two floating buttons take its place: `#mobileAddFab` (bottom-right, calls `openEventEditor(null)` — quick-add defaulting to today) and `#mobileListsBtn` (bottom-left, calls `openMobileLists()` — opens the Lists sheet). The 💡 Find Events trigger and the ⚙️ Settings gear are hidden from the calendar header/sidebar chrome on mobile and live in the sheet's footer instead.
+**Overview (redesigned 2026-09-16, replacing the old bottom-nav/tab-registry system):** Under 640px there is no bottom nav bar. `.sidebar` is unconditionally hidden and Calendar (`.cal-column`) is the only permanent surface — mirrors "mostly on Day/Agenda, want to glance at the week, want to add fast" over the old always-visible five-tab bar. One floating button remains, `#mobileAddFab` (bottom-right, calls `openEventEditor(null)` — quick-add defaulting to today); the Lists sheet opens from the 🏠 app icon in the calendar header instead of its own FAB (moved 2026-09-17 — a dedicated `#mobileListsBtn` FAB existed briefly first). The 💡 Find Events trigger and the ⚙️ Settings gear are hidden from the calendar header/sidebar chrome on mobile and live in the sheet's footer instead.
+
+**The app icon as the Lists trigger:** `.cal-app-emoji` is a real `<button onclick="openMobileLists()">` (`applyAppTitle()` in family-hub.js rebuilds it on every title/icon change, so both the static HTML and that template stay in sync). `openMobileLists()` no-ops when `!isMobile`, since `.mobile-sheet`'s CSS only exists under the 640px query — so the button is harmless if triggered on desktop. Desktop keeps the old borderless look (button chrome reset to `border:none;background:none;padding:0`); the 640px query re-adds a visible `border`/`background`/`border-radius` so it reads as an actual button rather than a decorative emoji. The icon already carried a 7-tap fireworks Easter egg (`setupEmojiFireworks()`, unconditional `addEventListener`, unrelated to the inline `onclick`) — both handlers fire on every click, harmlessly.
 
 **Lists sheet — registry (single source of truth):**
 ```js
@@ -849,7 +851,7 @@ Secondary widgets (Budget, Chores, Word, Joke, Quotes, Countdown, News, Stock, A
 
 **Tactile/theming:** sheet/FAB chrome derives from tokens (`--line`, `--surface-solid/-hi`, `--accent`); Tactile mobile rules (`body.flavor-tactile .mobile-sheet`) use neutral tokens only (KTD-4-safe). Touch tap-target sizing lives inside `@media (hover: none)` per the CLAUDE.md invariant.
 
-**HTML anchors:** `.mobile-fab` / `#mobileAddFab` / `#mobileListsBtn`, `#mobileListsOverlay` / `.mobile-sheet` / `#mobileListsTabs` / `#mobileListsBody` (containing `#mobileSheetShop` / `#mobileSheetTodo` / `#mobileSheetHome`) / `.mobile-sheet-footer`
+**HTML anchors:** `.mobile-fab` / `#mobileAddFab`, `.cal-app-emoji` (Lists trigger), `#mobileListsOverlay` / `.mobile-sheet` / `#mobileListsTabs` / `#mobileListsBody` (containing `#mobileSheetShop` / `#mobileSheetTodo` / `#mobileSheetHome`) / `.mobile-sheet-footer`
 
 **localStorage:** none specific to the mobile shell — `mobileListsSection` is in-memory only, always resets to Shopping. `fh_calView` is shared with desktop (see View toggle above).
 

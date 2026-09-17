@@ -117,7 +117,7 @@
       <div class="card-header cal-card-header">
         <!-- Left: app title + Refocus -->
         <div class="cal-title-zone">
-          <div class="cal-app-title"><em class="cal-app-emoji">🏠</em><span class="cal-app-title-text">Family <span>Hub</span></span></div>
+          <div class="cal-app-title"><button type="button" class="cal-app-emoji" onclick="openMobileLists()" aria-label="Open lists and settings" title="Lists">🏠</button><span class="cal-app-title-text">Family <span>Hub</span></span></div>
           <button id="backToTodayBtn" onclick="goToToday()" style="display:none">Refocus</button>
         </div>
         <!-- Centre: period navigator -->
@@ -461,10 +461,9 @@
 </div><!-- /layout -->
 
 <!-- Mobile shell (shown only on small screens via CSS): Calendar is the
-     permanent surface, these two floating buttons replace the old bottom
-     nav bar — one for quick-add, one for the Lists sheet. -->
-<button class="mobile-fab mobile-fab-lists" id="mobileListsBtn" onclick="openMobileLists()"
-        aria-label="Shopping and To-Do lists" title="Lists">📋</button>
+     permanent surface. The Lists sheet opens from the 🏠 app icon in the
+     header (.cal-app-emoji, styled as an obvious button under 640px — see
+     family-hub.css); this FAB is the only floating button left. -->
 <button class="mobile-fab mobile-fab-add" id="mobileAddFab" onclick="openEventEditor(null)"
         aria-label="Add event" title="Add event">＋</button>
 

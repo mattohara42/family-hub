@@ -748,10 +748,18 @@ body.has-bg .day-hour-row {
 }
 .cal-app-title .cal-app-title-text span { color: var(--accent); }
 .cal-app-emoji {
+  /* Now a real <button> (was an <em>) so it's focusable/keyboard-operable —
+     reset the browser's default button chrome back to how the plain emoji
+     used to look on desktop. Mobile re-adds visible chrome below. */
   font-size: 1.6rem;
   line-height: 1;
   font-style: normal;
   flex-shrink: 0;
+  font-family: inherit;
+  border: none;
+  background: none;
+  padding: 0;
+  color: inherit;
 }
 .safe-swatches {
   display: none;
@@ -4353,13 +4361,17 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
     background: var(--accent);
     color: #fff;
   }
-  .mobile-fab-lists {
-    left: 16px;
-    background: var(--surface);
-    color: var(--text);
+
+  /* App icon doubles as the Lists trigger on mobile — give it an obvious
+     button outline instead of the bare, unbordered emoji desktop keeps. */
+  .cal-app-emoji {
     border: 1px solid var(--line);
-    font-size: 1.2rem;
+    background: var(--surface);
+    border-radius: 8px;
+    padding: 3px 8px;
+    cursor: pointer;
   }
+  .cal-app-emoji:active { background: var(--surface2); }
 
   /* Lists sheet — a bottom sheet, not a full-page tab swap. Shown/hidden by
      toggling inline display (openMobileLists/closeMobileLists in
