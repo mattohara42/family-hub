@@ -1028,6 +1028,19 @@ body:not(.force-landscape).auto-portrait #bottomStrip {
 
 /* Large mobile */
 @media (max-width: 640px) {
+  /* The whole type scale below is sized for a wall panel read from a few
+     feet away. On a phone held at arm's length that reads as tiny body
+     copy next to one oversized date heading (#calMonthLabel). Scaling the
+     tokens up here — rather than the many individual font-size rules that
+     already reference them — keeps everything in one coherent scale. */
+  :root {
+    --text-xs:   0.80rem;
+    --text-sm:   0.88rem;
+    --text-base: 1.00rem;
+    --text-md:   1.10rem;
+    --text-lg:   1.30rem;
+  }
+
   /* Edge-to-edge: the outer gutter and the card's border/radius/shadow are
      desktop prettification that just cramp a phone screen. Safe-area insets
      stay — that's hardware (notch/home indicator), not decoration. */
@@ -1079,7 +1092,7 @@ body:not(.force-landscape).auto-portrait #bottomStrip {
   .wx-day { font-size: var(--text-sm); gap: 5px; }
 
   /* Settings modal: full width */
-  .modal-overlay { padding: 10px; }
+  .modal-overlay { padding: 10px; padding-bottom: max(10px, env(safe-area-inset-bottom, 0px)); }
   .modal { padding: 20px 16px; }
 }
 
@@ -4356,13 +4369,47 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
   /* The 💡 discover-events trigger lives in the sheet footer instead */
   #eventsDiscoverBtn { display: none; }
 
-  /* Collapse the 4-way view toggle to just Day/Agenda; Month/Week are
-     desktop-only (Agenda's rolling list already covers "week at a glance") */
-  #viewTab_month, #viewTab_week { display: none; }
+  /* Collapse the 4-way view toggle to Month/Day/Agenda; Week is desktop-only
+     (Agenda's rolling list already covers "week at a glance") */
+  #viewTab_week { display: none; }
 
   /* Prev/next period arrows are redundant with the swipe gesture
      (setupCalSwipe() in family-hub.js) and just eat header space */
   .cal-month-nav button { display: none; }
+
+  /* Tighten Day/Agenda: the desktop paddings/min-heights were sized for a
+     wall panel viewed from a few feet away, not a phone held in the hand */
+  .day-hour-row  { min-height: 40px; }
+  .day-hour-label { padding: 3px 8px 0 0; }
+  .day-time-label { padding-top: 2px; padding-right: 8px; }
+  .agenda-day-header { padding: 12px 10px 5px; }
+  .agenda-event  { padding: 7px 10px; }
+
+  /* Event editor: `90vh` is iOS Safari's *large* viewport (assumes the
+     address bar is collapsed), so with the bar visible the modal's bottom —
+     Save/Delete — renders below the fold with nothing left to scroll into.
+     `svh` is the guaranteed-visible viewport regardless of toolbar state.
+     Matches the ID+class specificity of the rule this overrides, so it
+     needs no !important; being later in the file settles the tie. */
+  #eventEditorModal .modal {
+    max-height: 90svh;
+    padding-bottom: max(28px, env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Preferences: bigger text + line-height for what's left after
+     renderSettingsNav() drops the desktop-only panels (family-hub.js).
+     Most panel copy is inline-styled (style="font-size:.82rem"), which
+     only !important can override; the more specific rules below still win
+     over the catch-all on specificity even with both marked important. */
+  #settingsModal .settings-panel,
+  #settingsModal .settings-panel * {
+    font-size: 1rem !important;
+    line-height: var(--leading-normal) !important;
+  }
+  #settingsModal .settings-section-head { font-size: 1.05rem !important; }
+  #settingsModal .settings-nav-label    { font-size: 0.8rem !important; }
+  #settingsModal .settings-nav-item     { font-size: 1.05rem !important; padding: 12px 10px !important; }
+  #settingsModal .modal h2              { font-size: 1.4rem !important; }
 }
 
 /* ── Budget Card ── */

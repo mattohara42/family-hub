@@ -11017,24 +11017,30 @@ function releaseFocusTrap() {
 // ── Settings modal ─────────────────────────────────────────────
 // Grouped nav structure — single source of truth for the settings shell.
 // Add/reorder settings by editing this; the nav renders from it.
+// `desktopOnly` marks settings for a feature with no mobile surface at all —
+// the screensaver (never runs under 640px), the Assistant/Mowing widgets
+// (sidebar-only, unreachable on mobile), and widget placement/Weather/Feeds/
+// Chores (either a desktop-only concept or a widget with no mobile card).
+// renderSettingsNav() drops these on mobile so Preferences only lists things
+// that actually do something from a phone.
 const SETTINGS_GROUPS = [
   { label: 'General', items: [
     { tab: 'look',        label: '🎨 Look & Feel' },
-    { tab: 'screensaver', label: '🖼 Images' },
+    { tab: 'screensaver', label: '🖼 Images', desktopOnly: true },
     { tab: 'family',      label: '👨‍👩‍👧 Family' },
-    { tab: 'assistant',   label: '🤖 Assistant' },
+    { tab: 'assistant',   label: '🤖 Assistant', desktopOnly: true },
   ]},
   { label: 'Calendar', items: [
     { tab: 'calendar', label: '📅 Calendar' },
     { tab: 'events',   label: '💡 Events' },
-    { tab: 'mow',      label: '🌿 Mowing' },
+    { tab: 'mow',      label: '🌿 Mowing', desktopOnly: true },
   ]},
   { label: 'Widgets', items: [
-    { tab: 'widgets',  label: '🧩 Widget Layout' },
-    { tab: 'weather',  label: '🌤 Weather' },
-    { tab: 'feeds',    label: '📊 Feeds' },
+    { tab: 'widgets',  label: '🧩 Widget Layout', desktopOnly: true },
+    { tab: 'weather',  label: '🌤 Weather', desktopOnly: true },
+    { tab: 'feeds',    label: '📊 Feeds', desktopOnly: true },
     { tab: 'shopping', label: '🛒 Shopping' },
-    { tab: 'chores',   label: '⭐ Chores' },
+    { tab: 'chores',   label: '⭐ Chores', desktopOnly: true },
     { tab: 'meals',    label: '🍽 Meals' },
     { tab: 'homeassistant', label: '🏠 Home Assistant' },
   ]},
@@ -11045,7 +11051,10 @@ const SETTINGS_GROUPS = [
 
 function renderSettingsNav() {
   const nav = document.getElementById('settingsNav');
-  nav.innerHTML = SETTINGS_GROUPS.map(g => `
+  nav.innerHTML = SETTINGS_GROUPS
+    .map(g => ({ ...g, items: isMobile ? g.items.filter(it => !it.desktopOnly) : g.items }))
+    .filter(g => g.items.length)
+    .map(g => `
     <div class="settings-nav-group${g.gated ? ' settings-nav-group--gated' : ''}">
       <div class="settings-nav-label">${g.label}</div>
       ${g.items.map(it =>
