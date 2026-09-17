@@ -300,12 +300,15 @@ Three modes, toggled via ⚙️ Settings → Look & Feel:
 
 **State:**
 ```js
-let appMode = localStorage.getItem('fh_mode') || 'dark'; // 'light' | 'dark' | 'nautical' | 'aurora' | 'colorblind'
+let appMode = localStorage.getItem('fh_mode') || 'auto'; // 'auto' | 'light' | 'dark' | 'nautical' | 'aurora' | 'colorblind'
 let appFlavor = localStorage.getItem('fh_flavor') || 'basic'; // 'basic' | 'tactile' — design-system axis, orthogonal to appMode
 ```
+**Auto mode (added 2026-09-17):** `'auto'` is the true default — before any explicit pick, the app already follows the device's `prefers-color-scheme`, and `'🌓 Auto'` in Settings → Look & Feel lets you opt back into that after picking something else. `resolveAppMode(mode)` maps `'auto'` to `'light'`/`'dark'` off `matchMedia('(prefers-color-scheme: light)')`; `applyAppMode()` applies classes off the *resolved* value while `appMode` itself keeps the logical `'auto'`. A `change` listener on that same media query reapplies whenever `appMode === 'auto'` — same pattern as the `'auto'` layout-orientation listener a bit further down the file. Auto only ever resolves to light/dark; Nautical/Aurora/Accessible stay manual-only picks, since they're not a day/night distinction.
+
 **Key functions:**
-- `applyAppMode(mode)` — removes all mode classes, adds the correct one
-- `setAppMode(mode)` — calls `applyAppMode`, saves to localStorage, updates button highlights
+- `resolveAppMode(mode)` — `'auto'` → live `'light'`/`'dark'`; anything else passes through unchanged
+- `applyAppMode(mode)` — removes all mode classes, adds the one for `resolveAppMode(mode)`
+- `setAppMode(mode)` — calls `applyAppMode`, saves to localStorage, updates button highlights (including the Aurora button, which `openSettings()`'s equivalent highlight block was missing before this pass)
 - `applyFlavor(flavor)` — toggles `body.flavor-tactile` (basic = no class)
 - `setFlavor(flavor)` — calls `applyFlavor`, saves `fh_flavor`, updates button highlights. Tactile reads each theme's color tokens; CSS lives in the `✦ TACTILE FLAVOR` section of `family-hub.css` (self-hosted fonts in `fonts/`)
 
