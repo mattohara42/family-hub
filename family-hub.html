@@ -142,10 +142,14 @@
         <div id="calNotSignedIn" style="color:var(--muted);font-size:.9rem;margin-bottom:12px">
           Sign in with Google to view your calendar events.
         </div>
-        <div class="cal-grid" id="calGrid"></div>
-        <div id="weekView"   style="display:none"></div>
-        <div id="dayView"    style="display:none"></div>
-        <div id="agendaView" style="display:none"></div>
+        <!-- Swipe/slide transition wrapper — the drag target for setupCalSwipe()
+             and the positioning context for the outgoing-period ghost. -->
+        <div class="cal-views" id="calViews">
+          <div class="cal-grid" id="calGrid"></div>
+          <div id="weekView"   style="display:none"></div>
+          <div id="dayView"    style="display:none"></div>
+          <div id="agendaView" style="display:none"></div>
+        </div>
       </div>
     </div>
 
