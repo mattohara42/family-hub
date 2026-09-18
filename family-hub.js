@@ -1351,6 +1351,17 @@ let calEventCache  = {};
 // IDs currently hidden by the user clicking a pill
 let disabledCals   = new Set();
 
+/** Can this cached event be written back to Google? Only events we own are
+ *  editable: a holiday is Google's own read-only calendar, and an ICS-feed
+ *  event (`readOnly`, set by injectIcsEvent) has the publisher's UID as its
+ *  `eventId` and a subscription as its `calId`, so a PATCH or DELETE could
+ *  only fail against the API. Gate every edit affordance on this — click to
+ *  open the editor, drag to reschedule, and the assistant's own lookup — so
+ *  read-only events render normally but offer no action that cannot work. */
+function isEventEditable(ev) {
+  return !!ev.eventId && !ev.holiday && !ev.readOnly;
+}
+
 function getWeekStart(date) {
   const d = new Date(date);
   d.setDate(d.getDate() - d.getDay()); // rewind to Sunday
@@ -1574,7 +1585,7 @@ function renderWeekGrid() {
         s.textContent = (ev.holiday ? '🎉 ' : '') + ev.summary + (ev.recurringEventId ? ' ↻' : '');
         pill.appendChild(s);
         appendMemberBadges(pill, ev.members);
-        if (!ev.holiday && ev.eventId) {
+        if (isEventEditable(ev)) {
           pill.onclick = e => { e.stopPropagation(); openEventEditor(ev); };
           pill.draggable = true;
           pill.addEventListener('dragstart', e => {
@@ -1739,7 +1750,7 @@ function renderDayGrid() {
       p.style.background = ev.color;
       p.innerHTML = `<span class="evt-title">${(ev.holiday ? '🎉 ' : '') + esc(ev.summary) + (ev.recurringEventId ? ' ↻' : '')}</span>`;
       appendMemberBadges(p, ev.members);
-      if (!ev.holiday && ev.eventId) {
+      if (isEventEditable(ev)) {
         p.style.cursor = 'pointer';
         p.onclick = () => openEventEditor(ev);
       }
@@ -1840,7 +1851,7 @@ function renderDayGrid() {
       pill.innerHTML = `<span class="evt-title">${esc(ev.summary) + (ev.recurringEventId ? ' ↻' : '')}</span>
                         <span class="evt-time">${startStr}${endStr ? ' – ' + endStr : ''}</span>`;
       appendMemberBadges(pill, ev.members);
-      if (!ev.holiday && ev.eventId) {
+      if (isEventEditable(ev)) {
         pill.style.cursor = 'pointer';
         pill.onclick = () => openEventEditor(ev);
       }
@@ -2034,18 +2045,24 @@ function renderMultidayOverlay() {
       `height:${BAR_H}px;` +
       `background:${ev.color};`;
 
-    bar.addEventListener('click', e => { e.stopPropagation(); openEventEditor(ev); });
-    bar.draggable = true;
-    bar.addEventListener('dragstart', e => {
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', JSON.stringify({
-        eventId: ev.eventId, calId: ev.calId, allDay: ev.allDay,
-        startDT: ev.startDT, endDT: ev.endDT,
-        startDate: ev.startDate, endDate: ev.endDate,
-      }));
-      setTimeout(() => bar.classList.add('cal-dnd-dragging'), 0);
-    });
-    bar.addEventListener('dragend', () => bar.classList.remove('cal-dnd-dragging'));
+    // A read-only feed's multi-day event still renders as a bar (it is the only
+    // place month view draws it), it just carries no click or drag.
+    if (isEventEditable(ev)) {
+      bar.addEventListener('click', e => { e.stopPropagation(); openEventEditor(ev); });
+      bar.draggable = true;
+      bar.addEventListener('dragstart', e => {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', JSON.stringify({
+          eventId: ev.eventId, calId: ev.calId, allDay: ev.allDay,
+          startDT: ev.startDT, endDT: ev.endDT,
+          startDate: ev.startDate, endDate: ev.endDate,
+        }));
+        setTimeout(() => bar.classList.add('cal-dnd-dragging'), 0);
+      });
+      bar.addEventListener('dragend', () => bar.classList.remove('cal-dnd-dragging'));
+    } else {
+      bar.style.cursor = 'default';
+    }
 
     overlay.appendChild(bar);
   });
@@ -2164,7 +2181,7 @@ function makeDayCell(year, month, day, otherMonth, isToday) {
     pill.appendChild(pillText);
     appendMemberBadges(pill, ev.members);
     pill.title = ev.summary;
-    if (!ev.holiday && ev.eventId) {
+    if (isEventEditable(ev)) {
       pill.onclick = e => { e.stopPropagation(); openEventEditor(ev); };
       pill.draggable = true;
       pill.addEventListener('dragstart', e => {
@@ -2394,7 +2411,7 @@ function renderAgendaView() {
 
     evts.forEach(ev => {
       const row = document.createElement('div');
-      const clickable = !ev.holiday && ev.eventId;
+      const clickable = isEventEditable(ev);
       row.className = 'agenda-event' + (clickable ? ' agenda-clickable' : '') + ' ' + agendaPastelClass(ev.summary || '');
       row.style.borderLeftColor = ev.color;
       if (clickable) row.onclick = () => openEventEditor(ev);
@@ -2860,6 +2877,7 @@ function injectIcsEvent(sub, ev) {
     description: ev.description || '',
     color:       sub.color,
     holiday:     false,
+    readOnly:    true,   // subscription: eventId is the feed's UID, calId a sub
     allDay:      !!ev.start?.date,
     startDT:     ev.start?.dateTime || null,
     endDT:       ev.end?.dateTime   || null,
@@ -3444,6 +3462,9 @@ function selectEvtScope(btn) {
 function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
   if (!googleToken) return;
   if (tvMode) return;   // TV mode is a passive read-only display — no editing
+  // Read-only sources never open: an eventId-less pseudo event (the event
+  // finder's "Add to Calendar") still must, so test the source, not the id.
+  if (ev && (ev.holiday || ev.readOnly)) return;
   evtEditing = ev || null;
 
   document.getElementById('eventEditorTitle').textContent =
@@ -9036,7 +9057,7 @@ async function assistantAddEvent(dateStr, timeStr, title, member) {
 
 // Find the soonest upcoming (or on `dateStr`) non-holiday event whose title
 // fuzzy-matches `query`. Returns the cached event object or null.
-function findCalEvent(query, dateStr) {
+function findCalEvent(query, dateStr, { readOnly = false } = {}) {
   const todayKey = localDateKey(new Date());
   let best = null, bestKey = null;
   Object.values(calEventCache).forEach(byDate => {
@@ -9044,7 +9065,10 @@ function findCalEvent(query, dateStr) {
       if (date < todayKey) return;
       if (dateStr && date !== dateStr) return;
       evs.forEach(e => {
-        if (e.holiday || !e.eventId || !fuzzyTextMatch(e.summary, query)) return;
+        // Default: only events we can actually write. `readOnly` flips it, so a
+        // caller can tell "no such event" apart from "that one is a feed's".
+        const wanted = readOnly ? (e.holiday || e.readOnly) : isEventEditable(e);
+        if (!wanted || !fuzzyTextMatch(e.summary, query)) return;
         const sortKey = e.startDT || (date + 'T00:00');
         if (!best || sortKey < bestKey) { best = { ...e, date }; bestKey = sortKey; }
       });
@@ -9088,11 +9112,21 @@ function computeEventShift(ev, newDate, newTime) {
   return { start: { dateTime: startLocal, timeZone: tz }, end: { dateTime: _evtFmtLocal(endD), timeZone: tz } };
 }
 
+/** Why no editable event matched. A subscribed feed or the holidays calendar
+ *  is visible on the wall panel but unwritable, so "couldn't find it" would be
+ *  a lie — name the reason instead. */
+function _noEditableEventMsg(query, dateStr) {
+  const ro = findCalEvent(query, dateStr, { readOnly: true });
+  return ro
+    ? `⚠️ "${ro.summary}" comes from a read-only calendar (a subscribed feed or holidays), so I can't change it`
+    : `⚠️ Couldn't find an upcoming event matching "${query}"`;
+}
+
 async function assistantRemoveEvent(query, dateStr) {
   if (!query)       return `⚠️ Which event should I remove?`;
   if (!googleToken) return `⚠️ Sign in with Google to let me change calendar events`;
   const e = findCalEvent(query, dateStr);
-  if (!e) return `⚠️ Couldn't find an upcoming event matching "${query}"`;
+  if (!e) return _noEditableEventMsg(query, dateStr);
   try {
     const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(e.calId)}/events/${encodeURIComponent(e.eventId)}`;
     const r = await calFetch(url, { method: 'DELETE' });
@@ -9106,7 +9140,7 @@ async function assistantEditEvent(query, newDate, newTime, newTitle) {
   if (!query)       return `⚠️ Which event should I change?`;
   if (!googleToken) return `⚠️ Sign in with Google to let me change calendar events`;
   const e = findCalEvent(query);
-  if (!e) return `⚠️ Couldn't find an upcoming event matching "${query}"`;
+  if (!e) return _noEditableEventMsg(query);
   const patch = {};
   if (newTitle && newTitle.trim()) patch.summary = newTitle.trim();
   const shift = computeEventShift(e, newDate, newTime);
