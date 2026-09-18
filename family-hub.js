@@ -1351,6 +1351,38 @@ let calEventCache  = {};
 // IDs currently hidden by the user clicking a pill
 let disabledCals   = new Set();
 
+/** Can this cached event be written back to Google? Only events we own are
+ *  editable: a holiday is Google's own read-only calendar, and an ICS-feed
+ *  event (`readOnly`, set by injectIcsEvent) has the publisher's UID as its
+ *  `eventId` and a subscription as its `calId`, so a PATCH or DELETE could
+ *  only fail against the API. Gate every edit affordance on this — click to
+ *  open the editor, drag to reschedule, and the assistant's own lookup — so
+ *  read-only events render normally but offer no action that cannot work. */
+function isEventEditable(ev) {
+  return !!ev.eventId && !ev.holiday && !ev.readOnly;
+}
+
+/** Display label for any calendar id: a Google calendar, an ICS subscription,
+ *  one of the generated local calendars, or holidays. */
+function calLabelFor(calId) {
+  if (calId === HOLIDAYS_ID) return '🎉 Holidays';
+  const ics = icsSubs.find(s => s.id === calId);
+  if (ics) return ics.label || calId;
+  const meta = calendarMeta.find(c => c.id === calId);
+  if (meta) return meta.label || String(calId).split('@')[0];
+  const lc = LC_DEFS.find(c => c.id === calId);
+  if (lc) return lc.label;
+  return calId;
+}
+
+/** Every calendar event click goes through here: ours opens the editor, anything
+ *  read-only opens the details view. Both are worth tapping — a feed event
+ *  carries the broadcast network, venue and link the pill has no room for. */
+function onCalEventClick(ev) {
+  if (isEventEditable(ev)) openEventEditor(ev);
+  else openEventDetails(ev);
+}
+
 function getWeekStart(date) {
   const d = new Date(date);
   d.setDate(d.getDate() - d.getDay()); // rewind to Sunday
@@ -1574,8 +1606,8 @@ function renderWeekGrid() {
         s.textContent = (ev.holiday ? '🎉 ' : '') + ev.summary + (ev.recurringEventId ? ' ↻' : '');
         pill.appendChild(s);
         appendMemberBadges(pill, ev.members);
-        if (!ev.holiday && ev.eventId) {
-          pill.onclick = e => { e.stopPropagation(); openEventEditor(ev); };
+        pill.onclick = e => { e.stopPropagation(); onCalEventClick(ev); };
+        if (isEventEditable(ev)) {
           pill.draggable = true;
           pill.addEventListener('dragstart', e => {
             e.dataTransfer.effectAllowed = 'move';
@@ -1739,10 +1771,8 @@ function renderDayGrid() {
       p.style.background = ev.color;
       p.innerHTML = `<span class="evt-title">${(ev.holiday ? '🎉 ' : '') + esc(ev.summary) + (ev.recurringEventId ? ' ↻' : '')}</span>`;
       appendMemberBadges(p, ev.members);
-      if (!ev.holiday && ev.eventId) {
-        p.style.cursor = 'pointer';
-        p.onclick = () => openEventEditor(ev);
-      }
+      p.style.cursor = 'pointer';
+      p.onclick = () => onCalEventClick(ev);
       adPills.appendChild(p);
     });
   } else {
@@ -1840,10 +1870,8 @@ function renderDayGrid() {
       pill.innerHTML = `<span class="evt-title">${esc(ev.summary) + (ev.recurringEventId ? ' ↻' : '')}</span>
                         <span class="evt-time">${startStr}${endStr ? ' – ' + endStr : ''}</span>`;
       appendMemberBadges(pill, ev.members);
-      if (!ev.holiday && ev.eventId) {
-        pill.style.cursor = 'pointer';
-        pill.onclick = () => openEventEditor(ev);
-      }
+      pill.style.cursor = 'pointer';
+      pill.onclick = () => onCalEventClick(ev);
       slot.appendChild(pill);
     });
 
@@ -2034,18 +2062,21 @@ function renderMultidayOverlay() {
       `height:${BAR_H}px;` +
       `background:${ev.color};`;
 
-    bar.addEventListener('click', e => { e.stopPropagation(); openEventEditor(ev); });
-    bar.draggable = true;
-    bar.addEventListener('dragstart', e => {
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', JSON.stringify({
-        eventId: ev.eventId, calId: ev.calId, allDay: ev.allDay,
-        startDT: ev.startDT, endDT: ev.endDT,
-        startDate: ev.startDate, endDate: ev.endDate,
-      }));
-      setTimeout(() => bar.classList.add('cal-dnd-dragging'), 0);
-    });
-    bar.addEventListener('dragend', () => bar.classList.remove('cal-dnd-dragging'));
+    bar.addEventListener('click', e => { e.stopPropagation(); onCalEventClick(ev); });
+    // A read-only event's bar opens details but can never be dragged.
+    if (isEventEditable(ev)) {
+      bar.draggable = true;
+      bar.addEventListener('dragstart', e => {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', JSON.stringify({
+          eventId: ev.eventId, calId: ev.calId, allDay: ev.allDay,
+          startDT: ev.startDT, endDT: ev.endDT,
+          startDate: ev.startDate, endDate: ev.endDate,
+        }));
+        setTimeout(() => bar.classList.add('cal-dnd-dragging'), 0);
+      });
+      bar.addEventListener('dragend', () => bar.classList.remove('cal-dnd-dragging'));
+    }
 
     overlay.appendChild(bar);
   });
@@ -2164,8 +2195,8 @@ function makeDayCell(year, month, day, otherMonth, isToday) {
     pill.appendChild(pillText);
     appendMemberBadges(pill, ev.members);
     pill.title = ev.summary;
-    if (!ev.holiday && ev.eventId) {
-      pill.onclick = e => { e.stopPropagation(); openEventEditor(ev); };
+    pill.onclick = e => { e.stopPropagation(); onCalEventClick(ev); };
+    if (isEventEditable(ev)) {
       pill.draggable = true;
       pill.addEventListener('dragstart', e => {
         e.dataTransfer.effectAllowed = 'move';
@@ -2394,10 +2425,9 @@ function renderAgendaView() {
 
     evts.forEach(ev => {
       const row = document.createElement('div');
-      const clickable = !ev.holiday && ev.eventId;
-      row.className = 'agenda-event' + (clickable ? ' agenda-clickable' : '') + ' ' + agendaPastelClass(ev.summary || '');
+      row.className = 'agenda-event agenda-clickable ' + agendaPastelClass(ev.summary || '');
       row.style.borderLeftColor = ev.color;
-      if (clickable) row.onclick = () => openEventEditor(ev);
+      row.onclick = () => onCalEventClick(ev);
 
       const info = document.createElement('div');
       info.className = 'agenda-info';
@@ -2698,6 +2728,8 @@ function parseIcs(text) {
     if (!cur) continue;
     if (line.startsWith('SUMMARY'))     cur.summary     = val(line);
     if (line.startsWith('DESCRIPTION')) cur.description = val(line).replace(/\\n/g, '\n').replace(/\\,/g, ',');
+    if (line.startsWith('LOCATION'))    cur.location    = val(line).replace(/\\,/g, ',').replace(/\\n/g, ' ');
+    if (line.startsWith('URL'))         cur.url         = val(line);
     if (line.startsWith('DTSTART'))     cur.start       = dtParse(line);
     if (line.startsWith('DTEND'))       cur.end         = dtParse(line);
     if (line.startsWith('UID'))         cur.id          = val(line);
@@ -2858,8 +2890,11 @@ function injectIcsEvent(sub, ev) {
     calId:       sub.id,
     summary:     ev.summary || '(No title)',
     description: ev.description || '',
+    location:    ev.location    || '',
+    url:         ev.url         || '',
     color:       sub.color,
     holiday:     false,
+    readOnly:    true,   // subscription: eventId is the feed's UID, calId a sub
     allDay:      !!ev.start?.date,
     startDT:     ev.start?.dateTime || null,
     endDT:       ev.end?.dateTime   || null,
@@ -3179,14 +3214,7 @@ function populateCountdownEventPicker() {
         const key = dateStr + '|' + (ev.summary || '');
         if (seen.has(key)) return;
         seen.add(key);
-        // Get label from matching cal/ICS
-        const calLabel = (() => {
-          const ics = icsSubs.find(s => s.id === calId);
-          if (ics) return ics.label;
-          const meta = calendarMeta.find(c => c.id === calId);
-          if (meta) return meta.label || calId.split('@')[0];
-          return calId;
-        })();
+        const calLabel = calLabelFor(calId);
         options.push({ dateStr, summary: ev.summary || '(No title)', calLabel, color: ev.color });
       });
     });
@@ -3444,6 +3472,9 @@ function selectEvtScope(btn) {
 function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
   if (!googleToken) return;
   if (tvMode) return;   // TV mode is a passive read-only display — no editing
+  // Read-only sources never open: an eventId-less pseudo event (the event
+  // finder's "Add to Calendar") still must, so test the source, not the id.
+  if (ev && (ev.holiday || ev.readOnly)) return;
   evtEditing = ev || null;
 
   document.getElementById('eventEditorTitle').textContent =
@@ -3460,7 +3491,7 @@ function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
   // Date — an explicit empty dateKey ('') means "no date known, require one"
   const dk = (dateKey !== undefined && dateKey !== null)
     ? dateKey
-    : (ev?.startDate || ev?.startDT?.slice(0,10) || localDateKey(new Date()));
+    : (ev?.startDate || (ev?.startDT ? localDateKey(new Date(ev.startDT)) : localDateKey(new Date())));
   document.getElementById('evtEdDate').value = dk;
 
   // All-day
@@ -3480,8 +3511,8 @@ function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
 
   // Times
   if (ev?.startDT) {
-    document.getElementById('evtEdStart').value = ev.startDT.slice(11,16);
-    document.getElementById('evtEdEnd').value   = ev.endDT?.slice(11,16) || '';
+    document.getElementById('evtEdStart').value = _evtLocalTime(ev.startDT);
+    document.getElementById('evtEdEnd').value   = _evtLocalTime(ev.endDT);
   } else {
     document.getElementById('evtEdStart').value = startTime || '09:00';
     document.getElementById('evtEdEnd').value   = endTime   || '10:00';
@@ -3570,6 +3601,72 @@ function closeEventEditor() {
   document.getElementById('eventEditorModal').style.display = 'none';
   releaseFocusTrap();
   evtEditing = null;
+}
+
+/** "Sunday, September 21 · 8:15 PM – 11:15 PM" for the details view. Timed
+ *  events go through Date so a feed's UTC start reads as local (see
+ *  _evtLocalTime); all-day ones anchor at noon to dodge the DST edges, and
+ *  their endDate is exclusive per the Google Calendar shape. */
+function _evtDetailsWhen(ev) {
+  const dayFmt  = { weekday: 'long', month: 'long', day: 'numeric' };
+  const timeFmt = { hour: 'numeric', minute: '2-digit' };
+
+  if (ev.allDay || !ev.startDT) {
+    const first = new Date((ev.startDate || localDateKey(new Date())) + 'T12:00:00');
+    if (ev.endDate && ev.startDate && ev.endDate > ev.startDate) {
+      const last = new Date(ev.endDate + 'T12:00:00');
+      last.setDate(last.getDate() - 1);
+      return `${first.toLocaleDateString([], dayFmt)} – ${last.toLocaleDateString([], dayFmt)} · all day`;
+    }
+    return `${first.toLocaleDateString([], dayFmt)} · all day`;
+  }
+
+  const start = new Date(ev.startDT);
+  const when  = `${start.toLocaleDateString([], dayFmt)} · ${start.toLocaleTimeString([], timeFmt)}`;
+  if (!ev.endDT) return when;
+  const end = new Date(ev.endDT);
+  return localDateKey(end) === localDateKey(start)
+    ? `${when} – ${end.toLocaleTimeString([], timeFmt)}`
+    : `${when} – ${end.toLocaleDateString([], dayFmt)} ${end.toLocaleTimeString([], timeFmt)}`;
+}
+
+/** Read-only detail view for an event we can't write back to (an ICS feed,
+ *  holidays, a local calendar). Shows what the pill has no room for — the
+ *  broadcast network or streaming service a feed puts in DESCRIPTION, the
+ *  venue, and any link — and says plainly that it can't be edited here.
+ *  Unlike the editor this needs no Google token: ICS subs work without one. */
+function openEventDetails(ev) {
+  if (!ev || tvMode) return;   // TV mode is a passive display — no modals
+
+  document.getElementById('evtDetailsTitle').textContent =
+    (ev.holiday ? '🎉 ' : '') + (ev.summary || '(No title)');
+  document.getElementById('evtDetailsWhen').textContent = _evtDetailsWhen(ev);
+
+  const srcEl = document.getElementById('evtDetailsSource');
+  srcEl.textContent = `🔒 ${calLabelFor(ev.calId)} · read-only, edit it where it's published`;
+  if (ev.color) srcEl.style.borderLeftColor = ev.color;
+
+  const whereEl = document.getElementById('evtDetailsWhere');
+  if (ev.location) { whereEl.textContent = `📍 ${ev.location}`; whereEl.style.display = ''; }
+  else whereEl.style.display = 'none';
+
+  // textContent, not innerHTML: a feed's description is someone else's text.
+  const descEl = document.getElementById('evtDetailsDesc');
+  if (ev.description) { descEl.textContent = ev.description; descEl.style.display = ''; }
+  else descEl.style.display = 'none';
+
+  // Only ever link http(s) — a feed could carry any scheme, javascript: included.
+  const linkEl = document.getElementById('evtDetailsLink');
+  if (/^https?:\/\//i.test(ev.url || '')) { linkEl.href = ev.url; linkEl.style.display = ''; }
+  else { linkEl.removeAttribute('href'); linkEl.style.display = 'none'; }
+
+  document.getElementById('eventDetailsModal').style.display = 'flex';
+  trapFocus(document.querySelector('#eventDetailsModal .modal'), null, closeEventDetails);
+}
+
+function closeEventDetails() {
+  document.getElementById('eventDetailsModal').style.display = 'none';
+  releaseFocusTrap();
 }
 
 function toggleEvtEdAllDay() {
@@ -9036,7 +9133,7 @@ async function assistantAddEvent(dateStr, timeStr, title, member) {
 
 // Find the soonest upcoming (or on `dateStr`) non-holiday event whose title
 // fuzzy-matches `query`. Returns the cached event object or null.
-function findCalEvent(query, dateStr) {
+function findCalEvent(query, dateStr, { readOnly = false } = {}) {
   const todayKey = localDateKey(new Date());
   let best = null, bestKey = null;
   Object.values(calEventCache).forEach(byDate => {
@@ -9044,7 +9141,10 @@ function findCalEvent(query, dateStr) {
       if (date < todayKey) return;
       if (dateStr && date !== dateStr) return;
       evs.forEach(e => {
-        if (e.holiday || !e.eventId || !fuzzyTextMatch(e.summary, query)) return;
+        // Default: only events we can actually write. `readOnly` flips it, so a
+        // caller can tell "no such event" apart from "that one is a feed's".
+        const wanted = readOnly ? (e.holiday || e.readOnly) : isEventEditable(e);
+        if (!wanted || !fuzzyTextMatch(e.summary, query)) return;
         const sortKey = e.startDT || (date + 'T00:00');
         if (!best || sortKey < bestKey) { best = { ...e, date }; bestKey = sortKey; }
       });
@@ -9056,6 +9156,16 @@ function findCalEvent(query, dateStr) {
 function _evtFmtLocal(d) {
   const p = n => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:00`;
+}
+
+/** An event's start/end as a local `HH:MM` for an `<input type="time">`.
+ *  Must round-trip through Date: calEventCache holds three ISO shapes — UTC
+ *  `...Z` (ICS feeds, since parseIcs normalizes TZID via tzWallToUTCISO), an
+ *  offset like `-04:00` (Google Calendar), and floating local (zoneless ICS).
+ *  Slicing `HH:MM` out of the string only reads correctly for the last two, so
+ *  an ICS event rendered its UTC wall clock: an 8:15 PM game showed 12:15 AM. */
+function _evtLocalTime(iso) {
+  return iso ? _evtFmtLocal(new Date(iso)).slice(11, 16) : '';
 }
 
 // Recompute an event's start/end when moving its date and/or time, preserving
@@ -9071,18 +9181,28 @@ function computeEventShift(ev, newDate, newTime) {
   }
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const date = newDate || ev.date;
-  const timePart = newTime || (ev.startDT ? ev.startDT.slice(11, 16) : '09:00');
+  const timePart = newTime || _evtLocalTime(ev.startDT) || '09:00';
   const durMs = (ev.startDT && ev.endDT) ? Math.max(0, new Date(ev.endDT) - new Date(ev.startDT)) : 3600000;
   const startLocal = `${date}T${timePart}:00`;
   const endD = new Date(new Date(startLocal).getTime() + durMs);
   return { start: { dateTime: startLocal, timeZone: tz }, end: { dateTime: _evtFmtLocal(endD), timeZone: tz } };
 }
 
+/** Why no editable event matched. A subscribed feed or the holidays calendar
+ *  is visible on the wall panel but unwritable, so "couldn't find it" would be
+ *  a lie — name the reason instead. */
+function _noEditableEventMsg(query, dateStr) {
+  const ro = findCalEvent(query, dateStr, { readOnly: true });
+  return ro
+    ? `⚠️ "${ro.summary}" comes from a read-only calendar (a subscribed feed or holidays), so I can't change it`
+    : `⚠️ Couldn't find an upcoming event matching "${query}"`;
+}
+
 async function assistantRemoveEvent(query, dateStr) {
   if (!query)       return `⚠️ Which event should I remove?`;
   if (!googleToken) return `⚠️ Sign in with Google to let me change calendar events`;
   const e = findCalEvent(query, dateStr);
-  if (!e) return `⚠️ Couldn't find an upcoming event matching "${query}"`;
+  if (!e) return _noEditableEventMsg(query, dateStr);
   try {
     const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(e.calId)}/events/${encodeURIComponent(e.eventId)}`;
     const r = await calFetch(url, { method: 'DELETE' });
@@ -9096,7 +9216,7 @@ async function assistantEditEvent(query, newDate, newTime, newTitle) {
   if (!query)       return `⚠️ Which event should I change?`;
   if (!googleToken) return `⚠️ Sign in with Google to let me change calendar events`;
   const e = findCalEvent(query);
-  if (!e) return `⚠️ Couldn't find an upcoming event matching "${query}"`;
+  if (!e) return _noEditableEventMsg(query);
   const patch = {};
   if (newTitle && newTitle.trim()) patch.summary = newTitle.trim();
   const shift = computeEventShift(e, newDate, newTime);
