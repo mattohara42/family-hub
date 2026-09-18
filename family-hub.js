@@ -1362,6 +1362,27 @@ function isEventEditable(ev) {
   return !!ev.eventId && !ev.holiday && !ev.readOnly;
 }
 
+/** Display label for any calendar id: a Google calendar, an ICS subscription,
+ *  one of the generated local calendars, or holidays. */
+function calLabelFor(calId) {
+  if (calId === HOLIDAYS_ID) return '🎉 Holidays';
+  const ics = icsSubs.find(s => s.id === calId);
+  if (ics) return ics.label || calId;
+  const meta = calendarMeta.find(c => c.id === calId);
+  if (meta) return meta.label || String(calId).split('@')[0];
+  const lc = LC_DEFS.find(c => c.id === calId);
+  if (lc) return lc.label;
+  return calId;
+}
+
+/** Every calendar event click goes through here: ours opens the editor, anything
+ *  read-only opens the details view. Both are worth tapping — a feed event
+ *  carries the broadcast network, venue and link the pill has no room for. */
+function onCalEventClick(ev) {
+  if (isEventEditable(ev)) openEventEditor(ev);
+  else openEventDetails(ev);
+}
+
 function getWeekStart(date) {
   const d = new Date(date);
   d.setDate(d.getDate() - d.getDay()); // rewind to Sunday
@@ -1585,8 +1606,8 @@ function renderWeekGrid() {
         s.textContent = (ev.holiday ? '🎉 ' : '') + ev.summary + (ev.recurringEventId ? ' ↻' : '');
         pill.appendChild(s);
         appendMemberBadges(pill, ev.members);
+        pill.onclick = e => { e.stopPropagation(); onCalEventClick(ev); };
         if (isEventEditable(ev)) {
-          pill.onclick = e => { e.stopPropagation(); openEventEditor(ev); };
           pill.draggable = true;
           pill.addEventListener('dragstart', e => {
             e.dataTransfer.effectAllowed = 'move';
@@ -1750,10 +1771,8 @@ function renderDayGrid() {
       p.style.background = ev.color;
       p.innerHTML = `<span class="evt-title">${(ev.holiday ? '🎉 ' : '') + esc(ev.summary) + (ev.recurringEventId ? ' ↻' : '')}</span>`;
       appendMemberBadges(p, ev.members);
-      if (isEventEditable(ev)) {
-        p.style.cursor = 'pointer';
-        p.onclick = () => openEventEditor(ev);
-      }
+      p.style.cursor = 'pointer';
+      p.onclick = () => onCalEventClick(ev);
       adPills.appendChild(p);
     });
   } else {
@@ -1851,10 +1870,8 @@ function renderDayGrid() {
       pill.innerHTML = `<span class="evt-title">${esc(ev.summary) + (ev.recurringEventId ? ' ↻' : '')}</span>
                         <span class="evt-time">${startStr}${endStr ? ' – ' + endStr : ''}</span>`;
       appendMemberBadges(pill, ev.members);
-      if (isEventEditable(ev)) {
-        pill.style.cursor = 'pointer';
-        pill.onclick = () => openEventEditor(ev);
-      }
+      pill.style.cursor = 'pointer';
+      pill.onclick = () => onCalEventClick(ev);
       slot.appendChild(pill);
     });
 
@@ -2045,10 +2062,9 @@ function renderMultidayOverlay() {
       `height:${BAR_H}px;` +
       `background:${ev.color};`;
 
-    // A read-only feed's multi-day event still renders as a bar (it is the only
-    // place month view draws it), it just carries no click or drag.
+    bar.addEventListener('click', e => { e.stopPropagation(); onCalEventClick(ev); });
+    // A read-only event's bar opens details but can never be dragged.
     if (isEventEditable(ev)) {
-      bar.addEventListener('click', e => { e.stopPropagation(); openEventEditor(ev); });
       bar.draggable = true;
       bar.addEventListener('dragstart', e => {
         e.dataTransfer.effectAllowed = 'move';
@@ -2060,8 +2076,6 @@ function renderMultidayOverlay() {
         setTimeout(() => bar.classList.add('cal-dnd-dragging'), 0);
       });
       bar.addEventListener('dragend', () => bar.classList.remove('cal-dnd-dragging'));
-    } else {
-      bar.style.cursor = 'default';
     }
 
     overlay.appendChild(bar);
@@ -2181,8 +2195,8 @@ function makeDayCell(year, month, day, otherMonth, isToday) {
     pill.appendChild(pillText);
     appendMemberBadges(pill, ev.members);
     pill.title = ev.summary;
+    pill.onclick = e => { e.stopPropagation(); onCalEventClick(ev); };
     if (isEventEditable(ev)) {
-      pill.onclick = e => { e.stopPropagation(); openEventEditor(ev); };
       pill.draggable = true;
       pill.addEventListener('dragstart', e => {
         e.dataTransfer.effectAllowed = 'move';
@@ -2411,10 +2425,9 @@ function renderAgendaView() {
 
     evts.forEach(ev => {
       const row = document.createElement('div');
-      const clickable = isEventEditable(ev);
-      row.className = 'agenda-event' + (clickable ? ' agenda-clickable' : '') + ' ' + agendaPastelClass(ev.summary || '');
+      row.className = 'agenda-event agenda-clickable ' + agendaPastelClass(ev.summary || '');
       row.style.borderLeftColor = ev.color;
-      if (clickable) row.onclick = () => openEventEditor(ev);
+      row.onclick = () => onCalEventClick(ev);
 
       const info = document.createElement('div');
       info.className = 'agenda-info';
@@ -2715,6 +2728,8 @@ function parseIcs(text) {
     if (!cur) continue;
     if (line.startsWith('SUMMARY'))     cur.summary     = val(line);
     if (line.startsWith('DESCRIPTION')) cur.description = val(line).replace(/\\n/g, '\n').replace(/\\,/g, ',');
+    if (line.startsWith('LOCATION'))    cur.location    = val(line).replace(/\\,/g, ',').replace(/\\n/g, ' ');
+    if (line.startsWith('URL'))         cur.url         = val(line);
     if (line.startsWith('DTSTART'))     cur.start       = dtParse(line);
     if (line.startsWith('DTEND'))       cur.end         = dtParse(line);
     if (line.startsWith('UID'))         cur.id          = val(line);
@@ -2875,6 +2890,8 @@ function injectIcsEvent(sub, ev) {
     calId:       sub.id,
     summary:     ev.summary || '(No title)',
     description: ev.description || '',
+    location:    ev.location    || '',
+    url:         ev.url         || '',
     color:       sub.color,
     holiday:     false,
     readOnly:    true,   // subscription: eventId is the feed's UID, calId a sub
@@ -3197,14 +3214,7 @@ function populateCountdownEventPicker() {
         const key = dateStr + '|' + (ev.summary || '');
         if (seen.has(key)) return;
         seen.add(key);
-        // Get label from matching cal/ICS
-        const calLabel = (() => {
-          const ics = icsSubs.find(s => s.id === calId);
-          if (ics) return ics.label;
-          const meta = calendarMeta.find(c => c.id === calId);
-          if (meta) return meta.label || calId.split('@')[0];
-          return calId;
-        })();
+        const calLabel = calLabelFor(calId);
         options.push({ dateStr, summary: ev.summary || '(No title)', calLabel, color: ev.color });
       });
     });
@@ -3591,6 +3601,72 @@ function closeEventEditor() {
   document.getElementById('eventEditorModal').style.display = 'none';
   releaseFocusTrap();
   evtEditing = null;
+}
+
+/** "Sunday, September 21 · 8:15 PM – 11:15 PM" for the details view. Timed
+ *  events go through Date so a feed's UTC start reads as local (see
+ *  _evtLocalTime); all-day ones anchor at noon to dodge the DST edges, and
+ *  their endDate is exclusive per the Google Calendar shape. */
+function _evtDetailsWhen(ev) {
+  const dayFmt  = { weekday: 'long', month: 'long', day: 'numeric' };
+  const timeFmt = { hour: 'numeric', minute: '2-digit' };
+
+  if (ev.allDay || !ev.startDT) {
+    const first = new Date((ev.startDate || localDateKey(new Date())) + 'T12:00:00');
+    if (ev.endDate && ev.startDate && ev.endDate > ev.startDate) {
+      const last = new Date(ev.endDate + 'T12:00:00');
+      last.setDate(last.getDate() - 1);
+      return `${first.toLocaleDateString([], dayFmt)} – ${last.toLocaleDateString([], dayFmt)} · all day`;
+    }
+    return `${first.toLocaleDateString([], dayFmt)} · all day`;
+  }
+
+  const start = new Date(ev.startDT);
+  const when  = `${start.toLocaleDateString([], dayFmt)} · ${start.toLocaleTimeString([], timeFmt)}`;
+  if (!ev.endDT) return when;
+  const end = new Date(ev.endDT);
+  return localDateKey(end) === localDateKey(start)
+    ? `${when} – ${end.toLocaleTimeString([], timeFmt)}`
+    : `${when} – ${end.toLocaleDateString([], dayFmt)} ${end.toLocaleTimeString([], timeFmt)}`;
+}
+
+/** Read-only detail view for an event we can't write back to (an ICS feed,
+ *  holidays, a local calendar). Shows what the pill has no room for — the
+ *  broadcast network or streaming service a feed puts in DESCRIPTION, the
+ *  venue, and any link — and says plainly that it can't be edited here.
+ *  Unlike the editor this needs no Google token: ICS subs work without one. */
+function openEventDetails(ev) {
+  if (!ev || tvMode) return;   // TV mode is a passive display — no modals
+
+  document.getElementById('evtDetailsTitle').textContent =
+    (ev.holiday ? '🎉 ' : '') + (ev.summary || '(No title)');
+  document.getElementById('evtDetailsWhen').textContent = _evtDetailsWhen(ev);
+
+  const srcEl = document.getElementById('evtDetailsSource');
+  srcEl.textContent = `🔒 ${calLabelFor(ev.calId)} · read-only, edit it where it's published`;
+  if (ev.color) srcEl.style.borderLeftColor = ev.color;
+
+  const whereEl = document.getElementById('evtDetailsWhere');
+  if (ev.location) { whereEl.textContent = `📍 ${ev.location}`; whereEl.style.display = ''; }
+  else whereEl.style.display = 'none';
+
+  // textContent, not innerHTML: a feed's description is someone else's text.
+  const descEl = document.getElementById('evtDetailsDesc');
+  if (ev.description) { descEl.textContent = ev.description; descEl.style.display = ''; }
+  else descEl.style.display = 'none';
+
+  // Only ever link http(s) — a feed could carry any scheme, javascript: included.
+  const linkEl = document.getElementById('evtDetailsLink');
+  if (/^https?:\/\//i.test(ev.url || '')) { linkEl.href = ev.url; linkEl.style.display = ''; }
+  else { linkEl.removeAttribute('href'); linkEl.style.display = 'none'; }
+
+  document.getElementById('eventDetailsModal').style.display = 'flex';
+  trapFocus(document.querySelector('#eventDetailsModal .modal'), null, closeEventDetails);
+}
+
+function closeEventDetails() {
+  document.getElementById('eventDetailsModal').style.display = 'none';
+  releaseFocusTrap();
 }
 
 function toggleEvtEdAllDay() {

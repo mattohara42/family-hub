@@ -1657,6 +1657,29 @@
   </div>
 </div>
 
+<!-- Event Details — read-only view for events we can't write back to:
+     ICS subscriptions, holidays, and the generated local calendars -->
+<div class="modal-overlay" id="eventDetailsModal" onclick="if(event.target===this)closeEventDetails()" style="display:none">
+  <div class="modal evt-details-modal" role="dialog" aria-modal="true" aria-labelledby="evtDetailsTitle">
+    <div class="evt-details-head">
+      <h2 id="evtDetailsTitle">Event</h2>
+      <button class="evt-editor-close-btn" onclick="closeEventDetails()" title="Close (Esc)" aria-label="Close event details">✕</button>
+    </div>
+
+    <p class="evt-details-when" id="evtDetailsWhen"></p>
+    <div class="evt-details-source" id="evtDetailsSource"></div>
+
+    <p class="evt-details-where" id="evtDetailsWhere" style="display:none"></p>
+    <div class="evt-details-desc" id="evtDetailsDesc" style="display:none"></div>
+    <a class="btn btn-sm btn-secondary evt-details-link" id="evtDetailsLink"
+       href="#" target="_blank" rel="noopener" style="display:none">↗ More info</a>
+
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeEventDetails()">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- Optional: Sentry error monitoring. To enable:
      1. Create a free project at sentry.io
      2. Replace YOUR_SENTRY_DSN below with your project DSN

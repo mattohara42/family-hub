@@ -161,6 +161,25 @@ let disabledCals = new Set(); // calendar IDs toggled off by user
 
 **localStorage:** `fh_calView`, `fh_calIds` (array of calendar IDs), `fh_calMeta` (labels/colors)
 
+#### Event Details (read-only events)
+
+Clicking any calendar event runs through **`onCalEventClick(ev)`**: ours opens the
+event editor, anything read-only opens `#eventDetailsModal`. Feed events are worth
+opening — the pill has no room for the broadcast network or streaming service a feed
+puts in `DESCRIPTION`, the venue, or its link.
+
+**Key functions:**
+- `onCalEventClick(ev)` — the one dispatcher behind every event click in all four views and the multi-day overlay bar. Drag-to-reschedule stays gated on `isEventEditable(ev)`, so a read-only event is clickable but never draggable.
+- `openEventDetails(ev)` / `closeEventDetails()` — read-only card: title, when, a `🔒 <calendar> · read-only` badge tinted with the calendar's colour, location, description, and an optional link. Needs **no** Google token (ICS subs work without one) and no-ops in `tvMode`. Description goes in via `textContent` (someone else's text) and the link renders only for `http(s)` URLs, so a feed can't smuggle a `javascript:` URI.
+- `_evtDetailsWhen(ev)` — the when-line. Timed events format through `Date` (a feed's UTC start reads as local); all-day events anchor at noon and un-exclusive their `endDate`.
+- `calLabelFor(calId)` — label for any calendar id: Google, ICS sub, local calendar (`LC_DEFS`), or holidays. Also used by the countdown event picker, which had its own copy of this lookup.
+
+**HTML anchors:** `#eventDetailsModal`, `#evtDetailsTitle`, `#evtDetailsWhen`, `#evtDetailsSource`, `#evtDetailsWhere`, `#evtDetailsDesc`, `#evtDetailsLink`
+
+**CSS:** `.evt-details-modal` / `.evt-details-head` / `.evt-details-when` / `.evt-details-source` / `.evt-details-where` / `.evt-details-desc` / `.evt-details-link`
+
+**Gotcha:** this is why the unconditional `cursor: pointer` on `.cal-event`/`.week-event`/`.day-event-pill` (family-hub.css) is honest — every event pill really is clickable. Editable ones show `grab` instead, via `.cal-event[draggable="true"]`.
+
 #### ICS Subscriptions (no-OAuth read-only calendars)
 
 Subscribe to any public/secret `.ics` URL (Google, Outlook, school/sports feeds)
@@ -170,7 +189,7 @@ render in every calendar view, the countdown picker, and conflict detection.
 **State:** `icsSubs` — Firestore collection `icsSubs` (`{id,url,label,color,weekdaysOnly}`, real-time sync across devices via `onSnapshot` in `attachFirestoreListeners()`; falls back to `lsGet('fh_icsSubs', [])` when `db` is unconfigured). `icsCache` = `lsGet('fh_icsCache', {})` (`{id:{fetchedAt,events}}`, 4 h TTL) — always local, it's just a fetch cache, not shared state.
 
 **Key functions:**
-- `parseIcs(text)` — VEVENT parser: summary/description, all-day vs timed, **TZID** (→ UTC via `tzWallToUTCISO`), **RRULE** + **EXDATE**, RFC line unfolding.
+- `parseIcs(text)` — VEVENT parser: summary/description/**location**/**url** (the last two feed the read-only details view), all-day vs timed, **TZID** (→ UTC via `tzWallToUTCISO`), **RRULE** + **EXDATE**, RFC line unfolding.
 - `expandRecurrence(ev, winStart, winEnd)` — expands `FREQ=DAILY/WEEKLY/MONTHLY/YEARLY` with `INTERVAL`/`COUNT`/`UNTIL`/`BYDAY`(weekly)/`EXDATE` across the load window (~2 mo back → ~14 mo forward). Non-recurring events pass through unchanged.
 - `normalizeIcsUrl(url)` — trims and rewrites a leading `webcal://`/`webcals://` to `https://`. Sports, TV and school feeds are published with that scheme, `fetch()` can't speak it, and `ics.js` rejects any non-http(s) scheme, so without this a pasted webcal link died with the generic "could not fetch" status. Applied in `addIcsSub()` (so the stored record and the dedupe-by-URL check both use the normalized form) and again in `fetchIcsSub()` (for subs stored before it existed, or synced in from another device).
 - `fetchIcsSub(sub)` — direct fetch of the normalized URL, falling back to the same-origin `/.netlify/functions/ics` proxy (keeps private feed URLs in your own infra; only on a Netlify deploy).

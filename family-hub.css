@@ -2793,6 +2793,40 @@ body.nautical-mode #eventEditorModal .modal {
 .list-item:hover .list-delete { opacity: 1; }
 .list-empty { color: var(--muted); font-size: var(--text-xs); text-align: center; padding: 6px 0; }
 
+/* ── Event Details (read-only events: ICS feeds, holidays, local calendars) ── */
+.evt-details-modal { max-width: 460px; }
+.evt-details-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 10px; margin-bottom: 4px;
+}
+.evt-details-head h2 { margin-bottom: 0; line-height: 1.2; }
+.evt-details-when {
+  font-size: var(--fs-item); color: var(--text);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 10px;
+}
+/* The read-only badge is the whole point of this view — say it in words, and
+   carry the calendar's own colour so it still reads as that calendar. */
+.evt-details-source {
+  display: inline-block;
+  font-size: var(--text-xs); color: var(--muted);
+  border-left: 3px solid var(--accent);
+  padding: 2px 0 2px 8px;
+  margin-bottom: 14px;
+}
+.evt-details-where {
+  font-size: var(--fs-meta); color: var(--text);
+  margin-bottom: 10px;
+}
+.evt-details-desc {
+  font-size: var(--fs-meta); color: var(--text);
+  line-height: var(--leading-loose);
+  white-space: pre-wrap;      /* feed descriptions carry real newlines */
+  overflow-wrap: anywhere;    /* and sometimes long unbroken URLs */
+  max-height: 40vh; overflow-y: auto;
+}
+.evt-details-link { text-decoration: none; margin-top: 12px; display: inline-block; }
+
 /* ── Shopping List Category Grouping ── */
 .shop-cat-select {
   background: var(--surface2);
