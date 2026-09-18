@@ -3460,7 +3460,7 @@ function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
   // Date — an explicit empty dateKey ('') means "no date known, require one"
   const dk = (dateKey !== undefined && dateKey !== null)
     ? dateKey
-    : (ev?.startDate || ev?.startDT?.slice(0,10) || localDateKey(new Date()));
+    : (ev?.startDate || (ev?.startDT ? localDateKey(new Date(ev.startDT)) : localDateKey(new Date())));
   document.getElementById('evtEdDate').value = dk;
 
   // All-day
@@ -3480,8 +3480,8 @@ function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
 
   // Times
   if (ev?.startDT) {
-    document.getElementById('evtEdStart').value = ev.startDT.slice(11,16);
-    document.getElementById('evtEdEnd').value   = ev.endDT?.slice(11,16) || '';
+    document.getElementById('evtEdStart').value = _evtLocalTime(ev.startDT);
+    document.getElementById('evtEdEnd').value   = _evtLocalTime(ev.endDT);
   } else {
     document.getElementById('evtEdStart').value = startTime || '09:00';
     document.getElementById('evtEdEnd').value   = endTime   || '10:00';
@@ -9058,6 +9058,16 @@ function _evtFmtLocal(d) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:00`;
 }
 
+/** An event's start/end as a local `HH:MM` for an `<input type="time">`.
+ *  Must round-trip through Date: calEventCache holds three ISO shapes — UTC
+ *  `...Z` (ICS feeds, since parseIcs normalizes TZID via tzWallToUTCISO), an
+ *  offset like `-04:00` (Google Calendar), and floating local (zoneless ICS).
+ *  Slicing `HH:MM` out of the string only reads correctly for the last two, so
+ *  an ICS event rendered its UTC wall clock: an 8:15 PM game showed 12:15 AM. */
+function _evtLocalTime(iso) {
+  return iso ? _evtFmtLocal(new Date(iso)).slice(11, 16) : '';
+}
+
 // Recompute an event's start/end when moving its date and/or time, preserving
 // duration. Returns { start, end } in Google Calendar shape, or null if no change.
 function computeEventShift(ev, newDate, newTime) {
@@ -9071,7 +9081,7 @@ function computeEventShift(ev, newDate, newTime) {
   }
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const date = newDate || ev.date;
-  const timePart = newTime || (ev.startDT ? ev.startDT.slice(11, 16) : '09:00');
+  const timePart = newTime || _evtLocalTime(ev.startDT) || '09:00';
   const durMs = (ev.startDT && ev.endDT) ? Math.max(0, new Date(ev.endDT) - new Date(ev.startDT)) : 3600000;
   const startLocal = `${date}T${timePart}:00`;
   const endD = new Date(new Date(startLocal).getTime() + durMs);
