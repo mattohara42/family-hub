@@ -5286,19 +5286,156 @@ Reply with only the 2 sentences. No intro, no labels.`;
 }
 
 // ── Calendar Swipe ──
+// The finger drags #calViews directly, then the period change lands as a
+// push: the outgoing view is cloned into a ghost that slides off while the
+// freshly rendered view slides in from the other side. Rendering the
+// neighbouring period live (a real three-pane carousel) would cost a full
+// month/agenda build on every touchstart, so the drag is damped instead of
+// 1:1 — it reads as resistance rather than a half-revealed empty page.
+const CAL_SWIPE_THRESHOLD = 50;   // px of travel that commits the change
+const CAL_SWIPE_VELOCITY  = 0.5;  // px/ms flick that commits below the threshold
+const CAL_SWIPE_DAMPING   = 0.45; // finger-follow ratio (no neighbour behind it)
+const CAL_SWIPE_AXIS_LOCK = 8;    // px before the gesture is called horizontal
+const CAL_SLIDE_MS        = 260;  // must match --cal-slide in family-hub.css
+const CAL_SLIDE_GUTTER    = 20;   // px past the edge, clearing the card-body padding
+
+let calSliding = false;           // a period slide is mid-flight
+
+function prefersReducedMotion() {
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
+}
+
+// The element the current view renders into — what gets cloned and pushed.
+function activeCalViewEl() {
+  return document.getElementById(
+    calView === 'month' ? 'calGrid' : calView === 'week' ? 'weekView'
+    : calView === 'day' ? 'dayView' : 'agendaView');
+}
+
+// Anything between the touch and the wrapper that scrolls sideways (the week
+// grid on a narrow screen) owns the horizontal gesture itself — stand down.
+function calSwipeBlocked(target, wrap) {
+  for (let el = target; el && el !== wrap; el = el.parentElement) {
+    // Overflowing alone isn't enough — an ellipsised event title overflows its
+    // day cell without being scrollable. Only a real scroller takes the gesture.
+    if (el.scrollWidth <= el.clientWidth + 1) continue;
+    const ox = getComputedStyle(el).overflowX;
+    if (ox === 'auto' || ox === 'scroll') return true;
+  }
+  return false;
+}
+
+function calSetDrag(wrap, px) {
+  const fade = Math.min(Math.abs(px) / (wrap.clientWidth || 1), 1);
+  wrap.style.transform = `translate3d(${px}px,0,0)`;
+  wrap.style.opacity   = String(1 - fade * 0.4);
+}
+
+// Release below the threshold: let the wrapper's own transition carry it home.
+function calSettleDrag(wrap) {
+  wrap.classList.remove('cal-dragging');
+  wrap.style.transform = '';
+  wrap.style.opacity   = '';
+}
+
+// Commit the swipe. `fromPx` is where the finger left the wrapper, so the
+// ghost picks up exactly where the drag stopped instead of jumping to 0.
+function slideCalPeriod(delta, fromPx = 0) {
+  const wrap   = document.getElementById('calViews');
+  const active = wrap && activeCalViewEl();
+  if (!wrap || !active || calSliding || prefersReducedMotion()) {
+    if (wrap) calSettleDrag(wrap);
+    changeCalPeriod(delta);
+    return;
+  }
+  calSliding = true;
+
+  // Next period => content travels left; previous => right. The two panes
+  // stay exactly `span` apart the whole way, so they read as one filmstrip
+  // rather than two things that happen to be moving.
+  const dir   = delta > 0 ? -1 : 1;
+  const span  = (wrap.clientWidth || 1) + CAL_SLIDE_GUTTER;
+  const ghost = active.cloneNode(true);
+  ghost.removeAttribute('id');
+  ghost.querySelectorAll('[id]').forEach(n => n.removeAttribute('id'));
+  ghost.classList.add('cal-view-ghost');
+  ghost.style.transform = `translate3d(${fromPx}px,0,0)`;
+  ghost.style.opacity   = wrap.style.opacity || '1';
+  wrap.appendChild(ghost);
+
+  // Hand the drag offset over to the ghost, then re-render underneath it.
+  calSettleDrag(wrap);
+  wrap.style.transition = 'none';
+  changeCalPeriod(delta);
+
+  // Park the incoming view just off the edge, alongside the ghost. This must
+  // land before .cal-sliding turns transitions on, or the jump animates too.
+  active.style.transform = `translate3d(${fromPx - dir * span}px,0,0)`;
+  active.style.opacity   = '0.4';
+  void wrap.offsetWidth;                 // flush both start states before easing
+
+  wrap.style.transition  = '';
+  wrap.classList.add('cal-sliding');
+  ghost.style.transform  = `translate3d(${dir * span}px,0,0)`;
+  ghost.style.opacity    = '0';
+  active.style.transform = 'translate3d(0,0,0)';
+  active.style.opacity   = '1';
+
+  setTimeout(() => {
+    ghost.remove();
+    wrap.classList.remove('cal-sliding');
+    active.style.transform = '';
+    active.style.opacity   = '';
+    calSliding = false;
+  }, CAL_SLIDE_MS + 20);
+}
+
 function setupCalSwipe() {
-  let startX = 0, startY = 0;
-  const body = document.querySelector('.cal-card .card-body');
-  if (!body) return;
-  body.addEventListener('touchstart', e => {
-    startX = e.touches[0].clientX;
-    startY = e.touches[0].clientY;
+  const wrap = document.getElementById('calViews');
+  if (!wrap) return;
+  let startX = 0, startY = 0, startT = 0, axis = null, tracking = false;
+
+  wrap.addEventListener('touchstart', e => {
+    tracking = false;
+    axis     = null;
+    if (e.touches.length !== 1 || calSliding) return;
+    if (calSwipeBlocked(e.target, wrap)) return;
+    startX   = e.touches[0].clientX;
+    startY   = e.touches[0].clientY;
+    startT   = e.timeStamp;
+    tracking = true;
   }, { passive: true });
-  body.addEventListener('touchend', e => {
-    const dx = e.changedTouches[0].clientX - startX;
-    const dy = e.changedTouches[0].clientY - startY;
-    if (Math.abs(dx) < 50 || Math.abs(dy) > Math.abs(dx)) return;
-    changeCalPeriod(dx < 0 ? 1 : -1);
+
+  wrap.addEventListener('touchmove', e => {
+    if (!tracking) return;
+    const dx = e.touches[0].clientX - startX;
+    const dy = e.touches[0].clientY - startY;
+    if (!axis) {
+      if (Math.abs(dx) < CAL_SWIPE_AXIS_LOCK && Math.abs(dy) < CAL_SWIPE_AXIS_LOCK) return;
+      // Vertical wins: leave the gesture to the scroller and stay out of it.
+      if (Math.abs(dy) >= Math.abs(dx)) { tracking = false; return; }
+      axis = 'x';
+      wrap.classList.add('cal-dragging');
+    }
+    calSetDrag(wrap, dx * CAL_SWIPE_DAMPING);
+  }, { passive: true });
+
+  wrap.addEventListener('touchend', e => {
+    if (!tracking) return;
+    tracking = false;
+    if (axis !== 'x') return;
+    const dx    = e.changedTouches[0].clientX - startX;
+    const speed = Math.abs(dx) / Math.max(e.timeStamp - startT, 1);
+    if (Math.abs(dx) >= CAL_SWIPE_THRESHOLD || speed >= CAL_SWIPE_VELOCITY) {
+      slideCalPeriod(dx < 0 ? 1 : -1, dx * CAL_SWIPE_DAMPING);
+    } else {
+      calSettleDrag(wrap);
+    }
+  }, { passive: true });
+
+  wrap.addEventListener('touchcancel', () => {
+    tracking = false;
+    calSettleDrag(wrap);
   }, { passive: true });
 }
 

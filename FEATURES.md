@@ -33,7 +33,7 @@ family-hub.html   (HTML only — no inline CSS or JS)
 │   ├── #bgPhoto, #configBanner
 │   ├── .layout
 │   │   ├── .cal-column
-│   │   │   ├── .cal-card  (#calGrid / #weekView / #dayView)
+│   │   │   ├── .cal-card  (#calViews → #calGrid / #weekView / #dayView / #agendaView)
 │   │   │   ├── #yearStrip  (bottom-mode year widget — stays here always)
 │   │   │   └── #bottomStrip  (widgets placed at "bottom")
 │   │   └── .sidebar
@@ -145,7 +145,7 @@ let disabledCals = new Set(); // calendar IDs toggled off by user
 - `renderWeekGrid()` — builds the 7-column week grid in `#weekView`
 - `renderDayGrid()` — builds the day timeline in `#dayView`
 - `makeDayCell(year, month, day, otherMonth, isToday)` — creates one month grid cell
-- `changeCalPeriod(delta)` — navigates forward/back by period
+- `changeCalPeriod(delta)` — navigates forward/back by period (the instant change; `slideCalPeriod()` wraps it with the swipe transition)
 - `getWeekStart(date)` — returns the Sunday of a given week
 - `loadAllCalendars()` — fetches Google Calendar events for all enabled cals
 - `renderCalendarTabs()` — draws toggle rows in `#calendarCard` sidebar card
@@ -157,7 +157,9 @@ let disabledCals = new Set(); // calendar IDs toggled off by user
 
 **Sidebar calendar card:** `#calendarCard` shows per-calendar checkbox toggles (swatch + name + checkbox). Hidden when no calendars loaded; shows "Sign in to see your calendars" placeholder when signed out.
 
-**HTML anchors:** `#calGrid`, `#weekView`, `#dayView`, `#calMonthLabel`, `#calendarTabs` (inside `#calendarCard`), `#calendarStatus`
+**HTML anchors:** `#calViews` (wraps the four view containers), `#calGrid`, `#weekView`, `#dayView`, `#agendaView`, `#calMonthLabel`, `#calendarTabs` (inside `#calendarCard`), `#calendarStatus`
+
+**Swipe / period slide:** `setupCalSwipe()` binds touch handlers to `#calViews`, the wrapper that holds all four view containers. A gesture locks to an axis after `CAL_SWIPE_AXIS_LOCK` px — vertical is handed straight back to the scroller, horizontal drags the wrapper at `CAL_SWIPE_DAMPING` (0.45) with a slight fade. Release past `CAL_SWIPE_THRESHOLD` (50px) or faster than `CAL_SWIPE_VELOCITY` (0.5 px/ms) calls `slideCalPeriod(delta, fromPx)`: it clones the active view into a `.cal-view-ghost` pinned over the wrapper, hands the drag offset to the ghost, re-renders the new period underneath via `changeCalPeriod()`, then runs both past each other in one transition. The two panes stay exactly `clientWidth + CAL_SLIDE_GUTTER` apart so they read as one filmstrip. `CAL_SLIDE_MS` (260) times the ghost teardown and must match `--cal-slide` in the CSS. Under `prefers-reduced-motion: reduce` (or while `calSliding` is already true) it falls through to a plain `changeCalPeriod()`. `calSwipeBlocked()` stands the gesture down inside a genuinely horizontally-scrollable ancestor — the week grid on a narrow screen owns that drag itself — which is why `#weekView` keeps `touch-action: pan-x`. `activeCalViewEl()` maps `calView` to the element that gets cloned and pushed.
 
 **localStorage:** `fh_calView`, `fh_calIds` (array of calendar IDs), `fh_calMeta` (labels/colors)
 
@@ -857,7 +859,7 @@ Secondary widgets (Budget, Chores, Word, Joke, Quotes, Countdown, News, Stock, Y
 - `setMobileListsSection(section)` — switches which of Shopping/To-Do/Home/Assistant is showing inside the sheet
 - `updateIsMobile()` + resize handler — `isMobile` (<640px); breakpoint crossings re-run `applyWidgetPlacement()` (moves cards between sidebar/bottomStrip/sheet) and `resetSaverIdleTimer()`
 
-**View toggle:** Week is hidden under 640px (`#viewTab_week`) — Month/Day/Agenda stay. The prev/next period arrows (`.cal-month-nav button`) are also hidden — both redundant with `setupCalSwipe()`, which already pages the period on a swipe regardless of which view is active. First-ever load (`fh_calView` unset) defaults to `'agenda'` on mobile, `'week'` on desktop; a saved value always wins either way. Day/Agenda rows are also tightened for mobile (`.day-hour-row` min-height, `.agenda-event`/`.agenda-day-header` padding) — the desktop values were sized for a wall panel, not a phone. `.cal-view-tab` pills carry their own `var(--surface)` background + `1px solid var(--line)` border + `var(--text)` label color when unselected — chosen over a shared dark track so an unselected segment doesn't blend into the (now edge-to-edge) page background in either theme; the `@media (hover:none)` touch-hover-reset rule was updated to match (resets `border-color`, not the no-longer-used muted text color).
+**View toggle:** Week is hidden under 640px (`#viewTab_week`) — Month/Day/Agenda stay. The prev/next period arrows (`.cal-month-nav button`) are also hidden — both redundant with `setupCalSwipe()`, which already pages the period on a swipe regardless of which view is active (the swipe follows the finger and lands with a slide — see §Swipe / period slide). One exception: in Week view on a narrow screen the week grid scrolls sideways and keeps the gesture, so swiping there scrolls rather than pages — Week is desktop-only on mobile anyway. First-ever load (`fh_calView` unset) defaults to `'agenda'` on mobile, `'week'` on desktop; a saved value always wins either way. Day/Agenda rows are also tightened for mobile (`.day-hour-row` min-height, `.agenda-event`/`.agenda-day-header` padding) — the desktop values were sized for a wall panel, not a phone. `.cal-view-tab` pills carry their own `var(--surface)` background + `1px solid var(--line)` border + `var(--text)` label color when unselected — chosen over a shared dark track so an unselected segment doesn't blend into the (now edge-to-edge) page background in either theme; the `@media (hover:none)` touch-hover-reset rule was updated to match (resets `border-color`, not the no-longer-used muted text color).
 
 **Compact date headers:** Day shows `"Wed 9/16"` (`shortWeekdayNumericDate()`), Agenda shows `"9/16 – 10/15"` (`_numericMDFmt`, en dash) — both via small `Intl.DateTimeFormat` instances near the top of the Day View section in family-hub.js, replacing verbose `{weekday:'long', month:'long', ...}` labels that used to truncate under the view toggle. Month keeps its own `"September 2026"` format, unrelated to this pair.
 

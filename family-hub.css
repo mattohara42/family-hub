@@ -83,6 +83,10 @@
   --fs-item:  var(--text-base); /* regular row content: bill/task line, event time */
   --fs-meta:  var(--text-sm);   /* secondary annotation: assignee badge, placeholder text */
 
+  /* Calendar period slide (swipe left/right). Keep CAL_SLIDE_MS in
+     family-hub.js in sync — it times the ghost teardown. */
+  --cal-slide: 260ms;
+
   /* Weights */
   --weight-normal:  400;
   --weight-medium:  500;
@@ -1196,6 +1200,46 @@ body.nautical-mode .card {
   flex-wrap: wrap;
 }
 .card-body { padding: 12px 14px; }
+
+/* ── Calendar Swipe / Period Slide ──
+   #calViews holds the four period views and is what the finger drags. The
+   outgoing period is cloned into a .cal-view-ghost pinned over the wrapper,
+   so the ghost and the freshly rendered view can travel past each other in
+   one transition. Overflow clipping comes from .cal-card .card-body. */
+.cal-views {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  /* We own horizontal panning; vertical scrolling stays with the browser. */
+  touch-action: pan-y pinch-zoom;
+  transition: transform var(--cal-slide) cubic-bezier(.22,.61,.36,1),
+              opacity   var(--cal-slide) ease;
+}
+/* Finger down: the wrapper tracks the touch, so no easing in the way. */
+.cal-views.cal-dragging { transition: none; }
+/* Child combinator, not a bare .cal-view-ghost: .cal-grid also sets
+   position (relative, for its multi-day overlay) and would otherwise win on
+   source order at equal specificity, dropping the ghost back into flow. */
+.cal-views > .cal-view-ghost {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+.cal-view-ghost,
+.cal-views.cal-sliding > * {
+  transition: transform var(--cal-slide) cubic-bezier(.22,.61,.36,1),
+              opacity   var(--cal-slide) ease;
+}
+/* The week grid scrolls horizontally on narrow screens — that gesture is its
+   own, and setupCalSwipe() stands down inside it (see calSwipeBlocked). */
+#weekView { touch-action: pan-x pan-y pinch-zoom; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cal-views, .cal-view-ghost, .cal-views.cal-sliding > * { transition: none; }
+}
 
 /* ── Month Calendar ── */
 .cal-month-nav {
