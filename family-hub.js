@@ -557,7 +557,7 @@ function applyWidgetVisibility() {
 
 // ── Budget ───────────────────────────────────────────────────────────────────
 let budgetItems = []; // populated by Firestore onSnapshot (or localStorage fallback)
-const BUDGET_COLOR = '#e57373'; // all budget items are red
+const BUDGET_COLOR = '#e57373'; // persisted on the Firestore record; render paths use var(--red) via CSS
 
 // ── Chore Chart state ───────────────────────────────────────────
 let choreItems = []; // { id, text, points, assignedTo (member id), doneDate }
@@ -1561,7 +1561,7 @@ function renderWeekGrid() {
     const weekTodos = todosDueOnDate(dateKey);
     if (weekTodos.length) {
       const todoStrip = document.createElement('div');
-      todoStrip.style.cssText = 'border-bottom:1px solid rgba(108,142,245,.2);padding:4px 5px 5px;background:rgba(108,142,245,.06);flex-shrink:0';
+      todoStrip.style.cssText = 'border-bottom:1px solid color-mix(in srgb, var(--accent) 20%, transparent);padding:4px 5px 5px;background:color-mix(in srgb, var(--accent) 6%, transparent);flex-shrink:0';
       weekTodos.forEach(todo => {
         const el = document.createElement('div');
         el.style.cssText = 'font-size:.62rem;color:var(--accent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:1px 3px';
@@ -1645,7 +1645,6 @@ function renderWeekGrid() {
       budgetDayItems.forEach(item => {
         const el = document.createElement('div');
         el.className = 'week-budget-item';
-        el.style.color = '#e57373';
         el.textContent = `💰 ${item.name} ${fmt$(item.amount)}`;
         el.title = `${item.name} — ${fmt$(item.amount)}`;
         budgetStrip.appendChild(el);
@@ -1721,18 +1720,6 @@ function shortWeekdayNumericDate(d) {
   return `${_weekdayShortFmt.format(d)} ${_numericMDFmt.format(d)}`;
 }
 
-// ── Agenda pastel fills ──
-// Stable hash of the event title → one of 6 fixed pastel swatches
-// (--agenda-pastel-1..6 in family-hub.css). Same title always gets the same
-// swatch, so e.g. every "ER SCHOOLS: Early Release" event matches across
-// reloads, while different titles within one calendar stay visually
-// distinguishable from each other.
-function agendaPastelClass(title) {
-  let hash = 0;
-  for (let i = 0; i < title.length; i++) hash = (hash * 31 + title.charCodeAt(i)) | 0;
-  return 'agenda-pastel-' + (Math.abs(hash) % 6 + 1);
-}
-
 // ── Day View ──────────────────────────────────────────────────
 function renderDayGrid() {
   const container = document.getElementById('dayView');
@@ -1793,13 +1780,13 @@ function renderDayGrid() {
     budgetSection.onclick = scrollToBudgetCard;
     const budgetHdr = document.createElement('div');
     budgetHdr.className = 'day-section-header';
-    budgetHdr.style.color = '#e57373';
+    budgetHdr.style.color = 'var(--red)';
     budgetHdr.textContent = '💰 Bills Due Today';
     budgetSection.appendChild(budgetHdr);
     budgetDayItems.forEach(item => {
       const r = document.createElement('div');
       r.className = 'budget-day-item';
-      r.innerHTML = `<span class="budget-day-name"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#e57373;margin-right:6px"></span>${esc(item.name)}</span>
+      r.innerHTML = `<span class="budget-day-name"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--red);margin-right:6px"></span>${esc(item.name)}</span>
                      <span class="budget-day-amt">${fmt$(item.amount)}</span>`;
       budgetSection.appendChild(r);
     });
@@ -2237,8 +2224,6 @@ function makeDayCell(year, month, day, otherMonth, isToday) {
   budgetDay.forEach(item => {
     const pill = document.createElement('div');
     pill.className = 'cal-event-budget';
-    pill.style.background = 'rgba(229,115,115,.18)';
-    pill.style.color = '#e57373';
     pill.textContent = `💰 ${item.name} ${fmt$(item.amount)}`;
     pill.title = `${item.name} — ${fmt$(item.amount)} (${freqLabel(item)})`;
     pill.onclick = e => e.stopPropagation();
@@ -2425,8 +2410,8 @@ function renderAgendaView() {
 
     evts.forEach(ev => {
       const row = document.createElement('div');
-      row.className = 'agenda-event agenda-clickable ' + agendaPastelClass(ev.summary || '');
-      row.style.borderLeftColor = ev.color;
+      row.className = 'agenda-event agenda-clickable';
+      if (ev.color) row.style.setProperty('--event-color', ev.color);
       row.onclick = () => onCalEventClick(ev);
 
       const info = document.createElement('div');
@@ -3752,7 +3737,7 @@ function autoAdvanceEvtEnd() {
 function evtEdStatus(msg, isError) {
   const el = document.getElementById('evtEdStatus');
   el.textContent = msg;
-  el.style.color = isError ? '#e57373' : 'var(--muted)';
+  el.style.color = isError ? 'var(--red)' : 'var(--muted)';
   el.style.display = 'block';
 }
 
