@@ -31,17 +31,6 @@
   --red: #e06c75;
   --text: #e8eaf6;
   --muted: #7b7f96;
-  /* ── Agenda event pastel fills — fixed 6-swatch palette, keyed by a
-     stable hash of the event title (see agendaPastelClass() in
-     family-hub.js). Dusty/deep tones here since dark theme's light --text
-     needs a dark-enough fill to stay AA; body.light-mode below swaps in
-     true pale pastels for its dark --text. Both checked at ≥8:1. ── */
-  --agenda-pastel-1: #4a2c30; /* dusty maroon */
-  --agenda-pastel-2: #4a4326; /* dusty olive */
-  --agenda-pastel-3: #24402f; /* dusty green */
-  --agenda-pastel-4: #263a52; /* dusty blue */
-  --agenda-pastel-5: #3a2f4a; /* dusty purple */
-  --agenda-pastel-6: #4a3527; /* dusty terracotta */
   /* ── Tactile flavor shared tokens (consumed only under body.flavor-tactile) ── */
   --ink: var(--text);
   --ink-soft: var(--muted);
@@ -646,12 +635,6 @@ body.light-mode {
   --text: #1a1d2e;
   --muted: #6b7080;
   --line: rgba(60,64,90,0.13);
-  --agenda-pastel-1: #FDE2E4; /* blush pink */
-  --agenda-pastel-2: #FFF1D0; /* cream yellow */
-  --agenda-pastel-3: #D8F3DC; /* mint green */
-  --agenda-pastel-4: #D6E4FF; /* periwinkle blue */
-  --agenda-pastel-5: #E8DFF5; /* lavender */
-  --agenda-pastel-6: #FFE5D4; /* peach */
   --surface-solid: #fbfcfe;
   --surface-hi:    #ffffff;
   --surface-lo:    #e9ecf4;
@@ -907,7 +890,7 @@ body.konami-mode {
   margin-top: 3px;
 }
 .ctrl-status-dot.ok   { background: #4caf82; box-shadow: 0 0 5px rgba(76,175,130,.6); }
-.ctrl-status-dot.fail { background: #e57373; box-shadow: 0 0 5px rgba(229,115,115,.6); }
+.ctrl-status-dot.fail { background: var(--red); box-shadow: 0 0 5px color-mix(in srgb, var(--red) 60%, transparent); }
 .ctrl-status-text {
   display: flex;
   flex-direction: column;
@@ -929,8 +912,8 @@ body.konami-mode {
 /* ── Budget total summary card ── */
 #budgetTotalCard {
   padding: 8px 16px;
-  border-bottom: 1px solid rgba(229,115,115,.2);
-  background: rgba(229,115,115,.06);
+  border-bottom: 1px solid color-mix(in srgb, var(--red) 20%, transparent);
+  background: color-mix(in srgb, var(--red) 6%, transparent);
 }
 .budget-total-row {
   display: flex;
@@ -946,7 +929,7 @@ body.konami-mode {
 .budget-total-amount {
   font-size: var(--text-md);
   font-weight: var(--weight-bold);
-  color: #e57373;
+  color: var(--red);
   white-space: nowrap;
 }
 .btn {
@@ -1150,7 +1133,7 @@ body:not(.force-landscape).auto-portrait #bottomStrip {
 .card {
   background: var(--surface);
   border-radius: var(--radius);
-  border: 1px solid rgba(108,142,245,0.38);
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, transparent);
   box-shadow: var(--shadow);
   overflow: hidden;
   backdrop-filter: blur(8px);
@@ -1441,7 +1424,7 @@ body.has-bg.light-mode .cal-day.current-week { background: rgba(190,198,225,0.75
 }
 /* Today's cell pops above the current-week row with a stronger tint + gold glow */
 body .cal-day.today {
-  background: rgba(108,142,245,0.75);
+  background: color-mix(in srgb, var(--accent) 75%, transparent);
   box-shadow: 0 0 0 1.5px rgba(212,175,55,0.85), 0 0 10px rgba(212,175,55,0.25);
 }
 body.light-mode .cal-day.today {
@@ -1452,7 +1435,7 @@ body.nautical-mode .cal-day.today {
   box-shadow: 0 0 0 1.5px rgba(212,175,55,0.85), 0 0 10px rgba(212,175,55,0.25);
 }
 body.has-bg .cal-day.today {
-  background: rgba(108,142,245,0.60);
+  background: color-mix(in srgb, var(--accent) 60%, transparent);
 }
 .cal-event {
   font-size: var(--text-xs);
@@ -1502,16 +1485,20 @@ body.has-bg .cal-day.today {
 }
 .agenda-day-header:first-child { padding-top: 6px; }
 .agenda-day-header.agenda-today { color: var(--accent); }
-/* Left border carries the calendar color (set inline per event — dynamic,
-   can't be a class); background fill is one of the 6 pastel custom
-   properties above, picked by agendaPastelClass() in family-hub.js.
-   Margin-bottom (not gap on the parent) so fills don't visually merge. */
+/* Border and fill both come from --event-color, the event's own calendar
+   color, set inline per event (dynamic, can't be a class). The fill is a tint
+   over the theme's surface rather than a fixed swatch, so contrast tracks
+   whatever theme is active instead of needing a hand-picked palette per theme;
+   events with no color fall back to --muted. Margin-bottom (not gap on the
+   parent) so fills don't visually merge. */
 .agenda-event {
   display: flex;
   align-items: flex-start;
   gap: 12px;
   padding: 8px 10px 8px 12px;
-  border-left: 3px solid var(--muted);
+  --event-color: var(--muted);
+  border-left: 3px solid var(--event-color);
+  background: color-mix(in srgb, var(--event-color) 18%, var(--surface-solid));
   border-radius: 8px;
   cursor: default;
   flex-shrink: 0;
@@ -1522,12 +1509,6 @@ body.has-bg .cal-day.today {
 .agenda-event.agenda-clickable { cursor: pointer; }
 .agenda-event.agenda-clickable:hover  { filter: brightness(1.08); }
 .agenda-event.agenda-clickable:active { filter: brightness(0.96); }
-.agenda-pastel-1 { background: var(--agenda-pastel-1); }
-.agenda-pastel-2 { background: var(--agenda-pastel-2); }
-.agenda-pastel-3 { background: var(--agenda-pastel-3); }
-.agenda-pastel-4 { background: var(--agenda-pastel-4); }
-.agenda-pastel-5 { background: var(--agenda-pastel-5); }
-.agenda-pastel-6 { background: var(--agenda-pastel-6); }
 .agenda-info { flex: 1; min-width: 0; }
 .agenda-time {
   font-size: var(--fs-meta);
@@ -1742,7 +1723,7 @@ body.has-bg #weatherCard::before { background: transparent; }
   font-size: var(--text-xs);
   padding: 2px 8px;
   border-radius: 20px;
-  background: rgba(108,142,245,.12);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: var(--text);
   white-space: nowrap;
 }
@@ -2210,7 +2191,7 @@ body.has-bg.light-mode .day-hour-row.current-hour { background: rgba(190,198,225
   padding: 0 2px; flex-shrink: 0;
   opacity: 0; transition: opacity .15s, color .15s;
 }
-.meal-remove-btn:hover { color: #e57373; }
+.meal-remove-btn:hover { color: var(--red); }
 
 /* Day view remove button — positioned in top-right corner of slot */
 .day-meal-remove-btn {
@@ -2220,13 +2201,13 @@ body.has-bg.light-mode .day-hour-row.current-hour { background: rgba(190,198,225
 .day-meal-slot:hover .day-meal-remove-btn { opacity: 1; }
 .week-add-meal-btn {
   font-size: var(--text-base); color: var(--accent);
-  background: none; border: 1px dashed rgba(108,142,245,.3);
+  background: none; border: 1px dashed color-mix(in srgb, var(--accent) 30%, transparent);
   border-radius: 4px; cursor: pointer; padding: 3px 4px;
   width: 100%; text-align: center; transition: all .15s;
   min-height: 56px;   /* ~3× the natural button height */
   display: flex; align-items: center; justify-content: center;
 }
-.week-add-meal-btn:hover { background: rgba(108,142,245,.1); border-style: solid; }
+.week-add-meal-btn:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); border-style: solid; }
 
 /* ── Meal Planning — Day section ── */
 .day-meals-section {
@@ -2421,33 +2402,33 @@ body.nautical-mode .meal-adjust-chip:hover { background: var(--accent2); border-
 
 /* ── Budget ── */
 .budget-pill {
-  background: rgba(229,115,115,.18); color: var(--text);
+  background: color-mix(in srgb, var(--red) 18%, transparent); color: var(--text);
   border-radius: 6px; padding: 3px 9px; font-size: var(--text-sm);
-  font-weight: var(--weight-semi); cursor: pointer; border: 1px solid rgba(229,115,115,.35);
+  font-weight: var(--weight-semi); cursor: pointer; border: 1px solid color-mix(in srgb, var(--red) 35%, transparent);
   transition: background .15s;
 }
-.budget-pill:hover { background: rgba(229,115,115,.32); }
+.budget-pill:hover { background: color-mix(in srgb, var(--red) 32%, transparent); }
 .budget-summary-bar {
   display: flex; align-items: center; justify-content: space-between;
-  background: rgba(229,115,115,.10); border-radius: 8px;
+  background: color-mix(in srgb, var(--red) 10%, transparent); border-radius: 8px;
   padding: 6px 12px; margin-bottom: 8px; font-size: var(--text-base);
-  border: 1px solid rgba(229,115,115,.25);
+  border: 1px solid color-mix(in srgb, var(--red) 25%, transparent);
 }
 .budget-summary-label { color: var(--muted); }
-.budget-summary-amount { font-weight: var(--weight-bold); color: #e57373; }
+.budget-summary-amount { font-weight: var(--weight-bold); color: var(--red); }
 .budget-day-section {
-  background: rgba(229,115,115,.07); border-radius: 8px;
+  background: color-mix(in srgb, var(--red) 7%, transparent); border-radius: 8px;
   padding: 8px 10px; margin-bottom: 8px;
-  border: 1px solid rgba(229,115,115,.2);
+  border: 1px solid color-mix(in srgb, var(--red) 20%, transparent);
 }
 .budget-day-item {
   display: flex; justify-content: space-between;
   font-size: var(--text-base); padding: 3px 0;
-  border-bottom: 1px solid rgba(229,115,115,.1);
+  border-bottom: 1px solid color-mix(in srgb, var(--red) 10%, transparent);
 }
 .budget-day-item:last-child { border-bottom: none; }
 .budget-day-name { color: var(--text); }
-.budget-day-amt  { font-weight: var(--weight-semi); color: #e57373; font-variant-numeric: tabular-nums; }
+.budget-day-amt  { font-weight: var(--weight-semi); color: var(--red); font-variant-numeric: tabular-nums; }
 .budget-day-total {
   display: flex; justify-content: space-between;
   font-size: var(--fs-item); font-weight: var(--weight-bold);
@@ -2455,7 +2436,7 @@ body.nautical-mode .meal-adjust-chip:hover { background: var(--accent2); border-
   border-top: 1px solid rgba(255,193,7,.2);
 }
 .budget-day-total .budget-day-total-label { color: var(--muted); }
-.budget-day-total .budget-day-total-amt   { color: #e57373; font-variant-numeric: tabular-nums; }
+.budget-day-total .budget-day-total-amt   { color: var(--red); font-variant-numeric: tabular-nums; }
 
 /* ── Day view: section headers + secondary rows (shared by budget/to-do) ── */
 .day-section-header {
@@ -2463,14 +2444,14 @@ body.nautical-mode .meal-adjust-chip:hover { background: var(--accent2); border-
   margin-bottom: 6px;
 }
 .day-todo-section {
-  background: rgba(108,142,245,.07); border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 7%, transparent); border-radius: 8px;
   padding: 8px 10px; margin-bottom: 8px;
-  border: 1px solid rgba(108,142,245,.2);
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
 }
 .day-todo-row {
   display: flex; justify-content: space-between;
   font-size: var(--fs-item); padding: 3px 0;
-  border-bottom: 1px solid rgba(108,142,245,.1);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 10%, transparent);
 }
 .day-todo-row:last-child { border-bottom: none; }
 .day-todo-text { color: var(--text); }
@@ -2478,17 +2459,17 @@ body.nautical-mode .meal-adjust-chip:hover { background: var(--accent2); border-
 .day-add-btn { font-size: var(--fs-meta); color: var(--accent); cursor: pointer; margin-left: 4px; }
 .day-allday-empty { font-size: var(--fs-meta); color: var(--muted); padding-top: 3px; }
 .week-budget-strip {
-  border-top: 1px solid rgba(229,115,115,.25);
-  padding: 4px 5px 5px; background: rgba(229,115,115,.07);
+  border-top: 1px solid color-mix(in srgb, var(--red) 25%, transparent);
+  padding: 4px 5px 5px; background: color-mix(in srgb, var(--red) 7%, transparent);
 }
 .week-budget-item {
-  font-size: var(--text-xs); color: #e57373;
+  font-size: var(--text-xs); color: var(--red);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   padding: 1px 3px; border-radius: 3px;
 }
 .week-budget-total {
-  font-size: var(--text-xs); font-weight: var(--weight-bold); color: #e57373;
-  padding: 2px 3px; border-top: 1px solid rgba(229,115,115,.2); margin-top: 2px;
+  font-size: var(--text-xs); font-weight: var(--weight-bold); color: var(--red);
+  padding: 2px 3px; border-top: 1px solid color-mix(in srgb, var(--red) 20%, transparent); margin-top: 2px;
 }
 .budget-modal-inner { max-width: 520px; }
 .budget-item-row {
@@ -2496,10 +2477,10 @@ body.nautical-mode .meal-adjust-chip:hover { background: var(--accent2); border-
   background: var(--surface2); border-radius: 8px;
   padding: 9px 12px; margin-bottom: 6px;
 }
-.budget-item-dot { width: 10px; height: 10px; border-radius: 50%; background: #e57373; flex-shrink: 0; }
+.budget-item-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--red); flex-shrink: 0; }
 .budget-item-name  { flex: 1; font-size: var(--text-base); font-weight: var(--weight-semi); }
 .budget-item-meta  { font-size: var(--text-sm); color: var(--muted); }
-.budget-item-amt   { font-weight: var(--weight-bold); color: #e57373; font-size: var(--text-base); margin: 0 6px; }
+.budget-item-amt   { font-weight: var(--weight-bold); color: var(--red); font-size: var(--text-base); margin: 0 6px; }
 .budget-item-del   {
   background: none; border: none; color: var(--muted); cursor: pointer;
   font-size: var(--text-md); padding: 0 3px; line-height: 1;
@@ -2508,7 +2489,7 @@ body.nautical-mode .meal-adjust-chip:hover { background: var(--accent2); border-
 .cal-event-budget {
   font-size: var(--text-xs); border-radius: 3px; padding: 1px 4px;
   margin: 0 -4px 2px;
-  background: rgba(229,115,115,.2); color: #e57373;
+  background: color-mix(in srgb, var(--red) 20%, transparent); color: var(--red);
   font-weight: var(--weight-semi); white-space: nowrap; overflow: hidden;
   text-overflow: ellipsis; cursor: default;
 }
@@ -2638,8 +2619,8 @@ body.light-mode .sms-contact-row:hover { background: rgba(0,0,0,.05); }
   font-size: .62rem; padding: 0 4px; border-radius: 8px;
   font-weight: var(--weight-semi); white-space: nowrap; flex-shrink: 0;
 }
-.list-badge-due  { background: rgba(108,142,245,.22); color: var(--accent); }
-.list-badge-due.overdue { background: rgba(229,115,115,.22); color: #e57373; }
+.list-badge-due  { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); }
+.list-badge-due.overdue { background: color-mix(in srgb, var(--red) 22%, transparent); color: var(--red); }
 .list-badge-assign { background: rgba(76,175,130,.22); color: var(--green); }
 /* Todo add-details expando */
 .todo-extra {
@@ -2658,7 +2639,7 @@ body.light-mode .sms-contact-row:hover { background: rgba(0,0,0,.05); }
 .cal-event-todo {
   font-size: .65rem; border-radius: 3px; padding: 1px 4px;
   margin: 0 -4px 2px;
-  background: rgba(108,142,245,.2); color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent);
   font-weight: 600; white-space: nowrap; overflow: hidden;
   text-overflow: ellipsis; cursor: default;
 }
@@ -2667,7 +2648,7 @@ body.light-mode .sms-contact-row:hover { background: rgba(0,0,0,.05); }
 .cal-event, .week-event, .day-event-pill { cursor: pointer; }
 .cal-event:hover, .week-event:hover, .day-event-pill:hover { filter: brightness(1.15); }
 .cal-day-empty-click { cursor: pointer; }
-.cal-day-empty-click:hover { background: rgba(108,142,245,.07); border-radius: 4px; }
+.cal-day-empty-click:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); border-radius: 4px; }
 #eventEditorModal .modal {
   width: min(480px, 95vw);
   max-height: 90vh;
@@ -2678,10 +2659,10 @@ body.light-mode .sms-contact-row:hover { background: rgba(0,0,0,.05); }
   border-left: 1px solid rgba(255,255,255,.10);
   box-shadow:
     0  1px 0  rgba(255,255,255,.14) inset,
-    0  0  80px rgba(108,142,245,.45),
-    0  0  40px rgba(108,142,245,.30),
-    0  0  16px rgba(108,142,245,.20),
-    0  0   0  1px rgba(108,142,245,.25);
+    0  0  80px color-mix(in srgb, var(--accent) 45%, transparent),
+    0  0  40px color-mix(in srgb, var(--accent) 30%, transparent),
+    0  0  16px color-mix(in srgb, var(--accent) 20%, transparent),
+    0  0   0  1px color-mix(in srgb, var(--accent) 25%, transparent);
   transform: perspective(800px) rotateX(2deg) translateY(-4px);
   transform-origin: 50% 0%;
 }
@@ -2773,12 +2754,12 @@ body.nautical-mode #eventEditorModal .modal {
   margin-top: 20px; gap: 10px;
 }
 .btn-danger {
-  background: rgba(229,115,115,.15); color: #e57373;
-  border: 1px solid rgba(229,115,115,.3);
+  background: color-mix(in srgb, var(--red) 15%, transparent); color: var(--red);
+  border: 1px solid color-mix(in srgb, var(--red) 30%, transparent);
   padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: .9rem;
   transition: background .15s;
 }
-.btn-danger:hover { background: rgba(229,115,115,.3); }
+.btn-danger:hover { background: color-mix(in srgb, var(--red) 30%, transparent); }
 .evt-editor-allday-row {
   display: flex; align-items: center; gap: 8px; margin: 8px 0;
 }
@@ -2814,7 +2795,7 @@ body.nautical-mode #eventEditorModal .modal {
   background: var(--surface2); color: var(--text);
 }
 .evt-scope-btn.selected {
-  border-color: var(--accent); background: rgba(108,142,245,.2);
+  border-color: var(--accent); background: color-mix(in srgb, var(--accent) 20%, transparent);
   color: var(--accent); font-weight: 600;
 }
 .week-day-col { cursor: default; }
@@ -2828,7 +2809,7 @@ body.nautical-mode #eventEditorModal .modal {
   text-align: center;
   transition: background .15s;
 }
-.week-day-body-add:hover { background: rgba(108,142,245,.1); color: var(--accent); }
+.week-day-body-add:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--accent); }
 .list-delete {
   background: none; border: none; color: var(--muted);
   cursor: pointer; font-size: .65rem; padding: 0 1px;
@@ -2983,8 +2964,8 @@ body.light-mode .shop-cat-header { border-bottom-color: rgba(0,0,0,.08); }
   box-shadow:
     0 8px 48px rgba(0,0,0,.7),
     0 2px 12px rgba(0,0,0,.5),
-    0 0 80px rgba(108,142,245,.18),
-    0 0 200px rgba(108,142,245,.10);
+    0 0 80px color-mix(in srgb, var(--accent) 18%, transparent),
+    0 0 200px color-mix(in srgb, var(--accent) 10%, transparent);
 }
 body.nautical-mode #settingsModal .modal {
   box-shadow:
@@ -3246,7 +3227,7 @@ body.light-mode .lc-section { border-color: rgba(0,0,0,.08); }
   background: var(--surface);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  border: 1px solid rgba(108,142,245,0.38);
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, transparent);
   overflow: hidden;
   display: flex;
   align-items: stretch;
@@ -3306,7 +3287,7 @@ body.has-bg #yearStrip {
   border: 1px solid transparent;
 }
 .mini-card:hover {
-  background: rgba(108,142,245,.12);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
   transform: translateY(-1px);
 }
 .mini-card.current-month {
@@ -3328,7 +3309,7 @@ body.has-bg .mini-card {
   background: var(--mini-card-bg-photo);
 }
 body.has-bg .mini-card:hover {
-  background: rgba(108,142,245,.2);
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 .mini-month-label {
@@ -3442,7 +3423,7 @@ body.has-bg .mini-card:hover {
 }
 
 .year-card-week-row.today-week {
-  background: rgba(108,142,245,0.13);
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -3583,7 +3564,7 @@ body.colorblind-mode .year-card-week-row.today-week {
 .bg-drop-zone:hover,
 .bg-drop-zone.drag-over {
   border-color: var(--accent);
-  background: rgba(108,142,245,.07);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
   color: var(--text);
 }
 .bg-drop-zone input[type=file] { display: none; }
@@ -3897,8 +3878,8 @@ body.eggs-unlocked .modal-tab[data-tab="eggs"] { display: inline-flex; }
 }
 .briefing-pill:hover { color: var(--text); border-color: rgba(255,255,255,.22); }
 .briefing-pill.active {
-  background: rgba(108,142,245,.18);
-  border-color: rgba(108,142,245,.42);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 42%, transparent);
   color: var(--accent);
 }
 body.light-mode .briefing-pill { border-color: rgba(0,0,0,.12); }
@@ -4289,7 +4270,7 @@ a, button, input, select, textarea, label,
   .cal-view-tab:hover:not(.active) { border-color: var(--line); }
   .modal-tab:hover:not(.active)  { color: var(--muted); }
   .cal-month-nav button:hover    { background: var(--surface2); }
-  .budget-pill:hover             { background: rgba(229,115,115,.18); }
+  .budget-pill:hover             { background: color-mix(in srgb, var(--red) 18%, transparent); }
   .budget-item-del:hover         { color: var(--muted); }
   .sms-contact-row:hover         { background: none; }
   .week-meal-item:hover          { background: color-mix(in srgb, var(--green) 18%, transparent); }
@@ -4316,7 +4297,7 @@ a, button, input, select, textarea, label,
   .sms-contact-row:active        { background: var(--surface2); }
   .week-meal-item:active         { background: color-mix(in srgb, var(--green) 32%, transparent); }
   .day-meal-slot:active          { border-color: var(--accent); }
-  .budget-pill:active            { background: rgba(229,115,115,.32); }
+  .budget-pill:active            { background: color-mix(in srgb, var(--red) 32%, transparent); }
   .widget-toggle-row:active      { background: var(--surface2); }
 }
 
@@ -4648,7 +4629,7 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
 }
 .budget-card-row:last-of-type { border-bottom: none; }
 .budget-card-row-past { opacity: .45; }
-.budget-card-row-today { background: rgba(229,115,115,.07); border-radius: 6px; padding: 8px 6px; margin: 0 -6px; }
+.budget-card-row-today { background: color-mix(in srgb, var(--red) 7%, transparent); border-radius: 6px; padding: 8px 6px; margin: 0 -6px; }
 .budget-card-date {
   font-size: var(--text-sm);
   color: var(--muted);
@@ -4657,8 +4638,8 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
 }
 .budget-card-today-badge {
   display: inline-block;
-  background: rgba(229,115,115,.25);
-  color: #e57373;
+  background: color-mix(in srgb, var(--red) 25%, transparent);
+  color: var(--red);
   font-size: var(--text-xs);
   font-weight: var(--weight-semi);
   border-radius: 4px;
@@ -4675,7 +4656,7 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
 }
 .budget-card-amt {
   font-weight: var(--weight-semi);
-  color: #e57373;
+  color: var(--red);
   flex-shrink: 0;
 }
 .budget-manage-toggle {
@@ -5087,7 +5068,7 @@ body.tv-mode .card:hover { box-shadow: none; }
 }
 .event-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(108,142,245,0.2);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 .event-image {
@@ -5387,7 +5368,7 @@ body.tv-mode .card:hover { box-shadow: none; }
 }
 .event-overlay-indicator:hover {
   transform: scale(1.2);
-  box-shadow: 0 2px 8px rgba(108,142,245,0.3);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 /* ════════════════════════════════════════════════════════════════
