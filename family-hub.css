@@ -1352,6 +1352,7 @@ body.nautical-mode .cal-month-nav button {
 }
 .cal-multiday-bar:hover { filter: brightness(1.12); }
 .cal-multiday-bar.cal-dnd-dragging { opacity: 0.3; pointer-events: none; }
+.cal-multiday-bar.other-month { opacity: .35; }
 .cal-md-spacer { flex-shrink: 0; }
 .cal-dow {
   text-align: center;
@@ -1366,6 +1367,9 @@ body.nautical-mode .cal-month-nav button {
 .cal-day {
   min-height: 0;  /* removed fixed height — grid rows handle sizing now */
   padding: 4px;
+  /* Stronger than --line (a hairline divider elsewhere) so each day reads
+     as its own cell rather than blending into the grid's background. */
+  border: 1px solid color-mix(in srgb, var(--text) 22%, transparent);
   border-radius: 8px;
   background: var(--surface2);
   font-size: var(--text-sm);
@@ -2052,6 +2056,9 @@ body.nautical-mode .wx-ticker { background: rgba(200,169,110,.06); border-top-co
 .week-day-col {
   display: flex; flex-direction: column;
   min-height: 0;
+  /* Stronger than --line (a hairline divider elsewhere) so each day reads
+     as its own column rather than blending into the grid's background. */
+  border: 1px solid color-mix(in srgb, var(--text) 22%, transparent);
   border-radius: 8px; overflow: hidden;
   background: var(--surface2);
 }

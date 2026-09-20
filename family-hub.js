@@ -2038,8 +2038,14 @@ function renderMultidayOverlay() {
     const ec = cellMap[endDate];
     if (!sc || !ec) return;
 
+    // Match the dimming single-day pills get from their (other-month) cell:
+    // the bar lives in a sibling overlay, not inside the cell, so it never
+    // inherited .cal-day.other-month's opacity on its own.
+    const segOtherMonth = segDates(startDate, endDate)
+      .every(dk => cellMap[dk]?.el.classList.contains('other-month'));
+
     const bar = document.createElement('div');
-    bar.className = 'cal-multiday-bar';
+    bar.className = 'cal-multiday-bar' + (segOtherMonth ? ' other-month' : '');
     bar.textContent = ev.summary;
     bar.title = ev.summary;
     bar.style.cssText =
@@ -2271,6 +2277,19 @@ function spawnWorm(cell) {
   setTimeout(() => worm.remove(), 2200);
 }
 
+// Push onto a day's cached event array unless it's already there. Google's
+// holiday calendar has a known history of listing the same holiday twice
+// under different event IDs (post-migration duplicates), so holiday events
+// dedupe by summary; everything else dedupes by eventId, which is only ever
+// repeated by a genuine re-fetch of the same instance (e.g. an ICS feed
+// re-injecting an occurrence, or two overlapping loads racing into the cache).
+function pushEventDeduped(arr, base) {
+  const isDup = base.holiday
+    ? arr.some(e => e.summary === base.summary)
+    : arr.some(e => e.eventId && e.eventId === base.eventId);
+  if (!isDup) arr.push(base);
+}
+
 async function loadAllCalendars() {
   if (!googleToken) return;
   document.getElementById('calendarStatus').innerHTML = '<span class="spinner"></span>';
@@ -2325,11 +2344,11 @@ async function loadAllCalendars() {
         for (let d = new Date(base.startDate + 'T00:00:00'); d < endD; d.setDate(d.getDate() + 1)) {
           const key = d.toISOString().slice(0, 10);
           if (!calEventCache[calId][key]) calEventCache[calId][key] = [];
-          calEventCache[calId][key].push(base);
+          pushEventDeduped(calEventCache[calId][key], base);
         }
       } else {
         if (!calEventCache[calId][startDate]) calEventCache[calId][startDate] = [];
-        calEventCache[calId][startDate].push(base);
+        pushEventDeduped(calEventCache[calId][startDate], base);
       }
     });
   }
@@ -2890,12 +2909,12 @@ function injectIcsEvent(sub, ev) {
   if (entry.allDay && entry.startDate && entry.endDate && entry.endDate > entry.startDate) {
     const endD = new Date(entry.endDate + 'T00:00:00');
     for (let d = new Date(entry.startDate + 'T00:00:00'); d < endD; d.setDate(d.getDate() + 1)) {
-      (cache[localDateKey(d)] ||= []).push(entry);
+      pushEventDeduped((cache[localDateKey(d)] ||= []), entry);
     }
   } else {
     // Date key from the actual local instant (handles UTC/zoned/floating uniformly).
     const key = entry.allDay ? entry.startDate : localDateKey(new Date(entry.startDT));
-    (cache[key] ||= []).push(entry);
+    pushEventDeduped((cache[key] ||= []), entry);
   }
 }
 
