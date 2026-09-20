@@ -199,6 +199,8 @@ render in every calendar view, the countdown picker, and conflict detection.
 - `loadIcsSubs()` — rebuilds each sub's `calEventCache` slice from scratch (no duplicate injection); `injectIcsEvent()` keys events by **local** date (no UTC day-shift).
 - `addIcsSub()` / `removeIcsSub(id)` / `renderIcsSubList()` — Settings → Calendar UI.
 
+**Gotcha — duplicate events:** `pushEventDeduped(arr, base)` (family-hub.js, above `loadAllCalendars()`) is the single gate every day's event array is written through — `cacheEvents()`'s two branches and both `injectIcsEvent()` branches all call it instead of `arr.push()`. Non-holiday events dedupe by `eventId` (only ever repeated by a genuine re-fetch of the same instance — an ICS feed re-injecting an occurrence, or two overlapping `loadAllCalendars()` calls racing into the same cache); holiday events dedupe by `summary` instead, because Google's public holiday calendar (`en.usa#holiday@group.v.calendar.google.com`) has a known history of listing the same holiday twice under two different event IDs post-migration, so an ID-based check wouldn't catch it. Add any new code path that writes into `calEventCache` through this helper too, not a raw `.push()`.
+
 **HTML anchors:** `#icsSubList`, `#icsUrlInput`, `#icsLabelInput`, `#icsColorInput`, `#icsSubStatus` (Settings → Calendar → 📡 ICS Subscriptions)
 
 **localStorage:** `fh_icsCache` (always); `fh_icsSubs` only as the no-Firebase fallback (migrated to Firestore on first sign-in, deduped by URL — see `runFirestoreMigrations()`)
