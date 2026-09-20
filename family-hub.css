@@ -2474,10 +2474,6 @@ body.nautical-mode .meal-adjust-chip:hover { background: var(--accent2); border-
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   padding: 1px 3px; border-radius: 3px;
 }
-.week-budget-total {
-  font-size: var(--text-xs); font-weight: var(--weight-bold); color: var(--red);
-  padding: 2px 3px; border-top: 1px solid color-mix(in srgb, var(--red) 20%, transparent); margin-top: 2px;
-}
 .budget-modal-inner { max-width: 520px; }
 .budget-item-row {
   display: flex; align-items: center; gap: 8px;

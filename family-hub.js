@@ -1649,11 +1649,6 @@ function renderWeekGrid() {
         el.title = `${item.name} — ${fmt$(item.amount)}`;
         budgetStrip.appendChild(el);
       });
-      const dayTotal = budgetDayItems.reduce((s, it) => s + it.amount, 0);
-      const tot = document.createElement('div');
-      tot.className = 'week-budget-total';
-      tot.textContent = fmt$(dayTotal);
-      budgetStrip.appendChild(tot);
       budgetStrip.onclick = scrollToBudgetCard;
       budgetStrip.style.cursor = 'pointer';
       col.appendChild(budgetStrip);
