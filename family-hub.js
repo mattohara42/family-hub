@@ -11056,7 +11056,9 @@ function scdRenderSubjectDayChecks() {
 function scdRenderSubjectMemberChecks() {
   const el = document.getElementById('scdSubjectMembers');
   if (!el) return;
-  el.innerHTML = familyMembers.map(m => `<label><input type="checkbox" value="${esc(m.name)}">${esc(m.name)}</label>`).join('');
+  el.innerHTML = familyMembers.length
+    ? familyMembers.map(m => `<label><input type="checkbox" value="${esc(m.name)}">${esc(m.name)}</label>`).join('')
+    : '<span class="lc-empty" style="padding:0">Add family members in Settings → Family first.</span>';
 }
 function lcRenderSchoolSubjectList() {
   const el = document.getElementById('scdSubjectList');
