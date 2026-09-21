@@ -76,6 +76,7 @@ family-hub.js     (all logic)
 ├── ── CALENDAR TABS ──        renderCalendarTabs
 ├── ── CALENDAR EVENT EDITOR── openEventEditor, saveCalEvent, deleteCalEvent
 ├── ── LOCAL CALENDARS ──      injectLocalEvents, lcAddBirthday/Medication/etc. (LC_IDS, LC_DEFS)
+├── ── SCHOOL DAY CYCLE ──     schoolDayNumberFor, scdAddHoliday/scdAddSubject (Week/Day view badge only, no LC_IDS entry)
 ├── ── BUDGET ──               renderBudgetCard (context-sensitive), budgetDatesInRange
 ├── ── WEATHER ──              showWeatherLocation, loadWeatherByCity, renderWeatherData,
 │                              renderSunArc, renderWeatherTicker, prev/nextWeatherLocation,
@@ -965,6 +966,9 @@ const HA_TOGGLE_DOMAINS = ['light', 'switch', 'fan', 'input_boolean'];
 | `fh_medications` | JSON array | Life Admin | Fallback only — migrated to Firestore `medications` collection |
 | `fh_school` | JSON array | Life Admin | Fallback only — migrated to Firestore `schoolPeriods` collection |
 | `fh_trash` | JSON array | Life Admin | Fallback only — migrated to Firestore `trashPickups` collection |
+| `fh_schoolDayCycle` | JSON object | School Day Cycle | `{ startDate, endDate, cycleLength }` — fallback only, synced via Firestore `settings/schoolDayCycle` doc otherwise (defaults come from `SCHOOL_CYCLE_DEFAULTS`) |
+| `fh_schoolHolidays` | JSON array | School Day Cycle | Fallback only — migrated to Firestore `schoolHolidays` collection — `[{date, label}]`, weekdays skipped when computing Day N |
+| `fh_schoolDaySubjects` | JSON array | School Day Cycle | Fallback only — migrated to Firestore `schoolDaySubjects` collection — `[{subject, dayNumbers, members}]`, per-kid subject assignments keyed to the cycle's Day N |
 | `fh_countdowns` | JSON array | Countdowns | Fallback only — migrated to Firestore `countdowns` collection |
 | `fh_newsFeeds` | JSON array | News Feed | Fallback only — migrated to Firestore `newsFeeds` collection (deduped by URL) |
 | `fh_stockTickers` | JSON array | Stock Ticker | Fallback only — synced via Firestore `settings/stockTickers` doc otherwise |
@@ -1007,6 +1011,8 @@ const HA_TOGGLE_DOMAINS = ['light', 'switch', 'fan', 'input_boolean'];
 | `medications` | `createdAt` | Life Admin card |
 | `schoolPeriods` | `createdAt` | Life Admin card |
 | `trashPickups` | `createdAt` | Life Admin card |
+| `schoolHolidays` | `date` | School Day Cycle non-school-day list |
+| `schoolDaySubjects` | `createdAt` | School Day Cycle per-kid subject assignments |
 | `countdowns` | `createdAt` | Countdown timers |
 | `mealTemplates` | `createdAt` (display date string) | Meal Plan Templates |
 | `newsFeeds` | `createdAt` | News Feed widget |
