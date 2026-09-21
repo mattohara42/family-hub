@@ -231,7 +231,7 @@ Once all the above is done, open the app (your Netlify URL or `http://localhost:
 - [ ] Calendars appear in the **Calendars** sidebar card — toggle each on/off with the checkboxes
 - [ ] ⚙️ Settings → **🌤 Weather**: API key saved and at least one location added
 - [ ] ⚙️ Settings → **🍽 Meals**: Gemini key saved; click a day in Week or Day view → plan a meal → try ✨ Suggest
-- [ ] ⚙️ Settings → **💰 Budget**: Add a recurring bill (e.g. Internet, $79.99, Monthly, day 1)
+- [ ] **💰 Budget** sidebar card → **+ Add**: Add a recurring bill (e.g. Internet, $79.99, Monthly, day 1)
 - [ ] Shopping List and To-Do List add items and persist on reload
 
 ---
@@ -471,6 +471,15 @@ After signing in:
 - In ⚙️ **Settings → 📅 Calendar**, you can assign custom labels and colors to each calendar
 - Toggle the **National Holidays** overlay on/off in calendar settings
 
+### School Day Cycle
+
+Tracks a school's internal rotating day (e.g. a 4-day A/B/C/D schedule), shown as a small "Day N" badge in Week and Day calendar views only.
+
+1. ⚙️ **Settings → 🏫 School → 🔁 School Day Cycle** → set the date Day 1 starts, the last day of the school year, and the cycle length (defaults to 4), then **Save**
+2. Add any non-school days (holidays, breaks) so they're skipped rather than counted — the cycle only advances on weekdays that aren't marked off
+3. Optionally add **Class Schedule by Day** entries: a subject, which day number(s) it falls on, and which family members have it — e.g. "Gym, Day 1 & 3, Kate" — these show as small chips under the Day N badge
+4. The same panel also holds **🏫 Hourly Class Schedule**, a separate, older feature for weekly recurring class periods with specific times (e.g. "Math, 9:00–9:50, Mon/Wed/Fri") — unrelated to the day-rotation cycle, just grouped in the same Settings tab
+
 ### Shopping List — Clear Options
 
 The Shopping card header has two clear buttons:
@@ -489,10 +498,11 @@ Same two clear buttons as Shopping. To-Do items can also be assigned to a family
 
 ### Budget
 
-1. ⚙️ **Settings → 💰 Budget** → click **+ Add Budget Item**
+1. In the **💰 Budget** sidebar card, click **+ Add**
 2. Fill in name, amount, frequency, and which day it falls on
-3. A **Budget Total** pill appears in the right sidebar showing the total for the current calendar period (month or week)
-4. The pill is hidden when no bills fall in the current period
+3. A **Budget Total** pill appears in the card showing the total for the current calendar period (month or week), and matching bills show up in Month/Week/Day calendar views too
+4. The card is hidden when no bills exist at all; the total pill is hidden when none fall in the current period
+5. Click the **👁** button in the card header to hide all dollar amounts (card, total pill, and every calendar view's bill pills) without removing anything — tap **🙈** to show them again. This is a per-device setting (not synced), meant for a public wall display: leave amounts visible on your phone/laptop and hide them just on the kiosk.
 
 ### Chore Chart
 
@@ -563,6 +573,7 @@ Family Hub can be shared in two ways:
 - Background photos
 - Word of the Day / Dad Joke cache
 - Widget placement preferences
+- Budget privacy toggle (👁/🙈 — deliberately per-device so a wall display can hide amounts while other devices keep them visible)
 
 ---
 
