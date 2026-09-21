@@ -1241,9 +1241,12 @@ function signOut() {
   currentUser = null; googleToken = null;
   localStorage.removeItem('fh_user');
   document.getElementById('calNotSignedIn').style.display = '';
-  document.getElementById('calendarTabs').innerHTML = '';
   calEventCache = {};
   disabledCals.clear();
+  // Mirror onSignedIn()'s settings-panel toggle in reverse — the sign-out
+  // button lives inside settingCalSignedIn, so it must hide with the rest
+  document.getElementById('settingCalNotSignedIn').style.display = '';
+  document.getElementById('settingCalSignedIn').style.display = 'none';
   updateStatusPill();
   renderCurrentView();
   renderYearStrip();
