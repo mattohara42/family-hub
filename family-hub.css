@@ -927,7 +927,7 @@ body.konami-mode {
   font-weight: var(--weight-medium);
 }
 .budget-total-amount {
-  font-size: var(--text-md);
+  font-size: var(--text-base);
   font-weight: var(--weight-bold);
   color: var(--red);
   white-space: nowrap;
@@ -2508,9 +2508,9 @@ body.nautical-mode .meal-adjust-chip:hover { background: var(--accent2); border-
   padding: 9px 12px; margin-bottom: 6px;
 }
 .budget-item-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--red); flex-shrink: 0; }
-.budget-item-name  { flex: 1; font-size: var(--text-base); font-weight: var(--weight-semi); }
-.budget-item-meta  { font-size: var(--text-sm); color: var(--muted); }
-.budget-item-amt   { font-weight: var(--weight-bold); color: var(--red); font-size: var(--text-base); margin: 0 6px; }
+.budget-item-name  { flex: 1; font-size: var(--text-sm); font-weight: var(--weight-semi); }
+.budget-item-meta  { font-size: var(--text-xs); color: var(--muted); }
+.budget-item-amt   { font-weight: var(--weight-bold); color: var(--red); font-size: var(--text-sm); margin: 0 6px; }
 .budget-item-del   {
   background: none; border: none; color: var(--muted); cursor: pointer;
   font-size: var(--text-md); padding: 0 3px; line-height: 1;
@@ -3194,6 +3194,7 @@ body.eggs-unlocked .settings-nav-group--gated { display: block; }
   padding: 5px 8px; font-size: var(--text-xs);
 }
 .lc-input-sm { flex: 0 0 auto; width: 90px; }
+.lc-input-date { flex: 0 0 auto; width: 140px; }
 .lc-input:focus { outline: none; border-color: var(--accent); }
 .lc-select {
   background: var(--surface2);
@@ -4655,13 +4656,13 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
   gap: 8px;
   padding: 8px 0;
   border-bottom: 1px solid rgba(255,255,255,.05);
-  font-size: var(--text-base);
+  font-size: var(--text-sm);
 }
 .budget-card-row:last-of-type { border-bottom: none; }
 .budget-card-row-past { opacity: .45; }
 .budget-card-row-today { background: color-mix(in srgb, var(--red) 7%, transparent); border-radius: 6px; padding: 8px 6px; margin: 0 -6px; }
 .budget-card-date {
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   color: var(--muted);
   min-width: 60px;
   flex-shrink: 0;
@@ -4701,6 +4702,7 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
   touch-action: manipulation;
 }
 .budget-manage-toggle:hover { color: var(--text); }
+.budget-hidden-notice { font-size: var(--text-xs); color: var(--muted); text-align: center; padding: 10px 0; }
 
 /* ── Home Assistant Card ── */
 .ha-row {

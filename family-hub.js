@@ -558,6 +558,12 @@ function applyWidgetVisibility() {
 // ── Budget ───────────────────────────────────────────────────────────────────
 let budgetItems = []; // populated by Firestore onSnapshot (or localStorage fallback)
 const BUDGET_COLOR = '#e57373'; // persisted on the Firestore record; render paths use var(--red) via CSS
+// Per-device "privacy" toggle — hides just the $ content (amounts, bill
+// list) while leaving the card + toggle button visible, so a public wall
+// display can be flipped to Budget and back without walking through
+// Settings. Independent of widgetVisibility.budget, which controls whether
+// the whole card exists on this device at all.
+let budgetHidden = lsGet('fh_budgetHidden', false);
 
 // ── Chore Chart state ───────────────────────────────────────────
 let choreItems = []; // { id, text, points, assignedTo (member id), doneDate }
@@ -811,6 +817,31 @@ function renderBudgetCard() {
     manageList.appendChild(r);
   });
   body.appendChild(manageList);
+
+  applyBudgetPrivacy();
+}
+
+// Applied after every renderBudgetCard() so it always has the last word on
+// whether the $ content is showing, regardless of what triggered the render.
+function applyBudgetPrivacy() {
+  const body   = document.getElementById('budgetCardBody');
+  const total  = document.getElementById('budgetTotalCard');
+  const addBtn = document.getElementById('budgetAddBtn');
+  const notice = document.getElementById('budgetHiddenNotice');
+  const btn    = document.getElementById('budgetPrivacyBtn');
+  if (body)   body.style.display   = budgetHidden ? 'none' : '';
+  if (total && budgetHidden) total.style.display = 'none';
+  if (addBtn) addBtn.style.display = budgetHidden ? 'none' : '';
+  if (notice) notice.style.display = budgetHidden ? '' : 'none';
+  if (btn) {
+    btn.textContent = budgetHidden ? '🙈' : '👁';
+    btn.title = budgetHidden ? 'Show bill amounts' : 'Hide bill amounts (privacy)';
+  }
+}
+function toggleBudgetPrivacy() {
+  budgetHidden = !budgetHidden;
+  localStorage.setItem('fh_budgetHidden', JSON.stringify(budgetHidden));
+  applyBudgetPrivacy();
 }
 
 function openBudgetCardAdd() {
@@ -11012,7 +11043,7 @@ function lcRenderSchoolHolidayList() {
   if (!schoolHolidays.length) { el.innerHTML = '<div class="lc-empty">No non-school days added yet.</div>'; return; }
   const sorted = [...schoolHolidays].sort((a, b) => a.date < b.date ? -1 : 1);
   el.innerHTML = sorted.map(h =>
-    `<div class="lc-item"><span class="lc-dot" style="background:var(--accent2)"></span>
+    `<div class="lc-item">
       <span class="lc-item-label">${esc(h.label || 'Day off')}</span>
       <span class="lc-item-meta">${esc(h.date)}</span>
       <button class="lc-del" onclick="scdDelHoliday('${h.id}')">✕</button></div>`
@@ -11065,7 +11096,7 @@ function lcRenderSchoolSubjectList() {
   if (!el) return;
   if (!schoolDaySubjects.length) { el.innerHTML = '<div class="lc-empty">No subjects added yet.</div>'; return; }
   el.innerHTML = schoolDaySubjects.map(s =>
-    `<div class="lc-item"><span class="lc-dot" style="background:var(--accent)"></span>
+    `<div class="lc-item">
       <span class="lc-item-label">${esc(s.subject)} — ${s.members.map(esc).join(', ')}</span>
       <span class="lc-item-meta">Day ${s.dayNumbers.join(', ')}</span>
       <button class="lc-del" onclick="scdDelSubject('${s.id}')">✕</button></div>`
@@ -11089,6 +11120,8 @@ async function scdAddSubject() {
     renderCurrentView();
   }
   document.getElementById('scdSubjectName').value = '';
+  scdRenderSubjectDayChecks();
+  scdRenderSubjectMemberChecks();
 }
 async function scdDelSubject(id) {
   if (db) {
