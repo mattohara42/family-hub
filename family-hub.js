@@ -558,8 +558,9 @@ function applyWidgetVisibility() {
 // ── Budget ───────────────────────────────────────────────────────────────────
 let budgetItems = []; // populated by Firestore onSnapshot (or localStorage fallback)
 const BUDGET_COLOR = '#e57373'; // persisted on the Firestore record; render paths use var(--red) via CSS
-// Per-device "privacy" toggle — hides just the $ content (amounts, bill
-// list) while leaving the card + toggle button visible, so a public wall
+// Per-device "privacy" toggle — hides $ content everywhere it can appear
+// (the sidebar card, and the Month/Week/Day calendar views' bill pills)
+// while leaving the sidebar card + toggle button visible, so a public wall
 // display can be flipped to Budget and back without walking through
 // Settings. Independent of widgetVisibility.budget, which controls whether
 // the whole card exists on this device at all.
@@ -602,14 +603,16 @@ function budgetDatesInRange(item, startD, endD) {
   return results;
 }
 
-/** All budget events for a given date key (YYYY-MM-DD) */
 /** Returns todo items with dueDate === dateKey that are not done */
 function todosDueOnDate(dateKey) {
   return todoItems.filter(t => t.dueDate === dateKey && !t.done);
 }
 
+// All budget events for a given date key (YYYY-MM-DD). Gated on budgetHidden
+// so every render path that reads it — the sidebar card, and the Month/Week/
+// Day calendar views' bill pills — honors the privacy toggle from one place.
 function budgetEventsForDate(dateKey) {
-  if (!budgetItems.length) return [];
+  if (!budgetItems.length || budgetHidden) return [];
   const d = new Date(dateKey + 'T00:00:00');
   return budgetItems.filter(item => budgetDatesInRange(item, d, d).length > 0);
 }
@@ -841,7 +844,10 @@ function applyBudgetPrivacy() {
 function toggleBudgetPrivacy() {
   budgetHidden = !budgetHidden;
   localStorage.setItem('fh_budgetHidden', JSON.stringify(budgetHidden));
-  applyBudgetPrivacy();
+  // renderCurrentView() re-renders Month/Week/Day (budgetEventsForDate() gates
+  // on budgetHidden) and ends by calling renderBudgetCard(), which itself
+  // calls applyBudgetPrivacy() — one call refreshes both surfaces.
+  renderCurrentView();
 }
 
 function openBudgetCardAdd() {

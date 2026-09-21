@@ -77,7 +77,7 @@ family-hub.js     (all logic)
 ├── ── CALENDAR EVENT EDITOR── openEventEditor, saveCalEvent, deleteCalEvent
 ├── ── LOCAL CALENDARS ──      injectLocalEvents, lcAddBirthday/Medication/etc. (LC_IDS, LC_DEFS)
 ├── ── SCHOOL DAY CYCLE ──     schoolDayNumberFor, scdAddHoliday/scdAddSubject (Week/Day view badge only, no LC_IDS entry) — settings UI lives in its own top-level 'school' tab, not 'calendar' (see below)
-├── ── BUDGET ──               renderBudgetCard (context-sensitive), budgetDatesInRange
+├── ── BUDGET ──               renderBudgetCard (context-sensitive), budgetDatesInRange, budgetEventsForDate (privacy-gated), toggleBudgetPrivacy
 ├── ── WEATHER ──              showWeatherLocation, loadWeatherByCity, renderWeatherData,
 │                              renderSunArc, renderWeatherTicker, prev/nextWeatherLocation,
 │                              add/removeWeatherLocation
@@ -163,6 +163,10 @@ let disabledCals = new Set(); // calendar IDs toggled off by user
 **Swipe / period slide:** `setupCalSwipe()` binds touch handlers to `#calViews`, the wrapper that holds all four view containers. A gesture locks to an axis after `CAL_SWIPE_AXIS_LOCK` px — vertical is handed straight back to the scroller, horizontal drags the wrapper at `CAL_SWIPE_DAMPING` (0.45) with a slight fade. Release past `CAL_SWIPE_THRESHOLD` (50px) or faster than `CAL_SWIPE_VELOCITY` (0.5 px/ms) calls `slideCalPeriod(delta, fromPx)`: it clones the active view into a `.cal-view-ghost` pinned over the wrapper, hands the drag offset to the ghost, re-renders the new period underneath via `changeCalPeriod()`, then runs both past each other in one transition. The two panes stay exactly `clientWidth + CAL_SLIDE_GUTTER` apart so they read as one filmstrip. `CAL_SLIDE_MS` (260) times the ghost teardown and must match `--cal-slide` in the CSS. Under `prefers-reduced-motion: reduce` (or while `calSliding` is already true) it falls through to a plain `changeCalPeriod()`. `calSwipeBlocked()` stands the gesture down inside a genuinely horizontally-scrollable ancestor — the week grid on a narrow screen owns that drag itself — which is why `#weekView` keeps `touch-action: pan-x`. `activeCalViewEl()` maps `calView` to the element that gets cloned and pushed.
 
 **localStorage:** `fh_calView`, `fh_calIds` (array of calendar IDs), `fh_calMeta` (labels/colors)
+
+**Other render-path integrations to know about when touching `renderWeekGrid()`/`renderDayGrid()`/`renderMonthGrid()`:**
+- **School Day Cycle:** `renderWeekGrid()` appends a `.school-day-badge` (+ `.school-day-subjects` chips) into each day's header via `schoolDayNumberFor(dateKey)`/`schoolDaySubjectsForDayNumber(n)`; `renderDayGrid()` appends a `.school-day-section`. Month and Agenda don't show it — see the `SCHOOL DAY CYCLE` anchor-map entry near the top of this file for the full writeup.
+- **Budget:** all three views read `budgetEventsForDate(dateKey)` for their bill pills (Month's `.cal-event-budget`, Week's `.week-budget-strip`, Day's `.budget-day-section`) — see §12 Budget for the privacy-toggle gate that lives inside that one function.
 
 #### Event Details (read-only events)
 
@@ -450,10 +454,17 @@ let familyMembers  = JSON.parse(localStorage.getItem('fh_familyMembers') || '[]'
 
 ### 9. Settings Modal
 
-**Key functions:** `openSettings()`, `closeSettings()`, `saveSettings()`, `switchSettingsTab(tab)`
-**Tabs:** `look` · `calendar` · `weather` · `shopping` · `todo` · `meals` · `budget` · `widgets` · `chores` · `eggs` *(eggs hidden; revealed by triple-clicking the ⚙️ in the modal title)*
+**Key functions:** `openSettings()`, `closeSettings()`, `saveSettings()`, `switchSettingsTab(tab)`, `renderSettingsNav()`
+**Tabs:** driven by the `SETTINGS_GROUPS` registry (nav groups → `{tab, label, desktopOnly?}` items) — `renderSettingsNav()` builds the nav from it and filters out `desktopOnly` items when `isMobile`, so adding a tab needs no separate mobile-visibility code. Current groups:
+- **General:** `look` (🎨 Look & Feel) · `screensaver` (🖼 Images, desktopOnly) · `family` (👨‍👩‍👧 Family) · `assistant` (🤖 Assistant)
+- **Calendar:** `calendar` (📅 Calendar — Google Calendars, ICS subs, Countdowns, Birthdays, Medications, Trash & Recycling) · `school` (🏫 School — School Day Cycle + Hourly Class Schedule, see the `SCHOOL DAY CYCLE` anchor-map entry near the top of this file) · `events` (💡 Events) · `mow` (🌿 Mowing, desktopOnly)
+- **Widgets:** `widgets` (🧩 Widget Layout, desktopOnly) · `weather` (🌤 Weather, desktopOnly) · `feeds` (📊 Feeds, desktopOnly) · `shopping` (🛒 Shopping) · `chores` (⭐ Chores, desktopOnly) · `meals` (🍽 Meals) · `homeassistant` (🏠 Home Assistant)
+- **Advanced** *(gated)*: `eggs` (🥚 Easter Eggs) — hidden until unlocked
+
+There is no dedicated `todo` or `budget` tab — To-Do and Budget have no Settings surface of their own (To-Do's only settings touchpoint is the assignee dropdown, populated from Family; Budget is managed entirely in its sidebar card, see §12).
+
 **HTML anchor:** `#settingsModal`, `#settingsModalGear` (triple-click target in modal `<h2>`)
-**Pattern:** Each tab has a `.settings-panel[data-panel="X"]` div; `switchSettingsTab` toggles `.active`
+**Pattern:** Each tab has a `.settings-panel[data-panel="X"]` div; `switchSettingsTab` toggles `.active` on both the nav button and the matching panel — generic, keyed only by `data-panel`/`data-tab` matching `tab`
 **Easter eggs unlock:** `handleSettingsGearClick()` — triple-click on `#settingsModalGear` within 700ms adds `body.eggs-unlocked`, revealing the 🥚 tab
 
 ---
@@ -575,18 +586,23 @@ let recipeBox = lsGet('fh_recipeBox', []);
 - Day view → "Bills Today" (pill hidden; detail shown in `#budgetCard` only)
 - Card hidden entirely when no items fall in the current period
 
+**Per-device privacy toggle:** `budgetHidden` (`fh_budgetHidden`, default `false`) hides $ content — the sidebar card's bill list/totals/Add button, *and* every calendar view's bill pills (Month's `.cal-event-budget`, Week's `.week-budget-strip`, Day's `.budget-day-section`) — while leaving the sidebar card and its 👁/🙈 toggle button visible so it can be flipped back on without opening Settings. `budgetEventsForDate(dateKey)` is the single gate: it returns `[]` whenever `budgetHidden` is true, and every calendar render path reads budget-by-date through it, so gating lives in one place. `toggleBudgetPrivacy()` flips the flag, persists it to `localStorage` (not synced — per-device on purpose, same reasoning as the Home Assistant token), and calls `renderCurrentView()`, which re-renders the active calendar view and ends by calling `renderBudgetCard()` → `applyBudgetPrivacy()`, refreshing both surfaces from one call. Independent of `widgetVisibility.budget`, which controls whether the sidebar card exists on a device at all — a device can keep the card enabled and just toggle content visibility with this instead.
+
 **State:**
 ```js
 let budgetItems = []; // live from Firestore onSnapshot
+let budgetHidden = lsGet('fh_budgetHidden', false); // per-device privacy toggle
 ```
 **Key functions:**
 - `budgetDatesInRange(item, startD, endD)` — returns `['YYYY-MM-DD', ...]`
-- `renderBudgetCard()` — context-sensitive; called from `renderCurrentView()`
-- `saveBudgetItems()` / Firestore listener keeps `budgetItems[]` live
+- `budgetEventsForDate(dateKey)` — budget items due on one date; gates on `budgetHidden` (see above)
+- `renderBudgetCard()` — context-sensitive; called from `renderCurrentView()`; ends with `applyBudgetPrivacy()`
+- `applyBudgetPrivacy()` / `toggleBudgetPrivacy()` — the privacy toggle
+- Firestore `onSnapshot` (collection `budget`) keeps `budgetItems[]` live
 
-**HTML anchors:** `#budgetCard`, `#budgetTotalCard`, `#budgetTotalInner`, `#budgetCardLabel`
+**HTML anchors:** `#budgetCard`, `#budgetTotalCard`, `#budgetTotalInner`, `#budgetCardLabel`, `#budgetPrivacyBtn`, `#budgetHiddenNotice`, `#budgetAddBtn`
 
-**localStorage fallback:** `fh_budgetItems` — auto-migrated to Firestore on first Firebase-enabled run
+**localStorage:** `fh_budgetItems` (fallback only, auto-migrated to Firestore on first Firebase-enabled run) · `fh_budgetHidden` (always local — per-device privacy toggle, never synced)
 
 ---
 
@@ -959,6 +975,7 @@ const HA_TOGGLE_DOMAINS = ['light', 'switch', 'fan', 'input_boolean'];
 | `fh_mealLoadingMsgs` | JSON array | Meals | Custom loading messages |
 | `fh_mealTemplates` | JSON array | Meals | Fallback only — migrated to Firestore `mealTemplates` collection on first Firebase-enabled run |
 | `fh_budgetItems` | JSON array | Budget | Fallback only — migrated to Firestore on first Firebase-enabled run |
+| `fh_budgetHidden` | boolean | Budget | Always local — per-device privacy toggle (hides $ content in the sidebar card and all calendar views), never synced |
 | `fh_familyMembers` | JSON array | To-Do | `[{ name }]` — used to populate assignee dropdown |
 | `fh_icsSubs` | JSON array | ICS Subscriptions | Fallback only — migrated to Firestore `icsSubs` collection (deduped by URL) on first Firebase-enabled run |
 | `fh_icsCache` | JSON object | ICS Subscriptions | Always local — fetched-event cache, not shared state |
