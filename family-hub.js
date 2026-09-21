@@ -1549,6 +1549,26 @@ function renderWeekGrid() {
     hdr.className = 'week-day-header';
     hdr.innerHTML = `<div class="week-day-dow">${DOW[i].slice(0,3)}</div>
                      <div class="week-day-num">${day.getDate()}</div>`;
+    const weekCycleDayNum = schoolDayNumberFor(dateKey);
+    if (weekCycleDayNum != null) {
+      const cycleBadge = document.createElement('div');
+      cycleBadge.className = 'school-day-badge';
+      cycleBadge.textContent = `Day ${weekCycleDayNum}`;
+      hdr.appendChild(cycleBadge);
+      const cycleSubjects = schoolDaySubjectsForDayNumber(weekCycleDayNum);
+      if (cycleSubjects.length) {
+        const subjectsRow = document.createElement('div');
+        subjectsRow.className = 'school-day-subjects';
+        cycleSubjects.forEach(s => {
+          const chip = document.createElement('span');
+          chip.className = 'school-day-subject-chip';
+          chip.textContent = s.subject;
+          appendMemberBadges(chip, s.members);
+          subjectsRow.appendChild(chip);
+        });
+        hdr.appendChild(subjectsRow);
+      }
+    }
     if (googleToken) {
       hdr.title = 'Click to add event';
       hdr.style.cursor = 'pointer';
@@ -1765,6 +1785,28 @@ function renderDayGrid() {
   allDayRow.appendChild(adPills);
   wrap.appendChild(allDayRow);
 
+  // ── School Day Cycle section (day view) ──
+  const dayCycleNum = schoolDayNumberFor(dateKey);
+  if (dayCycleNum != null) {
+    const cycleSection = document.createElement('div');
+    cycleSection.className = 'school-day-section';
+    const cycleHdr = document.createElement('div');
+    cycleHdr.className = 'day-section-header';
+    cycleHdr.style.color = 'var(--accent2)';
+    cycleHdr.textContent = `🔁 Day ${dayCycleNum}`;
+    cycleSection.appendChild(cycleHdr);
+    schoolDaySubjectsForDayNumber(dayCycleNum).forEach(s => {
+      const r = document.createElement('div');
+      r.className = 'school-day-item';
+      const nameEl = document.createElement('span');
+      nameEl.className = 'school-day-subject-name';
+      nameEl.textContent = s.subject;
+      r.appendChild(nameEl);
+      appendMemberBadges(r, s.members);
+      cycleSection.appendChild(r);
+    });
+    wrap.appendChild(cycleSection);
+  }
 
   // ── Budget section (day view) ──
   const budgetDayItems = budgetEventsForDate(dateKey);
@@ -5554,6 +5596,20 @@ function attachFirestoreListeners() {
     injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
   }, _fsError));
 
+  // School Day Cycle — non-school days (skipped in the Day N count)
+  _fsUnsub.push(db.collection('schoolHolidays').orderBy('date').onSnapshot(snap => {
+    schoolHolidays = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    lcRenderSchoolHolidayList();
+    scdRenderCycleStatus(); renderCurrentView();
+  }, _fsError));
+
+  // School Day Cycle — per-kid subject assignments (subject × day numbers × members)
+  _fsUnsub.push(db.collection('schoolDaySubjects').orderBy('createdAt').onSnapshot(snap => {
+    schoolDaySubjects = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    lcRenderSchoolSubjectList();
+    renderCurrentView();
+  }, _fsError));
+
   // Trash & recycling
   _fsUnsub.push(db.collection('trashPickups').orderBy('createdAt').onSnapshot(snap => {
     trashPickups = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -5611,6 +5667,10 @@ function attachFirestoreListeners() {
   _fsUnsub.push(db.collection('settings').doc('mowConfig').onSnapshot(doc => {
     if (doc.exists) mowConfig = { ...MOW_CONFIG, ...doc.data().value };
     _mowReco = null;
+  }, _fsError));
+  _fsUnsub.push(db.collection('settings').doc('schoolDayCycle').onSnapshot(doc => {
+    if (doc.exists) schoolDayCycle = { ...SCHOOL_CYCLE_DEFAULTS, ...doc.data().value };
+    scdRenderCycleStatus(); scdRenderSubjectDayChecks(); renderCurrentView();
   }, _fsError));
 
   // One-time localStorage → Firestore migrations. Writes require auth, so only
@@ -5736,6 +5796,7 @@ function runFirestoreMigrations() {
     { ls: 'fh_wlocations',     key: 'weatherLocations' },
     { ls: 'fh_mealDietPrefs',  key: 'mealDietPrefs' },
     { ls: 'fh_mowConfig',      key: 'mowConfig' },
+    { ls: 'fh_schoolDayCycle', key: 'schoolDayCycle' },
     { ls: 'fh_haConfig',       key: 'homeAssistant' },   // token is NOT synced — see the Home Assistant section
   ].forEach(({ ls, key }) => {
     const raw = localStorage.getItem(ls);
@@ -10594,6 +10655,14 @@ let medications  = lsGet('fh_medications',  []);
 let schoolPeriods= lsGet('fh_school',       []);
 let trashPickups = lsGet('fh_trash',        []);
 
+// School Day Cycle — a repeating "Day N" rotation (e.g. a 4-day A/B/C/D
+// schedule) computed from a start/end date, skipping weekends + entered
+// non-school days. Shown only in Week/Day view — see renderWeekGrid/renderDayGrid.
+const SCHOOL_CYCLE_DEFAULTS = { startDate: '', endDate: '', cycleLength: 4 };
+let schoolDayCycle    = { ...SCHOOL_CYCLE_DEFAULTS, ...lsGet('fh_schoolDayCycle', {}) };
+let schoolHolidays    = lsGet('fh_schoolHolidays', []);     // [{id, date, label}] — non-school weekdays, skipped in the count
+let schoolDaySubjects = lsGet('fh_schoolDaySubjects', []);  // [{id, subject, dayNumbers:[1,3], members:['Kate']}]
+
 const LC_IDS = {
   birthdays: 'local_birthdays',
   meds:      'local_meds',
@@ -10740,6 +10809,7 @@ function lcOpenSettings() {
   lcRenderMedList();
   lcRenderSchoolList();
   lcRenderTrashList();
+  scdOpenSettings();
 }
 
 
@@ -10873,6 +10943,173 @@ async function lcDelSchool(id) {
     lcRenderSchoolList();
     injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
   }
+}
+
+// ── School Day Cycle ──
+// Distinct from "School Schedule" above (weekly recurring class periods with
+// times) — this is the school's internal Day 1/2/3/4… rotation, weekdays
+// only, skipping entered non-school days. Not a calendar event source: it
+// renders as a header badge in Week/Day view only (see renderWeekGrid /
+// renderDayGrid), so it isn't registered in LC_IDS/LC_DEFS.
+function schoolHolidaySet() {
+  return new Set(schoolHolidays.map(h => h.date));
+}
+
+// dateKey: 'YYYY-MM-DD'. Returns the 1-indexed cycle day number for that
+// date, or null if it's outside the configured range, a weekend, or an
+// entered non-school day.
+function schoolDayNumberFor(dateKey) {
+  const { startDate, endDate, cycleLength } = schoolDayCycle;
+  if (!startDate || !endDate || !cycleLength) return null;
+  if (dateKey < startDate || dateKey > endDate) return null;
+  const target = new Date(dateKey + 'T00:00:00');
+  if (target.getDay() === 0 || target.getDay() === 6) return null;
+  const skip = schoolHolidaySet();
+  if (skip.has(dateKey)) return null;
+  let count = 0;
+  const cur = new Date(startDate + 'T00:00:00');
+  while (cur <= target) {
+    const dow = cur.getDay();
+    if (dow !== 0 && dow !== 6 && !skip.has(localDateKey(cur))) count++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return count === 0 ? null : ((count - 1) % cycleLength) + 1;
+}
+
+function schoolDaySubjectsForDayNumber(n) {
+  if (n == null) return [];
+  return schoolDaySubjects.filter(s => s.dayNumbers.includes(n));
+}
+
+async function scdSaveCycle() {
+  const startDate   = document.getElementById('scdStartDate').value;
+  const endDate      = document.getElementById('scdEndDate').value;
+  const cycleLength = Math.max(2, Math.min(10, parseInt(document.getElementById('scdCycleLength').value, 10) || 4));
+  if (startDate && endDate && endDate < startDate) { alert('End date must be after start date.'); return; }
+  schoolDayCycle = { startDate, endDate, cycleLength };
+  saveFsSetting('schoolDayCycle', 'fh_schoolDayCycle', schoolDayCycle);
+  scdRenderCycleStatus();
+  scdRenderSubjectDayChecks();
+  renderCurrentView();
+}
+
+function scdRenderCycleStatus() {
+  const el = document.getElementById('scdCycleStatus');
+  if (!el) return;
+  if (!schoolDayCycle.startDate || !schoolDayCycle.endDate) {
+    el.textContent = 'Set a start and end date to begin tracking.';
+    return;
+  }
+  const todayNum = schoolDayNumberFor(localDateKey(new Date()));
+  el.textContent = todayNum != null
+    ? `Today is Day ${todayNum} of ${schoolDayCycle.cycleLength}.`
+    : 'Today falls outside the school year (or is a weekend / non-school day).';
+}
+
+function lcRenderSchoolHolidayList() {
+  const el = document.getElementById('scdHolidayList');
+  if (!el) return;
+  if (!schoolHolidays.length) { el.innerHTML = '<div class="lc-empty">No non-school days added yet.</div>'; return; }
+  const sorted = [...schoolHolidays].sort((a, b) => a.date < b.date ? -1 : 1);
+  el.innerHTML = sorted.map(h =>
+    `<div class="lc-item"><span class="lc-dot" style="background:var(--accent2)"></span>
+      <span class="lc-item-label">${esc(h.label || 'Day off')}</span>
+      <span class="lc-item-meta">${esc(h.date)}</span>
+      <button class="lc-del" onclick="scdDelHoliday('${h.id}')">✕</button></div>`
+  ).join('');
+}
+async function scdAddHoliday() {
+  const date  = document.getElementById('scdHolidayDate').value;
+  const label = document.getElementById('scdHolidayLabel').value.trim();
+  if (!date) { alert('Pick a date.'); return; }
+  const item = { date, label };
+  if (db) {
+    await db.collection('schoolHolidays').add({ ...item, createdAt: firebase.firestore.FieldValue.serverTimestamp() }).catch(_fsWriteError);
+  } else {
+    item.id = String(Date.now());
+    schoolHolidays.push(item);
+    localStorage.setItem('fh_schoolHolidays', JSON.stringify(schoolHolidays));
+    lcRenderSchoolHolidayList();
+    renderCurrentView();
+  }
+  document.getElementById('scdHolidayDate').value = '';
+  document.getElementById('scdHolidayLabel').value = '';
+}
+async function scdDelHoliday(id) {
+  if (db) {
+    await db.collection('schoolHolidays').doc(id).delete().catch(_fsWriteError);
+  } else {
+    schoolHolidays = schoolHolidays.filter(h => h.id !== id);
+    localStorage.setItem('fh_schoolHolidays', JSON.stringify(schoolHolidays));
+    lcRenderSchoolHolidayList();
+    renderCurrentView();
+  }
+}
+
+function scdRenderSubjectDayChecks() {
+  const el = document.getElementById('scdSubjectDays');
+  if (!el) return;
+  const n = schoolDayCycle.cycleLength || 4;
+  el.innerHTML = Array.from({ length: n }, (_, i) => i + 1)
+    .map(d => `<label><input type="checkbox" value="${d}">D${d}</label>`).join('');
+}
+function scdRenderSubjectMemberChecks() {
+  const el = document.getElementById('scdSubjectMembers');
+  if (!el) return;
+  el.innerHTML = familyMembers.length
+    ? familyMembers.map(m => `<label><input type="checkbox" value="${esc(m.name)}">${esc(m.name)}</label>`).join('')
+    : '<span class="lc-empty" style="padding:0">Add family members in Settings → Family first.</span>';
+}
+function lcRenderSchoolSubjectList() {
+  const el = document.getElementById('scdSubjectList');
+  if (!el) return;
+  if (!schoolDaySubjects.length) { el.innerHTML = '<div class="lc-empty">No subjects added yet.</div>'; return; }
+  el.innerHTML = schoolDaySubjects.map(s =>
+    `<div class="lc-item"><span class="lc-dot" style="background:var(--accent)"></span>
+      <span class="lc-item-label">${esc(s.subject)} — ${s.members.map(esc).join(', ')}</span>
+      <span class="lc-item-meta">Day ${s.dayNumbers.join(', ')}</span>
+      <button class="lc-del" onclick="scdDelSubject('${s.id}')">✕</button></div>`
+  ).join('');
+}
+async function scdAddSubject() {
+  const subject     = document.getElementById('scdSubjectName').value.trim();
+  const dayNumbers  = [...document.querySelectorAll('#scdSubjectDays input:checked')].map(i => parseInt(i.value));
+  const members     = [...document.querySelectorAll('#scdSubjectMembers input:checked')].map(i => i.value);
+  if (!subject)          { alert('Enter a subject name.'); return; }
+  if (!dayNumbers.length) { alert('Select at least one day.'); return; }
+  if (!members.length)    { alert('Select at least one family member.'); return; }
+  const item = { subject, dayNumbers, members };
+  if (db) {
+    await db.collection('schoolDaySubjects').add({ ...item, createdAt: firebase.firestore.FieldValue.serverTimestamp() }).catch(_fsWriteError);
+  } else {
+    item.id = String(Date.now());
+    schoolDaySubjects.push(item);
+    localStorage.setItem('fh_schoolDaySubjects', JSON.stringify(schoolDaySubjects));
+    lcRenderSchoolSubjectList();
+    renderCurrentView();
+  }
+  document.getElementById('scdSubjectName').value = '';
+}
+async function scdDelSubject(id) {
+  if (db) {
+    await db.collection('schoolDaySubjects').doc(id).delete().catch(_fsWriteError);
+  } else {
+    schoolDaySubjects = schoolDaySubjects.filter(s => s.id !== id);
+    localStorage.setItem('fh_schoolDaySubjects', JSON.stringify(schoolDaySubjects));
+    lcRenderSchoolSubjectList();
+    renderCurrentView();
+  }
+}
+
+function scdOpenSettings() {
+  document.getElementById('scdStartDate').value   = schoolDayCycle.startDate || '';
+  document.getElementById('scdEndDate').value     = schoolDayCycle.endDate || '';
+  document.getElementById('scdCycleLength').value = schoolDayCycle.cycleLength || 4;
+  scdRenderCycleStatus();
+  lcRenderSchoolHolidayList();
+  scdRenderSubjectDayChecks();
+  scdRenderSubjectMemberChecks();
+  lcRenderSchoolSubjectList();
 }
 
 // ── Trash & Recycling ──
@@ -11355,6 +11592,7 @@ const SETTINGS_GROUPS = [
   ]},
   { label: 'Calendar', items: [
     { tab: 'calendar', label: '📅 Calendar' },
+    { tab: 'school',   label: '🏫 School' },
     { tab: 'events',   label: '💡 Events' },
     { tab: 'mow',      label: '🌿 Mowing', desktopOnly: true },
   ]},

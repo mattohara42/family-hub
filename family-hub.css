@@ -2104,6 +2104,21 @@ body.has-bg .week-day-col.today { background: rgba(110,125,200,0.55); backdrop-f
 body.has-bg.light-mode .week-day-col.today { background: rgba(190,198,225,0.75); }
 .week-day-col.today .week-day-dow { color: var(--accent); }
 .week-day-col.today .week-day-num { background: var(--accent); color: #fff; }
+/* ── School Day Cycle badge (Week/Day view only) ── */
+.school-day-badge {
+  font-size: var(--text-xs); font-weight: var(--weight-bold);
+  color: var(--accent2); text-align: center; margin-top: 2px;
+}
+.school-day-subjects {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 3px;
+  margin-top: 2px;
+}
+.school-day-subject-chip {
+  display: inline-flex; align-items: center;
+  font-size: var(--text-xs); color: var(--text);
+  background: color-mix(in srgb, var(--accent2) 16%, var(--surface2));
+  border-radius: 8px; padding: 1px 5px;
+}
 .week-day-body {
   flex: 1; padding: 4px 3px;
   display: flex; flex-direction: column; gap: 2px;
@@ -2465,6 +2480,18 @@ body.nautical-mode .meal-adjust-chip:hover { background: var(--accent2); border-
 .day-todo-assignee { color: var(--accent); font-size: var(--fs-meta); }
 .day-add-btn { font-size: var(--fs-meta); color: var(--accent); cursor: pointer; margin-left: 4px; }
 .day-allday-empty { font-size: var(--fs-meta); color: var(--muted); padding-top: 3px; }
+.school-day-section {
+  background: color-mix(in srgb, var(--accent2) 7%, transparent); border-radius: 8px;
+  padding: 8px 10px; margin-bottom: 8px;
+  border: 1px solid color-mix(in srgb, var(--accent2) 20%, transparent);
+}
+.school-day-item {
+  display: flex; align-items: center; gap: 4px;
+  font-size: var(--fs-item); padding: 3px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent2) 10%, transparent);
+}
+.school-day-item:last-child { border-bottom: none; }
+.school-day-subject-name { color: var(--text); }
 .week-budget-strip {
   border-top: 1px solid color-mix(in srgb, var(--red) 25%, transparent);
   padding: 4px 5px 5px; background: color-mix(in srgb, var(--red) 7%, transparent);

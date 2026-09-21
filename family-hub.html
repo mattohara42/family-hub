@@ -869,25 +869,6 @@
           </div>
         </div>
 
-        <div class="lc-section">
-          <div class="lc-section-title">🏫 School Schedule</div>
-          <div id="lcSchoolList" class="lc-list"></div>
-          <div class="lc-add-row" style="flex-wrap:wrap;gap:5px">
-            <input id="lcSchoolName"  type="text" placeholder="Class / Period" class="lc-input" />
-            <input id="lcSchoolStart" type="time" class="lc-input lc-input-sm" value="08:00" />
-            <input id="lcSchoolEnd"   type="time" class="lc-input lc-input-sm" value="08:50" />
-            <div class="lc-day-checks" id="lcSchoolDays">
-              <label><input type="checkbox" value="1" checked>M</label>
-              <label><input type="checkbox" value="2" checked>T</label>
-              <label><input type="checkbox" value="3" checked>W</label>
-              <label><input type="checkbox" value="4" checked>Th</label>
-              <label><input type="checkbox" value="5" checked>F</label>
-            </div>
-            <input id="lcSchoolColor" type="color" value="#61afef" class="lc-color" title="Color" />
-            <button class="btn btn-primary btn-sm" onclick="lcAddSchoolPeriod()">Add</button>
-          </div>
-        </div>
-
         <div class="lc-section" style="border-bottom:none">
           <div class="lc-section-title">🗑 Trash &amp; Recycling</div>
           <div id="lcTrashList" class="lc-list"></div>
@@ -911,6 +892,64 @@
         </div>
 
       </div><!-- /calendar -->
+
+      <!-- ── School (weekly class periods + Day N cycle) ── -->
+      <div class="settings-panel" data-panel="school">
+
+        <div class="lc-section">
+          <div class="lc-section-title">🏫 School Schedule</div>
+          <div id="lcSchoolList" class="lc-list"></div>
+          <div class="lc-add-row" style="flex-wrap:wrap;gap:5px">
+            <input id="lcSchoolName"  type="text" placeholder="Class / Period" class="lc-input" />
+            <input id="lcSchoolStart" type="time" class="lc-input lc-input-sm" value="08:00" />
+            <input id="lcSchoolEnd"   type="time" class="lc-input lc-input-sm" value="08:50" />
+            <div class="lc-day-checks" id="lcSchoolDays">
+              <label><input type="checkbox" value="1" checked>M</label>
+              <label><input type="checkbox" value="2" checked>T</label>
+              <label><input type="checkbox" value="3" checked>W</label>
+              <label><input type="checkbox" value="4" checked>Th</label>
+              <label><input type="checkbox" value="5" checked>F</label>
+            </div>
+            <input id="lcSchoolColor" type="color" value="#61afef" class="lc-color" title="Color" />
+            <button class="btn btn-primary btn-sm" onclick="lcAddSchoolPeriod()">Add</button>
+          </div>
+        </div>
+
+        <div class="lc-section" style="border-bottom:none">
+          <div class="lc-section-title">🔁 School Day Cycle</div>
+          <div class="lc-add-row" style="flex-wrap:wrap;gap:5px">
+            <label style="font-size:var(--text-xs);color:var(--muted);display:flex;flex-direction:column;gap:2px">Cycle starts (Day 1)
+              <input id="scdStartDate" type="date" class="lc-input lc-input-sm" />
+            </label>
+            <label style="font-size:var(--text-xs);color:var(--muted);display:flex;flex-direction:column;gap:2px">School year ends
+              <input id="scdEndDate" type="date" class="lc-input lc-input-sm" />
+            </label>
+            <label style="font-size:var(--text-xs);color:var(--muted);display:flex;flex-direction:column;gap:2px">Cycle length
+              <input id="scdCycleLength" type="number" min="2" max="10" value="4" class="lc-input lc-input-sm" style="width:60px" />
+            </label>
+            <button class="btn btn-primary btn-sm" onclick="scdSaveCycle()">Save</button>
+          </div>
+          <div id="scdCycleStatus" style="font-size:var(--text-xs);color:var(--muted);margin-top:6px"></div>
+
+          <div class="lc-section-title" style="margin-top:14px">🚫 Non-School Days</div>
+          <div id="scdHolidayList" class="lc-list"></div>
+          <div class="lc-add-row">
+            <input id="scdHolidayDate"  type="date" class="lc-input lc-input-sm" />
+            <input id="scdHolidayLabel" type="text" placeholder="Label (e.g. Winter Break)" class="lc-input" />
+            <button class="btn btn-primary btn-sm" onclick="scdAddHoliday()">Add</button>
+          </div>
+
+          <div class="lc-section-title" style="margin-top:14px">📚 Class Schedule by Day</div>
+          <div id="scdSubjectList" class="lc-list"></div>
+          <div class="lc-add-row" style="flex-wrap:wrap;gap:5px">
+            <input id="scdSubjectName" type="text" placeholder="Subject (e.g. Gym)" class="lc-input" />
+            <div class="lc-day-checks" id="scdSubjectDays"></div>
+            <div class="lc-day-checks" id="scdSubjectMembers"></div>
+            <button class="btn btn-primary btn-sm" onclick="scdAddSubject()">Add</button>
+          </div>
+        </div>
+
+      </div><!-- /school -->
 
       <!-- ── Weather ── -->
       <div class="settings-panel" data-panel="weather">
