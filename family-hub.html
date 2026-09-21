@@ -869,6 +869,33 @@
           </div>
         </div>
 
+        <div class="lc-section" style="border-bottom:none">
+          <div class="lc-section-title">🗑 Trash &amp; Recycling</div>
+          <div id="lcTrashList" class="lc-list"></div>
+          <div class="lc-add-row">
+            <input id="lcTrashLabel" type="text" placeholder="Label (e.g. Trash)" class="lc-input" />
+            <select id="lcTrashDay" class="lc-select">
+              <option value="0">Sunday</option><option value="1">Monday</option>
+              <option value="2">Tuesday</option><option value="3">Wednesday</option>
+              <option value="4">Thursday</option><option value="5">Friday</option>
+              <option value="6">Saturday</option>
+            </select>
+            <select id="lcTrashEmoji" class="lc-select">
+              <option value="🗑">🗑 Trash</option>
+              <option value="♻️">♻️ Recycling</option>
+              <option value="🌿">🌿 Compost</option>
+              <option value="📦">📦 Bulk Pickup</option>
+            </select>
+            <input id="lcTrashColor" type="color" value="#8bc34a" class="lc-color" title="Color" />
+            <button class="btn btn-primary btn-sm" onclick="lcAddTrash()">Add</button>
+          </div>
+        </div>
+
+      </div><!-- /calendar -->
+
+      <!-- ── School (weekly class periods + Day N cycle) ── -->
+      <div class="settings-panel" data-panel="school">
+
         <div class="lc-section">
           <div class="lc-section-title">🏫 School Schedule</div>
           <div id="lcSchoolList" class="lc-list"></div>
@@ -888,7 +915,7 @@
           </div>
         </div>
 
-        <div class="lc-section">
+        <div class="lc-section" style="border-bottom:none">
           <div class="lc-section-title">🔁 School Day Cycle</div>
           <div class="lc-add-row" style="flex-wrap:wrap;gap:5px">
             <label style="font-size:var(--text-xs);color:var(--muted);display:flex;flex-direction:column;gap:2px">Cycle starts (Day 1)
@@ -922,29 +949,7 @@
           </div>
         </div>
 
-        <div class="lc-section" style="border-bottom:none">
-          <div class="lc-section-title">🗑 Trash &amp; Recycling</div>
-          <div id="lcTrashList" class="lc-list"></div>
-          <div class="lc-add-row">
-            <input id="lcTrashLabel" type="text" placeholder="Label (e.g. Trash)" class="lc-input" />
-            <select id="lcTrashDay" class="lc-select">
-              <option value="0">Sunday</option><option value="1">Monday</option>
-              <option value="2">Tuesday</option><option value="3">Wednesday</option>
-              <option value="4">Thursday</option><option value="5">Friday</option>
-              <option value="6">Saturday</option>
-            </select>
-            <select id="lcTrashEmoji" class="lc-select">
-              <option value="🗑">🗑 Trash</option>
-              <option value="♻️">♻️ Recycling</option>
-              <option value="🌿">🌿 Compost</option>
-              <option value="📦">📦 Bulk Pickup</option>
-            </select>
-            <input id="lcTrashColor" type="color" value="#8bc34a" class="lc-color" title="Color" />
-            <button class="btn btn-primary btn-sm" onclick="lcAddTrash()">Add</button>
-          </div>
-        </div>
-
-      </div><!-- /calendar -->
+      </div><!-- /school -->
 
       <!-- ── Weather ── -->
       <div class="settings-panel" data-panel="weather">

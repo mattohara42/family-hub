@@ -76,7 +76,7 @@ family-hub.js     (all logic)
 ├── ── CALENDAR TABS ──        renderCalendarTabs
 ├── ── CALENDAR EVENT EDITOR── openEventEditor, saveCalEvent, deleteCalEvent
 ├── ── LOCAL CALENDARS ──      injectLocalEvents, lcAddBirthday/Medication/etc. (LC_IDS, LC_DEFS)
-├── ── SCHOOL DAY CYCLE ──     schoolDayNumberFor, scdAddHoliday/scdAddSubject (Week/Day view badge only, no LC_IDS entry)
+├── ── SCHOOL DAY CYCLE ──     schoolDayNumberFor, scdAddHoliday/scdAddSubject (Week/Day view badge only, no LC_IDS entry) — settings UI lives in its own top-level 'school' tab, not 'calendar' (see below)
 ├── ── BUDGET ──               renderBudgetCard (context-sensitive), budgetDatesInRange
 ├── ── WEATHER ──              showWeatherLocation, loadWeatherByCity, renderWeatherData,
 │                              renderSunArc, renderWeatherTicker, prev/nextWeatherLocation,

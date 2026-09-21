@@ -11592,6 +11592,7 @@ const SETTINGS_GROUPS = [
   ]},
   { label: 'Calendar', items: [
     { tab: 'calendar', label: '📅 Calendar' },
+    { tab: 'school',   label: '🏫 School' },
     { tab: 'events',   label: '💡 Events' },
     { tab: 'mow',      label: '🌿 Mowing', desktopOnly: true },
   ]},
