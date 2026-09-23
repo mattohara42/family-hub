@@ -11230,7 +11230,7 @@ const THEME_COLORS = {
   nautical:         '#1a2e52',
   aurora:           '#ede8ff',
   colorblind:       '#0d1117',
-  candy:            '#1a0b2e',
+  candy:            '#fdf0fa',
 };
 
 const EMOJI_PICKER_OPTIONS = [
