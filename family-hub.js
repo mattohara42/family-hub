@@ -243,7 +243,7 @@ let todoItems       = []; // in-memory mirror of Firestore 'todo' collection for
 if (localStorage.getItem('fh_mode') === 'amazing')        localStorage.setItem('fh_mode', 'nautical');
 if (localStorage.getItem('fh_mode') === 'nautical-light') localStorage.setItem('fh_mode', 'nautical');
 const _savedMode    = localStorage.getItem('fh_mode');
-let appMode         = _savedMode || 'auto';  // 'auto' | 'light' | 'dark' | 'nautical' | 'aurora' | 'colorblind'
+let appMode         = _savedMode || 'auto';  // 'auto' | 'light' | 'dark' | 'nautical' | 'aurora' | 'colorblind' | 'candy'
 // Flavor registry — to ship a new flavor, add an entry here AND a matching
 // `body.flavor-<id>` section in family-hub.css. Everything else is data-driven.
 const FLAVORS = [
@@ -11230,6 +11230,7 @@ const THEME_COLORS = {
   nautical:         '#1a2e52',
   aurora:           '#ede8ff',
   colorblind:       '#0d1117',
+  candy:            '#1a0b2e',
 };
 
 const EMOJI_PICKER_OPTIONS = [
@@ -11316,11 +11317,12 @@ function resolveAppMode(mode) {
 function applyAppMode(mode) {
   appMode = mode;
   const effective = resolveAppMode(mode);
-  document.body.classList.remove('light-mode', 'nautical-mode', 'aurora-mode', 'colorblind-mode');
+  document.body.classList.remove('light-mode', 'nautical-mode', 'aurora-mode', 'colorblind-mode', 'candy-mode');
   if (effective === 'light')      document.body.classList.add('light-mode');
   if (effective === 'nautical')   document.body.classList.add('nautical-mode');
   if (effective === 'aurora')     document.body.classList.add('aurora-mode');
   if (effective === 'colorblind') document.body.classList.add('colorblind-mode');
+  if (effective === 'candy')      document.body.classList.add('candy-mode');
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.content = THEME_COLORS[effective] || THEME_COLORS.dark;
 }
@@ -11393,6 +11395,7 @@ function setAppMode(mode) {
   document.getElementById('modeNautical').className       = 'btn btn-sm' + (mode === 'nautical'       ? ' btn-mode-active' : '');
   document.getElementById('modeAurora').className         = 'btn btn-sm' + (mode === 'aurora'         ? ' btn-mode-active' : '');
   document.getElementById('modeColorblind').className     = 'btn btn-sm' + (mode === 'colorblind'     ? ' btn-mode-active' : '');
+  document.getElementById('modeCandy').className           = 'btn btn-sm' + (mode === 'candy'          ? ' btn-mode-active' : '');
 }
 
 function setFlavor(flavor) {
@@ -11781,6 +11784,7 @@ function openSettings() {
   document.getElementById('modeNautical').className        = 'btn btn-sm' + (appMode === 'nautical'       ? ' btn-mode-active' : '');
   document.getElementById('modeAurora').className          = 'btn btn-sm' + (appMode === 'aurora'         ? ' btn-mode-active' : '');
   document.getElementById('modeColorblind').className      = 'btn btn-sm' + (appMode === 'colorblind'     ? ' btn-mode-active' : '');
+  document.getElementById('modeCandy').className            = 'btn btn-sm' + (appMode === 'candy'          ? ' btn-mode-active' : '');
   highlightFlavorButtons();
   renderBgPreview();
   const statusEl = document.getElementById('bgStatus');

@@ -623,6 +623,119 @@ body.colorblind-mode .cal-day.today            { background: rgba(86,180,233,0.4
 body.colorblind-mode .week-day-col.today       { background: rgba(86,180,233,0.30); }
 body.colorblind-mode .cal-dow.current-dow      { background: rgba(86,180,233,0.20); border-radius: 6px; }
 
+/* ════════════════════════════════════════════════════════════════
+   🍬  CANDY MODE — Jolly-Rancher Jewel Tones, Glassy Jelly Shine
+   A deep grape backdrop so saturated candy colors pop, plus a glossy
+   highlight layered on top of color (not just a flat tint) on the
+   surfaces mobile actually lives in day to day: Agenda event fills,
+   the quick-add FAB, the Lists sheet, and the view toggle. Requested
+   as an alternative to the Agenda view's 18% pastel wash — see the
+   comment above .agenda-event for why that wash exists at all.
+   ════════════════════════════════════════════════════════════════ */
+body.candy-mode {
+  --bg:                 #1a0b2e;
+  --surface:            rgba(45, 20, 68, 0.68);
+  --surface2:           rgba(64, 28, 92, 0.62);
+  --accent:             #ff2e7e;          /* cherry jolly rancher pink */
+  --accent2:            #ff8a1e;          /* orange jolly rancher */
+  --green:              #2ee88a;          /* apple candy green */
+  --red:                #ff3b5c;
+  --text:               #fbeeff;
+  --muted:              #b98ad9;
+  --line:          rgba(255,60,150,0.28);
+  --surface-solid: #2a1240;
+  --surface-hi:    #3d1a5c;
+  --surface-lo:    #1c0a2e;
+  --radius:             14px;
+  --shadow:             0 0 24px rgba(255,46,126,0.30), 0 10px 26px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.14);
+  --scrim:              rgba(20,5,35,0.50);
+  --card-bg-photo:      rgba(26,11,46,0.75);
+  --cal-card-bg-photo:  rgba(26,11,46,0.55);
+  --cal-day-bg-photo:   rgba(64,28,92,0.22);
+  --mini-card-bg-photo: rgba(64,28,92,0.70);
+  --strip-bg-photo:     rgba(26,11,46,0.70);
+}
+
+/* ── Primary buttons + active mode pill: glossy, raised jelly-bean look.
+   Each gets a radial highlight blob (the "shine") standing in for a light
+   source at upper-left, plus a 4-layer shadow stack that reads as a raised
+   3-D surface: inset top rim light, inset bottom contact shadow (the
+   bean's own curvature), a tight drop shadow (grounds it), and a soft
+   colored glow (the "jelly" bounce light). :active flattens it back down. */
+body.candy-mode .btn-primary {
+  background:
+    radial-gradient(140% 200% at 30% -20%, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 45%),
+    linear-gradient(160deg, #ff6fa8 0%, #ff2e7e 55%, #d9105c 100%);
+  color: #fff;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.45),
+    inset 0 -3px 5px rgba(0,0,0,0.20),
+    0 2px 3px rgba(0,0,0,0.30),
+    0 6px 14px rgba(255,46,126,0.45);
+  transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
+}
+body.candy-mode .btn-primary:hover  { filter: brightness(1.08); }
+body.candy-mode .btn-primary:active { transform: translateY(1px); filter: brightness(0.96); }
+body.candy-mode .btn-mode-active {
+  background:
+    radial-gradient(140% 200% at 30% -20%, rgba(255,255,255,0.50) 0%, rgba(255,255,255,0) 45%),
+    linear-gradient(160deg, #ff6fa8 0%, #ff2e7e 100%) !important;
+  color: #fff !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.40),
+    inset 0 -3px 5px rgba(0,0,0,0.18),
+    0 2px 6px rgba(255,46,126,0.35);
+}
+
+/* ── Agenda event fills: a raised jelly-bean card, not a flat tint. Border-
+   left and the color mix still key off --event-color (ev.color from
+   family-hub.js), so contrast still tracks the event's own calendar color —
+   only the mix ratio and the shine/shadow layers change. The inset bottom
+   shadow simulates the card's own curvature (rounded like a jelly bean);
+   hover lifts it, :active presses it back down. */
+body.candy-mode .agenda-event {
+  background:
+    radial-gradient(120% 140% at 22% -20%, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0) 48%),
+    linear-gradient(160deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0) 40%),
+    color-mix(in srgb, var(--event-color) 42%, var(--surface-solid));
+  border-left-width: 4px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.35),
+    inset 0 -6px 10px -6px rgba(0,0,0,0.35),
+    0 3px 3px rgba(0,0,0,0.25),
+    0 8px 16px rgba(0,0,0,0.30);
+  transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
+}
+body.candy-mode .agenda-event.agenda-clickable:hover {
+  filter: brightness(1.1) saturate(1.15);
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.40),
+    inset 0 -6px 10px -6px rgba(0,0,0,0.35),
+    0 4px 4px rgba(0,0,0,0.25),
+    0 14px 22px rgba(0,0,0,0.35);
+}
+body.candy-mode .agenda-event.agenda-clickable:active {
+  filter: brightness(0.97);
+  transform: translateY(0) scale(0.99);
+  box-shadow:
+    inset 0 2px 6px rgba(0,0,0,0.35),
+    0 1px 2px rgba(0,0,0,0.25);
+}
+
+/* ── Month/Day/Agenda view toggle: same raised-jelly treatment as the
+   buttons above, scaled down for a small pill ── */
+body.candy-mode .cal-view-tab.active {
+  background:
+    radial-gradient(140% 200% at 30% -20%, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 45%),
+    linear-gradient(160deg, #ff6fa8 0%, #ff2e7e 100%);
+  border-color: transparent;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.45),
+    inset 0 -3px 5px rgba(0,0,0,0.20),
+    0 3px 8px rgba(255,46,126,0.35);
+}
+
 /* ── Light mode overrides ── */
 body.light-mode {
   --bg: #f0f2f8;
@@ -5733,6 +5846,65 @@ body.flavor-tactile #saverClockTime { font-family: var(--font-display); }
   body.flavor-tactile.light-mode .mobile-sheet,
   body.flavor-tactile.aurora-mode .mobile-sheet {
     box-shadow: 0 -2px 10px rgba(70,55,30,.10);
+  }
+}
+
+/* ── Candy mobile chrome (FAB + app icon + Lists sheet) — same raised-jelly
+   shine/shadow stack as the desktop buttons above: a radial highlight blob
+   for the light source, inset top rim + inset bottom contact shadow for
+   curvature, then a grounding drop shadow. The FAB additionally presses
+   down on :active since it's the one element here people actually tap
+   and watch respond. ── */
+@media (max-width: 640px) {
+  body.candy-mode .mobile-fab-add {
+    background:
+      radial-gradient(120% 140% at 32% 18%, rgba(255,255,255,0.75) 0%, rgba(255,255,255,0) 42%),
+      linear-gradient(160deg, #ff6fa8 0%, #ff2e7e 55%, #d9105c 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.55),
+      inset 0 -4px 6px rgba(0,0,0,0.25),
+      0 2px 3px rgba(0,0,0,0.35),
+      0 8px 18px rgba(255,46,126,0.50);
+    transition: transform .12s ease, box-shadow .12s ease;
+  }
+  body.candy-mode .mobile-fab-add:active {
+    transform: translateY(2px) scale(0.96);
+    box-shadow:
+      inset 0 2px 6px rgba(0,0,0,0.35),
+      0 2px 6px rgba(255,46,126,0.35);
+  }
+  body.candy-mode .cal-app-emoji {
+    background: linear-gradient(160deg, var(--surface-hi) 0%, var(--surface-solid) 100%);
+    border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.18),
+      inset 0 -2px 4px rgba(0,0,0,0.25),
+      0 2px 4px rgba(0,0,0,0.25);
+  }
+  body.candy-mode .mobile-sheet {
+    background: linear-gradient(180deg, var(--surface-hi) 0%, var(--surface-solid) 45%);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.14),
+      0 -4px 8px rgba(0,0,0,0.30),
+      0 -16px 40px rgba(255,46,126,0.22);
+  }
+  body.candy-mode .mobile-sheet-tab.active {
+    background:
+      radial-gradient(140% 200% at 30% -20%, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 45%),
+      linear-gradient(160deg, #ff6fa8 0%, #ff2e7e 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.45),
+      inset 0 -3px 5px rgba(0,0,0,0.20),
+      0 3px 8px rgba(255,46,126,0.35);
+  }
+  body.candy-mode .mobile-sheet-close {
+    background:
+      radial-gradient(140% 200% at 30% -20%, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 45%),
+      linear-gradient(160deg, #ff6fa8 0%, #ff2e7e 100%) !important;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.45),
+      inset 0 -3px 5px rgba(0,0,0,0.20),
+      0 3px 8px rgba(255,46,126,0.35);
   }
 }
 
