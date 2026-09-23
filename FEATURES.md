@@ -327,11 +327,10 @@ Three modes, toggled via ⚙️ Settings → Look & Feel:
 | Dark (default) | _(none)_ | Deep charcoal, blue accent |
 | Light | `light-mode` | Light grey background, dark text |
 | Nautical | `nautical-mode` | Navy hull + 20% diagonal white stripes, beige-gold accents, anchor watermark, animated wave footer |
-| Candy | `candy-mode` | Deep grape background, saturated pink/orange jolly-rancher accents, glossy gradient + shine highlight on the Agenda event fills, mobile quick-add FAB, Lists sheet, and view toggle |
 
 **State:**
 ```js
-let appMode = localStorage.getItem('fh_mode') || 'auto'; // 'auto' | 'light' | 'dark' | 'nautical' | 'aurora' | 'colorblind' | 'candy'
+let appMode = localStorage.getItem('fh_mode') || 'auto'; // 'auto' | 'light' | 'dark' | 'nautical' | 'aurora' | 'colorblind'
 let appFlavor = localStorage.getItem('fh_flavor') || 'basic'; // 'basic' | 'tactile' — design-system axis, orthogonal to appMode
 ```
 **Auto mode (added 2026-09-17):** `'auto'` is the true default — before any explicit pick, the app already follows the device's `prefers-color-scheme`, and `'🌓 Auto'` in Settings → Look & Feel lets you opt back into that after picking something else. `resolveAppMode(mode)` maps `'auto'` to `'light'`/`'dark'` off `matchMedia('(prefers-color-scheme: light)')`; `applyAppMode()` applies classes off the *resolved* value while `appMode` itself keeps the logical `'auto'`. A `change` listener on that same media query reapplies whenever `appMode === 'auto'` — same pattern as the `'auto'` layout-orientation listener a bit further down the file. Auto only ever resolves to light/dark; Nautical/Aurora/Accessible stay manual-only picks, since they're not a day/night distinction.
@@ -349,11 +348,6 @@ let appFlavor = localStorage.getItem('fh_flavor') || 'basic'; // 'basic' | 'tact
 - Rope-style card header dividers (repeating-linear-gradient brass strands)
 - Compass rose radial gradient on calendar card body
 - Beige-gold DOW labels, today cell porthole glow, gradient brass buttons
-
-**Candy-specific CSS elements (added 2026-09-23):** a straight color-token swap like Aurora/Colorblind, plus a few glossy overrides layered on top rather than a full re-skin like Nautical's watermark/wave:
-- `.agenda-event` gets a steeper `color-mix` (40% vs. the base 18%) plus a diagonal white-to-transparent gloss layer and an inset highlight — this is the "pastel" fix; border-left still keys off `--event-color` so it still tracks the event's own calendar color
-- `.btn-primary`, `.btn-mode-active`, `.cal-view-tab.active`, `.mobile-fab-add`, `.mobile-sheet`, `.mobile-sheet-tab.active`, `.mobile-sheet-close`, `.cal-app-emoji` (mobile) all get a pink gradient + inset shine instead of a flat `var(--accent)` fill
-- The mobile-only overrides live in their own `@media (max-width: 640px)` block right after the Tactile mobile-chrome block, not inline with the base `body.candy-mode` token block
 
 **localStorage:** `fh_mode` — migration: `'amazing'` is auto-upgraded to `'nautical'` on load
 
@@ -958,7 +952,7 @@ const HA_TOGGLE_DOMAINS = ['light', 'switch', 'fan', 'input_boolean'];
 | Key | Type | Feature | Notes |
 |---|---|---|---|
 | `fh_name` | string | Settings | Display name |
-| `fh_mode` | string | Theme | `'light'` \| `'dark'` \| `'nautical'` \| `'aurora'` \| `'colorblind'` \| `'candy'` |
+| `fh_mode` | string | Theme | `'light'` \| `'dark'` \| `'nautical'` \| `'aurora'` \| `'colorblind'` |
 | `fh_flavor` | string | Flavor | `'basic'` \| `'tactile'` — design-system axis, orthogonal to theme |
 | `fh_calView` | string | Calendar | `'month'` \| `'week'` \| `'day'` \| `'agenda'` — unset defaults to `'agenda'` on mobile, `'week'` on desktop (§20) |
 | `fh_calIds` | JSON array | Calendar | Google Calendar IDs |
