@@ -1060,6 +1060,12 @@ window.onerror = (msg, src, line, col, err) => {
 // clients.claim, so when a new sw.js lands it takes control and fires
 // controllerchange — we reload to pick it up, but only while idle (no modal
 // open, no interaction for 60s) so we never interrupt someone mid-edit.
+// netlify-build.js stamps a unique CACHE_VERSION on every deploy, so two
+// deploys landing a few minutes apart (e.g. two merged PRs back to back)
+// each look like a fresh update — without a cooldown, that reloads the tab
+// once per deploy in quick succession, which reads as a reload loop even
+// though each one is a distinct, legitimate update.
+const RELOAD_COOLDOWN_MS = 5 * 60000;
 let _swUpdatePending = false;
 let _lastActivityTs  = Date.now();
 function markActivity() { _lastActivityTs = Date.now(); }
@@ -1069,6 +1075,10 @@ function maybeReloadForUpdate() {
     .some(m => getComputedStyle(m).display !== 'none');
   if (busy) return;
   if (Date.now() - _lastActivityTs < 60000) return;
+  let lastReload = 0;
+  try { lastReload = Number(sessionStorage.getItem('fh_lastAutoReload')) || 0; } catch {}
+  if (Date.now() - lastReload < RELOAD_COOLDOWN_MS) return;
+  try { sessionStorage.setItem('fh_lastAutoReload', String(Date.now())); } catch {}
   location.reload();
 }
 
