@@ -664,6 +664,34 @@ body.candy-mode {
   --strip-bg-photo:     rgba(255,235,248,0.72);
 }
 
+/* ── Event editor / Settings modals: light pink-glass card with a jelly
+   glow, matching the rest of the light palette above. Every other theme
+   (light/nautical/aurora) overrides these same two selectors elsewhere
+   in the file — Candy never did, so it fell through to their hardcoded
+   dark-navy default regardless of Candy's own bg/text being light or
+   dark, putting dark ink on a dark shell. ── */
+body.candy-mode #eventEditorModal .modal {
+  background: linear-gradient(160deg, #ffffff 0%, #fff0fa 55%, #ffe3f4 100%);
+  border-top: 1px solid rgba(255,255,255,1);
+  border-left: 1px solid rgba(255,46,126,.18);
+  box-shadow:
+    0  1px 0  rgba(255,255,255,1) inset,
+    0  0  80px rgba(255,46,126,.20),
+    0  0  40px rgba(255,46,126,.14),
+    0  0  16px rgba(255,46,126,.10),
+    0  0   0  1px rgba(255,46,126,.18);
+  transform: perspective(800px) rotateX(2deg) translateY(-4px);
+  transform-origin: 50% 0%;
+}
+body.candy-mode #settingsModal .modal {
+  background: #fff5fc;
+  box-shadow:
+    0 8px 48px rgba(0,0,0,.15),
+    0 2px 12px rgba(0,0,0,.10),
+    0 0 80px rgba(255,46,126,.16),
+    0 0 200px rgba(255,46,126,.08);
+}
+
 /* ── Primary buttons + active mode pill: glossy, raised jelly-bean look.
    Each gets a radial highlight blob (the "shine") standing in for a light
    source at upper-left, plus a 4-layer shadow stack that reads as a raised
