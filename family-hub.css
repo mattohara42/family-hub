@@ -2871,6 +2871,15 @@ body.nautical-mode #eventEditorModal .modal {
 .evt-editor-time-row input[type=date],
 .evt-editor-time-row input[type=time] {
   padding-left: 6px; padding-right: 6px;
+  /* Best-effort: iOS's native date/time picker paints wider than the box
+     it's given and isn't clipped by default, so the overflow bleeds into
+     the gap and the neighboring field instead of respecting this box's
+     edge. Unverified whether WebKit actually honors overflow on a native
+     form control's own internal rendering (it may not). If this doesn't
+     fully contain it, .evt-editor-time-row needs flex-direction: column
+     instead, which guarantees no overlap since there's no neighbor to
+     bleed into. */
+  overflow: hidden;
 }
 .evt-editor-footer {
   display: flex; justify-content: space-between; align-items: center;
@@ -2942,7 +2951,14 @@ body.nautical-mode #eventEditorModal .modal {
 .list-empty { color: var(--muted); font-size: var(--text-xs); text-align: center; padding: 6px 0; }
 
 /* ── Event Details (read-only events: ICS feeds, holidays, local calendars) ── */
-.evt-details-modal { max-width: 460px; }
+/* Unlike Settings/Event Editor, this modal never got its own opaque
+   background: it was inheriting the base .modal rule's `var(--surface)`,
+   which is deliberately translucent (for cards sitting over a background
+   photo) rather than solid. Over anything busy behind it (a background
+   photo, or just the Agenda list's own text) that read as illegible,
+   especially in dark mode. `--surface-solid` is the same per-theme token
+   Settings/Event Editor already use for exactly this. */
+.evt-details-modal { max-width: 460px; background: var(--surface-solid); }
 .evt-details-head {
   display: flex; align-items: flex-start; justify-content: space-between;
   gap: 10px; margin-bottom: 4px;
