@@ -649,6 +649,18 @@ body.light-mode {
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* iOS Safari's elastic bounce/rubber-band is a document-level effect, not
+   tied to whether body actually overflows: body's own `overflow: hidden`
+   below doesn't stop it. `overscroll-behavior: none` on both html and body
+   is what actually pins the page down so a drag can't pan/slide the whole
+   viewport; it doesn't affect scrolling inside a genuinely scrollable
+   descendant (.modal, .sidebar, #weekView, …), only the document root. */
+html {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 body {
   background: var(--bg);
   color: var(--text);
@@ -657,6 +669,7 @@ body {
   line-height: var(--leading-normal);
   height: 100dvh;
   overflow: hidden;
+  overscroll-behavior: none;
   display: flex;
   flex-direction: column;
   padding: 10px 14px;
@@ -4492,7 +4505,8 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
 .settings-panels,
 .sidebar,
 #weekView,
-.year-strip-scroll {
+.year-strip-scroll,
+#eventEditorModal .modal {
   -webkit-overflow-scrolling: touch;
 }
 
@@ -4709,6 +4723,34 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
     padding-bottom: max(28px, env(safe-area-inset-bottom, 0px));
     padding-left: 12px;
     padding-right: 12px;
+  }
+  /* .modal-overlay scrolls too (base rule), so this modal was sitting in
+     two nested scroll containers: dragging near the top/bottom of its own
+     content handed the gesture to the overlay instead, which moved the
+     whole card around the viewport rather than just scrolling what's inside
+     it. #eventEditorModal .modal already caps its own height and scrolls
+     internally, so the overlay never needs to scroll on top of that. */
+  #eventEditorModal {
+    overflow-y: hidden;
+    padding: 6px;
+  }
+  /* Claw back a bit more width for the paired date/time fields (below).
+     Stacking them to one-per-line solved the overlap outright but cost too
+     much vertical space, so this trims every layer around the pair instead:
+     overlay padding above, modal padding + input padding here. */
+  #eventEditorModal .modal {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  .evt-editor-time-row {
+    gap: 4px;
+  }
+  .evt-editor-time-row > .field {
+    flex-basis: 130px; min-width: 130px;
+  }
+  .evt-editor-time-row input[type=date],
+  .evt-editor-time-row input[type=time] {
+    padding-left: 4px; padding-right: 4px;
   }
 
   /* Preferences: bigger text + line-height for what's left after
