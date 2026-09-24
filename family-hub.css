@@ -4710,6 +4710,25 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
     padding-left: 12px;
     padding-right: 12px;
   }
+  /* .modal-overlay scrolls too (base rule), so this modal was sitting in
+     two nested scroll containers: dragging near the top/bottom of its own
+     content handed the gesture to the overlay instead, which moved the
+     whole card around the viewport rather than just scrolling what's inside
+     it. #eventEditorModal .modal already caps its own height and scrolls
+     internally, so the overlay never needs to scroll on top of that. */
+  #eventEditorModal {
+    overflow-y: hidden;
+  }
+  /* Side-by-side date/time fields depend on native iOS picker controls
+     fitting a ~150px box; they don't always, and the overflow bleeds into
+     the neighboring field instead of wrapping. Stacking removes the guess. */
+  .evt-editor-time-row {
+    flex-direction: column;
+  }
+  .evt-editor-time-row > .field {
+    flex-basis: auto;
+    min-width: 0;
+  }
 
   /* Preferences: bigger text + line-height for what's left after
      renderSettingsNav() drops the desktop-only panels (family-hub.js).
