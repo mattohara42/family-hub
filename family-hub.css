@@ -2207,6 +2207,13 @@ body.has-bg.light-mode .day-hour-row.current-hour { background: rgba(190,198,225
 }
 .day-event-pill .evt-title { font-weight: var(--weight-semi); }
 .day-event-pill .evt-time  { font-size: var(--fs-meta); opacity: .85; font-variant-numeric: tabular-nums; }
+/* Time + member badges share one row (built by appendPillMeta()) — without
+   this, badges appended straight into the column-flex pill above each land
+   on their own row, stacking vertically instead of sitting beside the time. */
+.day-event-pill .evt-meta {
+  display: flex; align-items: center; gap: 4px;
+}
+.day-event-pill .evt-meta .evt-member-badge { margin-left: 0; }
 
 /* ── Meal Planning — Week strip ── */
 .week-meals-strip {
@@ -2505,13 +2512,43 @@ body.nautical-mode .meal-adjust-chip:hover { background: var(--accent2); border-
   padding: 8px 10px; margin-bottom: 8px;
   border: 1px solid color-mix(in srgb, var(--accent2) 20%, transparent);
 }
-.school-day-item {
-  display: flex; align-items: center; gap: 4px;
-  font-size: var(--fs-item); padding: 3px 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--accent2) 10%, transparent);
+/* Header + every subject sit on one line (startMarqueeIfOverflowing() in
+   family-hub.js decides whether it needs to scroll — see below) instead of
+   the old one-row-per-subject list, which was the tallest thing in Day view
+   on a day with 2-3 subjects. */
+.school-day-line {
+  display: flex; align-items: center; gap: 8px;
+  overflow: hidden;
 }
-.school-day-item:last-child { border-bottom: none; }
+.school-day-label {
+  font-size: var(--fs-title); font-weight: var(--weight-bold);
+  flex-shrink: 0;
+}
+.school-day-track {
+  display: inline-flex; align-items: center; gap: 10px;
+  min-width: 0; white-space: nowrap;
+}
+.school-day-item {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: var(--fs-item); flex-shrink: 0;
+}
+.school-day-sep { color: var(--muted); flex-shrink: 0; }
 .school-day-subject-name { color: var(--text); }
+/* Only added when startMarqueeIfOverflowing() measures real overflow — most
+   days fit and should stay still, not animate for its own sake. */
+.school-day-scrolling .school-day-track {
+  animation: school-day-marquee 6s ease-in-out infinite;
+  animation-delay: 1s;   /* the "after one second" pause before it moves */
+}
+@keyframes school-day-marquee {
+  0%, 12%  { transform: translateX(0); }
+  50%, 62% { transform: translateX(var(--marquee-dist, 0)); }
+  100%     { transform: translateX(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .school-day-line { overflow-x: auto; }
+  .school-day-scrolling .school-day-track { animation: none; }
+}
 .week-budget-strip {
   border-top: 1px solid color-mix(in srgb, var(--red) 25%, transparent);
   padding: 4px 5px 5px; background: color-mix(in srgb, var(--red) 7%, transparent);
@@ -4570,6 +4607,16 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
      header title is dropped in this context; action buttons in the same row
      (SMS, refresh, clear-done/-all) stay. */
   .mobile-sheet-body .card-header h2 { display: none; }
+  /* Widget drag-to-reorder has no meaning inside the sheet — a card's
+     position there is fixed by MOBILE_SHEET_SECTIONS, not draggable — so
+     the ⠿ grip handle initWidgetDragDrop() injects into every card header
+     is dead chrome here even though it's harmless (nothing calls it). */
+  .mobile-sheet-body .widget-drag-handle { display: none; }
+  /* SMS still works from a phone (sendToContact()'s sms: link opens the
+     native Messages app), just not worth a full text button in a header
+     row that's otherwise gone icon-only — shrink it to match. */
+  .mobile-sheet-body #smsTriggerBtn .sms-btn-label { display: none; }
+  .mobile-sheet-body #smsTriggerBtn { padding: 4px 8px; }
   /* ...which leaves the header row holding only its action-button group;
      space-between (the desktop default) would flush that lone child left. */
   .mobile-sheet-body .card-header { justify-content: flex-end; }
