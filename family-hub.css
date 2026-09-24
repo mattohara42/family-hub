@@ -2830,11 +2830,10 @@ body.nautical-mode #eventEditorModal .modal {
   background: color-mix(in srgb, currentColor 28%, var(--surface2));
 }
 .evt-editor-time-row {
-  display: flex; gap: 8px; align-items: center;
+  display: flex; gap: 8px;
 }
-.evt-editor-time-row input[type=time],
-.evt-editor-time-row input[type=date] {
-  flex: 1;
+.evt-editor-time-row > .field {
+  flex: 1; min-width: 0;
 }
 .evt-editor-footer {
   display: flex; justify-content: space-between; align-items: center;
@@ -2848,7 +2847,7 @@ body.nautical-mode #eventEditorModal .modal {
 }
 .btn-danger:hover { background: color-mix(in srgb, var(--red) 30%, transparent); }
 .evt-editor-allday-row {
-  display: flex; align-items: center; gap: 8px; margin: 8px 0;
+  display: flex; align-items: center; gap: 8px; margin: 0 0 14px;
 }
 .evt-editor-members { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .evt-member-chip {

@@ -1622,24 +1622,23 @@
       </div>
     </div>
 
-    <div class="field">
-      <label>Start date</label>
-      <input type="date" id="evtEdDate" />
-    </div>
-
     <div class="evt-editor-allday-row">
       <input type="checkbox" id="evtEdAllDay" onchange="toggleEvtEdAllDay()" />
       <label for="evtEdAllDay" style="cursor:pointer;font-size:.9rem">All-day event</label>
     </div>
 
-    <div id="evtEdEndDateSection" style="display:none">
+    <div class="evt-editor-time-row">
       <div class="field">
+        <label>Start date</label>
+        <input type="date" id="evtEdDate" />
+      </div>
+      <div class="field" id="evtEdEndDateSection" style="display:none">
         <label>End date</label>
         <input type="date" id="evtEdEndDate" />
       </div>
     </div>
 
-    <div id="evtEdTimeSection">
+    <div class="evt-editor-time-row" id="evtEdTimeSection">
       <div class="field">
         <label>Start time</label>
         <input type="time" id="evtEdStart" onchange="autoAdvanceEvtEnd()" />
@@ -1697,7 +1696,7 @@
     </div>
 
     <div class="evt-editor-footer">
-      <button id="evtEdDeleteBtn" class="btn-danger" onclick="deleteCalEvent()" style="display:none">🗑 Delete event</button>
+      <button id="evtEdDeleteBtn" class="btn btn-danger" onclick="deleteCalEvent()" style="display:none">🗑 Delete</button>
       <div style="display:flex;gap:8px;margin-left:auto">
         <button class="btn btn-secondary" onclick="closeEventEditor()">Cancel</button>
         <button class="btn" onclick="saveCalEvent()">Save</button>
