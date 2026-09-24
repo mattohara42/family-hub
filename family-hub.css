@@ -649,6 +649,18 @@ body.light-mode {
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* iOS Safari's elastic bounce/rubber-band is a document-level effect, not
+   tied to whether body actually overflows: body's own `overflow: hidden`
+   below doesn't stop it. `overscroll-behavior: none` on both html and body
+   is what actually pins the page down so a drag can't pan/slide the whole
+   viewport; it doesn't affect scrolling inside a genuinely scrollable
+   descendant (.modal, .sidebar, #weekView, …), only the document root. */
+html {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 body {
   background: var(--bg);
   color: var(--text);
@@ -657,6 +669,7 @@ body {
   line-height: var(--leading-normal);
   height: 100dvh;
   overflow: hidden;
+  overscroll-behavior: none;
   display: flex;
   flex-direction: column;
   padding: 10px 14px;
@@ -4492,7 +4505,8 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
 .settings-panels,
 .sidebar,
 #weekView,
-.year-strip-scroll {
+.year-strip-scroll,
+#eventEditorModal .modal {
   -webkit-overflow-scrolling: touch;
 }
 
