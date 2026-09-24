@@ -117,7 +117,8 @@
       <div class="card-header cal-card-header">
         <!-- Left: app title + Refocus -->
         <div class="cal-title-zone">
-          <div class="cal-app-title"><button type="button" class="cal-app-emoji" onclick="openMobileLists()" aria-label="Open lists and settings" title="Lists">🏠</button><span class="cal-app-title-text">Family <span>Hub</span></span></div>
+          <div class="cal-app-title"><button type="button" class="cal-app-emoji" onclick="openMobileLists()" aria-label="Open lists" title="Lists">🏠</button><span class="cal-app-title-text">Family <span>Hub</span></span></div>
+          <button id="calBudgetPrivacyBtn" class="cal-event-discover-btn" onclick="toggleBudgetPrivacy()" style="display:none" title="Hide bill amounts (privacy)" aria-label="Hide bill amounts">👁</button>
           <button id="backToTodayBtn" onclick="goToToday()" style="display:none">Refocus</button>
         </div>
         <!-- Centre: period navigator -->
@@ -127,10 +128,13 @@
           <span id="calendarStatus"></span>
           <button onclick="changeCalPeriod(1)" aria-label="Next period">&#8250;</button>
         </div>
+        <!-- Top-right: Settings — its own nav item, mobile-only (desktop keeps
+             the sidebar control card's ⚙️); hidden by default so it drops out
+             of the 3-column desktop grid below (see .cal-header-settings-btn) -->
+        <button id="calSettingsBtn" class="cal-header-settings-btn" onclick="openSettings()" title="Preferences" aria-label="Preferences">⚙️</button>
         <!-- Right: event discovery + view tabs -->
-        <div style="display:flex;align-items:center;gap:12px">
+        <div class="cal-header-actions" style="display:flex;align-items:center;gap:12px">
           <button id="eventsDiscoverBtn" class="cal-event-discover-btn" onclick="openEventsModal()" title="Discover nearby events" aria-label="Discover events">💡</button>
-          <button id="calBudgetPrivacyBtn" class="cal-event-discover-btn" onclick="toggleBudgetPrivacy()" style="display:none" title="Hide bill amounts (privacy)" aria-label="Hide bill amounts">👁</button>
           <div class="cal-view-tabs">
             <button class="cal-view-tab" id="viewTab_month"  onclick="switchCalView('month')">Month</button>
             <button class="cal-view-tab" id="viewTab_week"   onclick="switchCalView('week')">Week</button>
@@ -497,7 +501,6 @@
     </div>
     <div class="mobile-sheet-footer">
       <button onclick="closeMobileLists();openEventsModal()">💡 Find Events</button>
-      <button onclick="closeMobileLists();openSettings()">⚙️ Settings</button>
       <button class="mobile-sheet-close" onclick="closeMobileLists()">Done</button>
     </div>
   </div>
@@ -1696,7 +1699,7 @@
     </div>
 
     <div class="evt-editor-footer">
-      <button id="evtEdDeleteBtn" class="btn btn-danger" onclick="deleteCalEvent()" style="display:none">🗑 Delete</button>
+      <button id="evtEdDeleteBtn" class="btn btn-secondary" onclick="deleteCalEvent()" style="display:none">Delete</button>
       <div style="display:flex;gap:8px;margin-left:auto">
         <button class="btn btn-secondary" onclick="closeEventEditor()">Cancel</button>
         <button class="btn" onclick="saveCalEvent()">Save</button>
