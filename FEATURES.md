@@ -327,11 +327,10 @@ Three modes, toggled via ⚙️ Settings → Look & Feel:
 | Dark (default) | _(none)_ | Deep charcoal, blue accent |
 | Light | `light-mode` | Light grey background, dark text |
 | Nautical | `nautical-mode` | Navy hull + 20% diagonal white stripes, beige-gold accents, anchor watermark, animated wave footer |
-| Candy | `candy-mode` | Deep grape background, saturated pink/orange jolly-rancher accents, glossy gradient + shine highlight on the Agenda event fills, mobile quick-add FAB, Lists sheet, and view toggle |
 
 **State:**
 ```js
-let appMode = localStorage.getItem('fh_mode') || 'auto'; // 'auto' | 'light' | 'dark' | 'nautical' | 'aurora' | 'colorblind' | 'candy'
+let appMode = localStorage.getItem('fh_mode') || 'auto'; // 'auto' | 'light' | 'dark' | 'nautical' | 'aurora' | 'colorblind'
 let appFlavor = localStorage.getItem('fh_flavor') || 'basic'; // 'basic' | 'tactile' — design-system axis, orthogonal to appMode
 ```
 **Auto mode (added 2026-09-17):** `'auto'` is the true default — before any explicit pick, the app already follows the device's `prefers-color-scheme`, and `'🌓 Auto'` in Settings → Look & Feel lets you opt back into that after picking something else. `resolveAppMode(mode)` maps `'auto'` to `'light'`/`'dark'` off `matchMedia('(prefers-color-scheme: light)')`; `applyAppMode()` applies classes off the *resolved* value while `appMode` itself keeps the logical `'auto'`. A `change` listener on that same media query reapplies whenever `appMode === 'auto'` — same pattern as the `'auto'` layout-orientation listener a bit further down the file. Auto only ever resolves to light/dark; Nautical/Aurora/Accessible stay manual-only picks, since they're not a day/night distinction.
@@ -349,11 +348,6 @@ let appFlavor = localStorage.getItem('fh_flavor') || 'basic'; // 'basic' | 'tact
 - Rope-style card header dividers (repeating-linear-gradient brass strands)
 - Compass rose radial gradient on calendar card body
 - Beige-gold DOW labels, today cell porthole glow, gradient brass buttons
-
-**Candy-specific CSS elements (added 2026-09-23):** a straight color-token swap like Aurora/Colorblind, plus a few glossy overrides layered on top rather than a full re-skin like Nautical's watermark/wave:
-- `.agenda-event` gets a steeper `color-mix` (40% vs. the base 18%) plus a diagonal white-to-transparent gloss layer and an inset highlight — this is the "pastel" fix; border-left still keys off `--event-color` so it still tracks the event's own calendar color
-- `.btn-primary`, `.btn-mode-active`, `.cal-view-tab.active`, `.mobile-fab-add`, `.mobile-sheet`, `.mobile-sheet-tab.active`, `.mobile-sheet-close`, `.cal-app-emoji` (mobile) all get a pink gradient + inset shine instead of a flat `var(--accent)` fill
-- The mobile-only overrides live in their own `@media (max-width: 640px)` block right after the Tactile mobile-chrome block, not inline with the base `body.candy-mode` token block
 
 **localStorage:** `fh_mode` — migration: `'amazing'` is auto-upgraded to `'nautical'` on load
 
@@ -900,7 +894,7 @@ Secondary widgets (Budget, Chores, Word, Joke, Quotes, Countdown, News, Stock, Y
 
 **Day/Agenda typography tokens:** `--fs-title`/`--fs-item`/`--fs-meta` (family-hub.css `:root`) alias into the existing `--text-md/base/sm` ladder — a semantic layer for Day/Agenda markup, not a second competing scale. `renderDayGrid()`'s previously-inline styles (section headers, the budget Total row, to-do rows, the "+" add-a-day-event trigger, the "No all-day events" placeholder) now carry classes (`.day-section-header`, `.budget-day-total`, `.day-todo-row`/`.day-todo-text`/`.day-todo-assignee`, `.day-add-btn`, `.day-allday-empty`) built on those tokens instead of ad hoc `font-size` values. Currency (`.budget-day-amt`, `.budget-day-total-amt`) and clock-time text (`.day-time-label`, `.day-hour-label`, `.evt-time`, `.agenda-time`) get `font-variant-numeric: tabular-nums`. This pass covers Day + Agenda; the rest of the app (Budget/Countdown sidebar cards, Week view, etc.) still has its own ad hoc sizes and is a follow-up, not done here.
 
-**Agenda event fills:** the agenda renderer sets `--event-color` inline on each `.agenda-event` from `ev.color` (dynamic per event/calendar, can't be a class); the class declares `--event-color: var(--muted)` as its own fallback for events with no color. That one property drives both `border-left: 3px solid var(--event-color)` and `background: color-mix(in srgb, var(--event-color) 18%, var(--surface-solid))`, so an event reads the same color in Agenda as it does in Month and Day. Mixing against the theme's own `--surface-solid` (defined in every theme block) keeps text contrast in range without per-theme swatches — measured 7.6:1–15.8:1 over the 11 Google Calendar colors in dark/light/nautical/aurora/colorblind. The `.agenda-dot` element is gone. `.agenda-event` uses `margin-bottom` (not a parent `gap`) so adjacent fills stay visually separated, and hover/active use `filter: brightness()` instead of swapping `background`, so the tint stays visible. Superseded `agendaPastelClass()` and `--agenda-pastel-1..6`, a 6-swatch palette hashed from the event title — removed, along with its per-theme token blocks.
+**Agenda event fills:** the agenda renderer sets `--event-color` inline on each `.agenda-event` from `ev.color` (dynamic per event/calendar, can't be a class); the class declares `--event-color: var(--muted)` as its own fallback for events with no color. That one property drives both `border-left: 3px solid var(--event-color)` and `background: color-mix(in srgb, var(--event-color) 32%, var(--surface-solid))` (bumped from 18%, which read as pastel — a dedicated "Candy" theme was tried as a fix first and reverted in favor of this one-line change), so an event reads the same color in Agenda as it does in Month and Day. Mixing against the theme's own `--surface-solid` (defined in every theme block) keeps text contrast in range without per-theme swatches — measured 5.58:1–14.65:1 over the 11 Google Calendar colors in dark/light/nautical/aurora/colorblind. The `.agenda-dot` element is gone. `.agenda-event` uses `margin-bottom` (not a parent `gap`) so adjacent fills stay visually separated, and hover/active use `filter: brightness()` instead of swapping `background`, so the tint stays visible. Superseded `agendaPastelClass()` and `--agenda-pastel-1..6`, a 6-swatch palette hashed from the event title — removed, along with its per-theme token blocks.
 
 **Tactile/theming:** sheet/FAB chrome derives from tokens (`--line`, `--surface-solid/-hi`, `--accent`); Tactile mobile rules (`body.flavor-tactile .mobile-sheet`) use neutral tokens only (KTD-4-safe). Touch tap-target sizing lives inside `@media (hover: none)` per the CLAUDE.md invariant.
 
@@ -958,7 +952,7 @@ const HA_TOGGLE_DOMAINS = ['light', 'switch', 'fan', 'input_boolean'];
 | Key | Type | Feature | Notes |
 |---|---|---|---|
 | `fh_name` | string | Settings | Display name |
-| `fh_mode` | string | Theme | `'light'` \| `'dark'` \| `'nautical'` \| `'aurora'` \| `'colorblind'` \| `'candy'` |
+| `fh_mode` | string | Theme | `'light'` \| `'dark'` \| `'nautical'` \| `'aurora'` \| `'colorblind'` |
 | `fh_flavor` | string | Flavor | `'basic'` \| `'tactile'` — design-system axis, orthogonal to theme |
 | `fh_calView` | string | Calendar | `'month'` \| `'week'` \| `'day'` \| `'agenda'` — unset defaults to `'agenda'` on mobile, `'week'` on desktop (§20) |
 | `fh_calIds` | JSON array | Calendar | Google Calendar IDs |
