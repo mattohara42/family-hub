@@ -265,6 +265,7 @@ window.addEventListener('resize', () => {
   isMobile = updateIsMobile();
   if (wasMobile !== isMobile) {
     applyWidgetPlacement();
+    applyBudgetPrivacy();   // calBudgetPrivacyBtn only shows under isMobile
     resetSaverIdleTimer();  // screensaver is desktop-only; re-arm/disarm on crossing
   }
 });
@@ -839,6 +840,17 @@ function applyBudgetPrivacy() {
   if (btn) {
     btn.textContent = budgetHidden ? '🙈' : '👁';
     btn.title = budgetHidden ? 'Show bill amounts' : 'Hide bill amounts (privacy)';
+  }
+  // The sidebar Budget card (btn, above) isn't reachable on mobile at all —
+  // this is the same toggleBudgetPrivacy()/budgetHidden gate, surfaced in the
+  // calendar header instead so a phone has *some* way to flip it. Only shown
+  // once the family actually has budget items to hide.
+  const calBtn = document.getElementById('calBudgetPrivacyBtn');
+  if (calBtn) {
+    calBtn.style.display = (isMobile && budgetItems.length) ? '' : 'none';
+    calBtn.textContent = budgetHidden ? '🙈' : '👁';
+    calBtn.title = budgetHidden ? 'Show bill amounts' : 'Hide bill amounts (privacy)';
+    calBtn.setAttribute('aria-label', calBtn.title);
   }
 }
 function toggleBudgetPrivacy() {
