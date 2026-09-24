@@ -2759,6 +2759,14 @@ body.light-mode .sms-contact-row:hover { background: rgba(0,0,0,.05); }
   width: min(480px, 95vw);
   max-height: 90vh;
   overflow-y: auto;
+  /* This element is a genuinely scrollable box (real overflow content), and
+     WebKit applies elastic rubber-band bounce locally to any scrollable
+     element on its own, independent of the document root: html/body's own
+     overscroll-behavior (elsewhere in this file) only stops the document
+     from panning, it doesn't reach into a descendant's own local bounce.
+     Confirmed on-device in both iOS Safari and Chrome (same WebKit engine
+     underneath), so this needs its own overscroll-behavior too. */
+  overscroll-behavior: contain;
   /* 3-D card: gradient face + layered shadows + top-edge shine */
   background: linear-gradient(160deg, #2a2f48 0%, #1a1e30 60%, #161929 100%);
   border-top: 1px solid rgba(255,255,255,.18);
