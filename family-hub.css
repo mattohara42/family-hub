@@ -1529,7 +1529,14 @@ body.has-bg .cal-day.today {
 .agenda-info { flex: 1; min-width: 0; }
 .agenda-time {
   font-size: var(--fs-meta);
-  color: var(--muted);
+  /* --muted is tuned for contrast against --surface, not against this
+     card's --event-color tint (see .agenda-event above) — on an olive/
+     green fill it reads as low-contrast grey. --text is the color already
+     measured safe across all 11 Google Calendar colors × 5 themes for
+     .agenda-title on this same background, so reuse it here; the smaller
+     font-size and lack of bold weight (vs. .agenda-title) still carry the
+     time/title hierarchy without needing a second, unvalidated color. */
+  color: var(--text);
   margin-bottom: 3px;
   font-variant-numeric: tabular-nums;
 }
