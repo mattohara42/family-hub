@@ -130,6 +130,7 @@
         <!-- Right: event discovery + view tabs -->
         <div style="display:flex;align-items:center;gap:12px">
           <button id="eventsDiscoverBtn" class="cal-event-discover-btn" onclick="openEventsModal()" title="Discover nearby events" aria-label="Discover events">💡</button>
+          <button id="calBudgetPrivacyBtn" class="cal-event-discover-btn" onclick="toggleBudgetPrivacy()" style="display:none" title="Hide bill amounts (privacy)" aria-label="Hide bill amounts">👁</button>
           <div class="cal-view-tabs">
             <button class="cal-view-tab" id="viewTab_month"  onclick="switchCalView('month')">Month</button>
             <button class="cal-view-tab" id="viewTab_week"   onclick="switchCalView('week')">Week</button>

@@ -4565,6 +4565,14 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
     border-radius: 0;
     background: transparent;
   }
+  /* The active sheet tab already names the list ("🛒 Shopping" etc.) — the
+     reparented card's own header title would just repeat it, so only its
+     header title is dropped in this context; action buttons in the same row
+     (SMS, refresh, clear-done/-all) stay. */
+  .mobile-sheet-body .card-header h2 { display: none; }
+  /* ...which leaves the header row holding only its action-button group;
+     space-between (the desktop default) would flush that lone child left. */
+  .mobile-sheet-body .card-header { justify-content: flex-end; }
 
   .mobile-sheet-footer {
     display: flex;
