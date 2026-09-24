@@ -4718,16 +4718,25 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
      internally, so the overlay never needs to scroll on top of that. */
   #eventEditorModal {
     overflow-y: hidden;
+    padding: 6px;
   }
-  /* Side-by-side date/time fields depend on native iOS picker controls
-     fitting a ~150px box; they don't always, and the overflow bleeds into
-     the neighboring field instead of wrapping. Stacking removes the guess. */
+  /* Claw back a bit more width for the paired date/time fields (below).
+     Stacking them to one-per-line solved the overlap outright but cost too
+     much vertical space, so this trims every layer around the pair instead:
+     overlay padding above, modal padding + input padding here. */
+  #eventEditorModal .modal {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
   .evt-editor-time-row {
-    flex-direction: column;
+    gap: 4px;
   }
   .evt-editor-time-row > .field {
-    flex-basis: auto;
-    min-width: 0;
+    flex-basis: 130px; min-width: 130px;
+  }
+  .evt-editor-time-row input[type=date],
+  .evt-editor-time-row input[type=time] {
+    padding-left: 4px; padding-right: 4px;
   }
 
   /* Preferences: bigger text + line-height for what's left after
