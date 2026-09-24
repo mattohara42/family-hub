@@ -424,7 +424,8 @@ const WIDGET_ORDER = [
 - `clearAllShopping()` — removes all items after `confirm()` dialog
 - `renderShopList(items)` — re-renders `#shopList`
 - `toggleSmsPopover(event)` — shows/hides SMS contact picker
-- `sendShoppingViaSms(phone)` — opens `sms:` URL with list contents
+- `buildShoppingBody()` — formats the list into the message text (pending items only, if any are pending; otherwise everything)
+- `sendToContact(phone)` — opens an `sms:` URL with `buildShoppingBody()`'s text pre-filled
 
 **SMS popover:** `.sms-popover` uses a solid opaque background (`#1e2130` dark / `#f5f6fa` light / `#0e1e48` nautical) so it's readable over background photos.
 
