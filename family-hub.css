@@ -1297,6 +1297,12 @@ body.nautical-mode .cal-month-nav button {
 .cal-card-header .cal-view-tabs {
   justify-self: end;
 }
+/* Settings as its own top-level header nav item — mobile-only (desktop keeps
+   the sidebar control card's ⚙️ button). Hidden by default so it drops out
+   of the box tree entirely, leaving the 3-column desktop grid above with
+   exactly the 3 visible children it expects (title-zone/month-nav/actions);
+   the mobile media query below turns it back on and pins it to row 1. */
+.cal-header-settings-btn { display: none; }
 
 /* Mobile: 2-row header — title+nav on row 1, view tabs centered on row 2.
    Must be after the base .cal-card-header rule (which sets display:grid) so
@@ -1321,7 +1327,7 @@ body.nautical-mode .cal-month-nav button {
   }
   .cal-card-header .cal-title-zone { flex: 0 0 auto; }
   .cal-card-header .cal-month-nav  { flex: 1; justify-content: center; min-width: 0; flex-wrap: nowrap; }
-  .cal-card-header > div:last-child { flex: 0 0 100%; justify-content: center; }
+  .cal-card-header .cal-header-actions { flex: 0 0 100%; justify-content: center; }
   #calMonthLabel { overflow: hidden; text-overflow: ellipsis; font-size: var(--text-md); }
   .cal-app-title-text { display: none; }
 }
@@ -2802,18 +2808,18 @@ body.nautical-mode #eventEditorModal .modal {
   display: flex; align-items: center; justify-content: center;
   width: 32px; height: 32px;
   border-radius: 50%;
-  background: rgba(220,53,69,0.15);
-  border: 1.5px solid rgba(220,53,69,0.55);
-  color: #e05c6a;
+  background: var(--surface2);
+  border: 1.5px solid var(--line);
+  color: var(--muted);
   font-size: 1.1rem; line-height: 1;
   cursor: pointer;
   transition: background .15s, border-color .15s, transform .1s;
   flex-shrink: 0;
 }
 .evt-editor-close-btn:hover {
-  background: rgba(220,53,69,0.85);
-  border-color: #dc3545;
-  color: #fff;
+  background: color-mix(in srgb, var(--text) 12%, var(--surface2));
+  border-color: var(--muted);
+  color: var(--text);
   transform: scale(1.08);
 }
 .evt-editor-cal-select {
@@ -2830,10 +2836,20 @@ body.nautical-mode #eventEditorModal .modal {
   background: color-mix(in srgb, currentColor 28%, var(--surface2));
 }
 .evt-editor-time-row {
-  display: flex; gap: 8px;
+  display: flex; flex-wrap: wrap; gap: 6px;
 }
+/* flex-basis 150px (not 0) so a field that can't fit its neighbor at that
+   width wraps to its own line instead of the two native date/time controls
+   overlapping — iOS Safari's picker has a fixed minimum render width that
+   ignores a narrower CSS box, which is what caused the overlap this guards
+   against. Reduced input padding below buys back a bit more room so paired
+   fields still fit side by side on typical phone widths. */
 .evt-editor-time-row > .field {
-  flex: 1; min-width: 0;
+  flex: 1 1 150px; min-width: 150px;
+}
+.evt-editor-time-row input[type=date],
+.evt-editor-time-row input[type=time] {
+  padding-left: 6px; padding-right: 6px;
 }
 .evt-editor-footer {
   display: flex; justify-content: space-between; align-items: center;
@@ -4543,6 +4559,23 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
   }
   .cal-app-emoji:active { background: var(--surface2); }
 
+  /* Settings — its own top-level nav item, top-right corner of row 1
+     (flex:0 0 auto keeps it off the .cal-header-actions row-2 wrap below).
+     Same bordered-button treatment as the 🏠 Lists trigger for parity. */
+  .cal-header-settings-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    border-radius: 8px;
+    padding: 3px 8px;
+    font-size: 1.05rem;
+    cursor: pointer;
+  }
+  .cal-header-settings-btn:active { background: var(--surface2); }
+
   /* Lists sheet — a bottom sheet, not a full-page tab swap. Shown/hidden by
      toggling inline display (openMobileLists/closeMobileLists in
      family-hub.js), not a class — display:none above is the closed state. */
@@ -4674,6 +4707,8 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
   #eventEditorModal .modal {
     max-height: 90svh;
     padding-bottom: max(28px, env(safe-area-inset-bottom, 0px));
+    padding-left: 12px;
+    padding-right: 12px;
   }
 
   /* Preferences: bigger text + line-height for what's left after
