@@ -1081,7 +1081,7 @@ body:not(.force-landscape).auto-portrait #bottomStrip {
   .layout { gap: 10px; }
 
   .cal-view-tab { padding: 4px 10px; font-size: var(--text-sm); }
-  #calMonthLabel { font-size: 1.2rem; min-width: 0; }
+  #calMonthLabel { min-width: 0; }
 
 
   /* Month grid: shorter cells */
@@ -1298,20 +1298,31 @@ body.nautical-mode .cal-month-nav button {
   justify-self: end;
 }
 
-/* Mobile: 2-row header — title+nav on row 1, view tabs full-width on row 2.
+/* Mobile: 2-row header — title+nav on row 1, view tabs centered on row 2.
    Must be after the base .cal-card-header rule (which sets display:grid) so
-   the lower specificity flex override wins via source order. */
+   the lower specificity flex override wins via source order. Row 2 is
+   centered rather than right-aligned so the tabs don't read as stranded in
+   the row's left-hand dead space; padding/gap trimmed to reclaim a bit of
+   vertical space for the calendar body below.
+   The #calMonthLabel font-size here must stay in *this* block, not the
+   earlier 640px block above (~line 1080): the unguarded desktop rule
+   further down the file (`#calMonthLabel { font-size: 1.6rem }`) is the
+   same specificity and wins any tie by source order regardless of which
+   media query it's in, so an override needs to come after it in the file
+   to actually take effect — the earlier block's attempt at this was
+   silently dead code. */
 @media (max-width: 640px) {
   .cal-card-header {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 4px;
     align-items: center;
+    padding: 8px 14px 6px;
   }
   .cal-card-header .cal-title-zone { flex: 0 0 auto; }
   .cal-card-header .cal-month-nav  { flex: 1; justify-content: center; min-width: 0; flex-wrap: nowrap; }
-  .cal-card-header > div:last-child { flex: 0 0 100%; justify-content: flex-end; }
-  #calMonthLabel { overflow: hidden; text-overflow: ellipsis; }
+  .cal-card-header > div:last-child { flex: 0 0 100%; justify-content: center; }
+  #calMonthLabel { overflow: hidden; text-overflow: ellipsis; font-size: var(--text-md); }
   .cal-app-title-text { display: none; }
 }
 
@@ -4578,6 +4589,12 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
   /* Prev/next period arrows are redundant with the swipe gesture
      (setupCalSwipe() in family-hub.js) and just eat header space */
   .cal-month-nav button { display: none; }
+
+  /* Trim the view tabs a little below the generic @media (hover: none) tap
+     padding above (must come after it in source order to win at equal
+     specificity) — row 2 of the header is otherwise taller than it needs
+     to be now that it's just three short labels. */
+  .cal-view-tab { padding: 7px 13px; }
 
   /* Tighten Day/Agenda: the desktop paddings/min-heights were sized for a
      wall panel viewed from a few feet away, not a phone held in the hand */
