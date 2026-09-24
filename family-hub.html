@@ -261,7 +261,7 @@
         <div style="display:flex;gap:4px;align-items:center">
           <div class="sms-btn-wrap">
             <button class="btn btn-secondary btn-sm" id="smsTriggerBtn"
-                    onclick="toggleSmsPopover(event)">📱 SMS ▾</button>
+                    onclick="toggleSmsPopover(event)" title="Send list via SMS" aria-label="Send list via SMS">📱<span class="sms-btn-label"> SMS ▾</span></button>
             <div class="sms-popover" id="smsPopover"></div>
           </div>
           <button id="shopClearDoneBtn" class="btn btn-secondary btn-sm" onclick="clearDoneShopping()" title="Clear completed items" aria-label="Clear completed items" style="display:none">✕ done</button>

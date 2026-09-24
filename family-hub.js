@@ -1834,7 +1834,7 @@ function renderDayGrid() {
       p.className = 'day-event-pill';
       p.style.background = ev.color;
       p.innerHTML = `<span class="evt-title">${(ev.holiday ? '🎉 ' : '') + esc(ev.summary) + (ev.recurringEventId ? ' ↻' : '')}</span>`;
-      appendMemberBadges(p, ev.members);
+      appendPillMeta(p, null, ev.members);
       p.style.cursor = 'pointer';
       p.onclick = () => onCalEventClick(ev);
       adPills.appendChild(p);
@@ -1847,27 +1847,40 @@ function renderDayGrid() {
   allDayRow.appendChild(adPills);
   wrap.appendChild(allDayRow);
 
-  // ── School Day Cycle section (day view) ──
+  // ── School Day Cycle section (day view) — one line; see startMarqueeIfOverflowing() ──
   const dayCycleNum = schoolDayNumberFor(dateKey);
   if (dayCycleNum != null) {
     const cycleSection = document.createElement('div');
     cycleSection.className = 'school-day-section';
-    const cycleHdr = document.createElement('div');
-    cycleHdr.className = 'day-section-header';
-    cycleHdr.style.color = 'var(--accent2)';
-    cycleHdr.textContent = `🔁 Day ${dayCycleNum}`;
-    cycleSection.appendChild(cycleHdr);
-    schoolDaySubjectsForDayNumber(dayCycleNum).forEach(s => {
-      const r = document.createElement('div');
-      r.className = 'school-day-item';
+    const line = document.createElement('div');
+    line.className = 'school-day-line';
+    const label = document.createElement('span');
+    label.className = 'school-day-label';
+    label.style.color = 'var(--accent2)';
+    label.textContent = `🔁 Day ${dayCycleNum}`;
+    const track = document.createElement('span');
+    track.className = 'school-day-track';
+    schoolDaySubjectsForDayNumber(dayCycleNum).forEach((s, i) => {
+      if (i > 0) {
+        const sep = document.createElement('span');
+        sep.className = 'school-day-sep';
+        sep.textContent = '·';
+        track.appendChild(sep);
+      }
+      const item = document.createElement('span');
+      item.className = 'school-day-item';
       const nameEl = document.createElement('span');
       nameEl.className = 'school-day-subject-name';
       nameEl.textContent = s.subject;
-      r.appendChild(nameEl);
-      appendMemberBadges(r, s.members);
-      cycleSection.appendChild(r);
+      item.appendChild(nameEl);
+      appendMemberBadges(item, s.members);
+      track.appendChild(item);
     });
+    line.appendChild(label);
+    line.appendChild(track);
+    cycleSection.appendChild(line);
     wrap.appendChild(cycleSection);
+    startMarqueeIfOverflowing(line, track);
   }
 
   // ── Budget section (day view) ──
@@ -1953,9 +1966,8 @@ function renderDayGrid() {
       const pill = document.createElement('div');
       pill.className = 'day-event-pill';
       pill.style.background = ev.color;
-      pill.innerHTML = `<span class="evt-title">${esc(ev.summary) + (ev.recurringEventId ? ' ↻' : '')}</span>
-                        <span class="evt-time">${startStr}${endStr ? ' – ' + endStr : ''}</span>`;
-      appendMemberBadges(pill, ev.members);
+      pill.innerHTML = `<span class="evt-title">${esc(ev.summary) + (ev.recurringEventId ? ' ↻' : '')}</span>`;
+      appendPillMeta(pill, `${startStr}${endStr ? ' – ' + endStr : ''}`, ev.members);
       pill.style.cursor = 'pointer';
       pill.onclick = () => onCalEventClick(ev);
       slot.appendChild(pill);
@@ -3527,6 +3539,44 @@ function appendMemberBadges(container, members) {
     badge.title = name;
     badge.textContent = name[0].toUpperCase();
     container.appendChild(badge);
+  });
+}
+
+// `.day-event-pill` is flex-direction:column, so appending badges straight
+// into it (like appendMemberBadges does everywhere else) gives each badge
+// its own row below the time instead of sitting beside it. Wrap time +
+// badges in one horizontal row; skip the row entirely when there's neither
+// (an all-day pill with no assigned members), so it doesn't add empty space.
+function appendPillMeta(pill, timeText, members) {
+  if (!timeText && !members?.length) return;
+  const meta = document.createElement('span');
+  meta.className = 'evt-meta';
+  if (timeText) {
+    const time = document.createElement('span');
+    time.className = 'evt-time';
+    time.textContent = timeText;
+    meta.appendChild(time);
+  }
+  pill.appendChild(meta);
+  appendMemberBadges(meta, members);
+}
+
+// Most days `track`'s content fits `lineEl` and should just sit still — an
+// always-running ticker (see .wx-ticker/.assistant-ticker) would be motion
+// for its own sake on the common case. Only measure-and-animate the rare day
+// that overflows (e.g. 3+ subjects), and let CSS's `animation-delay` supply
+// the "pause a beat before scrolling" part. Deferred a frame so `lineEl` has
+// real layout — it's usually still being inserted into a detached `wrap`
+// when this runs.
+function startMarqueeIfOverflowing(lineEl, trackEl) {
+  requestAnimationFrame(() => {
+    // trackEl.clientWidth is the box flex actually gave it (shrunk to fit
+    // lineEl once the label's width is subtracted); scrollWidth is its
+    // full, unclipped content width — the gap between them is what's cut off.
+    const overflow = trackEl.scrollWidth - trackEl.clientWidth;
+    if (overflow <= 1) return;
+    trackEl.style.setProperty('--marquee-dist', `-${overflow}px`);
+    lineEl.classList.add('school-day-scrolling');
   });
 }
 
