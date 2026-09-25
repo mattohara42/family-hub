@@ -8056,12 +8056,12 @@ async function generateMealSuggestions() {
   const prompt =
 `Suggest ${countStr} for a family meal plan.
 ${style       ? `Cuisine/style preference: ${style}` : ''}
-${pantry      ? `On-hand ingredients to incorporate: ${pantry}` : ''}
 ${calContext  ? `Calendar events today (gauge busyness/time): ${calContext}` : ''}
 ${existingStr ? `Already planned today: ${existingStr}` : ''}
 Dietary preferences: ${dietStr}
 ${variantGuide}
 Prioritise healthy, nutritious, well-balanced options.
+${pantry      ? `REQUIRED: On-hand ingredients: ${pantry}. Every single suggested meal MUST use at least one of these on-hand ingredients as a main component of the dish — do not suggest a meal that uses none of them.` : ''}
 Choose the best matching recipe site from: allrecipes, seriouseats, nytcooking, epicurious, simplyrecipes, bonappetit.
 
 Return ONLY a valid JSON array — no markdown, no explanation. Each element:
