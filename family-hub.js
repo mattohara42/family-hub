@@ -253,8 +253,12 @@ const FLAVORS = [
 const _savedFlavor  = localStorage.getItem('fh_flavor');
 let appFlavor       = FLAVORS.some(f => f.id === _savedFlavor) ? _savedFlavor : 'basic';  // design-system layer, orthogonal to appMode
 // Compute isMobile boolean for viewport-width-dependent logic
+// A phone turned sideways is ~930px wide but only ~430px tall, so width alone
+// handed it the desktop layout squeezed into a strip. Mirrors the CSS mobile
+// query (family-hub.css, every `max-width: 640px` block).
 function updateIsMobile() {
-  return window.innerWidth < 640;
+  return window.innerWidth < 640
+    || window.matchMedia('(max-height: 500px) and (orientation: landscape) and (pointer: coarse)').matches;
 }
 let isMobile = updateIsMobile();
 
