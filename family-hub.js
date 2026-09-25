@@ -2380,17 +2380,35 @@ function setupWormHold(cell) {
   let holdTimer = null;
   const HOLD_MS = 3000;
 
+  let spawned = false;
+  let lastTouchEnd = 0;
+
   const start = () => {
-    holdTimer = setTimeout(() => spawnWorm(cell), HOLD_MS);
+    spawned = false;
+    holdTimer = setTimeout(() => { spawned = true; spawnWorm(cell); }, HOLD_MS);
   };
   const cancel = () => { clearTimeout(holdTimer); holdTimer = null; };
+  // Ignore the emulated mousedown a browser fires right after a touch ends,
+  // or it restarts the hold and clears `spawned` before the click lands.
+  const mouseStart = () => { if (Date.now() - lastTouchEnd > 800) start(); };
 
-  cell.addEventListener('mousedown', start);
+  cell.addEventListener('mousedown', mouseStart);
   cell.addEventListener('mouseup', cancel);
   cell.addEventListener('mouseleave', cancel);
-  cell.addEventListener('touchstart', e => { e.preventDefault(); start(); }, { passive: false });
-  cell.addEventListener('touchend', cancel);
+  // Passive on purpose: preventDefault() on touchstart suppresses the click
+  // that follows, which silently broke every Month cell tap on touch devices.
+  cell.addEventListener('touchstart', start, { passive: true });
+  cell.addEventListener('touchmove', cancel, { passive: true }); // swipe/scroll isn't a hold
+  cell.addEventListener('touchend', () => { lastTouchEnd = Date.now(); cancel(); });
   cell.addEventListener('touchcancel', cancel);
+  // A completed hold is the Easter egg, not a tap: swallow the release's click
+  // so the worm isn't immediately replaced by Day view / the event editor.
+  cell.addEventListener('click', e => {
+    if (!spawned) return;
+    spawned = false;
+    e.stopImmediatePropagation();
+    e.preventDefault();
+  }, true);
 }
 
 function spawnWorm(cell) {

@@ -4421,6 +4421,8 @@ a, button, input, select, textarea, label,
   .cal-month-nav button:active   { background: var(--accent); }
   .cal-tab:active                { opacity: .65; }
   .cal-day:active                { background: var(--surface2); }
+  /* The 3s worm hold (setupWormHold) would otherwise start a text selection */
+  .cal-day                       { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   .cal-event:active,
   .week-event:active,
   .day-event-pill:active         { opacity: .7; }
