@@ -2817,6 +2817,11 @@ body.nautical-mode #eventEditorModal .modal {
   border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line));
   background: color-mix(in srgb, var(--accent) 4%, var(--surface2));
 }
+/* .btn-secondary's --surface2 fill nearly matches this modal's gradient, so
+   Cancel/Delete read as bare text without the same outline as the inputs */
+#eventEditorModal .btn-secondary {
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line));
+}
 #eventEditorModal .field input:focus,
 #eventEditorModal .field textarea:focus,
 #eventEditorModal .field select:focus {
