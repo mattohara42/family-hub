@@ -253,8 +253,12 @@ const FLAVORS = [
 const _savedFlavor  = localStorage.getItem('fh_flavor');
 let appFlavor       = FLAVORS.some(f => f.id === _savedFlavor) ? _savedFlavor : 'basic';  // design-system layer, orthogonal to appMode
 // Compute isMobile boolean for viewport-width-dependent logic
+// A phone turned sideways is ~930px wide but only ~430px tall, so width alone
+// handed it the desktop layout squeezed into a strip. Mirrors the CSS mobile
+// query (family-hub.css, every `max-width: 640px` block).
 function updateIsMobile() {
-  return window.innerWidth < 640;
+  return window.innerWidth < 640
+    || window.matchMedia('(max-height: 500px) and (orientation: landscape) and (pointer: coarse)').matches;
 }
 let isMobile = updateIsMobile();
 
@@ -266,6 +270,7 @@ window.addEventListener('resize', () => {
   if (wasMobile !== isMobile) {
     applyWidgetPlacement();
     applyBudgetPrivacy();   // calBudgetPrivacyBtn only shows under isMobile
+    if (calView === 'month') renderMonthGrid(); // pill labels differ under isMobile
     resetSaverIdleTimer();  // screensaver is desktop-only; re-arm/disarm on crossing
   }
 });
@@ -2320,9 +2325,17 @@ function makeDayCell(year, month, day, otherMonth, isToday) {
     pill.className = 'cal-event' + (ev.holiday ? ' cal-event-holiday' : '');
     pill.style.background = ev.color;
     const pillText = document.createElement('span');
-    pillText.textContent = (ev.holiday ? '🎉 ' : '') + ev.summary + (ev.recurringEventId ? ' ↻' : '');
+    // Mobile cells fit ~5 characters, which for most titles is just the
+    // member's name ("Jack ..."), so a member's event shows everyone's
+    // initials instead. Events with no member keep their clipped title.
+    const initials = isMobile && !ev.holiday ? eventMemberInitials(ev) : '';
+    if (initials) {
+      pillText.textContent = initials;
+    } else {
+      pillText.textContent = (ev.holiday ? '🎉 ' : '') + ev.summary + (ev.recurringEventId ? ' ↻' : '');
+    }
     pill.appendChild(pillText);
-    appendMemberBadges(pill, ev.members);
+    if (!initials) appendMemberBadges(pill, ev.members);
     pill.title = ev.summary;
     pill.onclick = e => { e.stopPropagation(); onCalEventClick(ev); };
     if (isEventEditable(ev)) {
@@ -2366,7 +2379,8 @@ function makeDayCell(year, month, day, otherMonth, isToday) {
   budgetDay.forEach(item => {
     const pill = document.createElement('div');
     pill.className = 'cal-event-budget';
-    pill.textContent = `💰 ${item.name} ${fmt$(item.amount)}`;
+    // Mobile cells only fit the first few letters, so lead with the name.
+    pill.textContent = isMobile ? `${item.name} ${fmt$(item.amount)}` : `💰 ${item.name} ${fmt$(item.amount)}`;
     pill.title = `${item.name} — ${fmt$(item.amount)} (${freqLabel(item)})`;
     pill.onclick = monthInfoPillClick(key);
     cell.appendChild(pill);
@@ -3583,6 +3597,34 @@ function appendMemberBadges(container, members) {
     badge.textContent = name[0].toUpperCase();
     container.appendChild(badge);
   });
+}
+
+/** Short label per family member: the first letter, or the shortest prefix
+ *  that tells them apart when names share one (Jack/Joey → "Ja"/"Jo"). */
+function memberInitial(name) {
+  const lower = name.toLowerCase();
+  const others = familyMembers.map(m => m.name.toLowerCase()).filter(n => n !== lower);
+  for (let len = 1; len < name.length; len++) {
+    const prefix = lower.slice(0, len);
+    if (!others.some(n => n.startsWith(prefix))) {
+      return name[0].toUpperCase() + name.slice(1, len);
+    }
+  }
+  return name[0].toUpperCase() + name.slice(1);
+}
+
+/** Initials for an event's members: its explicit assignment, else every
+ *  member named as a whole word in the title. '' when there's no member. */
+function eventMemberInitials(ev) {
+  let names = ev.members?.length ? ev.members : [];
+  if (!names.length) {
+    const t = (ev.summary || '').toLowerCase();
+    names = familyMembers.map(m => m.name).filter(name => {
+      const esc = name.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return new RegExp(`\\b${esc}(['’]s)?\\b`).test(t);
+    });
+  }
+  return names.map(memberInitial).join(' ');
 }
 
 // `.day-event-pill` is flex-direction:column, so appending badges straight

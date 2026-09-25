@@ -1060,7 +1060,10 @@ body:not(.force-landscape).auto-portrait #bottomStrip {
 }
 
 /* Large mobile */
-@media (max-width: 640px) {
+/* Mobile = narrower than 640px, or a phone turned sideways (short, landscape,
+   touch). Every mobile block repeats this full query, and updateIsMobile()
+   in family-hub.js mirrors it: keep all of them in sync. */
+@media (max-width: 640px), (max-height: 500px) and (orientation: landscape) and (pointer: coarse) {
   /* The whole type scale below is sized for a wall panel read from a few
      feet away. On a phone held at arm's length that reads as tiny body
      copy next to one oversized date heading (#calMonthLabel). Scaling the
@@ -1330,7 +1333,7 @@ body.nautical-mode .cal-month-nav button {
    media query it's in, so an override needs to come after it in the file
    to actually take effect — the earlier block's attempt at this was
    silently dead code. */
-@media (max-width: 640px) {
+@media (max-width: 640px), (max-height: 500px) and (orientation: landscape) and (pointer: coarse) {
   .cal-card-header {
     display: flex;
     flex-wrap: wrap;
@@ -2591,6 +2594,21 @@ body.nautical-mode .meal-adjust-chip:hover { background: var(--accent2); border-
   font-weight: var(--weight-semi); white-space: nowrap; overflow: hidden;
   text-overflow: ellipsis; cursor: default;
 }
+/* Mobile Month cells fit ~5 characters, and a trailing "..." would take up
+   most of them. Placed after the base .cal-event/.cal-event-budget rules so
+   it wins on source order. */
+@media (max-width: 640px), (max-height: 500px) and (orientation: landscape) and (pointer: coarse) {
+  .cal-event, .cal-event-budget { text-overflow: clip; }
+}
+
+/* Phone turned sideways: ~430px tall is too short for the mini-month strip
+   plus a six-row Month grid, so drop the strip (swipe already changes
+   months) and let the grid scroll at a readable row height rather than
+   crushing every week to a sliver. */
+@media (max-height: 500px) and (orientation: landscape) and (pointer: coarse) {
+  body #yearStrip { display: none; } /* body: outranks the later base #yearStrip rule */
+  .cal-grid { grid-auto-rows: minmax(64px, 1fr); overflow-y: auto; }
+}
 
 /* ── SMS contact popover ── */
 .sms-btn-wrap { position: relative; }
@@ -2810,6 +2828,11 @@ body.nautical-mode #eventEditorModal .modal {
 #eventEditorModal .field select {
   border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line));
   background: color-mix(in srgb, var(--accent) 4%, var(--surface2));
+}
+/* .btn-secondary's --surface2 fill nearly matches this modal's gradient, so
+   Cancel/Delete read as bare text without the same outline as the inputs */
+#eventEditorModal .btn-secondary {
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line));
 }
 #eventEditorModal .field input:focus,
 #eventEditorModal .field textarea:focus,
@@ -4528,7 +4551,7 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
 }
 
 /* ── 7. Mobile: full-width inputs & bigger modal panels ── */
-@media (max-width: 640px) {
+@media (max-width: 640px), (max-height: 500px) and (orientation: landscape) and (pointer: coarse) {
   /* Modal fills more vertical space */
   .modal { max-height: 92svh; display: flex; flex-direction: column; }
   .settings-panels { max-height: unset; flex: 1; overflow-y: auto; }
@@ -4546,8 +4569,11 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
 .mobile-fab { display: none; }
 .mobile-sheet-overlay { display: none; }
 
-@media (max-width: 640px) {
+@media (max-width: 640px), (max-height: 500px) and (orientation: landscape) and (pointer: coarse) {
   .sidebar { display: none; }
+  /* Portrait phones already get one column from the 860px rule; a sideways
+     phone is wider than that and would keep an empty sidebar column */
+  .layout { grid-template-columns: 1fr; }
 
   /* iOS: prevent auto-zoom when focusing any text input */
   input:not([type=checkbox]):not([type=radio]),
@@ -5901,7 +5927,7 @@ body.flavor-tactile #saverClockTime { font-family: var(--font-display); }
 
 /* ── Tactile mobile chrome (FABs + Lists sheet) — neutral tokens only,
       so it stays KTD-4-safe under colorblind-mode/safe-palette-on ── */
-@media (max-width: 640px) {
+@media (max-width: 640px), (max-height: 500px) and (orientation: landscape) and (pointer: coarse) {
   body.flavor-tactile .mobile-sheet {
     background: linear-gradient(180deg, var(--surface-hi) 0%, var(--surface-solid) 40%);
     box-shadow: 0 -2px 10px rgba(0,0,0,.18);
