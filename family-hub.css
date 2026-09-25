@@ -2591,6 +2591,12 @@ body.nautical-mode .meal-adjust-chip:hover { background: var(--accent2); border-
   font-weight: var(--weight-semi); white-space: nowrap; overflow: hidden;
   text-overflow: ellipsis; cursor: default;
 }
+/* Mobile Month cells fit ~5 characters, and a trailing "..." would take up
+   most of them. Placed after the base .cal-event/.cal-event-budget rules so
+   it wins on source order. */
+@media (max-width: 640px) {
+  .cal-event, .cal-event-budget { text-overflow: clip; }
+}
 
 /* ── SMS contact popover ── */
 .sms-btn-wrap { position: relative; }
