@@ -2253,6 +2253,20 @@ function renderMonthGrid() {
   requestAnimationFrame(() => renderMultidayOverlay());
 }
 
+/** Month cell tap. On mobile the cell is too small to review a day's events
+ *  (pills collapse to a dot under 400px), so it opens that day in Day view;
+ *  Day view's own ＋ controls and the FAB still create events from there.
+ *  Desktop keeps the tap-to-create behavior. */
+function onMonthDayTap(dateKey) {
+  if (isMobile) {
+    calViewDate = new Date(dateKey + 'T00:00:00');
+    switchCalView('day');
+    renderYearStrip();
+  } else {
+    openEventEditor(null, dateKey);
+  }
+}
+
 function makeDayCell(year, month, day, otherMonth, isToday) {
   const cell = document.createElement('div');
   const canAdd = !otherMonth && !!googleToken;
@@ -2264,7 +2278,7 @@ function makeDayCell(year, month, day, otherMonth, isToday) {
   if (!otherMonth && googleToken) {
     num.title = 'Click to add event';
     num.style.cursor = 'pointer';
-    num.onclick = e => { e.stopPropagation(); openEventEditor(null, key); };
+    num.onclick = e => { e.stopPropagation(); onMonthDayTap(key); };
   }
   cell.appendChild(num);
 
@@ -2274,10 +2288,11 @@ function makeDayCell(year, month, day, otherMonth, isToday) {
   const evts = Object.entries(calEventCache)
     .filter(([calId]) => !disabledCals.has(calId))
     .flatMap(([, byDate]) => byDate[key] || []);
-  // Cell-level click opens new event editor
-  if (!otherMonth && googleToken) {
+  // Cell-level click opens new event editor (desktop) or that day's Day view
+  // (mobile, where the cell is too small to show the day's events)
+  if (isMobile || (!otherMonth && googleToken)) {
     cell.style.cursor = 'pointer';
-    cell.onclick = () => openEventEditor(null, key);
+    cell.onclick = () => onMonthDayTap(key);
   }
 
   // Spacer placeholder — height set by renderMultidayOverlay() so single-day pills
@@ -3664,11 +3679,11 @@ function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
 
   // Times
   if (ev?.startDT) {
-    document.getElementById('evtEdStart').value = _evtLocalTime(ev.startDT);
-    document.getElementById('evtEdEnd').value   = _evtLocalTime(ev.endDT);
+    setEvtEdTime('evtEdStart', _evtLocalTime(ev.startDT));
+    setEvtEdTime('evtEdEnd',   _evtLocalTime(ev.endDT));
   } else {
-    document.getElementById('evtEdStart').value = startTime || '09:00';
-    document.getElementById('evtEdEnd').value   = endTime   || '10:00';
+    setEvtEdTime('evtEdStart', startTime || '09:00');
+    setEvtEdTime('evtEdEnd',   endTime   || '10:00');
   }
 
   // Calendar selector — only writable calendars (not holidays, not 'group.v.calendar')
@@ -3746,11 +3761,20 @@ function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
   document.getElementById('evtEdEndsUntil').value = dk;
   toggleEvtEdEnds();
 
+  document.body.classList.add('evt-editor-open');   // hides the mobile ＋ FAB
   document.getElementById('eventEditorModal').style.display = 'flex';
   trapFocus(document.querySelector('#eventEditorModal .modal'), null, closeEventEditor);
 }
 
+/** Mobile ＋ FAB. In Day view the new event defaults to the day on screen,
+ *  so browsing to Friday and tapping ＋ starts a Friday event; Month and
+ *  Agenda span many days, so they keep the today default. */
+function openNewEventFromFab() {
+  openEventEditor(null, calView === 'day' ? localDateKey(calViewDate) : undefined);
+}
+
 function closeEventEditor() {
+  document.body.classList.remove('evt-editor-open');
   document.getElementById('eventEditorModal').style.display = 'none';
   releaseFocusTrap();
   evtEditing = null;
@@ -3899,7 +3923,36 @@ function autoAdvanceEvtEnd() {
   if (endEl.value && endEl.value > startEl.value) return;   // valid range — leave it
   const [h, m] = startEl.value.split(':').map(Number);
   const end = Math.min(h * 60 + m + 60, 23 * 60 + 59);       // +1h, clamp to 23:59
-  endEl.value = `${String(Math.floor(end / 60)).padStart(2,'0')}:${String(end % 60).padStart(2,'0')}`;
+  setEvtEdTime('evtEdEnd', `${String(Math.floor(end / 60)).padStart(2,'0')}:${String(end % 60).padStart(2,'0')}`);
+}
+
+// Start/End time are <select>s of 15-minute steps rather than <input
+// type=time>: iOS and Android's native time pickers ignore `step`, so the
+// minute wheel always offered all 60 minutes. Values stay "HH:MM" so every
+// reader of .value is unchanged.
+function fillEvtEdTimeOptions(sel) {
+  const fmt = { hour: 'numeric', minute: '2-digit' };
+  for (let m = 0; m < 24 * 60; m += 15) {
+    const v = `${String(Math.floor(m / 60)).padStart(2,'0')}:${String(m % 60).padStart(2,'0')}`;
+    sel.add(new Option(new Date(2000, 0, 1, Math.floor(m / 60), m % 60).toLocaleTimeString([], fmt), v));
+  }
+}
+
+/** Set a time select, adding an option in order when the value is off the
+ *  15-minute grid (an existing event at 9:10, or the 23:59 end clamp) so it
+ *  shows as-is instead of the select silently going blank. */
+function setEvtEdTime(id, hhmm) {
+  const sel = document.getElementById(id);
+  if (!sel.options.length) fillEvtEdTimeOptions(sel);
+  // Drop a previous off-grid option so they don't pile up across sessions
+  [...sel.options].forEach(o => { if (o.dataset.offGrid && o.value !== hhmm) o.remove(); });
+  if (hhmm && ![...sel.options].some(o => o.value === hhmm)) {
+    const [h, m] = hhmm.split(':').map(Number);
+    const opt = new Option(new Date(2000, 0, 1, h, m).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }), hhmm);
+    opt.dataset.offGrid = '1';
+    sel.add(opt, [...sel.options].find(o => o.value > hhmm) || null);
+  }
+  sel.value = hhmm;
 }
 
 function evtEdStatus(msg, isError) {
