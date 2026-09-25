@@ -2267,6 +2267,16 @@ function onMonthDayTap(dateKey) {
   }
 }
 
+/** Bill and to-do pills in a Month cell have no editor of their own. On
+ *  mobile a tap on one opens the day like a tap anywhere else in the cell;
+ *  on desktop they stay inert rather than opening a blank new-event editor. */
+function monthInfoPillClick(dateKey) {
+  return e => {
+    e.stopPropagation();
+    if (isMobile) onMonthDayTap(dateKey);
+  };
+}
+
 function makeDayCell(year, month, day, otherMonth, isToday) {
   const cell = document.createElement('div');
   const canAdd = !otherMonth && !!googleToken;
@@ -2358,7 +2368,7 @@ function makeDayCell(year, month, day, otherMonth, isToday) {
     pill.className = 'cal-event-budget';
     pill.textContent = `💰 ${item.name} ${fmt$(item.amount)}`;
     pill.title = `${item.name} — ${fmt$(item.amount)} (${freqLabel(item)})`;
-    pill.onclick = e => e.stopPropagation();
+    pill.onclick = monthInfoPillClick(key);
     cell.appendChild(pill);
   });
 
@@ -2368,7 +2378,7 @@ function makeDayCell(year, month, day, otherMonth, isToday) {
     pill.className = 'cal-event-todo';
     pill.textContent = '✅ ' + todo.text + (todo.assignedTo ? ' · ' + todo.assignedTo : '');
     pill.title = todo.text + (todo.assignedTo ? ' — assigned to ' + todo.assignedTo : '');
-    pill.onclick = e => e.stopPropagation();
+    pill.onclick = monthInfoPillClick(key);
     cell.appendChild(pill);
   });
 
