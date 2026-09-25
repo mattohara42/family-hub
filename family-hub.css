@@ -1519,22 +1519,19 @@ body.has-bg .cal-day.today {
 }
 .agenda-day-header:first-child { padding-top: 6px; }
 .agenda-day-header.agenda-today { color: var(--accent); }
-/* Border and fill both come from --event-color, the event's own calendar
-   color, set inline per event (dynamic, can't be a class). The fill is a tint
-   over the theme's surface rather than a fixed swatch, so contrast tracks
-   whatever theme is active instead of needing a hand-picked palette per theme;
-   events with no color fall back to --muted. Margin-bottom (not gap on the
-   parent) so fills don't visually merge. 32% (was 18%, which read as pastel)
-   — measured worst-case 5.58:1 text contrast over the 11 Google Calendar
-   colors × dark/light/nautical/aurora/colorblind, comfortably above WCAG AA. */
+/* Same color treatment as Month's .cal-event and Day's .day-event-pill: a
+   solid fill of the event's own calendar color with white text, so one event
+   reads the same in all three views. --event-color is set inline per event
+   (dynamic, can't be a class); events with no color fall back to --muted.
+   Margin-bottom (not gap on the parent) so fills don't visually merge. */
 .agenda-event {
   display: flex;
   align-items: flex-start;
   gap: 12px;
   padding: 8px 10px 8px 12px;
   --event-color: var(--muted);
-  border-left: 3px solid var(--event-color);
-  background: color-mix(in srgb, var(--event-color) 32%, var(--surface-solid));
+  background: var(--event-color);
+  color: #fff;
   border-radius: 8px;
   cursor: default;
   flex-shrink: 0;
@@ -1548,21 +1545,16 @@ body.has-bg .cal-day.today {
 .agenda-info { flex: 1; min-width: 0; }
 .agenda-time {
   font-size: var(--fs-meta);
-  /* --muted is tuned for contrast against --surface, not against this
-     card's --event-color tint (see .agenda-event above) — on an olive/
-     green fill it reads as low-contrast grey. --text is the color already
-     measured safe across all 11 Google Calendar colors × 5 themes for
-     .agenda-title on this same background, so reuse it here; the smaller
-     font-size and lack of bold weight (vs. .agenda-title) still carry the
-     time/title hierarchy without needing a second, unvalidated color. */
-  color: var(--text);
+  /* Matches .day-event-pill .evt-time: the fill's white text, dimmed */
+  color: inherit;
+  opacity: .85;
   margin-bottom: 3px;
   font-variant-numeric: tabular-nums;
 }
 .agenda-title {
   font-size: var(--fs-title);
   font-weight: var(--weight-semi);
-  color: var(--text);
+  color: inherit;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2868,8 +2860,7 @@ body.nautical-mode #eventEditorModal .modal {
 .evt-editor-time-row > .field {
   flex: 1 1 150px; min-width: 150px;
 }
-.evt-editor-time-row input[type=date],
-.evt-editor-time-row input[type=time] {
+.evt-editor-time-row input[type=date] {
   padding-left: 6px; padding-right: 6px;
   /* Best-effort: iOS's native date/time picker paints wider than the box
      it's given and isn't clipped by default, so the overflow bleeds into
@@ -4585,6 +4576,9 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
     background: var(--accent);
     color: #fff;
   }
+  /* The FAB sits above the modal layer; hide it while the event editor is
+     open so it doesn't cover the form (class set by openEventEditor()) */
+  body.evt-editor-open #mobileAddFab { display: none; }
 
   /* App icon doubles as the Lists trigger on mobile — give it an obvious
      button outline instead of the bare, unbordered emoji desktop keeps. */
@@ -4772,8 +4766,7 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
   .evt-editor-time-row > .field {
     flex-basis: 130px; min-width: 130px;
   }
-  .evt-editor-time-row input[type=date],
-  .evt-editor-time-row input[type=time] {
+  .evt-editor-time-row input[type=date] {
     padding-left: 4px; padding-right: 4px;
   }
 

@@ -478,7 +478,7 @@
      permanent surface. The Lists sheet opens from the 🏠 app icon in the
      header (.cal-app-emoji, styled as an obvious button under 640px — see
      family-hub.css); this FAB is the only floating button left. -->
-<button class="mobile-fab mobile-fab-add" id="mobileAddFab" onclick="openEventEditor(null)"
+<button class="mobile-fab mobile-fab-add" id="mobileAddFab" onclick="openNewEventFromFab()"
         aria-label="Add event" title="Add event">＋</button>
 
 <div class="mobile-sheet-overlay" id="mobileListsOverlay" onclick="if(event.target===this)closeMobileLists()">
@@ -1644,11 +1644,11 @@
     <div class="evt-editor-time-row" id="evtEdTimeSection">
       <div class="field">
         <label>Start time</label>
-        <input type="time" id="evtEdStart" onchange="autoAdvanceEvtEnd()" />
+        <select id="evtEdStart" class="evt-editor-select" onchange="autoAdvanceEvtEnd()"></select>
       </div>
       <div class="field">
         <label>End time</label>
-        <input type="time" id="evtEdEnd" />
+        <select id="evtEdEnd" class="evt-editor-select"></select>
       </div>
     </div>
 
