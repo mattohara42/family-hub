@@ -3728,11 +3728,11 @@ function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
       chip.style.color = selected ? '' : (m.color || '');
       if (selected) {
         chip.classList.add('selected');
-        chip.style.background = m.color || 'var(--accent)';
+        chip.style.background = chip.style.borderColor = m.color || 'var(--accent)';
       }
       chip.onclick = () => {
         const nowSelected = chip.classList.toggle('selected');
-        chip.style.background = nowSelected ? (m.color || 'var(--accent)') : '';
+        chip.style.background = chip.style.borderColor = nowSelected ? (m.color || 'var(--accent)') : '';
         chip.style.color = nowSelected ? '' : (m.color || '');
       };
       membersContainer.appendChild(chip);
