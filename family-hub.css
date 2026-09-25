@@ -2826,7 +2826,7 @@ body.nautical-mode #eventEditorModal .modal {
 #eventEditorModal .field input,
 #eventEditorModal .field textarea,
 #eventEditorModal .field select {
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line));
+  border: 1.5px solid color-mix(in srgb, var(--accent) 30%, var(--line));
   background: color-mix(in srgb, var(--accent) 4%, var(--surface2));
 }
 /* .btn-secondary's --surface2 fill nearly matches this modal's gradient, so
@@ -2863,7 +2863,7 @@ body.nautical-mode #eventEditorModal .modal {
 }
 .evt-editor-cal-opt {
   padding: 4px 12px; border-radius: 20px;
-  border: 2px solid color-mix(in srgb, currentColor 32%, transparent);
+  border: 1.5px solid color-mix(in srgb, currentColor 32%, transparent);
   font-size: .8rem; cursor: pointer; transition: all .15s;
   background: color-mix(in srgb, currentColor 14%, var(--surface2)); color: var(--text);
 }
@@ -2912,11 +2912,13 @@ body.nautical-mode #eventEditorModal .modal {
 .evt-editor-members { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .evt-member-chip {
   padding: 4px 12px; border-radius: 20px;
-  border: 2px solid color-mix(in srgb, currentColor 38%, transparent);
+  border: 1.5px solid color-mix(in srgb, currentColor 38%, transparent);
   font-size: .8rem; cursor: pointer; transition: all .15s;
   background: color-mix(in srgb, currentColor 12%, var(--surface2)); color: var(--text);
 }
-.evt-member-chip.selected { border-color: transparent; color: #fff; font-weight: 600; }
+/* Selected: border-color is set inline to the member's color alongside the
+   fill (openEventEditor()), so a selected chip keeps a visible edge */
+.evt-member-chip.selected { color: #fff; font-weight: 600; }
 .evt-member-badge {
   display: inline-flex; align-items: center; justify-content: center;
   width: 14px; height: 14px; border-radius: 50%;
@@ -2936,7 +2938,8 @@ body.nautical-mode #eventEditorModal .modal {
 .evt-editor-ends-row input[type=date]   { width: auto; flex: 1; }
 .evt-editor-scope-row { display: flex; gap: 6px; margin-top: 6px; }
 .evt-scope-btn {
-  padding: 5px 14px; border-radius: 20px; border: 2px solid rgba(255,255,255,.18);
+  padding: 5px 14px; border-radius: 20px;
+  border: 1.5px solid color-mix(in srgb, var(--accent) 30%, var(--line));
   font-size: .82rem; cursor: pointer; transition: all .15s;
   background: var(--surface2); color: var(--text);
 }
@@ -2944,6 +2947,26 @@ body.nautical-mode #eventEditorModal .modal {
   border-color: var(--accent); background: color-mix(in srgb, var(--accent) 20%, transparent);
   color: var(--accent); font-weight: 600;
 }
+/* One border for every control in the event editor: inputs, selects, chips,
+   scope toggles and footer buttons all use 1.5px, in the same accent tint as
+   the text fields (colored chips tint from their own color instead). Before
+   this, the footer .btn and close button had none or a different weight, and
+   the scope toggle's white border vanished in light mode. */
+#eventEditorModal .btn,
+#eventEditorModal .evt-editor-close-btn {
+  border: 1.5px solid color-mix(in srgb, var(--accent) 30%, var(--line));
+}
+/* iOS renders a native date input at its own intrinsic width and ignores
+   width:100%, so Start date ran past the card's right edge. Dropping the
+   native appearance lets it take the box it's given. */
+#eventEditorModal input[type=date] {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  min-width: 0;
+  min-height: 2.6em;
+}
+#eventEditorModal input[type=date]::-webkit-date-and-time-value { text-align: left; }
 .week-day-col { cursor: default; }
 .week-day-body-add {
   cursor: pointer;
