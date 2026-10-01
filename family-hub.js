@@ -354,6 +354,8 @@ let assistantHistory = (()=>{
 let shopItemsCache    = [];   // in-memory mirror of shopping items for context
 let assistantRecognition = null;  // SpeechRecognition instance
 let assistantListening   = false; // true while mic is open
+let assistantVoiceSent   = false; // this mic session already sent its final result
+let assistantSending     = false; // a sendAssistantMessage() round-trip is in flight
 let assistantTTS         = lsGet('fh_assistantTTS', false); // read replies aloud
 let assistantWelcomeMode = localStorage.getItem('fh_assistantWelcome') || 'ticker'; // 'static' | 'ticker'
 let oskEnabled           = lsGet('fh_osk', false); // on-screen keyboard for keyboardless wall displays
@@ -10336,9 +10338,19 @@ function buildDailyBriefingSummary() {
 
 /** Send the typed message to Gemini and render the reply. */
 async function sendAssistantMessage() {
+  // One request at a time: a second send while Gemini is answering would run
+  // the same actions twice (e.g. add an item to Shopping twice). Leave any
+  // text in the box so it can be sent once the first reply lands.
+  if (assistantSending) return;
   const input = document.getElementById('assistantInput');
   const text  = input.value.trim();
   if (!text) return;
+  assistantSending = true;
+  try { await _sendAssistantMessage(input, text); }
+  finally { assistantSending = false; }
+}
+
+async function _sendAssistantMessage(input, text) {
   if ('speechSynthesis' in window) speechSynthesis.cancel();  // stop reading any prior reply
   input.value = '';
 
@@ -10429,6 +10441,7 @@ function clearAssistantChat() {
 const BRIEFING_DATE_KEY   = 'fh_briefingDate';
 const BRIEFING_TEXT_KEY   = 'fh_briefingText';
 const BRIEFING_BUCKET_KEY = 'fh_briefingBucket'; // 'morning'|'afternoon'|'evening'
+const BRIEFING_NAME_KEY   = 'fh_briefingName';   // userName the cached briefing greets
 
 function toggleBriefing() {
   const banner = document.getElementById('briefingBanner');
@@ -10473,8 +10486,10 @@ async function loadDailyBriefing() {
   const cachedDate   = localStorage.getItem(BRIEFING_DATE_KEY);
   const cachedBucket = localStorage.getItem(BRIEFING_BUCKET_KEY);
   const cachedText   = localStorage.getItem(BRIEFING_TEXT_KEY);
+  const cachedName   = localStorage.getItem(BRIEFING_NAME_KEY);
 
-  if (cachedDate === today && cachedBucket === bucket && cachedText) {
+  // The greeting names the user, so a name change in Settings invalidates it.
+  if (cachedDate === today && cachedBucket === bucket && cachedName === userName && cachedText) {
     showBriefingBanner(cachedText);
     return;
   }
@@ -10487,7 +10502,7 @@ async function loadDailyBriefing() {
     const prompt = `${context}
 
 ---
-Write a warm, concise daily briefing (3–5 sentences max). Your response MUST begin with exactly "${greeting}, ${userName || 'there'}!" — do not alter this opening phrase. Then cover:
+Write a warm, concise daily briefing (3–5 sentences max). Your response MUST begin with exactly "${greeting}, ${userName === 'Someone' ? 'there' : userName}!" — do not alter this opening phrase. Then cover:
 1. Any calendar events or tasks due today
 2. Today's weather highlights (if available)
 3. Any bills due soon or a notable meal planned
@@ -10506,6 +10521,7 @@ Be specific and personal. Use the family data above, including the correct prono
       localStorage.setItem(BRIEFING_DATE_KEY,   today);
       localStorage.setItem(BRIEFING_BUCKET_KEY, bucket);
       localStorage.setItem(BRIEFING_TEXT_KEY,   text);
+      localStorage.setItem(BRIEFING_NAME_KEY,   userName);
       showBriefingBanner(text);
     } else {
       banner.style.display = 'none';
@@ -10686,6 +10702,7 @@ async function initAssistantVoice() {
 
   assistantRecognition.onstart = () => {
     assistantListening = true;
+    assistantVoiceSent = false;
     setMicState('recording');
     clearMicPrimingMessage();
     const inp = document.getElementById('assistantInput');
@@ -10696,7 +10713,12 @@ async function initAssistantVoice() {
     const transcript = Array.from(event.results).map(r => r[0].transcript).join('');
     const inp = document.getElementById('assistantInput');
     if (inp) inp.value = transcript;
+    // iOS WebKit (Safari and every other iOS browser) can deliver the final
+    // result twice, so send only the first and end the session ourselves.
     if (event.results[event.results.length - 1].isFinal) {
+      if (assistantVoiceSent) return;
+      assistantVoiceSent = true;
+      try { assistantRecognition.abort(); } catch {}
       stopAssistantMic();
       sendAssistantMessage();
     }
