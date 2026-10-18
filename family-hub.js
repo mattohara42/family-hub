@@ -3197,12 +3197,16 @@ function renderIcsSubList() {
     const colorInput = document.createElement('input');
     colorInput.type = 'color';
     colorInput.value = sub.color;
+    // Preview on input, persist on change: every Firestore write fires the
+    // icsSubs snapshot, which rebuilds this list and drops the open picker.
+    colorInput.onchange = e => {
+      if (db) db.collection('icsSubs').doc(sub.id).update({ color: e.target.value }).catch(_fsWriteError);
+      else localStorage.setItem('fh_icsSubs', JSON.stringify(icsSubs));
+    };
     colorInput.oninput = e => {
       const newColor = e.target.value;
       icsSubs[i].color = newColor;
       colorWrap.style.background = newColor;
-      if (db) db.collection('icsSubs').doc(sub.id).update({ color: newColor }).catch(_fsWriteError);
-      else localStorage.setItem('fh_icsSubs', JSON.stringify(icsSubs));
       // Update color on already-cached events so the live calendar reflects immediately
       if (calEventCache[sub.id]) {
         Object.values(calEventCache[sub.id]).forEach(dayEvts =>
@@ -3222,9 +3226,14 @@ function renderIcsSubList() {
     labelInput.value = sub.label;
     labelInput.title = sub.url;
     labelInput.placeholder = 'Label';
-    labelInput.oninput = e => {
-      icsSubs[i].label = e.target.value;
-      if (db) db.collection('icsSubs').doc(sub.id).update({ label: e.target.value }).catch(_fsWriteError);
+    labelInput.enterKeyHint = 'done';
+    labelInput.onkeydown = e => { if (e.key === 'Enter') labelInput.blur(); };
+    // Persist on change (blur/Enter), not per keystroke: each write fires the
+    // icsSubs snapshot, which rebuilds this list and steals focus mid-word.
+    labelInput.onchange = e => {
+      const label = e.target.value.trim() || sub.url;
+      icsSubs[i].label = label;
+      if (db) db.collection('icsSubs').doc(sub.id).update({ label }).catch(_fsWriteError);
       else localStorage.setItem('fh_icsSubs', JSON.stringify(icsSubs));
       renderCalendarTabs();
     };
@@ -3244,8 +3253,7 @@ function renderIcsSubList() {
       renderCountdownCard();
     };
     const wdText = document.createElement('span');
-    wdText.textContent = 'Wkdays';
-    wdText.style.cssText = 'font-size:.68rem;color:var(--muted);white-space:nowrap';
+    wdText.textContent = 'Weekdays-only countdowns';
     wdLabel.appendChild(wdCheck);
     wdLabel.appendChild(wdText);
 
@@ -3274,9 +3282,14 @@ function renderIcsSubList() {
     row.appendChild(visToggle);
     row.appendChild(colorWrap);
     row.appendChild(labelInput);
-    row.appendChild(wdLabel);
     row.appendChild(removeBtn);
-    el.appendChild(row);
+    // Weekdays toggle sits on its own line under the label, so the label
+    // input keeps the row's full width on a phone.
+    const item = document.createElement('div');
+    item.className = 'ics-sub-item';
+    item.appendChild(row);
+    item.appendChild(wdLabel);
+    el.appendChild(item);
   });
 }
 
