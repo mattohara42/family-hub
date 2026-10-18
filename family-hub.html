@@ -525,11 +525,11 @@
         <div class="settings-section-head">Identity</div>
         <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
           <div class="field" style="flex:1 1 140px">
-            <label>Your name <span style="font-weight:400;color:var(--muted)">(list items)</span></label>
+            <label>Your name</label>
             <input type="text" id="settingName" placeholder="e.g. Matt" />
           </div>
           <div class="field" style="flex:1 1 140px">
-            <label>App title <span style="font-weight:400;color:var(--muted)">(header)</span></label>
+            <label>App title</label>
             <input type="text" id="settingAppTitle" placeholder="e.g. Family Hub" maxlength="30" />
           </div>
           <div class="field" style="flex:0 0 auto">
@@ -541,36 +541,36 @@
         <div class="settings-section-head">Theme</div>
         <div class="field">
           <label>Appearance</label>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <div class="appearance-grid" style="display:flex;gap:8px;flex-wrap:wrap">
             <button id="modeAuto" class="btn btn-sm"
                     onclick="setAppMode('auto')" title="Follow this device's system light/dark setting"
                     style="flex:1;min-width:70px;display:flex;align-items:center;justify-content:center;gap:5px">
-              🌓 Auto
+              <span>🌓</span> Auto
             </button>
             <button id="modeLight" class="btn btn-sm"
                     onclick="setAppMode('light')"
                     style="flex:1;min-width:70px;display:flex;align-items:center;justify-content:center;gap:5px">
-              ☀️ Light
+              <span>☀️</span> Light
             </button>
             <button id="modeDark" class="btn btn-sm"
                     onclick="setAppMode('dark')"
                     style="flex:1;min-width:70px;display:flex;align-items:center;justify-content:center;gap:5px">
-              🌙 Dark
+              <span>🌙</span> Dark
             </button>
             <button id="modeNautical" class="btn btn-sm"
                     onclick="setAppMode('nautical')"
                     style="flex:1;min-width:70px;display:flex;align-items:center;justify-content:center;gap:5px">
-              ⚓ Nautical
+              <span>⚓</span> Nautical
             </button>
             <button id="modeAurora" class="btn btn-sm"
                     onclick="setAppMode('aurora')"
                     style="flex:1;min-width:70px;display:flex;align-items:center;justify-content:center;gap:5px">
-              🌌 Aurora
+              <span>🌌</span> Aurora
             </button>
             <button id="modeColorblind" class="btn btn-sm"
                     onclick="setAppMode('colorblind')"
                     style="flex:1;min-width:70px;display:flex;align-items:center;justify-content:center;gap:5px">
-              👁 Accessible
+              <span>👁</span> Accessible
             </button>
           </div>
         </div>
@@ -578,13 +578,17 @@
           <label>Flavor</label>
           <div id="flavorButtons" style="display:flex;gap:8px;flex-wrap:wrap"></div>
         </div>
-        <div class="field" style="margin-bottom:14px">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-            <input type="checkbox" id="safePaletteToggle" style="width:14px;height:14px;accent-color:var(--accent)">
-            <span>Colorblind-safe color swatches</span>
-            <span style="font-weight:400;color:var(--muted);font-size:.80rem">(replaces color pickers with a safe palette)</span>
+        <div class="toggle-row">
+          <label class="toggle-switch">
+            <input type="checkbox" id="safePaletteToggle" />
+            <span class="toggle-track"></span>
           </label>
+          <div>
+            <div class="toggle-label">Colorblind-safe swatches</div>
+            <div class="toggle-sub">Swaps color pickers for a safe palette.</div>
+          </div>
         </div>
+        <div class="settings-desktop-only">
         <div class="settings-section-head">Layout &amp; display</div>
         <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
           <div class="field" style="flex:1 1 160px;margin-bottom:0">
@@ -602,7 +606,7 @@
             </label>
             <div>
               <div class="toggle-label">📺 TV / Display mode</div>
-              <div class="toggle-sub">Hides controls, enlarges text — for Chromecast/AirPlay. <code>?tv=1</code> to activate on load, Escape to exit.</div>
+              <div class="toggle-sub">Hides controls and enlarges text for casting. Add <code>?tv=1</code> to start in it, Escape exits.</div>
             </div>
           </div>
           <div class="toggle-row" style="flex:1 1 200px">
@@ -612,10 +616,11 @@
             </label>
             <div>
               <div class="toggle-label">⌨️ On-screen keyboard</div>
-              <div class="toggle-sub">Pops up a touch keyboard when you tap the assistant box or an event field — for wall displays with no physical keyboard. Off on phones (they have their own).</div>
+              <div class="toggle-sub">A touch keyboard for wall displays with no physical one.</div>
             </div>
           </div>
         </div>
+        </div><!-- /settings-desktop-only -->
       </div><!-- /look -->
 
       <!-- ── Images (Screensaver / Background) ── -->
@@ -738,53 +743,41 @@
 
       <!-- ── Family Members ── -->
       <div class="settings-panel" data-panel="family">
-        <p style="font-size:.82rem;color:var(--muted);margin:0 0 14px">
-          Family members are shared across Shopping (SMS), To-Do, Chores, and Calendar — set names, colors, and an optional phone number here.
+        <p class="settings-hint" style="margin:0 0 14px">
+          Shared by Shopping, To-Do, Chores and Calendar. A phone number lets you text them the shopping list.
         </p>
         <div id="familyMemberList" style="margin-bottom:10px"></div>
-        <div style="display:flex;gap:8px">
-          <input type="text" id="newFamilyMemberInput" placeholder="Name…"
-                 style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();addFamilyMember()}" />
-          <button class="btn btn-sm btn-primary" onclick="addFamilyMember()">+ Add</button>
+        <div class="lc-add-row">
+          <input type="text" id="newFamilyMemberInput" placeholder="Name" class="lc-input"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();addFamilyMember()}" />
+          <button class="btn btn-sm btn-primary" onclick="addFamilyMember()">Add</button>
         </div>
         <div id="familyMemberError" style="display:none;font-size:.8rem;color:var(--red);margin-top:8px"></div>
       </div><!-- /family -->
 
       <!-- ── Family Assistant ── -->
       <div class="settings-panel" data-panel="assistant">
-        <div style="display:flex;gap:10px;align-items:flex-start;background:var(--surface2);border-radius:var(--radius);padding:10px 12px;margin:0 0 14px">
-          <span style="font-size:1.1rem;line-height:1;flex-shrink:0">🤖</span>
-          <p style="font-size:var(--text-sm);color:var(--muted);margin:0;line-height:1.45">
-            Ask about your schedule, weather, or budget, or tell it what to do — add or remove shopping items, to-dos, and calendar events, plan a meal, log a bill, or ask when to mow the lawn. It sees your family's calendars, lists, and budget in real time to answer.
-          </p>
+        <div class="settings-intro">
+          <span>🤖</span>
+          <p>Ask about your schedule, weather or budget, or have it add events, to-dos, shopping items and bills.</p>
         </div>
         <div class="field">
-          <label>Assistant name <span style="font-weight:400;color:var(--muted)">(shown on the assistant card)</span></label>
+          <label>Name</label>
           <input type="text" id="settingAssistantName" placeholder="e.g. Family Assistant" maxlength="40" />
-        </div>
-        <div class="toggle-sub" style="margin:-8px 0 14px">
-          🎭 Some names unlock a matching personality in its replies — try naming it after a famous fictional AI or butler.
+          <p class="settings-hint">🎭 Name it after a famous fictional AI or butler and it may pick up the personality.</p>
         </div>
         <div class="field">
-          <label>Empty state</label>
-          <div style="display:flex;gap:16px;margin-top:4px">
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
-              <input type="radio" name="assistantWelcome" value="ticker" style="accent-color:var(--accent)">
-              <span>Quick-prompt ticker</span>
-            </label>
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
-              <input type="radio" name="assistantWelcome" value="static" style="accent-color:var(--accent)">
-              <span>Static message</span>
-            </label>
+          <label>When idle, show</label>
+          <div class="choice-group">
+            <label><input type="radio" name="assistantWelcome" value="ticker"><span>Suggested prompts</span></label>
+            <label><input type="radio" name="assistantWelcome" value="static"><span>Welcome message</span></label>
           </div>
         </div>
-        <div class="settings-section-head">AI Provider</div>
+        <div class="settings-section-head">AI provider</div>
         <div class="field">
-          <label>Google Gemini API Key</label>
-          <input type="password" id="settingMealAiKey" placeholder="Paste your API key…" autocomplete="off" />
-          <p style="font-size:var(--text-xs);color:var(--muted);margin-top:6px">
-            Also powers meal suggestions in ⚙️ Settings → 🍽 Meals.
-          </p>
+          <label>Gemini API key</label>
+          <input type="password" id="settingMealAiKey" placeholder="Paste your API key" autocomplete="off" />
+          <p class="settings-hint">Also powers meal suggestions.</p>
         </div>
       </div><!-- /assistant -->
 
@@ -835,11 +828,11 @@
           <!-- Weekdays toggle (shared by both add methods) -->
           <label style="display:flex;align-items:center;gap:6px;font-size:.8rem;color:var(--muted);margin-top:6px;cursor:pointer">
             <input type="checkbox" id="cdWeekdaysOnly" style="accent-color:var(--accent)" />
-            Count weekdays only (Mon–Fri)
+            Weekdays only (Mon–Fri)
           </label>
           <!-- Manual date entry -->
           <div class="lc-add-row" style="flex-wrap:wrap;gap:5px;margin-top:6px">
-            <input id="cdLabelInput" type="text" placeholder="Label" class="lc-input" style="flex:1;min-width:100px" />
+            <input id="cdLabelInput" type="text" placeholder="Countdown name" class="lc-input" />
             <input id="cdDateInput"  type="date"  class="lc-input lc-input-sm" />
             <input id="cdEmojiInput" type="text"  placeholder="🎉" class="lc-input" style="width:42px;text-align:center" maxlength="8" />
             <button type="button" class="btn btn-secondary btn-sm" onclick="openEmojiPicker('cdEmojiInput',this)" title="Pick emoji">😊</button>
@@ -1025,16 +1018,15 @@
 
       <!-- ── Shopping ── -->
       <div class="settings-panel" data-panel="shopping">
-        <p style="font-size:.82rem;color:var(--muted);margin:0 0 14px">
-          Add phone numbers to family members in <strong style="cursor:pointer;color:var(--accent)" onclick="switchSettingsTab('family')">👨‍👩‍👧 Family</strong> to enable SMS sending.
+        <p class="settings-hint" style="margin:0 0 14px">
+          To text the list, add phone numbers in <strong style="cursor:pointer;color:var(--accent)" onclick="switchSettingsTab('family')">👨‍👩‍👧 Family</strong>.
         </p>
-        <hr style="border:none;border-top:1px solid rgba(255,255,255,.08);margin:0 0 14px"/>
         <div class="field">
-          <label>Aisle Categories</label>
-          <p style="font-size:.78rem;color:var(--muted);margin-bottom:8px">Items are grouped by aisle in the shopping list.</p>
+          <label>Aisle categories</label>
+          <p class="settings-hint" style="margin:0 0 8px">The shopping list groups items by these.</p>
           <div id="shopCategoryList" style="margin-bottom:8px"></div>
-          <div style="display:flex;gap:8px;margin-top:4px">
-            <input type="text" id="newShopCategoryInput" placeholder="New category…" style="flex:1"
+          <div class="lc-add-row">
+            <input type="text" id="newShopCategoryInput" placeholder="New category" class="lc-input"
                    onkeydown="if(event.key==='Enter'){event.preventDefault();addShopCategory()}" />
             <button class="btn btn-primary btn-sm" onclick="addShopCategory()">Add</button>
           </div>
@@ -1051,32 +1043,30 @@
 
       <!-- ── Meal Planning ── -->
       <div class="settings-panel" data-panel="meals">
-        <p style="font-size:.82rem;color:var(--muted);margin:0 0 14px">
-          The Gemini API key that powers meal suggestions now lives in <strong style="cursor:pointer;color:var(--accent)" onclick="switchSettingsTab('assistant')">🤖 Assistant</strong>.
+        <p class="settings-hint" style="margin:0 0 14px">
+          Meal suggestions use the Gemini key set in <strong style="cursor:pointer;color:var(--accent)" onclick="switchSettingsTab('assistant')">🤖 Assistant</strong>.
         </p>
         <div class="field">
-          <label>Dietary Preferences</label>
-          <div class="meal-diet-grid" id="mealDietGrid">
+          <label>Dietary preferences</label>
+          <div class="choice-group" id="mealDietGrid">
             <!-- rendered by JS -->
           </div>
         </div>
         <div class="field">
-          <label>Default Pantry / Freezer Staples
-            <span style="font-weight:400;color:var(--muted)"> — pre-fills the on-hand field</span>
-          </label>
+          <label>Pantry staples</label>
           <textarea id="settingMealPantry" rows="3"
             style="width:100%;background:var(--surface2);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:var(--text);padding:9px 12px;font-size:.85rem;resize:vertical"
-            placeholder="e.g. olive oil, garlic, onions, canned tomatoes, rice, chicken breasts, frozen shrimp…"></textarea>
+            placeholder="e.g. olive oil, garlic, rice, frozen shrimp"></textarea>
+          <p class="settings-hint">Pre-fills what's on hand when you ask for ideas.</p>
         </div>
         <div class="field">
-          <label>Loading Messages
-            <span style="font-weight:400;color:var(--muted)"> — shown while AI thinks</span>
-          </label>
+          <label>Loading messages</label>
+          <p class="settings-hint" style="margin:0 0 8px">Shown while the AI thinks.</p>
           <div id="loadingMsgList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>
           <div style="display:flex;gap:8px">
-            <input type="text" id="newLoadingMsgInput" placeholder="Add a new message…"
+            <input type="text" id="newLoadingMsgInput" placeholder="New message"
                    style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();addLoadingMsg()}" />
-            <button class="btn btn-sm" onclick="addLoadingMsg()" style="white-space:nowrap">+ Add</button>
+            <button class="btn btn-sm btn-primary" onclick="addLoadingMsg()">Add</button>
           </div>
           <button class="btn btn-sm" onclick="resetLoadingMsgs()"
                   style="margin-top:8px;font-size:.75rem;color:var(--muted);background:none;border:1px solid rgba(255,255,255,.15)">
@@ -1084,18 +1074,17 @@
           </button>
         </div>
         <div class="field">
-          <label>Meal Plan Templates</label>
+          <label>Meal plan templates</label>
           <div style="display:flex;gap:8px;margin-bottom:10px">
-            <input type="text" id="mealTemplateNameInput" placeholder="Template name…" style="flex:1"
+            <input type="text" id="mealTemplateNameInput" placeholder="Template name" style="flex:1"
                    onkeydown="if(event.key==='Enter'){event.preventDefault();saveMealTemplate()}" />
             <button class="btn btn-sm btn-primary" onclick="saveMealTemplate()" style="white-space:nowrap">💾 Save Week</button>
           </div>
           <div id="mealTemplateList"></div>
         </div>
         <div class="field">
-          <label>Recipe Box
-            <span style="font-weight:400;color:var(--muted)"> — dishes saved from manual meal entry</span>
-          </label>
+          <label>Recipe box</label>
+          <p class="settings-hint" style="margin:0 0 8px">Dishes you've typed in by hand.</p>
           <div id="recipeBoxList"></div>
         </div>
       </div><!-- /meals -->
@@ -1288,11 +1277,9 @@
 
       <!-- ── Events ── -->
       <div class="settings-panel" data-panel="events">
-        <div style="display:flex;gap:10px;align-items:flex-start;background:var(--surface2);border-radius:var(--radius);padding:10px 12px;margin:0 0 14px">
-          <span style="font-size:1.1rem;line-height:1;flex-shrink:0">💡</span>
-          <p style="font-size:var(--text-sm);color:var(--muted);margin:0;line-height:1.45">
-            Finds local events — concerts, shows, library programs, sports, and family activities — near your location. Click the 💡 button on the calendar to browse them; results are weather-aware and flag conflicts with what's already on your calendar.
-          </p>
+        <div class="settings-intro">
+          <span>💡</span>
+          <p>Finds concerts, library programs, sports and family activities nearby. Tap 💡 on the calendar to browse. Nothing is added to your calendar until you tap 📅 Add.</p>
         </div>
         <div class="field">
           <label>Location</label>
@@ -1300,23 +1287,11 @@
         </div>
         <div class="field">
           <label>Max distance</label>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <label style="display:flex;align-items:center;gap:6px">
-              <input type="radio" name="eventDistance" value="30" />
-              <span>30 min</span>
-            </label>
-            <label style="display:flex;align-items:center;gap:6px">
-              <input type="radio" name="eventDistance" value="60" />
-              <span>1 hour</span>
-            </label>
-            <label style="display:flex;align-items:center;gap:6px">
-              <input type="radio" name="eventDistance" value="120" />
-              <span>2 hours</span>
-            </label>
+          <div class="choice-group">
+            <label><input type="radio" name="eventDistance" value="30" /><span>30 min</span></label>
+            <label><input type="radio" name="eventDistance" value="60" /><span>1 hour</span></label>
+            <label><input type="radio" name="eventDistance" value="120" /><span>2 hours</span></label>
           </div>
-        </div>
-        <div class="toggle-sub" style="margin-top:10px;border-top:1px solid rgba(128,128,128,.12);padding-top:12px">
-          Discovered events never appear on your calendar automatically. Use the “📅 Add” button on any event card to add it.
         </div>
       </div><!-- /events -->
 
@@ -1361,17 +1336,16 @@
           </div>
           <div class="field">
             <label>Long-lived access token</label>
-            <input id="haTokenInput" type="password" class="lc-input" autocomplete="off" placeholder="Paste from HA → profile → Security" />
+            <input id="haTokenInput" type="password" class="lc-input" autocomplete="off" placeholder="Paste token" />
           </div>
           <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
             <button class="btn btn-secondary btn-sm" onclick="testHaConnection()">Test connection</button>
             <span id="haTestResult" class="ha-test"></span>
           </div>
-          <p style="font-size:.75rem;color:var(--muted);margin-top:8px">
-            The token is stored <strong>on this device only</strong> and is never synced, so
-            enter it once per device. Home Assistant must be reachable over HTTPS — see
-            Step 6 of the setup guide. Add this page's address to
-            <code>cors_allowed_origins</code> in Home Assistant, or every request will fail.
+          <p class="settings-hint">
+            Create a token in Home Assistant under Profile → Security. It stays on this
+            device and is never synced. Home Assistant needs HTTPS and this site in
+            <code>cors_allowed_origins</code> (setup guide, step 6).
           </p>
         </div>
 
@@ -1385,11 +1359,9 @@
             <button class="btn btn-primary btn-sm" onclick="addHaEntity()">Add</button>
           </div>
           <datalist id="haEntityOptions"></datalist>
-          <p style="font-size:.75rem;color:var(--muted);margin-top:6px">
-            Only what you list here appears on the panel. Run <strong>Test connection</strong>
-            and the ID box will suggest every entity in the house; otherwise find IDs under
-            <strong>Developer&nbsp;Tools → States</strong> in Home Assistant.
-            Lights, switches and fans get a toggle, locks get lock/unlock, everything else is read-only.
+          <p class="settings-hint">
+            After <strong>Test connection</strong>, the ID box suggests every entity. Lights,
+            switches and fans get a toggle, locks get lock/unlock, the rest are read-only.
           </p>
         </div>
 

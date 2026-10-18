@@ -8489,7 +8489,7 @@ function renderMealTemplateList() {
   if (!list) return;
   list.innerHTML = '';
   if (!mealTemplates.length) {
-    list.innerHTML = '<div style="color:var(--muted);font-size:.8rem;padding:4px 0">No templates yet — plan a week then click Save Week.</div>';
+    list.innerHTML = '<div style="color:var(--muted);font-size:.8rem;padding:4px 0">No templates yet. Plan a week, then tap Save Week.</div>';
     return;
   }
   mealTemplates.forEach(tmpl => {
@@ -11995,11 +11995,9 @@ function openSettings() {
   dietGrid.innerHTML = '';
   MEAL_DIET_OPTIONS.forEach(opt => {
     const label = document.createElement('label');
-    label.className = 'meal-diet-option';
     const cb = document.createElement('input');
     cb.type = 'checkbox'; cb.value = opt;
     cb.checked = mealDietPrefs.includes(opt);
-    cb.style.cssText = 'width:14px;height:14px;accent-color:var(--accent)';
     label.appendChild(cb);
     label.appendChild(document.createTextNode(opt));
     dietGrid.appendChild(label);
