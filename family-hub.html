@@ -817,11 +817,13 @@
         <div class="lc-section">
           <div class="lc-section-title">📡 ICS Subscriptions</div>
           <div id="icsSubList" class="lc-list"></div>
-          <div class="lc-add-row" style="flex-wrap:wrap;gap:5px;margin-top:6px">
-            <input id="icsUrlInput" type="url" placeholder="Paste ICS URL…" class="lc-input" style="min-width:180px;flex:2" />
-            <input id="icsLabelInput" type="text" placeholder="Label" class="lc-input" style="flex:1;min-width:80px" />
-            <input id="icsColorInput" type="color" value="#61afef" class="lc-color" title="Color" />
-            <button class="btn btn-primary btn-sm" onclick="addIcsSub()">Add</button>
+          <div class="ics-add-form">
+            <input id="icsUrlInput" type="url" placeholder="Paste ICS URL…" class="lc-input" />
+            <div class="lc-add-row">
+              <input id="icsLabelInput" type="text" placeholder="Name (optional)" class="lc-input" />
+              <input id="icsColorInput" type="color" value="#61afef" class="lc-color" title="Color" />
+              <button class="btn btn-primary btn-sm" onclick="addIcsSub()">Add</button>
+            </div>
           </div>
           <div id="icsSubStatus" style="font-size:.75rem;color:var(--muted);margin-top:4px"></div>
         </div>
