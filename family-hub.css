@@ -2339,14 +2339,6 @@ body.has-bg.light-mode .day-hour-row.current-hour { background: rgba(190,198,225
 .meal-s-healthy { font-size: var(--text-sm); color: var(--green); margin-bottom: 6px; }
 .meal-s-ingredients { font-size: var(--text-sm); color: var(--muted); margin-bottom: 8px; }
 .meal-s-actions { display: flex; gap: 6px; flex-wrap: wrap; }
-.meal-diet-grid {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
-  margin-top: 4px;
-}
-.meal-diet-option {
-  display: flex; align-items: center; gap: 6px;
-  font-size: var(--text-base); cursor: pointer;
-}
 .wx-view-option {
   display: flex; align-items: center; gap: 5px;
   font-size: var(--text-sm); cursor: pointer;
@@ -3181,6 +3173,10 @@ body.nautical-mode #settingsModal .modal {
 .field input:focus,
 .field textarea:focus,
 .field select:focus { outline: none; border-color: var(--accent); }
+/* The text-input sizing above must not stretch radios/checkboxes: a 100%-wide
+   radio pushes its own label to the far side of the row */
+.field input[type=checkbox],
+.field input[type=radio] { width: auto; padding: 0; }
 .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; flex-shrink: 0; }
 .btn-secondary { background: var(--surface2); color: var(--text); }
 .btn-mode-active { background: var(--accent) !important; color: #fff !important; }
@@ -3244,6 +3240,44 @@ body.eggs-unlocked .settings-nav-group--gated { display: block; }
   flex-direction: column;
 }
 .settings-back { display: none; }  /* wide screens: both panes visible, no back */
+
+/* Helper copy under a field, and the callout that opens some panels */
+.settings-hint {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  line-height: 1.45;
+  margin: 6px 0 0;
+}
+.settings-intro {
+  display: flex; gap: 10px; align-items: flex-start;
+  background: var(--surface2);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  margin: 0 0 14px;
+  font-size: var(--text-sm);
+  color: var(--muted);
+  line-height: 1.45;
+}
+.settings-intro p { margin: 0; }
+.settings-intro p:only-child { flex: 1; }
+/* Radio choices as pills, same shape as the Appearance buttons */
+.choice-group { display: flex; flex-wrap: wrap; gap: 8px; }
+.choice-group label {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin: 0;
+  padding: 7px 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: var(--surface2);
+  color: var(--text);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.choice-group label:has(input:checked) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.choice-group input { margin: 0; accent-color: var(--accent); }
 
 /* Labeled subsection header inside a panel — breaks long panels into groups */
 .settings-section-head {
@@ -3717,7 +3751,9 @@ body.colorblind-mode .year-card-week-row.today-week {
 .toggle-switch input { opacity: 0; width: 0; height: 0; }
 .toggle-track {
   position: absolute; inset: 0;
-  background: rgba(255,255,255,.15);
+  /* Off state reads from --muted so it shows on light themes too
+     (a white wash disappeared there, leaving only the white knob) */
+  background: color-mix(in srgb, var(--muted) 45%, transparent);
   border-radius: 20px;
   cursor: pointer;
   transition: background .2s;
@@ -4630,7 +4666,9 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
     cursor: pointer;
     touch-action: manipulation;
     box-shadow: var(--shadow);
-    z-index: 150;
+    /* Below .modal-overlay (100), so no modal ever has the FAB on top of
+       its buttons; the Lists sheet (200) covers it too */
+    z-index: 90;
   }
   .mobile-fab-add {
     right: 16px;
@@ -4841,7 +4879,27 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
     font-size: 1rem !important;
     line-height: var(--leading-normal) !important;
   }
-  #settingsModal .settings-section-head { font-size: 1.05rem !important; }
+  #settingsModal .settings-section-head,
+  #settingsModal .lc-section-title      { font-size: 1.05rem !important; }
+  /* Helper copy one step below body text, so labels and controls lead */
+  #settingsModal .settings-panel .settings-hint,
+  #settingsModal .settings-panel .toggle-sub,
+  #settingsModal .settings-panel .settings-intro,
+  #settingsModal .settings-panel .settings-intro * { font-size: .9rem !important; }
+  /* Settings that only mean something on a wall display or desktop */
+  #settingsModal .settings-desktop-only { display: none; }
+  /* Add forms: the first text box gets its own line, the rest share the next
+     one instead of each squeezing to a truncated sliver */
+  #settingsModal .lc-add-row > .lc-input,
+  #settingsModal .lc-add-row > .lc-select { flex: 1 1 88px; min-width: 0; width: auto; }
+  /* ...unless it's just one box and its Add button, which fit on one line */
+  #settingsModal .lc-add-row > .lc-input:first-child:not(:nth-last-child(2)) { flex-basis: 100%; }
+  #settingsModal #cdEmojiInput { flex: 0 0 52px; }
+  #settingsModal .lc-add-row > input[type=time] { flex-basis: 110px; }
+  #settingsModal .lc-add-row > input[type=date] { flex-basis: 140px; }
+  /* Narrow theme buttons wrap some labels under their emoji and not others;
+     stack them all so the grid reads evenly */
+  #settingsModal .appearance-grid > .btn { flex-direction: column; gap: 2px !important; }
   #settingsModal .settings-nav-label    { font-size: 0.8rem !important; }
   #settingsModal .settings-nav-item     { font-size: 1.05rem !important; padding: 12px 10px !important; }
   #settingsModal .modal h2              { font-size: 1.4rem !important; }
