@@ -178,13 +178,13 @@ puts in `DESCRIPTION`, the venue, or its link.
 
 **Key functions:**
 - `onCalEventClick(ev)` — the one dispatcher behind every event click in all four views and the multi-day overlay bar. Drag-to-reschedule stays gated on `isEventEditable(ev)`, so a read-only event is clickable but never draggable.
-- `openEventDetails(ev)` / `closeEventDetails()` — read-only card: title, when, a `🔒 <calendar> · read-only` badge tinted with the calendar's colour, location, description, and an optional link. Needs **no** Google token (ICS subs work without one) and no-ops in `tvMode`. Description goes in via `textContent` (someone else's text) and the link renders only for `http(s)` URLs, so a feed can't smuggle a `javascript:` URI.
+- `openEventDetails(ev)` / `closeEventDetails()` — read-only card: a stripe and faint wash of the event's colour (`--event-color`, set inline), title, a calendar chip (a URL-as-label ICS sub shows its hostname) with a `🔒 Read-only` note, icon rows for when/where, a boxed description with bare URLs linkified (`_evtDetailsFillDesc()`, DOM nodes only, http(s) only), and an optional link. Background is `.modal.evt-details-modal`: a single class loses to the later base `.modal` rule and goes translucent. Needs **no** Google token (ICS subs work without one) and no-ops in `tvMode`. Description is built from text nodes and `<a>` elements, never `innerHTML` (someone else's text) and the link renders only for `http(s)` URLs, so a feed can't smuggle a `javascript:` URI.
 - `_evtDetailsWhen(ev)` — the when-line. Timed events format through `Date` (a feed's UTC start reads as local); all-day events anchor at noon and un-exclusive their `endDate`.
 - `calLabelFor(calId)` — label for any calendar id: Google, ICS sub, local calendar (`LC_DEFS`), or holidays. Also used by the countdown event picker, which had its own copy of this lookup.
 
-**HTML anchors:** `#eventDetailsModal`, `#evtDetailsTitle`, `#evtDetailsWhen`, `#evtDetailsSource`, `#evtDetailsWhere`, `#evtDetailsDesc`, `#evtDetailsLink`
+**HTML anchors:** `#eventDetailsModal`, `#evtDetailsTitle`, `#evtDetailsWhen`, `#evtDetailsCal`, `#evtDetailsWhereRow`, `#evtDetailsWhere`, `#evtDetailsDesc`, `#evtDetailsLink`
 
-**CSS:** `.evt-details-modal` / `.evt-details-head` / `.evt-details-when` / `.evt-details-source` / `.evt-details-where` / `.evt-details-desc` / `.evt-details-link`
+**CSS:** `.modal.evt-details-modal` / `.evt-details-head` / `.evt-details-source` / `.evt-details-cal` / `.evt-details-ro` / `.evt-details-row` / `.evt-details-when` / `.evt-details-desc` / `.evt-details-link`
 
 **Gotcha:** this is why the unconditional `cursor: pointer` on `.cal-event`/`.week-event`/`.day-event-pill` (family-hub.css) is honest — every event pill really is clickable. Editable ones show `grab` instead, via `.cal-event[draggable="true"]`.
 
