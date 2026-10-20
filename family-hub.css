@@ -4836,10 +4836,28 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
     background: var(--surface2);
   }
   #eventsModal .event-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  /* .event-tab only: the category sub-tabs below reuse .event-tab-count */
   #eventsModal .event-tab-icon,
-  #eventsModal .event-tab-count { display: block; }
+  #eventsModal .event-tab .event-tab-count { display: block; }
   #eventsModal .events-refresh-row { display: none; }
   #eventsModal .events-refresh-top { display: inline-flex; }
+  /* Around Town's dozen category chips wrapped into five rows and left the
+     list a sliver. One swipeable row instead, faded at the right edge so
+     it reads as more-to-the-side. (!important: the bar's inline flex-wrap.) */
+  #eventsModal .events-sub-tabs {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(to right, #000 85%, transparent);
+            mask-image: linear-gradient(to right, #000 85%, transparent);
+  }
+  #eventsModal .events-sub-tabs::-webkit-scrollbar { display: none; }
+  #eventsModal .event-subtab { flex-shrink: 0; }
+  /* More room for the list itself: taller modal (its inline max-height is
+     80vh), no bottom Close (✕ is in the title row), shorter card images. */
+  #eventsModal .modal { max-height: 92svh !important; padding: 16px; }
+  #eventsModal .modal-actions { display: none; }
+  #eventsModal .event-image { height: 96px; }
 
   /* Collapse the 4-way view toggle to Month/Day/Agenda; Week is desktop-only
      (Agenda's rolling list already covers "week at a glance") */
