@@ -2469,8 +2469,46 @@ function pushEventDeduped(arr, base) {
   if (!isDup) arr.push(base);
 }
 
+/** Store Google Calendar API items under target[calId][YYYY-MM-DD], with time
+ *  data. target is calEventCache for the view, or the Assistant's own window. */
+function cacheCalEvents(target, calId, items, color, holiday = false) {
+  if (!target[calId]) target[calId] = {};
+  items.forEach(ev => {
+    const startDate = ev.start?.date || ev.start?.dateTime?.slice(0,10);
+    if (!startDate) return;
+    const base = {
+      eventId:   ev.id || null,
+      calId,
+      summary:   ev.summary || (holiday ? '(Holiday)' : '(No title)'),
+      description: ev.description || '',
+      color, holiday,
+      allDay:    !!ev.start?.date,
+      startDT:   ev.start?.dateTime || null,
+      endDT:     ev.end?.dateTime   || null,
+      startDate:        ev.start?.date     || null,
+      endDate:          ev.end?.date       || null,
+      members:          (ev.extendedProperties?.private?.fhMembers || '').split(',').map(s => s.trim()).filter(Boolean),
+      recurringEventId: ev.recurringEventId || null,
+      location:         ev.location || '',
+    };
+    // Multi-day all-day events: cache on every date in their range
+    if (base.allDay && base.startDate && base.endDate && base.endDate > base.startDate) {
+      const endD = new Date(base.endDate + 'T00:00:00');
+      for (let d = new Date(base.startDate + 'T00:00:00'); d < endD; d.setDate(d.getDate() + 1)) {
+        const key = d.toISOString().slice(0, 10);
+        if (!target[calId][key]) target[calId][key] = [];
+        pushEventDeduped(target[calId][key], base);
+      }
+    } else {
+      if (!target[calId][startDate]) target[calId][startDate] = [];
+      pushEventDeduped(target[calId][startDate], base);
+    }
+  });
+}
+
 async function loadAllCalendars() {
   if (!googleToken) return;
+  assistantCalCache.fetchedAt = 0;   // events may have changed; refetch on the next question
   document.getElementById('calendarStatus').innerHTML = '<span class="spinner"></span>';
 
   // Compute date range based on current view
@@ -2496,42 +2534,6 @@ async function loadAllCalendars() {
 
   calEventCache = {};
 
-  // Helper: store events under their calendar ID, including time data
-  function cacheEvents(calId, items, color, holiday = false) {
-    if (!calEventCache[calId]) calEventCache[calId] = {};
-    items.forEach(ev => {
-      const startDate = ev.start?.date || ev.start?.dateTime?.slice(0,10);
-      if (!startDate) return;
-      const base = {
-        eventId:   ev.id || null,
-        calId,
-        summary:   ev.summary || (holiday ? '(Holiday)' : '(No title)'),
-        description: ev.description || '',
-        color, holiday,
-        allDay:    !!ev.start?.date,
-        startDT:   ev.start?.dateTime || null,
-        endDT:     ev.end?.dateTime   || null,
-        startDate:        ev.start?.date     || null,
-        endDate:          ev.end?.date       || null,
-        members:          (ev.extendedProperties?.private?.fhMembers || '').split(',').map(s => s.trim()).filter(Boolean),
-        recurringEventId: ev.recurringEventId || null,
-        location:         ev.location || '',
-      };
-      // Multi-day all-day events: cache on every date in their range
-      if (base.allDay && base.startDate && base.endDate && base.endDate > base.startDate) {
-        const endD = new Date(base.endDate + 'T00:00:00');
-        for (let d = new Date(base.startDate + 'T00:00:00'); d < endD; d.setDate(d.getDate() + 1)) {
-          const key = d.toISOString().slice(0, 10);
-          if (!calEventCache[calId][key]) calEventCache[calId][key] = [];
-          pushEventDeduped(calEventCache[calId][key], base);
-        }
-      } else {
-        if (!calEventCache[calId][startDate]) calEventCache[calId][startDate] = [];
-        pushEventDeduped(calEventCache[calId][startDate], base);
-      }
-    });
-  }
-
   // Fetch user calendars
   const fetches = calendarMeta.map(async ({ id, color }) => {
     try {
@@ -2540,7 +2542,7 @@ async function loadAllCalendars() {
         + `&timeMin=${timeMin}&timeMax=${timeMax}`;
       const r    = await fetch(url, { headers: { Authorization: `Bearer ${googleToken}` } });
       const data = await r.json();
-      if (data.items) cacheEvents(id, data.items, color, false);
+      if (data.items) cacheCalEvents(calEventCache, id, data.items, color, false);
     } catch(e) { console.warn('Cal error', id, e); }
   });
 
@@ -2553,7 +2555,7 @@ async function loadAllCalendars() {
           + `&timeMin=${timeMin}&timeMax=${timeMax}`;
         const r    = await fetch(url, { headers: { Authorization: `Bearer ${googleToken}` } });
         const data = await r.json();
-        if (data.items) cacheEvents(HOLIDAYS_ID, data.items, holidaysColor, true);
+        if (data.items) cacheCalEvents(calEventCache, HOLIDAYS_ID, data.items, holidaysColor, true);
       } catch(e) { console.warn('Holidays error', e); }
     })());
   }
@@ -2873,7 +2875,7 @@ let icsSubs      = lsGet('fh_icsSubs', []);    // [{id, url, label, color}]
 let icsCache     = lsGet('fh_icsCache', {});   // {id: {fetchedAt, events[]}}
 const ICS_TTL_MS = 4 * 60 * 60 * 1000;        // refresh every 4 hours
 
-/** Parse an ICS text string into a flat array of event objects compatible with cacheEvents(). */
+/** Parse an ICS text string into a flat array of event objects compatible with cacheCalEvents(). */
 function parseIcs(text) {
   const events = [];
   // Unfold folded lines (continuation lines start with a space OR tab), per RFC 5545.
@@ -9307,6 +9309,43 @@ function mowContextSection() {
 // ── Family Assistant ───────────────────────────────────────────────────────
 
 /** Gather current app state into a system prompt for the AI. */
+// ── Assistant calendar window ──
+// calEventCache only holds the period on screen (one day in Day view, one
+// month in Month view), so the Assistant keeps its own 30-day fetch of the
+// Google calendars. ICS subscriptions already cover months ahead in
+// calEventCache, so those are read from there.
+const ASSISTANT_CAL_DAYS   = 30;
+const ASSISTANT_CAL_TTL_MS = 10 * 60 * 1000;
+let assistantCalCache = { fetchedAt: 0, events: {} };
+
+async function refreshAssistantCalendar() {
+  if (!googleToken || Date.now() - assistantCalCache.fetchedAt < ASSISTANT_CAL_TTL_MS) return;
+  const start = new Date(); start.setHours(0, 0, 0, 0);
+  const end   = new Date(start); end.setDate(end.getDate() + ASSISTANT_CAL_DAYS); end.setHours(23, 59, 59);
+  const events = {};
+  await Promise.all(calendarMeta.map(async ({ id, color }) => {
+    try {
+      const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(id)}/events`
+        + `?maxResults=250&orderBy=startTime&singleEvents=true`
+        + `&timeMin=${start.toISOString()}&timeMax=${end.toISOString()}`;
+      const r    = await fetch(url, { headers: { Authorization: `Bearer ${googleToken}` } });
+      const data = await r.json();
+      if (data.items) cacheCalEvents(events, id, data.items, color);
+    } catch (e) { console.warn('Assistant cal error', id, e); }
+  }));
+  assistantCalCache = { fetchedAt: Date.now(), events };
+}
+
+/** Non-holiday events on a date for the Assistant: its own Google fetch where
+ *  it has one, plus everything else calEventCache holds (ICS, local cals). */
+function assistantEventsOn(dateStr) {
+  const own = assistantCalCache.fetchedAt ? assistantCalCache.events : {};
+  return [
+    ...Object.values(own).flatMap(byDate => byDate[dateStr] || []),
+    ...Object.entries(calEventCache).filter(([calId]) => !own[calId]).flatMap(([, byDate]) => byDate[dateStr] || []),
+  ].filter(e => !e.holiday);
+}
+
 function buildAssistantContext() {
   const today = new Date();
   const fmt = (d, opts) => d.toLocaleDateString('en-US', opts);
@@ -9320,9 +9359,7 @@ function buildAssistantContext() {
     const dateStr = localDateStr(d);
     const label = i === 0 ? 'Today' : i === 1 ? 'Tomorrow'
                 : fmt(d, { weekday: 'long', month: 'short', day: 'numeric' });
-    const evts = Object.values(calEventCache)
-      .flatMap(calDays => calDays[dateStr] || [])
-      .filter(e => !e.holiday)
+    const evts = assistantEventsOn(dateStr)
       .sort((a, b) => {
         if (a.allDay && !b.allDay) return -1;
         if (!a.allDay && b.allDay) return 1;
@@ -9337,6 +9374,26 @@ function buildAssistantContext() {
       });
     if (evts.length) calLines.push(`  ${label}: ${evts.join(', ')}`);
   }
+  // Days 8-30: titles only, to keep the prompt small
+  const laterLines = [];
+  for (let i = 7; i < ASSISTANT_CAL_DAYS; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() + i);
+    const titles = assistantEventsOn(localDateStr(d)).map(e => e.summary);
+    if (titles.length) laterLines.push(`  ${fmt(d, { weekday: 'short', month: 'short', day: 'numeric' })}: ${titles.join(', ')}`);
+  }
+
+  // ── Birthdays (the hub's own list), soonest first ──
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const bdayLines = birthdays.map(b => {
+    const next = new Date(today.getFullYear(), b.month - 1, b.day);
+    if (next < todayStart) next.setFullYear(next.getFullYear() + 1);
+    return { b, next, days: Math.round((next - todayStart) / 86400000) };
+  }).sort((x, y) => x.days - y.days).map(({ b, next, days }) => {
+    const when = days === 0 ? 'today' : days === 1 ? 'tomorrow' : `in ${days} days`;
+    const age  = b.year ? `, turns ${next.getFullYear() - b.year}` : '';
+    return `  • ${b.name}: ${fmt(next, { weekday: 'short', month: 'short', day: 'numeric' })} (${when}${age})`;
+  });
 
   // ── Meal plan: next 7 days ──
   const mealLines = [];
@@ -9417,6 +9474,12 @@ Weather: ${weatherSummary}
 
 Calendar — next 7 days:
 ${calLines.length ? calLines.join('\n') : '  (no upcoming events)'}
+
+Calendar — the 3 weeks after that (titles only):
+${laterLines.length ? laterLines.join('\n') : '  (nothing scheduled)'}
+
+Birthdays (soonest first):
+${bdayLines.length ? bdayLines.join('\n') : '  (none added)'}
 ${mowContextSection()}
 Meal plan — next 7 days:
 ${mealLines.length ? mealLines.join('\n') : '  (no meals planned)'}
@@ -9454,6 +9517,7 @@ GUIDELINES:
 - When asked when to mow the lawn (or do yard work), use "Best times to mow" above — recommend the top pick, explain the reasoning briefly, and offer to add it to the calendar (you can assign a family member). If that section is absent, say the forecast or a weather location isn't available.
 - When an event clearly belongs to a specific family member ("Mom's dentist", "soccer for Jake", "Ava has a recital"), pass that person's name in the Member field of addEvent so the event is color-coded to them. Use the closest matching name from the family members list above — never invent a name that isn't listed.
 - To change or remove an event, use editEvent / removeEvent with words from its title. It acts on the soonest upcoming match. The app then shows the user a Yes/No card naming the exact event, and nothing changes until they tap Yes, so phrase your reply as what you're about to do ("I'll move it once you confirm"), never as already done. Only do this when clearly asked.
+- When asked about birthdays ("whose birthday is next?", "how old is Mom turning?"), use the Birthdays list above. Calendar events titled as birthdays count too.
 - When asked "what's for dinner?" or "what's the meal plan?", use the meal plan data above.
 - When asked about family members or who is assigned to something, use the family members list.
 - Do not repeat raw data back verbatim — synthesise and be helpful.
@@ -10459,6 +10523,7 @@ async function _sendAssistantMessage(input, text) {
 
   try {
     await refreshMowReco();   // keep the mow recommendation fresh in context
+    await refreshAssistantCalendar();   // its own 30-day window, not just the view's
     const systemPrompt = buildAssistantContext();
     const resp = await geminiFetch({
       systemInstruction: { parts: [{ text: systemPrompt }] },
@@ -10575,6 +10640,7 @@ async function loadDailyBriefing() {
   showBriefingBanner(null, true); // show loading state
   try {
     await refreshMowReco();        // include a fresh mow recommendation in context
+    await refreshAssistantCalendar();   // its own 30-day window, not just the view's
     const context = buildAssistantContext();
     const prompt = `${context}
 
