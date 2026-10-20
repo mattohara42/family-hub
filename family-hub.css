@@ -3019,6 +3019,9 @@ body.nautical-mode #eventEditorModal .modal {
    especially in dark mode. `--surface-solid` is the same per-theme token
    Settings/Event Editor already use for exactly this. */
 .evt-details-modal { max-width: 460px; background: var(--surface-solid); }
+/* Discover Events sat on the translucent base .modal surface, so the calendar
+   read through it on a phone (third time this gotcha has bitten) */
+#eventsModal .modal { background: var(--surface-solid); }
 .evt-details-head {
   display: flex; align-items: flex-start; justify-content: space-between;
   gap: 10px; margin-bottom: 4px;
@@ -4867,6 +4870,9 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
 
   /* The 💡 discover-events trigger lives in the sheet's tab row instead */
   #eventsDiscoverBtn { display: none; }
+  /* Six source tabs in a sideways-scrolling row showed two on a phone, with
+     nothing to say the rest existed. Wrap them instead. */
+  #eventsModal .events-source-tabs { flex-wrap: wrap; overflow-x: visible !important; }
 
   /* Collapse the 4-way view toggle to Month/Day/Agenda; Week is desktop-only
      (Agenda's rolling list already covers "week at a glance") */
