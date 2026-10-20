@@ -355,6 +355,8 @@ let shopItemsCache    = [];   // in-memory mirror of shopping items for context
 let assistantRecognition = null;  // SpeechRecognition instance
 let assistantListening   = false; // true while mic is open
 let assistantVoiceSent   = false; // this mic session already sent its final result
+let assistantVoiceEngine = lsGet('fh_voiceEngine', 'browser'); // 'browser' (SpeechRecognition) | 'gemini' (record + Gemini transcribes)
+let assistantRecorder    = null;  // MediaRecorder while a Gemini-voice clip is recording
 let assistantSending     = false; // a sendAssistantMessage() round-trip is in flight
 let assistantTTS         = lsGet('fh_assistantTTS', false); // read replies aloud
 let assistantWelcomeMode = localStorage.getItem('fh_assistantWelcome') || 'ticker'; // 'static' | 'ticker'
@@ -10754,7 +10756,15 @@ async function initAssistantVoice() {
         appendAssistantNote('No microphone found. Check that one is connected.');
         break;
       case 'network':
-        appendAssistantNote('Voice recognition needs an internet connection (your browser sends audio to a speech-recognition service).');
+        // Chromium builds without Google's API keys (Raspberry Pi OS ships one)
+        // fail every session this way, so switch this device to Gemini for good.
+        if (canRecordAssistantVoice()) {
+          assistantVoiceEngine = 'gemini';
+          localStorage.setItem('fh_voiceEngine', JSON.stringify('gemini'));
+          appendAssistantNote("This browser's built-in speech recognition isn't working, so voice on this device now goes through Gemini. Tap 🎤, speak, then tap 🎤 again to send.");
+        } else {
+          appendAssistantNote("Voice recognition failed: this browser couldn't reach its speech-recognition service.");
+        }
         break;
       case 'aborted':
         // user cancelled — silent
@@ -10801,6 +10811,7 @@ function toggleAssistantMic() {
   const state  = micBtn?.getAttribute('data-mic-state');
 
   if (state === 'denied') { showMicDeniedHelp(); return; }
+  if (assistantVoiceEngine === 'gemini') { toggleGeminiRecording(state); return; }
   if (state === 'recording' || assistantListening) { assistantRecognition.stop(); return; }
 
   // 'prompt' — show priming message before the browser dialog fires
@@ -10832,6 +10843,108 @@ function stopAssistantMic() {
   }
   const input = document.getElementById('assistantInput');
   if (input && input.placeholder === 'Listening…') input.placeholder = 'Ask anything…';
+}
+
+// ── Assistant voice via Gemini ──
+// Fallback for browsers whose SpeechRecognition can't reach its service: record
+// the clip ourselves, have Gemini transcribe it, then send it like a spoken turn.
+// Tap to start, tap again to stop (capped at GEMINI_VOICE_MAX_MS).
+const GEMINI_VOICE_MAX_MS = 20000;
+
+function canRecordAssistantVoice() {
+  return !!(navigator.mediaDevices?.getUserMedia && window.MediaRecorder);
+}
+
+async function toggleGeminiRecording(state) {
+  if (assistantRecorder) { assistantRecorder.stop(); return; }
+  if (state === 'prompt') showMicPrimingMessage();
+
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (e) {
+    clearMicPrimingMessage();
+    if (e.name === 'NotAllowedError')      { setMicState('denied'); showMicDeniedHelp(); }
+    else if (e.name === 'NotFoundError')   appendAssistantNote('No microphone found. Check that one is connected.');
+    else                                   appendAssistantNote(`Voice error: ${e.message}`);
+    return;
+  }
+  clearMicPrimingMessage();
+
+  const chunks   = [];
+  const recorder = new MediaRecorder(stream);
+  assistantRecorder = recorder;
+  recorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+  const capTimer = setTimeout(() => { if (recorder.state === 'recording') recorder.stop(); }, GEMINI_VOICE_MAX_MS);
+  recorder.onstop = () => {
+    clearTimeout(capTimer);
+    stream.getTracks().forEach(t => t.stop());
+    assistantRecorder = null;
+    stopAssistantMic();
+    transcribeAssistantVoice(new Blob(chunks, { type: recorder.mimeType }));
+  };
+  recorder.start();
+
+  assistantListening = true;
+  setMicState('recording');
+  const inp = document.getElementById('assistantInput');
+  if (inp) { inp.value = ''; inp.placeholder = 'Listening…'; }
+}
+
+async function transcribeAssistantVoice(blob) {
+  const input = document.getElementById('assistantInput');
+  if (blob.size < 1000) { appendAssistantNote('No speech detected — try again.'); return; }
+  if (input) input.placeholder = 'Transcribing…';
+  try {
+    // WAV rather than the recorder's WebM: WAV is on Gemini's documented audio list.
+    const wav  = await blobToWav16k(blob);
+    const resp = await geminiFetch({
+      contents: [{ parts: [
+        { text: 'Transcribe this audio exactly as spoken. Reply with only the transcript, or with nothing if there is no speech.' },
+        { inlineData: { mimeType: 'audio/wav', data: await blobToBase64(wav) } },
+      ] }],
+      generationConfig: { temperature: 0 },
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      appendAssistantNote(`Couldn't transcribe: ${err.error?.message || `HTTP ${resp.status}`}`);
+      return;
+    }
+    const data = await resp.json();
+    const text = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('').trim();
+    if (!text) { appendAssistantNote('No speech detected — try again.'); return; }
+    if (input) input.value = text;
+    sendAssistantMessage();
+  } catch (e) {
+    appendAssistantNote(`Couldn't transcribe: ${e.message}`);
+  } finally {
+    if (input && input.placeholder === 'Transcribing…') input.placeholder = 'Ask anything…';
+  }
+}
+
+/** Decode a recorded clip and re-encode it as 16 kHz mono 16-bit PCM WAV. */
+async function blobToWav16k(blob) {
+  const RATE = 16000;
+  // decodeAudioData resamples to its context's rate, so this lands at 16 kHz.
+  const decoded = await new OfflineAudioContext(1, 1, RATE).decodeAudioData(await blob.arrayBuffer());
+  const pcm  = decoded.getChannelData(0);
+  const view = new DataView(new ArrayBuffer(44 + pcm.length * 2));
+  const tag  = (off, s) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
+  tag(0, 'RIFF'); view.setUint32(4, 36 + pcm.length * 2, true); tag(8, 'WAVE');
+  tag(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+  view.setUint32(24, RATE, true); view.setUint32(28, RATE * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+  tag(36, 'data'); view.setUint32(40, pcm.length * 2, true);
+  for (let i = 0; i < pcm.length; i++) view.setInt16(44 + i * 2, Math.max(-1, Math.min(1, pcm[i])) * 0x7fff, true);
+  return new Blob([view], { type: 'audio/wav' });
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload  = () => resolve(r.result.split(',')[1]);
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(blob);
+  });
 }
 
 /** Append a small italic note to the chat (for non-critical voice feedback). */
