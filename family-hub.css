@@ -4816,8 +4816,30 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
   /* The 💡 discover-events trigger lives in the sheet's tab row instead */
   #eventsDiscoverBtn { display: none; }
   /* Six source tabs in a sideways-scrolling row showed two on a phone, with
-     nothing to say the rest existed. Wrap them instead. */
-  #eventsModal .events-source-tabs { flex-wrap: wrap; overflow-x: visible !important; }
+     nothing to say the rest existed, and plain wrapping left them ragged.
+     An even 3×2 grid of buttons instead, each with its count on a second
+     line; Refresh moves up beside ✕ so the grid gets the full width.
+     (!important: the tab row's inline display/overflow.) */
+  #eventsModal .events-source-tabs {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    overflow: visible !important;
+  }
+  #eventsModal .event-tab {
+    white-space: normal;
+    text-align: center;
+    line-height: 1.25;
+    padding: 8px 4px;
+    border-radius: 8px;
+    border-color: var(--line);
+    background: var(--surface2);
+  }
+  #eventsModal .event-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  #eventsModal .event-tab-icon,
+  #eventsModal .event-tab-count { display: block; }
+  #eventsModal .events-refresh-row { display: none; }
+  #eventsModal .events-refresh-top { display: inline-flex; }
 
   /* Collapse the 4-way view toggle to Month/Day/Agenda; Week is desktop-only
      (Agenda's rolling list already covers "week at a glance") */
@@ -5363,6 +5385,7 @@ body.tv-mode .card:hover { box-shadow: none; }
   opacity: 0.7;
   font-size: var(--text-xs);
 }
+.events-refresh-top { display: none; }
 
 /* Category sub-tabs (within a source) — smaller, pill-style */
 .events-sub-tabs {
