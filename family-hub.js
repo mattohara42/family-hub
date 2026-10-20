@@ -13655,20 +13655,26 @@ function renderEventCard(event) {
 
   const summary = event.description
     ? event.description.substring(0, 160) + (event.description.length > 160 ? '…' : '')
-    : 'No description available.';
+    : '';
+  const timeLabel = event.time ? ` ${formatTime12(event.time)}` : '';
 
+  // Same title / summary / footer shape as the compact card. On phones the
+  // image shrinks to a thumbnail beside the text and the footer's meta line
+  // (hidden on desktop, where the image overlay shows it) carries date and
+  // distance.
   return `
-    <div class="event-card">
+    <div class="event-card event-card-img">
       <div class="event-image" style="background-image: url('${escapeHtml(event.image)}')">${overlayHtml}</div>
       <div class="event-card-content">
-        <div class="event-card-header">
-          <h3 class="event-title">${escapeHtml(event.title)} <span class="event-type-badge">${event.type}</span></h3>
+        <h3 class="event-title">${escapeHtml(event.title)} <span class="event-type-badge">${event.type}</span></h3>
+        ${summary ? `<p class="event-description">${escapeHtml(summary)}</p>` : ''}
+        <div class="event-compact-foot">
+          <span class="event-compact-meta event-img-meta">${dateLabel}${timeLabel} · ${distLabel}</span>
           <span class="event-card-actions">
             ${addBtn}
             <a href="${escapeHtml(event.sourceUrl)}" target="_blank" rel="noopener" class="event-link">View Details${linkIcon}</a>
           </span>
         </div>
-        <p class="event-description">${escapeHtml(summary)}</p>
       </div>
     </div>
   `;

@@ -1541,21 +1541,25 @@
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="eventsModalTitle" style="max-width:780px;width:100%;max-height:80vh;display:flex;flex-direction:column">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
       <h2 id="eventsModalTitle" style="margin:0">💡 Discover Events</h2>
-      <button onclick="closeEventsModal()" title="Close" aria-label="Close events modal" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.3rem;line-height:1">✕</button>
+      <div style="display:flex;align-items:center;gap:10px">
+        <!-- Phone-only copy of Refresh, so the source grid below gets the full width -->
+        <button class="btn btn-primary btn-sm events-refresh-top" onclick="refreshEvents()" title="Refresh" aria-label="Refresh events">🔄</button>
+        <button onclick="closeEventsModal()" title="Close" aria-label="Close events modal" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.3rem;line-height:1">✕</button>
+      </div>
     </div>
 
     <div id="eventsAgeLabel" style="font-size:.8rem;color:var(--muted);margin-bottom:8px"></div>
 
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-shrink:0">
       <div class="events-source-tabs" style="display:flex;gap:6px;overflow-x:auto;flex:1">
-        <button class="event-tab active" data-source="ticketmaster" onclick="selectEventSource(this)">🎟️ Live Events <span class="event-tab-count" id="count-ticketmaster"></span></button>
-        <button class="event-tab" data-source="osm" onclick="selectEventSource(this)">📍 Things to Do <span class="event-tab-count" id="count-osm"></span></button>
-        <button class="event-tab" data-source="libraryweb" onclick="selectEventSource(this)">📚 Library <span class="event-tab-count" id="count-libraryweb"></span></button>
-        <button class="event-tab" data-source="redwings" onclick="selectEventSource(this)">⚾ Red Wings <span class="event-tab-count" id="count-redwings"></span></button>
-        <button class="event-tab" data-source="cityspark" onclick="selectEventSource(this)">🎡 Around Town <span class="event-tab-count" id="count-cityspark"></span></button>
-        <button class="event-tab" data-source="towns" onclick="selectEventSource(this)">🎪 Town Events <span class="event-tab-count" id="count-towns"></span></button>
+        <button class="event-tab active" data-source="ticketmaster" onclick="selectEventSource(this)"><span class="event-tab-icon">🎟️</span> Live Events <span class="event-tab-count" id="count-ticketmaster"></span></button>
+        <button class="event-tab" data-source="osm" onclick="selectEventSource(this)"><span class="event-tab-icon">📍</span> Things to Do <span class="event-tab-count" id="count-osm"></span></button>
+        <button class="event-tab" data-source="libraryweb" onclick="selectEventSource(this)"><span class="event-tab-icon">📚</span> Library <span class="event-tab-count" id="count-libraryweb"></span></button>
+        <button class="event-tab" data-source="redwings" onclick="selectEventSource(this)"><span class="event-tab-icon">⚾</span> Red Wings <span class="event-tab-count" id="count-redwings"></span></button>
+        <button class="event-tab" data-source="cityspark" onclick="selectEventSource(this)"><span class="event-tab-icon">🎡</span> Around Town <span class="event-tab-count" id="count-cityspark"></span></button>
+        <button class="event-tab" data-source="towns" onclick="selectEventSource(this)"><span class="event-tab-icon">🎪</span> Town Events <span class="event-tab-count" id="count-towns"></span></button>
       </div>
-      <button class="btn btn-primary btn-sm" onclick="refreshEvents()" title="Refresh" style="flex-shrink:0">🔄</button>
+      <button class="btn btn-primary btn-sm events-refresh-row" onclick="refreshEvents()" title="Refresh" style="flex-shrink:0">🔄</button>
     </div>
 
     <div id="eventsSubTabs" class="events-sub-tabs" style="display:none;gap:6px;flex-wrap:wrap;margin-bottom:12px;flex-shrink:0"></div>

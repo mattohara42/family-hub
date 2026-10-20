@@ -4816,8 +4816,63 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
   /* The 💡 discover-events trigger lives in the sheet's tab row instead */
   #eventsDiscoverBtn { display: none; }
   /* Six source tabs in a sideways-scrolling row showed two on a phone, with
-     nothing to say the rest existed. Wrap them instead. */
-  #eventsModal .events-source-tabs { flex-wrap: wrap; overflow-x: visible !important; }
+     nothing to say the rest existed, and plain wrapping left them ragged.
+     An even 3×2 grid of buttons instead, each with its count on a second
+     line; Refresh moves up beside ✕ so the grid gets the full width.
+     (!important: the tab row's inline display/overflow.) */
+  #eventsModal .events-source-tabs {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    overflow: visible !important;
+  }
+  #eventsModal .event-tab {
+    white-space: normal;
+    text-align: center;
+    line-height: 1.25;
+    padding: 8px 4px;
+    border-radius: 8px;
+    border-color: var(--line);
+    background: var(--surface2);
+  }
+  #eventsModal .event-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  /* .event-tab only: the category sub-tabs below reuse .event-tab-count */
+  #eventsModal .event-tab-icon,
+  #eventsModal .event-tab .event-tab-count { display: block; }
+  #eventsModal .events-refresh-row { display: none; }
+  #eventsModal .events-refresh-top { display: inline-flex; }
+  /* Around Town's dozen category chips wrapped into five rows and left the
+     list a sliver. One swipeable row instead, faded at the right edge so
+     it reads as more-to-the-side. (!important: the bar's inline flex-wrap.) */
+  #eventsModal .events-sub-tabs {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(to right, #000 85%, transparent);
+            mask-image: linear-gradient(to right, #000 85%, transparent);
+  }
+  #eventsModal .events-sub-tabs::-webkit-scrollbar { display: none; }
+  #eventsModal .event-subtab { flex-shrink: 0; }
+  /* More room for the list itself: taller modal (its inline max-height is
+     80vh), no bottom Close (✕ is in the title row), shorter card images. */
+  #eventsModal .modal { max-height: 92svh !important; padding: 16px; }
+  #eventsModal .modal-actions { display: none; }
+  /* Image cards become compact rows: a 72px thumbnail beside the text, the
+     date/distance moving from the image overlay to the footer meta line,
+     and a two-line summary. About twice as many events per screen. */
+  #eventsModal .event-card-img { flex-direction: row; }
+  #eventsModal .event-card-img .event-image {
+    flex: 0 0 72px;
+    height: 72px;
+    margin: 10px 0 10px 10px;
+    border-radius: 8px;
+  }
+  #eventsModal .event-card-img .event-overlay { display: none; }
+  #eventsModal .event-img-meta { display: inline; }
+  #eventsModal .event-card-img .event-card-content { padding: 10px 12px; min-width: 0; }
+  #eventsModal .event-card-img .event-title { margin: 0; font-size: var(--text-sm); }
+  #eventsModal .event-card-img .event-description { margin: 4px 0 0; font-size: var(--text-xs); -webkit-line-clamp: 2; }
+  #eventsModal .event-compact-foot { flex-wrap: wrap; row-gap: 6px; }
 
   /* Collapse the 4-way view toggle to Month/Day/Agenda; Week is desktop-only
      (Agenda's rolling list already covers "week at a glance") */
@@ -5363,6 +5418,7 @@ body.tv-mode .card:hover { box-shadow: none; }
   opacity: 0.7;
   font-size: var(--text-xs);
 }
+.events-refresh-top { display: none; }
 
 /* Category sub-tabs (within a source) — smaller, pill-style */
 .events-sub-tabs {
@@ -5558,6 +5614,10 @@ body.tv-mode .card:hover { box-shadow: none; }
 .event-link-sm {
   padding: 3px 8px;
 }
+/* Image cards share the compact footer; on desktop the image overlay already
+   shows date and distance, so the footer is just the actions, right-aligned. */
+.event-img-meta { display: none; }
+.event-card-img .event-card-actions { margin-left: auto; }
 
 .event-card-actions {
   display: flex;
