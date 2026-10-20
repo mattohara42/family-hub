@@ -203,21 +203,13 @@ The API key is stored as a server-side secret in Netlify — you never paste it 
    - *(`OWM_KEY` is only needed if you use the optional Event Discovery feature — the weather widget itself is keyless.)*
 5. Click **Save**, then trigger a new deploy (Deploys → **Trigger deploy → Deploy site**)
 
-After deploying, leave the AI key field in `family-hub.js` blank — the app will automatically call the Netlify proxy function instead. (Weather needs no key at all.)
+After deploying, leave the **Gemini API key** field in ⚙️ Settings → 🤖 Assistant blank on every device, the wall panel included. The Assistant, meal planning and the daily briefing all go through the Netlify function, which holds the key. (Weather needs no key at all.)
+
+The function only answers requests from your Family Hub site itself, so the URL can't casually be reused by another site to spend your Gemini quota.
 
 **If running locally:**
 
-1. Open Family Hub → click ⚙️ **Settings → 🍽 Meals**
-2. Select **Google Gemini** as the provider
-3. Paste your API key
-4. Click **Save**
-
-### 4c. Optional: Use OpenAI instead (local only)
-
-If you have an OpenAI API key with credits:
-1. In **Settings → 🍽 Meals**, select **OpenAI**
-2. Paste your OpenAI API key (from [platform.openai.com/api-keys](https://platform.openai.com/api-keys))
-3. Click **Save**
+With `netlify dev` (port 8888), the function runs locally and reads `GEMINI_KEY` from your Netlify site, so nothing else is needed. With plain `python3 -m http.server`, there's no function, so paste your key into ⚙️ **Settings → 🤖 Assistant → Gemini API key** and click **Save**. That key is stored on that device only.
 
 ---
 
@@ -229,7 +221,7 @@ Once all the above is done, open the app (your Netlify URL or `http://localhost:
 - [ ] Click **Sign in with Google** → sign in with your Google account
 - [ ] Calendars appear in the **Calendars** sidebar card — toggle each on/off with the checkboxes
 - [ ] ⚙️ Settings → **🌤 Weather**: at least one location added (no key needed)
-- [ ] ⚙️ Settings → **🍽 Meals**: Gemini key saved; click a day in Week or Day view → plan a meal → try ✨ Suggest
+- [ ] AI works: `GEMINI_KEY` set on Netlify (Step 4b); click a day in Week or Day view → plan a meal → try ✨ Suggest
 - [ ] **💰 Budget** sidebar card → **+ Add**: Add a recurring bill (e.g. Internet, $79.99, Monthly, day 1)
 - [ ] Shopping List and To-Do List add items and persist on reload
 

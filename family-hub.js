@@ -136,6 +136,13 @@ function geminiFetch(body) {
   return fetch('/.netlify/functions/ai', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ model: GEMINI_MODEL, ...body }),
+  }).then(r => {
+    // A non-JSON reply means there's no function here (python http.server's 501,
+    // or a 404 page), not a Gemini error, which the proxy passes through as JSON.
+    if ((r.headers.get('content-type') || '').includes('json')) return r;
+    return new Response(JSON.stringify({ error: { message:
+      'No AI proxy here and no Gemini key on this device. Run `netlify dev`, or add a key in ⚙️ Settings → 🤖 Assistant.' } }),
+      { status: r.status, headers: { 'Content-Type': 'application/json' } });
   });
 }
 
@@ -1351,7 +1358,7 @@ function renderCtrlStatusView() {
   const googleOk   = !!currentUser;
   const calOk      = googleOk && (typeof calendarMeta !== 'undefined') && calendarMeta.length > 0;
   const weatherOk  = !!(typeof weatherLocations !== 'undefined' && weatherLocations.length > 0);
-  const aiOk       = !!(typeof mealAiKey !== 'undefined' && mealAiKey);
+  const aiOnDevice = !!(typeof mealAiKey !== 'undefined' && mealAiKey);
 
   const firebaseDesc = !configOk
     ? 'Add FIREBASE_CONFIG to family-hub.js'
@@ -1385,8 +1392,8 @@ function renderCtrlStatusView() {
     },
     {
       label: 'Gemini AI',
-      desc:  aiOk ? 'AI Studio key active — meal planning enabled' : 'Add an AI Studio key in ⚙️ Meals to enable AI meal planning',
-      ok: aiOk
+      desc:  aiOnDevice ? 'Using the Gemini key saved on this device' : 'Using the server key on Netlify (GEMINI_KEY)',
+      ok: true
     },
   ];
 
@@ -8152,14 +8159,6 @@ function showAIPermissionError(provider, rawMsg = '') {
 async function generateMealSuggestions() {
   const wrap = document.getElementById('mealSuggestionsWrap');
 
-  if (!mealAiKey) {
-    wrap.innerHTML = `
-      <div style="background:var(--surface2);border-radius:10px;padding:16px;font-size:.85rem">
-        <strong>⚙️ API key required</strong><br><br>
-        Add your key in <strong>Settings → 🤖 Assistant</strong>.
-      </div>`;
-    return;
-  }
 
   const style       = document.getElementById('mealStyleInput').value.trim();
   const pantry      = document.getElementById('mealPantryInput').value.trim();
@@ -9108,7 +9107,6 @@ async function adjustMeal() {
   const instruction = document.getElementById('mealAdjustInput').value.trim();
   const statusEl    = document.getElementById('mealAdjustStatus');
   if (!instruction) { statusEl.innerHTML = '<span style="color:var(--muted);font-size:.8rem">Describe a change or tap a chip first.</span>'; return; }
-  if (!mealAiKey)   { statusEl.innerHTML = '<span style="color:var(--accent2);font-size:.8rem">⚙️ Add a Gemini API key in Settings → 🤖 Assistant.</span>'; return; }
 
   const meal = (mealPlan[_mealDetailDate] || {})[_mealDetailType];
   if (!meal) { closeMealDetail(); return; }
@@ -10438,12 +10436,6 @@ async function _sendAssistantMessage(input, text) {
   if ('speechSynthesis' in window) speechSynthesis.cancel();  // stop reading any prior reply
   input.value = '';
 
-  if (!mealAiKey) {
-    assistantHistory.push({ role: 'model', parts: [{ text: 'I need a Gemini API key to work. Add one in ⚙️ Settings → 🤖 Assistant.' }] });
-    renderAssistantMessages();
-    return;
-  }
-
   // Add user turn and show it immediately
   assistantHistory.push({ role: 'user', parts: [{ text }] });
   renderAssistantMessages();
@@ -10551,7 +10543,6 @@ const BRIEFING_AUTOSHOWN_KEY = 'fh_briefingAutoShown';   // date we last auto-op
 // on a long-open kiosk). Respects dismissal — once auto-shown for the day it
 // won't re-pop, and the user can still open it by hand via the pill.
 function maybeAutoBriefing() {
-  if (!mealAiKey) return;                                 // generator needs a client key
   const today = localDateKey(new Date());
   if (localStorage.getItem(BRIEFING_AUTOSHOWN_KEY) === today) return;
   localStorage.setItem(BRIEFING_AUTOSHOWN_KEY, today);
@@ -10561,7 +10552,7 @@ function maybeAutoBriefing() {
 /** Show (or generate) the daily briefing banner above the chat. */
 async function loadDailyBriefing() {
   const banner = document.getElementById('briefingBanner');
-  if (!banner || !mealAiKey) return;
+  if (!banner) return;
 
   const _now = new Date();
   const today = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}-${String(_now.getDate()).padStart(2,'0')}`;
