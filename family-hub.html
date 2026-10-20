@@ -483,12 +483,13 @@
 
 <div class="mobile-sheet-overlay" id="mobileListsOverlay" onclick="if(event.target===this)closeMobileLists()">
   <div class="mobile-sheet" role="dialog" aria-modal="true" aria-label="Shopping and To-Do lists">
-    <div class="mobile-sheet-handle"></div>
+    <div class="mobile-sheet-handle" id="mobileSheetHandle" aria-hidden="true"></div>
     <div class="mobile-sheet-tabs" id="mobileListsTabs">
       <button class="mobile-sheet-tab active" data-section="shop" onclick="setMobileListsSection('shop')">🛒 Shopping</button>
       <button class="mobile-sheet-tab" data-section="todo" onclick="setMobileListsSection('todo')">✅ To-Do</button>
       <button class="mobile-sheet-tab" id="mobileListsHomeTab" data-section="home" onclick="setMobileListsSection('home')" style="display:none">🏠 Home</button>
       <button class="mobile-sheet-tab" id="mobileListsAssistantTab" data-section="assistant" onclick="setMobileListsSection('assistant')" style="display:none">🤖 Assistant</button>
+      <button class="mobile-sheet-action" onclick="closeMobileLists();openEventsModal()" aria-label="Find events" title="Find events">💡</button>
     </div>
     <!-- Shopping/To-Do/Home Assistant/Assistant cards are reparented in here by
          applyWidgetPlacement() on mobile (see MOBILE_SHEET_SECTIONS in
@@ -500,7 +501,6 @@
       <div class="mobile-sheet-section" data-section="assistant" id="mobileSheetAssistant"></div>
     </div>
     <div class="mobile-sheet-footer">
-      <button onclick="closeMobileLists();openEventsModal()">💡 Find Events</button>
       <button class="mobile-sheet-close" onclick="closeMobileLists()">Done</button>
     </div>
   </div>

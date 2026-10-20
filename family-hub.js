@@ -1147,6 +1147,7 @@ window.addEventListener('load', () => {
   switchCalView(calView);   // sets up tabs + renders the right view
   renderYearStrip();
   setupCalSwipe();
+  setupMobileSheetDrag();
   // Load ICS subs even without Google auth; loadAllCalendars also calls this for signed-in users
   if (icsSubs.length && !googleToken) {
     loadIcsSubs().then(() => { renderCalendarTabs(); renderCurrentView(); renderYearStrip(); });
@@ -11617,6 +11618,39 @@ function openMobileLists() {
 
 function closeMobileLists() {
   document.getElementById('mobileListsOverlay').style.display = 'none';
+  document.querySelector('#mobileListsOverlay .mobile-sheet')?.classList.remove('expanded');
+}
+
+/** The sheet's grab handle: drag down past 80px to close, drag up to expand
+ *  to near full height, tap to toggle expanded. The sheet follows the finger
+ *  downward only; an upward drag just snaps to expanded on release. */
+function setupMobileSheetDrag() {
+  const handle = document.getElementById('mobileSheetHandle');
+  const sheet  = handle?.closest('.mobile-sheet');
+  if (!sheet) return;
+  let startY = null;
+  handle.addEventListener('pointerdown', e => {
+    startY = e.clientY;
+    handle.setPointerCapture(e.pointerId);
+    sheet.classList.add('dragging');
+  });
+  handle.addEventListener('pointermove', e => {
+    if (startY === null) return;
+    sheet.style.transform = `translateY(${Math.max(0, e.clientY - startY)}px)`;
+  });
+  const end = e => {
+    if (startY === null) return;
+    const dy = e.clientY - startY;
+    startY = null;
+    sheet.classList.remove('dragging');
+    sheet.style.transform = '';
+    if (e.type === 'pointercancel') return;
+    if (dy > 80)               closeMobileLists();
+    else if (dy < -40)         sheet.classList.add('expanded');
+    else if (Math.abs(dy) < 6) sheet.classList.toggle('expanded');
+  };
+  handle.addEventListener('pointerup', end);
+  handle.addEventListener('pointercancel', end);
 }
 
 function setMobileListsSection(section) {
