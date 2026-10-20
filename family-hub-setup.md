@@ -375,9 +375,14 @@ sudo tailscale up
 ```
 
 Follow the login link it prints. The panel only needs to join the tailnet, so there's no
-`serve` step on it. Install the Tailscale app on any phone that should control the house, and
-sign into the same tailnet. A guest phone on your wifi will *not* be able to use the widget.
-That's intentional.
+`serve` step on it.
+
+**Phones are optional.** We control lights from our phones with the WiZ and Google Home apps,
+so in our setup only the panel and the Home Assistant machine are on the tailnet. If you do
+want the widget on a phone, install the Tailscale app, sign into the same tailnet, and allow
+the VPN configuration it asks for. Phones allow one VPN at a time, so a work or privacy VPN
+disconnects Tailscale while it's on. A guest phone on your wifi will *not* be able to use the
+widget. That's intentional.
 
 ### 6d. Let Family Hub talk to Home Assistant (CORS)
 
@@ -423,7 +428,7 @@ If you ever lose a device, revoke just that device's token from this same screen
 
 ### 6f. Connect Family Hub
 
-On the wall panel (and again on each phone, since the token is stored per device):
+On the wall panel (and again on any phone you've put on the tailnet, since the token is stored per device):
 
 1. ⚙️ Settings → **🧩 Widget Layout** → enable **Home Assistant**
 2. ⚙️ Settings → **🏠 Home Assistant**
