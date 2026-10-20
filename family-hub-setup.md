@@ -276,6 +276,58 @@ Follow Home Assistant's own installation page for your hardware:
 [home-assistant.io/installation](https://www.home-assistant.io/installation/). Their steps
 change with each release, so this guide doesn't copy them.
 
+#### Our setup: a Mac mini (Apple Silicon)
+
+We run Home Assistant OS in a **VirtualBox** virtual machine on an M4 Mac mini. VirtualBox is
+the route Home Assistant documents for Macs, so follow their
+[macOS page](https://www.home-assistant.io/installation/macos) for the click-by-click steps.
+In outline:
+
+1. Install VirtualBox, then download the **Apple Silicon** `.vdi.zip` image from that page and unzip it.
+2. Create a new Linux VM (Oracle Linux, ARM 64-bit) with **Use EFI** checked. Give it
+   **4 GB of memory and 2 CPUs**. A 16 GB Mac has room for that and Home Assistant
+   won't need more for a house like ours.
+3. Under **Storage**, remove the empty placeholder disk and attach the `.vdi` file.
+4. Under **Network**, set **Attached to** to **Bridged Adapter** on the Mac's wired or wifi
+   connection. This gives Home Assistant its own address on your home network, which is what
+   lets it auto-discover devices. The default NAT mode hides it from them.
+
+A Mac only works as a Home Assistant host if it really stays on, so also do this:
+
+- **System Settings → Energy**: turn on **Prevent automatic sleeping when the display is off**
+  and **Start up automatically after a power failure**.
+- **System Settings → Users & Groups**: set **Automatically log in as** to your user. macOS
+  hides this option while **FileVault** is on, and with FileVault on, a Mac that restarts after
+  a power cut waits at the unlock screen with Home Assistant stopped. Decide which matters more
+  to you on this machine.
+- **Start the VM at login** so it comes back by itself. Save this as
+  `~/Library/LaunchAgents/io.home-assistant.vm.plist`:
+
+  ```xml
+  <?xml version="1.0" encoding="UTF-8"?>
+  <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+  <plist version="1.0">
+  <dict>
+    <key>Label</key><string>io.home-assistant.vm</string>
+    <key>ProgramArguments</key>
+    <array>
+      <string>/usr/local/bin/VBoxManage</string>
+      <string>startvm</string>
+      <string>Home Assistant</string>
+      <string>--type</string>
+      <string>headless</string>
+    </array>
+    <key>RunAtLoad</key><true/>
+  </dict>
+  </plist>
+  ```
+
+  Then run `launchctl load ~/Library/LaunchAgents/io.home-assistant.vm.plist` once. The VM
+  name must match what you called it in VirtualBox. `headless` runs it with no window.
+
+macOS updates restart the Mac now and then. With the settings above, Home Assistant comes back
+on its own a minute or two later.
+
 When it's running, open `http://homeassistant.local:8123` from a computer on your home network
 and complete the onboarding wizard (create your admin account, set your location). Home
 Assistant will auto-discover a lot of your house on its own, WiZ bulbs and Nest thermostats included.
