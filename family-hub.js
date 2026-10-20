@@ -1500,6 +1500,8 @@ function switchCalView(view) {
     const btn = document.getElementById('viewTab_' + v);
     if (btn) btn.classList.toggle('active', v === view);
   });
+  const sel = document.getElementById('calViewSelect');   // mobile's one-row header
+  if (sel) sel.value = view;
   renderCurrentView();
   if (googleToken) loadAllCalendars();
 }
@@ -2336,17 +2338,19 @@ function makeDayCell(year, month, day, otherMonth, isToday) {
     pill.className = 'cal-event' + (ev.holiday ? ' cal-event-holiday' : '');
     pill.style.background = ev.color;
     const pillText = document.createElement('span');
-    // Mobile cells fit ~5 characters, which for most titles is just the
-    // member's name ("Jack ..."), so a member's event shows everyone's
-    // initials instead. Events with no member keep their clipped title.
-    const initials = isMobile && !ev.holiday ? eventMemberInitials(ev) : '';
-    if (initials) {
-      pillText.textContent = initials;
+    // Mobile cells fit a few characters per line, and most titles open with a
+    // member's name ("Jack hockey practice" → "Jack ..."). So on mobile the
+    // names come out of the title ("Hockey practice") and each member becomes
+    // a stripe in their color on the pill's left edge instead.
+    const who = isMobile && !ev.holiday ? eventMemberNames(ev) : [];
+    if (who.length) {
+      pillText.textContent = stripMemberNames(ev.summary, who);
+      applyMemberStripes(pill, who);
     } else {
       pillText.textContent = (ev.holiday ? '🎉 ' : '') + ev.summary + (ev.recurringEventId ? ' ↻' : '');
+      if (!isMobile) appendMemberBadges(pill, ev.members);
     }
     pill.appendChild(pillText);
-    if (!initials) appendMemberBadges(pill, ev.members);
     pill.title = ev.summary;
     pill.onclick = e => { e.stopPropagation(); onCalEventClick(ev); };
     if (isEventEditable(ev)) {
@@ -3623,32 +3627,45 @@ function appendMemberBadges(container, members) {
   });
 }
 
-/** Short label per family member: the first letter, or the shortest prefix
- *  that tells them apart when names share one (Jack/Joey → "Ja"/"Jo"). */
-function memberInitial(name) {
-  const lower = name.toLowerCase();
-  const others = familyMembers.map(m => m.name.toLowerCase()).filter(n => n !== lower);
-  for (let len = 1; len < name.length; len++) {
-    const prefix = lower.slice(0, len);
-    if (!others.some(n => n.startsWith(prefix))) {
-      return name[0].toUpperCase() + name.slice(1, len);
-    }
-  }
-  return name[0].toUpperCase() + name.slice(1);
+/** Matches a member's name as a whole word, possessive included ("Jack's"). */
+function memberNameRe(name, flags) {
+  const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`\\b${esc}(['’]s)?\\b`, flags);
 }
 
-/** Initials for an event's members: its explicit assignment, else every
- *  member named as a whole word in the title. '' when there's no member. */
-function eventMemberInitials(ev) {
-  let names = ev.members?.length ? ev.members : [];
-  if (!names.length) {
-    const t = (ev.summary || '').toLowerCase();
-    names = familyMembers.map(m => m.name).filter(name => {
-      const esc = name.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      return new RegExp(`\\b${esc}(['’]s)?\\b`).test(t);
-    });
-  }
-  return names.map(memberInitial).join(' ');
+/** An event's members: its explicit assignment, else every member named as
+ *  a whole word in the title. [] when there's no member. */
+function eventMemberNames(ev) {
+  if (ev.members?.length) return ev.members;
+  return familyMembers.map(m => m.name).filter(name => memberNameRe(name, 'i').test(ev.summary || ''));
+}
+
+/** The title with member names taken out, plus the joiners that only made
+ *  sense between them ("Jack & Matt", "Jack, Matt and Kate") and any dash or
+ *  colon left at either end: "Jack & Matt - Dentist" → "Dentist". An "and"
+ *  elsewhere in the title stays. Falls back to the full title when nothing
+ *  would be left. */
+function stripMemberNames(summary, names) {
+  const NAME = '\u0000';
+  let t = summary || '';
+  names.forEach(name => { t = t.replace(memberNameRe(name, 'gi'), NAME); });
+  const joined = new RegExp(`${NAME}\\s*(?:,|&|\\+|\\band\\b)\\s*${NAME}`, 'i');
+  while (joined.test(t)) t = t.replace(joined, NAME);
+  t = t.replace(new RegExp(`\\s+(?:with|for)\\s+${NAME}\\s*$`, 'i'), '');   // "Lunch with Jack"
+  t = t.split(NAME).join(' ')
+       .replace(/\s+/g, ' ')
+       .replace(/^[\s,&+:\-–—/|]+|[\s,&+:\-–—/|]+$/g, '');
+  if (!t) return summary || '';
+  return t[0].toUpperCase() + t.slice(1);
+}
+
+/** One 2px stripe per member, in their color, down the pill's left edge.
+ *  Members without a color get none. */
+function applyMemberStripes(pill, names) {
+  const colors = names.map(n => familyMembers.find(m => m.name === n)?.color).filter(Boolean);
+  if (!colors.length) return;
+  pill.style.boxShadow = colors.map((c, i) => `inset ${2 * (i + 1)}px 0 0 ${c}`).reverse().join(', ');
+  pill.style.paddingLeft = `${2 * colors.length + 2}px`;
 }
 
 // `.day-event-pill` is flex-direction:column, so appending badges straight

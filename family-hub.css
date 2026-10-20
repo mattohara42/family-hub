@@ -1136,10 +1136,6 @@ body:not(.force-landscape).auto-portrait #bottomStrip {
 @media (max-width: 400px) {
   .cal-view-tab { padding: 3px 7px; font-size: var(--text-xs); }
   .cal-day { min-height: 44px; }
-  .cal-event { display: none; } /* hide pills, keep day number readable */
-  .cal-day:has(.cal-event) .cal-day-num::after {
-    content: ' •'; color: var(--accent); font-size: 0.6rem;
-  }
   .mini-grid { grid-template-columns: repeat(2, 1fr); }
   #calMonthLabel { font-size: 1rem; }
   .week-grid { min-width: 460px; }
@@ -1319,8 +1315,11 @@ body.nautical-mode .cal-month-nav button {
    exactly the 3 visible children it expects (title-zone/month-nav/actions);
    the mobile media query below turns it back on and pins it to row 1. */
 .cal-header-settings-btn { display: none; }
+.cal-view-select { display: none; }
 
-/* Mobile: 2-row header — title+nav on row 1, view tabs centered on row 2.
+/* Mobile: 1-row header — 🏠/👁, the period label, a Month/Day/Agenda
+   select and ⚙️. (It used to be 2 rows with the view tabs on row 2, which
+   cost the Month grid most of a week row's height on a phone.)
    Must be after the base .cal-card-header rule (which sets display:grid) so
    the lower specificity flex override wins via source order. Row 2 is
    centered rather than right-aligned so the tabs don't read as stranded in
@@ -1343,9 +1342,41 @@ body.nautical-mode .cal-month-nav button {
   }
   .cal-card-header .cal-title-zone { flex: 0 0 auto; }
   .cal-card-header .cal-month-nav  { flex: 1; justify-content: center; min-width: 0; flex-wrap: nowrap; }
-  .cal-card-header .cal-header-actions { flex: 0 0 100%; justify-content: center; }
+  .cal-card-header { flex-wrap: nowrap; }
+  /* !important: the element carries an inline display:flex */
+  .cal-card-header .cal-header-actions { display: none !important; }
   #calMonthLabel { overflow: hidden; text-overflow: ellipsis; font-size: var(--text-md); }
   .cal-app-title-text { display: none; }
+  .cal-view-select {
+    display: block;
+    flex: 0 0 auto;
+    border: 1px solid var(--line);
+    background: var(--surface-solid);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 5px 8px;
+    font: inherit;
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semi);
+  }
+
+  /* Month pills wrap to two lines instead of clipping after a few letters.
+     Qualified with .cal-day so it beats the unguarded .cal-event rule further down. */
+  .cal-day .cal-event {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-height: 1.2;
+    overflow-wrap: break-word;   /* only a word too long for the line breaks, */
+    -webkit-hyphens: auto;       /* and then with a hyphen (needs <html lang>; */
+    hyphens: auto;               /* iOS Safari reads only the prefixed one) */
+    padding-left: 3px;
+    padding-right: 3px;
+  }
+  /* Today's cell gets an accent ring. An outline, not a box-shadow, because
+     the themes already put their own glows in box-shadow on this cell. */
+  .cal-day.today { outline: 2px solid var(--accent); outline-offset: -2px; }
 }
 
 .cal-grid {
@@ -4692,7 +4723,7 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
   .cal-app-emoji:active { background: var(--surface2); }
 
   /* Settings — its own top-level nav item, top-right corner of row 1
-     (flex:0 0 auto keeps it off the .cal-header-actions row-2 wrap below).
+     (flex:0 0 auto keeps it from shrinking in the one-row header).
      Same bordered-button treatment as the 🏠 Lists trigger for parity. */
   .cal-header-settings-btn {
     display: flex;
