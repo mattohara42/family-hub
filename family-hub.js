@@ -9455,7 +9455,7 @@ GUIDELINES:
 - When asked about weather ("will it rain?", "is it going to be hot?"), use the real weather data above.
 - When asked when to mow the lawn (or do yard work), use "Best times to mow" above — recommend the top pick, explain the reasoning briefly, and offer to add it to the calendar (you can assign a family member). If that section is absent, say the forecast or a weather location isn't available.
 - When an event clearly belongs to a specific family member ("Mom's dentist", "soccer for Jake", "Ava has a recital"), pass that person's name in the Member field of addEvent so the event is color-coded to them. Use the closest matching name from the family members list above — never invent a name that isn't listed.
-- To change or remove an event, use editEvent / removeEvent with words from its title. It acts on the soonest upcoming match; the confirmation names which event, so the user can correct you if it picked the wrong one. Only do this when clearly asked.
+- To change or remove an event, use editEvent / removeEvent with words from its title. It acts on the soonest upcoming match. The app then shows the user a Yes/No card naming the exact event, and nothing changes until they tap Yes, so phrase your reply as what you're about to do ("I'll move it once you confirm"), never as already done. Only do this when clearly asked.
 - When asked "what's for dinner?" or "what's the meal plan?", use the meal plan data above.
 - When asked about family members or who is assigned to something, use the family members list.
 - Do not repeat raw data back verbatim — synthesise and be helpful.
@@ -9718,6 +9718,70 @@ async function assistantAddBudget(name, amountStr, freqRaw) {
   return `✓ Added bill "${name}" — ${fmt$(amount)} (${freq})`;
 }
 
+// ── Assistant confirm cards ──
+// Event edits and removals act on Google Calendar straight away, and a voice
+// mishearing ("remove the dentist" → the wrong event) can't be undone from the
+// panel. So they wait on a Yes/No card naming the exact event first. Adds stay
+// instant: a wrong add is visible and easy to delete. Cards aren't persisted.
+let assistantPendingConfirms = [];   // [{ id, type, parts, question }]
+let assistantConfirmSeq      = 0;
+
+function _evtWhen(e) {
+  return e.allDay ? e.date : new Date(e.startDT).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+}
+
+/** Run the same checks the action would, then phrase the Yes/No question.
+ *  Returns { error } for anything that would fail anyway, else { question }. */
+function describeEventChange(type, parts) {
+  const [query, dateOrNew] = parts;
+  if (!query)       return { error: `⚠️ Which event should I ${type === 'removeEvent' ? 'remove' : 'change'}?` };
+  if (!googleToken) return { error: `⚠️ Sign in with Google to let me change calendar events` };
+  if (type === 'removeEvent') {
+    const e = findCalEvent(query, dateOrNew);
+    return e ? { question: `Remove "${e.summary}" (${_evtWhen(e)})?` } : { error: _noEditableEventMsg(query, dateOrNew) };
+  }
+  const e = findCalEvent(query);
+  if (!e) return { error: _noEditableEventMsg(query) };
+  const [, newDate, newTime, newTitle] = parts;
+  const shift   = computeEventShift(e, newDate, newTime);
+  const changes = [];
+  if (shift) changes.push(shift.start.dateTime ? `move it to ${new Date(shift.start.dateTime).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })}` : `move it to ${shift.start.date}`);
+  if (newTitle && newTitle.trim()) changes.push(`rename it "${newTitle.trim()}"`);
+  if (!changes.length) return { error: `⚠️ Nothing to change on "${e.summary}"` };
+  return { question: `Change "${e.summary}" (${_evtWhen(e)}): ${changes.join(' and ')}?` };
+}
+
+function renderAssistantConfirms(container) {
+  assistantPendingConfirms.forEach(c => {
+    const div = document.createElement('div');
+    div.className = 'assistant-msg ai assistant-confirm';
+    div.innerHTML = `<div>${esc(c.question)}</div>
+      <div class="assistant-confirm-actions">
+        <button class="btn btn-sm ${c.type === 'removeEvent' ? 'btn-danger' : 'btn-primary'}" onclick="resolveAssistantConfirm(${c.id}, true)">Yes</button>
+        <button class="btn btn-sm" onclick="resolveAssistantConfirm(${c.id}, false)">No</button>
+      </div>`;
+    container.appendChild(div);
+  });
+}
+
+async function resolveAssistantConfirm(id, yes) {
+  const c = assistantPendingConfirms.find(p => p.id === id);
+  if (!c) return;   // already answered (double tap)
+  assistantPendingConfirms = assistantPendingConfirms.filter(p => p.id !== id);
+  renderAssistantMessages();
+  let msg = 'Okay, I left it as it is.';
+  if (yes) {
+    const [a, b, d, t] = c.parts;
+    try {
+      msg = c.type === 'removeEvent' ? await assistantRemoveEvent(a, b) : await assistantEditEvent(a, b, d, t);
+    } catch (e) { msg = `⚠️ Action failed: ${e.message}`; }
+  }
+  assistantHistory.push({ role: 'model', parts: [{ text: msg }] });
+  saveAssistantHistory();
+  renderAssistantMessages();
+  speakAssistant(msg);
+}
+
 /** Execute parsed assistant actions; returns an array of confirmation strings. */
 async function executeAssistantActions(actions) {
   const confirmMsgs = [];
@@ -9729,8 +9793,12 @@ async function executeAssistantActions(actions) {
       else if (type === 'completeTodo')  confirmMsgs.push(await assistantCompleteTodo(value));
       else if (type === 'checkShopping') confirmMsgs.push(await assistantCheckShopping(value));
       else if (type === 'addEvent')      confirmMsgs.push(await assistantAddEvent(parts[0], parts[1], parts[2], parts[3]));
-      else if (type === 'editEvent')     confirmMsgs.push(await assistantEditEvent(parts[0], parts[1], parts[2], parts[3]));
-      else if (type === 'removeEvent')   confirmMsgs.push(await assistantRemoveEvent(parts[0], parts[1]));
+      else if (type === 'editEvent' || type === 'removeEvent') {
+        // Not run yet: these wait for an explicit Yes on a confirm card.
+        const ask = describeEventChange(type, parts);
+        if (ask.error) confirmMsgs.push(ask.error);
+        else assistantPendingConfirms.push({ id: ++assistantConfirmSeq, type, parts, question: ask.question });
+      }
       else if (type === 'setMeal')       confirmMsgs.push(await assistantSetMeal(parts[0], parts[1], parts.slice(2).join('|')));
       else if (type === 'addBudget')     confirmMsgs.push(await assistantAddBudget(parts[0], parts[1], parts[2]));
     } catch (e) {
@@ -9765,6 +9833,7 @@ function renderAssistantMessages() {
     div.innerHTML = formatAssistantText(turn.parts[0].text);
     container.appendChild(div);
   });
+  renderAssistantConfirms(container);
   container.scrollTop = container.scrollHeight;
 }
 
@@ -10418,6 +10487,7 @@ async function _sendAssistantMessage(input, text) {
     const data     = await resp.json();
     const rawReply = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "Sorry, I didn't get a response.";
     const { text: cleanText, actions } = extractAssistantActions(rawReply);
+    const askedBefore = assistantPendingConfirms.length;
     const confirms = await executeAssistantActions(actions);
 
     // Append confirmation note to reply if actions were taken
@@ -10428,7 +10498,8 @@ async function _sendAssistantMessage(input, text) {
     assistantHistory.push({ role: 'model', parts: [{ text: finalText }] });
     saveAssistantHistory();
     renderAssistantMessages();
-    speakAssistant(finalText);   // read aloud if TTS is on
+    // read aloud if TTS is on, including any Yes/No question this turn raised
+    speakAssistant([finalText, ...assistantPendingConfirms.slice(askedBefore).map(c => c.question)].join(' '));
 
   } catch(e) {
     thinkEl.remove();

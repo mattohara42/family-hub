@@ -4349,6 +4349,7 @@ body.nautical-mode .assistant-chip:hover { background: var(--accent2); border-co
 .assistant-mic-help { border-left: 2px solid #c0392b; padding-left: 8px !important; }
 .assistant-mic-priming { opacity: .75; font-style: italic; }
 .assistant-note { opacity: .7; font-style: italic; }
+.assistant-confirm-actions { display: flex; gap: 8px; margin-top: 8px; }
 .mic-help-step {
   display: inline-flex;
   align-items: center;
