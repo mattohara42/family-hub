@@ -341,14 +341,6 @@ let mealPantryDef   = localStorage.getItem('fh_mealPantry')               || '';
 let mealTemplates   = lsGet('fh_mealTemplates', []);
 let recipeBox        = lsGet('fh_recipeBox', []);
 let _manualMealIngredients = []; // ingredients being built for the manual-entry meal form
-// ── Shopping categories ───────────────────────────────────────────────────
-const SHOP_DEFAULT_CATEGORIES = ['Produce','Dairy','Meat & Seafood','Bakery','Frozen','Pantry','Beverages','Household','Other'];
-const SHOP_CATEGORY_ICONS = {
-  'Produce':'🥦','Dairy':'🧀','Meat & Seafood':'🥩','Bakery':'🍞',
-  'Frozen':'🧊','Pantry':'🥫','Beverages':'🧃','Household':'🧹','Other':'📦'
-};
-let shopCategories = lsGet('fh_shopCategories', SHOP_DEFAULT_CATEGORIES.slice());
-let shopCollapsed  = {};   // { categoryName: true } — true means collapsed
 // ── Family Assistant state ─────────────────────────────────────────────────
 const ASSISTANT_HISTORY_KEY = 'fh_assistantHistory';
 const ASSISTANT_HISTORY_MAX = 40; // store up to 40 half-turns (~20 exchanges)
@@ -1155,7 +1147,6 @@ window.addEventListener('load', () => {
   setupListeners();
   loadBgFromDb();
   populateTodoAssigneeDropdown();
-  populateShopCategorySelect();
   applyWidgetPlacement();   // moves cards to sidebar/bottom, then calls applyWidgetVisibility
   initWidgetDragDrop();
   renderBudgetCard();
@@ -5784,7 +5775,7 @@ function _fsWriteError(e) {
 }
 
 // Single-doc settings sync (whole-array/object value, no per-item id) — used by
-// shopCategories, stockTickers, weatherLocations, mealDietPrefs, mowConfig.
+// stockTickers, weatherLocations, mealDietPrefs, mowConfig.
 function saveFsSetting(fsKey, lsKey, value) {
   if (db) db.collection('settings').doc(fsKey).set({ value }).catch(_fsWriteError);
   else localStorage.setItem(lsKey, JSON.stringify(value));
@@ -5924,10 +5915,6 @@ function attachFirestoreListeners() {
   }, _fsError));
 
   // Shared settings (single doc per key, whole value synced)
-  _fsUnsub.push(db.collection('settings').doc('shopCategories').onSnapshot(doc => {
-    if (doc.exists) shopCategories = doc.data().value;
-    populateShopCategorySelect(); renderShopCategorySettings(); renderLocalList('shopping');
-  }, _fsError));
   _fsUnsub.push(db.collection('settings').doc('stockTickers').onSnapshot(doc => {
     if (doc.exists) stockTickers = doc.data().value;
     renderStockTickerList(); loadStockQuotes(true);
@@ -6070,7 +6057,6 @@ function runFirestoreMigrations() {
   // Shared settings (single doc per key) — migrate only if not already synced
   // elsewhere, so the first device to sign in "wins" rather than clobbering.
   [
-    { ls: 'fh_shopCategories', key: 'shopCategories' },
     { ls: 'fh_stockTickers',   key: 'stockTickers' },
     { ls: 'fh_wlocations',     key: 'weatherLocations' },
     { ls: 'fh_mealDietPrefs',  key: 'mealDietPrefs' },
@@ -6123,11 +6109,8 @@ function renderTodoList() {
   if (!ul) return;
   ul.innerHTML = '';
   const hasDone = todoItems.some(i => i.done);
-  const hasAny  = todoItems.length > 0;
   const doneBtn = document.getElementById('todoClearDoneBtn');
-  const allBtn  = document.getElementById('todoClearAllBtn');
   if (doneBtn) doneBtn.style.display = hasDone ? '' : 'none';
-  if (allBtn)  allBtn.style.display  = hasAny  ? '' : 'none';
   if (!todoItems.length) { empty.style.display = ''; return; }
   empty.style.display = 'none';
 
@@ -6159,11 +6142,11 @@ function renderFsList(ulId, emptyId, docs, collection) {
   if (collection === 'shopping') {
     const entries = docs.map(doc => {
       const d = doc.data();
-      return { text: d.text, done: d.done, by: d.by, category: d.category || 'Other',
+      return { text: d.text, done: d.done, by: d.by,
                onToggle: () => toggleFs(collection, doc.id, d.done),
                onDelete: () => deleteFs(collection, doc.id) };
     });
-    renderShopGrouped(entries);
+    renderShopList(entries);
     return;
   }
   const ul = document.getElementById(ulId);
@@ -6225,11 +6208,11 @@ function renderLocalList(col) {
   if (col === 'shopping') {
     const items = getLocalList('shopping');
     const entries = items.map((item, i) => ({
-      text: item.text, done: item.done, by: item.by, category: item.category || 'Other',
+      text: item.text, done: item.done, by: item.by,
       onToggle: () => { items[i].done = !items[i].done; saveLocalList('shopping', items); renderLocalList('shopping'); },
       onDelete: () => { items.splice(i, 1); saveLocalList('shopping', items); renderLocalList('shopping'); },
     }));
-    renderShopGrouped(entries);
+    renderShopList(entries);
     return;
   }
   const ulId    = col === 'todo' ? 'todoList' : 'shopList';
@@ -6607,12 +6590,12 @@ function addTodo() {
   }
 }
 
-function renderShopGrouped(entries) {
+function renderShopList(entries) {
   const ul    = document.getElementById('shopList');
   const empty = document.getElementById('shopEmpty');
   if (!ul) return;
   ul.innerHTML = '';
-  shopItemsCache = entries.map(({ text, done, by, category }) => ({ text, done, by, category }));
+  shopItemsCache = entries.map(({ text, done, by }) => ({ text, done, by }));
   const hasDone = entries.some(i => i.done);
   const hasAny  = entries.length > 0;
   const doneBtn = document.getElementById('shopClearDoneBtn');
@@ -6621,53 +6604,7 @@ function renderShopGrouped(entries) {
   if (allBtn)  allBtn.style.display  = hasAny  ? '' : 'none';
   if (!entries.length) { empty.style.display = ''; return; }
   empty.style.display = 'none';
-
-  // Ordered: known categories first, then any custom ones found in items
-  const usedCats = [...new Set(entries.map(e => e.category || 'Other'))];
-  const orderedCats = [
-    ...shopCategories.filter(c => usedCats.includes(c)),
-    ...usedCats.filter(c => !shopCategories.includes(c))
-  ];
-
-  orderedCats.forEach(cat => {
-    const items = entries.filter(e => (e.category || 'Other') === cat);
-    if (!items.length) return;
-    const icon        = SHOP_CATEGORY_ICONS[cat] || '📦';
-    const isCollapsed = !!shopCollapsed[cat];
-    const undone      = items.filter(i => !i.done).length;
-
-    const groupLi = document.createElement('li');
-    groupLi.className = 'shop-cat-group';
-
-    const header = document.createElement('div');
-    header.className = 'shop-cat-header' + (isCollapsed ? ' collapsed' : '');
-    const nameSpan = document.createElement('span');
-    nameSpan.className = 'shop-cat-name';
-    nameSpan.textContent = `${icon} ${cat}`;
-    const countSpan = document.createElement('span');
-    countSpan.className = 'shop-cat-count';
-    countSpan.textContent = undone;
-    const toggleSpan = document.createElement('span');
-    toggleSpan.className = 'shop-cat-toggle';
-    toggleSpan.textContent = '▾';
-    header.appendChild(nameSpan);
-    header.appendChild(countSpan);
-    header.appendChild(toggleSpan);
-
-    const itemsUl = document.createElement('ul');
-    itemsUl.className = 'shop-cat-items' + (isCollapsed ? ' hidden' : '');
-    items.forEach(item => itemsUl.appendChild(makeListItem(item.text, item.done, item.by, item.onToggle, item.onDelete)));
-
-    header.onclick = () => {
-      shopCollapsed[cat] = !shopCollapsed[cat];
-      header.classList.toggle('collapsed');
-      itemsUl.classList.toggle('hidden');
-    };
-
-    groupLi.appendChild(header);
-    groupLi.appendChild(itemsUl);
-    ul.appendChild(groupLi);
-  });
+  entries.forEach(item => ul.appendChild(makeListItem(item.text, item.done, item.by, item.onToggle, item.onDelete)));
 
   // Easter egg: exactly 9 pending items
   const pendingCount = entries.filter(i => !i.done).length;
@@ -6691,69 +6628,15 @@ function triggerOneRing() {
   }, 4000);
 }
 
-function populateShopCategorySelect() {
-  const sel = document.getElementById('shopCategorySelect');
-  if (!sel) return;
-  const prev = sel.value;
-  sel.innerHTML = shopCategories.map(c =>
-    `<option value="${c}">${SHOP_CATEGORY_ICONS[c] || '📦'} ${c}</option>`
-  ).join('');
-  if (prev && shopCategories.includes(prev)) sel.value = prev;
-}
-
-function renderShopCategorySettings() {
-  const list = document.getElementById('shopCategoryList');
-  if (!list) return;
-  list.innerHTML = '';
-  shopCategories.forEach((cat, i) => {
-    const row = document.createElement('div');
-    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:3px 0;font-size:var(--text-sm)';
-    const icon = SHOP_CATEGORY_ICONS[cat] || '📦';
-    const nameSpan = document.createElement('span');
-    nameSpan.style.flex = '1';
-    nameSpan.textContent = `${icon} ${cat}`;
-    const delBtn = document.createElement('button');
-    delBtn.className = 'btn btn-sm';
-    delBtn.style.cssText = 'padding:1px 7px;background:var(--surface2);color:var(--red)';
-    delBtn.textContent = '✕';
-    delBtn.onclick = () => removeShopCategory(i);
-    row.appendChild(nameSpan);
-    row.appendChild(delBtn);
-    list.appendChild(row);
-  });
-}
-
-function addShopCategory() {
-  const input = document.getElementById('newShopCategoryInput');
-  const name  = input.value.trim();
-  if (!name || shopCategories.includes(name)) return;
-  input.value = '';
-  shopCategories.push(name);
-  saveFsSetting('shopCategories', 'fh_shopCategories', shopCategories);
-  populateShopCategorySelect();
-  renderShopCategorySettings();
-  renderLocalList('shopping');
-}
-
-function removeShopCategory(idx) {
-  const removed = shopCategories[idx];
-  delete shopCollapsed[removed];
-  shopCategories.splice(idx, 1);
-  saveFsSetting('shopCategories', 'fh_shopCategories', shopCategories);
-  populateShopCategorySelect();
-  renderShopCategorySettings();
-}
-
 function addShop() {
   const input = document.getElementById('shopInput');
   const text  = input.value.trim();
   if (!text) return;
-  const category = document.getElementById('shopCategorySelect')?.value || 'Other';
   input.value = '';
-  if (db) { addToFs('shopping', text, { category }); }
+  if (db) { addToFs('shopping', text); }
   else {
     const items = getLocalList('shopping');
-    items.push({ text, done: false, by: userName, category });
+    items.push({ text, done: false, by: userName });
     saveLocalList('shopping', items);
     renderLocalList('shopping');
   }
@@ -6776,10 +6659,6 @@ function clearAllLocal(col) {
     saveLocalList(col, []);
     renderLocalList(col);
   }
-}
-function clearAllTodo() {
-  if (!confirm('Clear all to-do items?')) return;
-  db ? clearAllFs('todo') : clearAllLocal('todo');
 }
 function clearAllShopping() {
   if (!confirm('Clear all shopping items?')) return;
@@ -8348,12 +8227,12 @@ function addIngredientsToShopping(ingredients, label) {
 
   let added = 0;
   if (db) {
-    ingredients.forEach(ing => { addToFs('shopping', ing, { category: 'Other' }); added++; });
+    ingredients.forEach(ing => { addToFs('shopping', ing); added++; });
   } else {
     const items = getLocalList('shopping');
     ingredients.forEach(ing => {
       if (!items.some(i => i.text.toLowerCase() === ing.toLowerCase())) {
-        items.push({ text: ing, done: false, by: userName, category: 'Other' });
+        items.push({ text: ing, done: false, by: userName });
         added++;
       }
     });
@@ -8406,10 +8285,10 @@ function exportWeekMealsToShopping() {
   }
 
   if (db) {
-    toAdd.forEach(ing => addToFs('shopping', ing, { category: 'Other' }));
+    toAdd.forEach(ing => addToFs('shopping', ing));
   } else {
     const items = getLocalList('shopping');
-    toAdd.forEach(ing => items.push({ text: ing, done: false, by: userName, category: 'Other' }));
+    toAdd.forEach(ing => items.push({ text: ing, done: false, by: userName }));
     saveLocalList('shopping', items);
     renderLocalList('shopping');
   }
@@ -9573,10 +9452,10 @@ function fuzzyTextMatch(stored, query) {
 
 // ── Assistant action handlers (each returns a confirmation string) ──
 function assistantAddShopping(item) {
-  if (db) { addToFs('shopping', item, { category: 'Other' }); }
+  if (db) { addToFs('shopping', item); }
   else {
     const items = getLocalList('shopping');
-    items.push({ text: item, done: false, by: userName, category: 'Other' });
+    items.push({ text: item, done: false, by: userName });
     saveLocalList('shopping', items);
     renderLocalList('shopping');
   }
@@ -12246,7 +12125,6 @@ function openSettings() {
   document.getElementById('wxViewRadar').checked  = !!wxEnabledViews['radar'];
   document.getElementById('wxViewSnarky').checked = !!wxEnabledViews['snarky'];
   renderWeatherLocationsList();
-  renderShopCategorySettings();
   document.getElementById('settingSlideInterval').value = slideInterval;
   document.getElementById('settingSaverEnabled').checked  = !!saverEnabled;
   document.getElementById('settingSaverIdleMin').value    = saverIdleMin;

@@ -2635,6 +2635,8 @@ body.nautical-mode .meal-adjust-chip:hover { background: var(--accent2); border-
 
 /* ── SMS contact popover ── */
 .sms-btn-wrap { position: relative; }
+/* In the shopping input row: as tall as the input and Add button beside it */
+.list-input-row .sms-btn-wrap { display: flex; }
 .sms-popover {
   display: none;
   position: fixed;
@@ -3051,52 +3053,6 @@ body.nautical-mode #eventEditorModal .modal {
 }
 .evt-details-link { text-decoration: none; margin-top: 12px; display: inline-block; }
 
-/* ── Shopping List Category Grouping ── */
-.shop-cat-select {
-  background: var(--surface2);
-  color: var(--text);
-  border: 1px solid rgba(255,255,255,.12);
-  border-radius: 6px;
-  padding: 0 4px;
-  font-size: var(--text-sm);
-  cursor: pointer;
-  width: 120px;
-  flex-shrink: 0;
-}
-body.light-mode .shop-cat-select { border-color: rgba(0,0,0,.15); }
-.shop-cat-group { list-style: none; }
-.shop-cat-header {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 6px 0 3px;
-  margin-top: 6px;
-  cursor: pointer;
-  user-select: none;
-  color: var(--muted);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-semi);
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  border-bottom: 1px solid rgba(255,255,255,.07);
-}
-body.light-mode .shop-cat-header { border-bottom-color: rgba(0,0,0,.08); }
-.shop-cat-group:first-child .shop-cat-header { margin-top: 0; }
-.shop-cat-name { flex: 1; }
-.shop-cat-count {
-  background: var(--surface2);
-  border-radius: 20px;
-  padding: 0 5px;
-  font-size: .65rem;
-  color: var(--muted);
-  min-width: 16px;
-  text-align: center;
-}
-.shop-cat-toggle { font-size: .65rem; transition: transform .15s; }
-.shop-cat-header.collapsed .shop-cat-toggle { transform: rotate(-90deg); }
-.shop-cat-items { list-style: none; padding-left: 0; }
-.shop-cat-items.hidden { display: none; }
-.shop-cat-items .list-item:last-child { border-bottom: none; }
 
 /* Tighter card body for list widgets */
 #shopCard .card-body, #todoCard .card-body {
@@ -3123,12 +3079,6 @@ body.light-mode .shop-cat-header { border-bottom-color: rgba(0,0,0,.08); }
 #shopCard .card-header .btn-sm {
   padding: 3px 7px;
   white-space: nowrap;
-}
-/* Constrain shopping category select so it doesn't widen the input row */
-.shop-cat-select {
-  max-width: 90px;
-  min-width: 0;
-  flex-shrink: 1;
 }
 /* ToDo list scrolls when long */
 #todoCard .list-items {
@@ -4836,13 +4786,8 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
      the ⠿ grip handle initWidgetDragDrop() injects into every card header
      is dead chrome here even though it's harmless (nothing calls it). */
   .mobile-sheet-body .widget-drag-handle { display: none; }
-  /* SMS still works from a phone (sendToContact()'s sms: link opens the
-     native Messages app), just not worth a full text button in a header
-     row that's otherwise gone icon-only — shrink it to match. */
-  .mobile-sheet-body #smsTriggerBtn .sms-btn-label { display: none; }
-  .mobile-sheet-body #smsTriggerBtn { padding: 4px 8px; }
-  /* ...which leaves the header row holding only its action-button group;
-     space-between (the desktop default) would flush that lone child left. */
+  /* The header row holds only its action-button group once the title is
+     hidden; space-between (the desktop default) would flush it left. */
   .mobile-sheet-body .card-header { justify-content: flex-end; }
 
   .mobile-sheet-footer {
@@ -5141,8 +5086,7 @@ body.tv-mode [onclick*="openMealDetail"] .meal-edit-btn,
 body.tv-mode .shop-extra-row,
 body.tv-mode #shopClearDoneBtn,
 body.tv-mode #shopClearAllBtn,
-body.tv-mode #todoClearDoneBtn,
-body.tv-mode #todoClearAllBtn {
+body.tv-mode #todoClearDoneBtn {
   display: none !important;
 }
 

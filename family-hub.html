@@ -272,11 +272,6 @@
       <div class="card-header">
         <h2>🛒 Shopping</h2>
         <div style="display:flex;gap:4px;align-items:center">
-          <div class="sms-btn-wrap">
-            <button class="btn btn-secondary btn-sm" id="smsTriggerBtn"
-                    onclick="toggleSmsPopover(event)" title="Send list via SMS" aria-label="Send list via SMS">📱<span class="sms-btn-label"> SMS ▾</span></button>
-            <div class="sms-popover" id="smsPopover"></div>
-          </div>
           <button id="shopClearDoneBtn" class="btn btn-secondary btn-sm" onclick="clearDoneShopping()" title="Clear completed items" aria-label="Clear completed items" style="display:none">✕ done</button>
           <button id="shopClearAllBtn" class="btn btn-sm" onclick="clearAllShopping()" style="display:none;background:var(--surface2);color:var(--muted);padding:3px 7px" title="Clear all items" aria-label="Clear all items">✕ all</button>
         </div>
@@ -284,8 +279,12 @@
       <div class="card-body">
         <div class="list-input-row">
           <input id="shopInput" type="text" placeholder="Add an item…" aria-label="Add a shopping item" onkeydown="if(event.key==='Enter')addShop()" />
-          <select id="shopCategorySelect" class="shop-cat-select"></select>
           <button class="btn btn-primary btn-sm" onclick="addShop()">Add</button>
+          <div class="sms-btn-wrap">
+            <button class="btn btn-secondary btn-sm" id="smsTriggerBtn"
+                    onclick="toggleSmsPopover(event)" title="Send list via SMS" aria-label="Send list via SMS">📱</button>
+            <div class="sms-popover" id="smsPopover"></div>
+          </div>
         </div>
         <ul id="shopList" class="list-items"></ul>
         <div id="shopEmpty" class="list-empty" style="display:none">List is empty!</div>
@@ -298,7 +297,6 @@
         <h2>✅ To-Do</h2>
         <div style="display:flex;gap:4px">
           <button id="todoClearDoneBtn" class="btn btn-sm" onclick="clearDoneTodo()" style="display:none;background:var(--surface2);color:var(--muted);padding:3px 7px" title="Clear completed tasks" aria-label="Clear completed tasks">✕ done</button>
-          <button id="todoClearAllBtn" class="btn btn-sm" onclick="clearAllTodo()" style="display:none;background:var(--surface2);color:var(--muted);padding:3px 7px" title="Clear all tasks" aria-label="Clear all tasks">✕ all</button>
         </div>
       </div>
       <div class="card-body">
@@ -1030,16 +1028,6 @@
         <p class="settings-hint" style="margin:0 0 14px">
           To text the list, add phone numbers in <strong style="cursor:pointer;color:var(--accent)" onclick="switchSettingsTab('family')">👨‍👩‍👧 Family</strong>.
         </p>
-        <div class="field">
-          <label>Aisle categories</label>
-          <p class="settings-hint" style="margin:0 0 8px">The shopping list groups items by these.</p>
-          <div id="shopCategoryList" style="margin-bottom:8px"></div>
-          <div class="lc-add-row">
-            <input type="text" id="newShopCategoryInput" placeholder="New category" class="lc-input"
-                   onkeydown="if(event.key==='Enter'){event.preventDefault();addShopCategory()}" />
-            <button class="btn btn-primary btn-sm" onclick="addShopCategory()">Add</button>
-          </div>
-        </div>
       </div><!-- /shopping -->
 
       <!-- ── Chores ── -->
