@@ -12,7 +12,6 @@ Family Hub is a web dashboard made of three files — `family-hub.html`, `family
 |---|---|---|
 | Google Cloud Console | Calendar sync, Google sign-in, background photos | Free |
 | Firebase | Shared real-time Shopping, To-Do, Budget, Meal Plans, Family Members & Chore Chart | Free tier |
-| OpenWeatherMap | Weather widget | Free tier |
 | Google AI Studio | Meal Planning AI suggestions | Free tier (or pay-as-you-go) |
 
 ---
@@ -226,10 +225,10 @@ If you have an OpenAI API key with credits:
 
 Once all the above is done, open the app (your Netlify URL or `http://localhost:8080/family-hub.html`) and verify:
 
-- [ ] ⚙️ Settings → **Look & Feel**: Set your name and choose an appearance (Light, Dark, or Nautical)
+- [ ] ⚙️ Settings → **Look & Feel**: Set your name and choose a theme and flavor (see Appearance Themes below)
 - [ ] Click **Sign in with Google** → sign in with your Google account
 - [ ] Calendars appear in the **Calendars** sidebar card — toggle each on/off with the checkboxes
-- [ ] ⚙️ Settings → **🌤 Weather**: API key saved and at least one location added
+- [ ] ⚙️ Settings → **🌤 Weather**: at least one location added (no key needed)
 - [ ] ⚙️ Settings → **🍽 Meals**: Gemini key saved; click a day in Week or Day view → plan a meal → try ✨ Suggest
 - [ ] **💰 Budget** sidebar card → **+ Add**: Add a recurring bill (e.g. Internet, $79.99, Monthly, day 1)
 - [ ] Shopping List and To-Do List add items and persist on reload
@@ -415,17 +414,24 @@ that only lives on a dead disk doesn't help.
 
 ### Appearance Themes
 
-Three themes are available in ⚙️ **Settings → Look & Feel**:
+Six themes are available in ⚙️ **Settings → 🎨 Look & Feel → Appearance**:
 
 | Theme | Description |
 |---|---|
+| 🌓 Auto | Follows the device's light/dark setting and switches with it (default) |
 | ☀️ Light | Light grey background, dark text |
-| 🌙 Dark | Deep charcoal background, blue accents (default) |
+| 🌙 Dark | Deep charcoal background, blue accents |
 | ⚓ Nautical | Navy blue hull with diagonal white stripes, beige-gold accents, animated anchor and wave decorations |
+| 🌌 Aurora | Light violet background with soft aurora glows, using a colorblind-safe orange/sky-blue palette |
+| 👁 Accessible | High-contrast dark theme with a colorblind-safe (Okabe-Ito) palette |
+
+Separately, **Flavor** changes the material rather than the colors: **◻ Basic** (default) is flat
+glass, and **✦ Tactile** adds a serif display font, softer shadows and surface grain. Any flavor
+works with any theme. Tactile's decoration is turned off under the Accessible theme.
 
 ### Widget Placement
 
-Every widget can be shown in the **right sidebar** or the **bottom strip** below the calendar. Configure this in ⚙️ **Settings → Widgets**. Each widget has a radio button for Sidebar or Bottom placement, plus a checkbox to show/hide it entirely.
+Every widget can be shown in the **right sidebar** or the **bottom strip** below the calendar. Configure this in ⚙️ **Settings → 🧩 Widget Layout**. Each widget has a radio button for Sidebar or Bottom placement, plus a checkbox to show/hide it entirely.
 
 ### Multi-Location Weather
 
@@ -549,7 +555,7 @@ Family Hub can be shared in two ways:
 - Chore Chart (chores, completion status, rewards) ✅
 
 **What is local per-device:**
-- Settings (name, weather key, API keys)
+- Settings (name, API keys)
 - Appearance theme
 - Weather locations
 - Calendar view preferences
@@ -566,14 +572,13 @@ Family Hub can be shared in two ways:
 |---|---|
 | Google sign-in does nothing | Must be served over HTTP/HTTPS — not `file://`. Use the Netlify URL or `http://localhost:8080`. Also ensure the origin is in Authorized JavaScript Origins in Google Cloud Console. |
 | "This app isn't verified" warning | Click **Advanced → Go to Family Hub (unsafe)** — this is normal for personal apps in test mode |
-| Weather shows nothing after saving key | New OWM keys take up to 2 hours to activate |
-| Weather only shows 1–2 forecast days | The free OWM tier returns up to 5 days of 3-hour slots — fewer may appear depending on time of day |
+| Weather shows nothing | Check that a location is added in ⚙️ Settings → 🌤 Weather. The widget needs no key, so a blank widget usually means no location or a failed network request to Open-Meteo |
 | Meal AI says "rate limited" | You've hit the free daily limit — it resets at midnight Pacific Time |
 | Meal AI says "API not enabled" | Go to [aistudio.google.com/apikey](https://aistudio.google.com/apikey) and create a fresh key in a new project |
 | Photos don't appear as background | Re-open the Photos Picker and re-import — Picker sessions expire |
 | Calendar shows no events | Check that your Google account is a Test User in Cloud Console |
 | Calendars card shows nothing | The card shows a placeholder until you sign in — click **Sign in with Google** |
 | Lists don't sync | Verify Firebase config values are correct and Firestore is in test mode |
-| Weather or AI not working on Netlify | Go to **Project Configuration → Environment variables** and confirm `OWM_KEY` and `GEMINI_KEY` are set, then trigger a new deploy |
+| AI or Event Discovery not working on Netlify | Go to **Project Configuration → Environment variables** and confirm `GEMINI_KEY` (AI) and `OWM_KEY` (Event Discovery only) are set, then trigger a new deploy |
 | AI key not found on Netlify | Keys must be added before deploying — Netlify functions read env vars at runtime, but a fresh deploy is required after adding them |
 | Word of the Day shows "Loading…" | The dictionary API may be temporarily unavailable — click the ↺ refresh button |
