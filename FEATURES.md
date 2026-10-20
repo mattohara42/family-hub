@@ -759,6 +759,8 @@ A handful of triggers aren't tied to any franchise (birthday, politeness, dark-m
 6. **Fairport Festivals** — the village's published festival season (curated table in the function, no API)
 7. **Town of Pittsford** — the town's municipal calendar (concerts, movie nights, festivals), scraped from its Drupal page
 
+**Time limits (added 2026-10-20):** Netlify ends the function at 30s and the sources are awaited together, so the module shadows `fetch` with an 8s `AbortSignal.timeout` (`FETCH_TIMEOUT_MS`), wraps each source in `capped()` → `withTimeout(…, SOURCE_TIMEOUT_MS = 12000)` (a timed-out source returns nothing and shows in `warnings`), caps geocoding at 6s, and gives weather enrichment a 5s budget (`WEATHER_STEP_MS`) after which events ship without weather. `addWeatherContext(event, forecasts)` shares one OWM forecast per ~1° lat/lon cell per request instead of one call per event. On phones the source tabs wrap instead of scrolling sideways, and the modal uses `--surface-solid`.
+
 Sources 6 and 7 both emit `source: 'towns'` and share the single "🎪 Town Events" tab; cards are told apart by `location.address` ("Fairport Village" / "Town of Pittsford"). `sourceStatus` keeps a separate entry per source so `sourceStats` still shows which one produced what.
 
 **State:**

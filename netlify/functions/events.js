@@ -14,6 +14,28 @@
  * after aggregation. Distance filtering uses Haversine formula (see calculateDistance).
  */
 
+// Time limits. Netlify ends a function at 30s, and every source is awaited
+// together, so one hung upstream used to take the whole response down: on
+// 2026-10-20 the Overpass API stopped answering and every request 504'd.
+// Each fetch now has its own deadline (the module-level fetch below shadows
+// the global one), each source an overall cap covering its retries, and the
+// weather step a budget after which events go out without weather.
+const FETCH_TIMEOUT_MS   = 8000;
+const GEOCODE_TIMEOUT_MS = 6000;
+const SOURCE_TIMEOUT_MS  = 12000;
+const WEATHER_STEP_MS    = 5000;
+const fetch = (url, opts = {}) => globalThis.fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS), ...opts });
+
+/** Reject if `promise` hasn't settled within `ms`. The work underneath isn't
+ *  cancelled, only no longer waited on. */
+function withTimeout(promise, ms, label) {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms); }),
+  ]).finally(() => clearTimeout(timer));
+}
+
 const TM_API_BASE = 'https://app.ticketmaster.com/discovery/v2';
 const OWM_API_BASE = 'https://api.openweathermap.org/data/2.5';
 const OWM_GEO_BASE = 'https://api.openweathermap.org/geo/1.0';
@@ -126,20 +148,24 @@ exports.handler = async (event) => {
 
   try {
     // Step 1: Geocode location (city → lat/lon)
-    const { lat, lon, city, state } = await geocodeLocation(location);
+    const { lat, lon, city, state } = await withTimeout(geocodeLocation(location), GEOCODE_TIMEOUT_MS, 'Geocoding');
     if (!lat || !lon) {
       return json(400, { error: `Could not geocode location: ${location}` });
     }
 
     // Step 2: Fetch from all sources in parallel
+    const capped = (promise, name) => withTimeout(promise, SOURCE_TIMEOUT_MS, name).catch(err => {
+      if (sourceStatus[name]) { sourceStatus[name].ok = false; sourceStatus[name].error = err.message; }
+      throw err;
+    });
     const [tmEvents, osmEvents, libEvents, rwEvents, csEvents, fpEvents, pfEvents] = await Promise.allSettled([
-      fetchTicketmaster(city, state, lat, lon, { keyword, attractionId, venueId }),
-      fetchOpenStreetMap(city, state, lat, lon, radiusMinutes),
-      fetchLibraryWeb(city, state, lat, lon),
-      fetchRedWings(city, state, lat, lon),
-      fetchCitySpark(city, state, lat, lon),
-      fetchFairport(city, state, lat, lon),
-      fetchPittsford(city, state, lat, lon)
+      capped(fetchTicketmaster(city, state, lat, lon, { keyword, attractionId, venueId }), 'ticketmaster'),
+      capped(fetchOpenStreetMap(city, state, lat, lon, radiusMinutes), 'osm'),
+      capped(fetchLibraryWeb(city, state, lat, lon), 'libraryweb'),
+      capped(fetchRedWings(city, state, lat, lon), 'redwings'),
+      capped(fetchCitySpark(city, state, lat, lon), 'cityspark'),
+      capped(fetchFairport(city, state, lat, lon), 'towns'),
+      capped(fetchPittsford(city, state, lat, lon), 'pittsford')
     ]);
 
     // Collect all results
@@ -159,10 +185,13 @@ exports.handler = async (event) => {
     // Step 4: Filter by distance and date
     const filteredEvents = filterEventsByDistanceAndDate(uniqueEvents, radiusMinutes, lat, lon);
 
-    // Step 5: Add weather context to each event
-    const withWeather = await Promise.all(
-      filteredEvents.map(e => addWeatherContext(e))
-    );
+    // Step 5: Add weather context to each event. One forecast per ~100km cell,
+    // not one per event (it used to be hundreds of calls), and a time budget.
+    const forecasts = new Map();
+    const withWeather = await withTimeout(
+      Promise.all(filteredEvents.map(e => addWeatherContext(e, forecasts))),
+      WEATHER_STEP_MS, 'Weather'
+    ).catch(err => { console.warn('[Events]', err.message); return filteredEvents; });
 
     // Step 6: Filter by event type if specified
     const finalEvents = eventTypesList.length > 0
@@ -1212,14 +1241,16 @@ function filterEventsByDistanceAndDate(events, radiusMinutes, searchLat, searchL
   });
 }
 
-async function addWeatherContext(event) {
+async function addWeatherContext(event, forecasts = new Map()) {
   try {
     if (!event.date) return event;
 
     const key = process.env.OWM_KEY;
     if (!key) return event;
 
-    const data = await fetchWithRetry(async () => {
+    // Events share a forecast with everything else in their ~1° (≈100km) cell
+    const cell = `${Math.round(event.location.lat)},${Math.round(event.location.lon)}`;
+    if (!forecasts.has(cell)) forecasts.set(cell, fetchWithRetry(async () => {
       const params = new URLSearchParams({
         lat: event.location.lat,
         lon: event.location.lon,
@@ -1232,7 +1263,8 @@ async function addWeatherContext(event) {
         throw new Error(`HTTP ${r.status}: ${r.statusText}`);
       }
       return r.json();
-    }, 'Weather', 1);  // Single retry for weather (less critical)
+    }, 'Weather', 1));  // Single retry for weather (less critical)
+    const data = await forecasts.get(cell);
 
     const eventDate = event.date;
     const dayForecasts = (data.list || []).filter(f => f.dt_txt.startsWith(eventDate));
