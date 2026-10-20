@@ -83,7 +83,7 @@ family-hub.js     (all logic)
 │                              add/removeWeatherLocation
 ├── ── PHOTOS ──               openPhotosPicker, loadBgFromDb, startSlideshow
 ├── ── SHOPPING ──             addShop, toggleShop, clearDoneShopping, clearAllShopping
-├── ── TODO ──                 addTodo, renderTodoList, clearDoneTodo, clearAllTodo
+├── ── TODO ──                 addTodo, renderTodoList, clearDoneTodo
 ├── ── SETTINGS ──             openSettings, saveSettings, switchSettingsTab
 ├── ── APPEARANCE ──           applyAppMode, setAppMode
 ├── ── YEAR STRIP ──           renderYearStrip, changeStripMonth (bottom mode)
@@ -422,7 +422,7 @@ const WIDGET_ORDER = [
 - `toggleShop(id)` — marks item done/undone
 - `clearDoneShopping()` — removes completed items only (confirms with nothing — immediate)
 - `clearAllShopping()` — removes all items after `confirm()` dialog
-- `renderShopList(items)` — re-renders `#shopList`
+- `renderShopList(entries)` — one flat list. Aisle categories (the add-row dropdown, grouped headers, and the Settings → Shopping category list) were removed 2026-10-20; old items may still carry a `category` field, which nothing reads. 📱 SMS (`#smsTriggerBtn`, icon only) sits in the add row after Add, not in the card header
 - `toggleSmsPopover(event)` — shows/hides SMS contact picker
 - `buildShoppingBody()` — formats the list into the message text (pending items only, if any are pending; otherwise everything)
 - `sendToContact(phone)` — opens an `sms:` URL with `buildShoppingBody()`'s text pre-filled
@@ -451,7 +451,7 @@ let familyMembers  = JSON.parse(localStorage.getItem('fh_familyMembers') || '[]'
 - `addTodo()` — reads text + optional dueDate + assignedTo, writes to Firestore
 - `renderTodoList()` — re-renders `#todoList` from `todoItems`; list scrolls at `max-height: 220px`
 - `clearDoneTodo()` — removes completed items only
-- `clearAllTodo()` — removes all items after `confirm()` dialog
+- (No clear-all for To-Do: removed 2026-10-20 at the family's request; only ✕ done remains)
 - `todosDueOnDate(dateKey)` — returns todos with `dueDate === dateKey` that are not done
 
 **localStorage:** `fh_familyMembers`
@@ -1015,7 +1015,6 @@ const HA_TOGGLE_DOMAINS = ['light', 'switch', 'fan', 'input_boolean'];
 | `fh_countdowns` | JSON array | Countdowns | Fallback only — migrated to Firestore `countdowns` collection |
 | `fh_newsFeeds` | JSON array | News Feed | Fallback only — migrated to Firestore `newsFeeds` collection (deduped by URL) |
 | `fh_stockTickers` | JSON array | Stock Ticker | Fallback only — synced via Firestore `settings/stockTickers` doc otherwise |
-| `fh_shopCategories` | JSON array | Shopping | Fallback only — synced via Firestore `settings/shopCategories` doc otherwise |
 | `fh_mowConfig` | JSON object | Mow Advisor | Fallback only — synced via Firestore `settings/mowConfig` doc otherwise (only user-set override keys, defaults come from `MOW_CONFIG`) |
 | `fh_wotd` | JSON object | Word of Day | `{ date, word, phonetic, partOfSpeech, definition, example }` |
 | `fh_dadjoke` | JSON object | Dad Joke | `{ date, joke }` |
@@ -1060,6 +1059,6 @@ const HA_TOGGLE_DOMAINS = ['light', 'switch', 'fan', 'input_boolean'];
 | `countdowns` | `createdAt` | Countdown timers |
 | `mealTemplates` | `createdAt` (display date string) | Meal Plan Templates |
 | `newsFeeds` | `createdAt` | News Feed widget |
-| `settings` | — (fixed doc id per key: `shopCategories`, `stockTickers`, `weatherLocations`, `mealDietPrefs`, `mowConfig`) | Single-value config synced whole via `saveFsSetting(fsKey, lsKey, value)` |
+| `settings` | — (fixed doc id per key: `stockTickers`, `weatherLocations`, `mealDietPrefs`, `mowConfig`) | Single-value config synced whole via `saveFsSetting(fsKey, lsKey, value)` |
 
 **IndexedDB:** `fh_bgImages` (object store `images`) — stores downloaded photo blobs for background slideshow
