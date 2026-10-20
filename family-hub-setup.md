@@ -467,6 +467,36 @@ that only lives on a dead disk doesn't help.
 
 ---
 
+## Wall Panel — Remote Access
+
+You can see and control the panel's screen from another computer (we use the Mac mini), which
+saves walking to the kitchen to fix a frozen page or change a setting.
+
+### On the Pi (one time)
+
+1. Run `sudo raspi-config`
+2. **Interface Options → VNC → Enable.** This turns on whichever VNC server your Raspberry Pi
+   OS version uses: WayVNC on recent versions, RealVNC on older ones.
+3. **Interface Options → SSH → Enable.** Useful for quick fixes that don't need the screen.
+
+### From the Mac
+
+- **See the screen:** install **RealVNC Viewer** (free) and connect to the Pi. macOS's built-in
+  Screen Sharing (Finder → **Go → Connect to Server** → `vnc://<pi-address>`) may also work, but
+  it doesn't always get along with WayVNC. If it refuses to connect, use RealVNC Viewer.
+- **Command line:** `ssh <username>@<pi-address>` in Terminal. `sudo reboot` restarts the
+  panel without touching it.
+
+For `<pi-address>`, use the Pi's Tailscale name from the
+[Tailscale admin console](https://login.tailscale.com/admin/machines) if it's on your tailnet
+(step 6c). That works from anywhere. At home, the Pi's local IP address or
+`<hostname>.local` works too.
+
+> **Disconnect when you're done.** A Raspberry Pi 3 has 1 GB of RAM and is already busy running
+> the hub. VNC adds load, so expect a laggy picture, and don't leave a session open.
+
+---
+
 ## Feature Configuration Reference
 
 ### Appearance Themes
