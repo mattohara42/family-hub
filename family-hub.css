@@ -1573,6 +1573,10 @@ body.has-bg .cal-day.today {
   transition: filter .12s;
 }
 .agenda-event:last-child { margin-bottom: 0; }
+/* Bills in Agenda: the --red fill Month's bill pills and Day's "Bills Due
+   Today" use, with the amount right-aligned */
+.agenda-event.agenda-bill { --event-color: var(--red); align-items: center; }
+.agenda-bill-amt { font-weight: var(--weight-semi); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .agenda-event.agenda-clickable { cursor: pointer; }
 .agenda-event.agenda-clickable:hover  { filter: brightness(1.08); }
 .agenda-event.agenda-clickable:active { filter: brightness(0.96); }
@@ -4666,7 +4670,8 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
 
   /* App icon doubles as the Lists trigger on mobile — give it an obvious
      button outline instead of the bare, unbordered emoji desktop keeps. */
-  .cal-app-emoji {
+  .cal-app-emoji,
+  #calBudgetPrivacyBtn {
     border: 1px solid var(--line);
     background: var(--surface);
     border-radius: 8px;
