@@ -3892,6 +3892,27 @@ function _evtDetailsWhen(ev) {
     : `${when} – ${end.toLocaleDateString([], dayFmt)} ${end.toLocaleTimeString([], timeFmt)}`;
 }
 
+/** Fills the details description with a feed's text, turning bare http(s)
+ *  URLs into links. Built from text nodes and <a> elements rather than
+ *  innerHTML, since a feed's description is someone else's text. Trailing
+ *  punctuation stays out of the link, so "(https://x.com/app)" links x.com/app. */
+function _evtDetailsFillDesc(el, text) {
+  el.replaceChildren();
+  const urlRe = /https?:\/\/[^\s<>"]+/gi;
+  let last = 0, m;
+  while ((m = urlRe.exec(text))) {
+    const url = m[0].replace(/[).,;:!?\]'"]+$/, '');
+    if (m.index > last) el.append(text.slice(last, m.index));
+    const a = document.createElement('a');
+    a.href = url; a.target = '_blank'; a.rel = 'noopener';
+    a.textContent = url.replace(/^https?:\/\/(www\.)?/i, '');
+    el.append(a);
+    last = m.index + url.length;
+    urlRe.lastIndex = last;
+  }
+  if (last < text.length) el.append(text.slice(last));
+}
+
 /** Read-only detail view for an event we can't write back to (an ICS feed,
  *  holidays, a local calendar). Shows what the pill has no room for — the
  *  broadcast network or streaming service a feed puts in DESCRIPTION, the
@@ -3904,18 +3925,24 @@ function openEventDetails(ev) {
     (ev.holiday ? '🎉 ' : '') + (ev.summary || '(No title)');
   document.getElementById('evtDetailsWhen').textContent = _evtDetailsWhen(ev);
 
-  const srcEl = document.getElementById('evtDetailsSource');
-  srcEl.textContent = `🔒 ${calLabelFor(ev.calId)} · read-only, edit it where it's published`;
-  if (ev.color) srcEl.style.borderLeftColor = ev.color;
+  const modalEl = document.querySelector('#eventDetailsModal .modal');
+  if (ev.color) modalEl.style.setProperty('--event-color', ev.color);
+  else modalEl.style.removeProperty('--event-color');
 
-  const whereEl = document.getElementById('evtDetailsWhere');
-  if (ev.location) { whereEl.textContent = `📍 ${ev.location}`; whereEl.style.display = ''; }
-  else whereEl.style.display = 'none';
+  // An ICS sub added without a label is labelled with its own URL, which
+  // reads as noise here. The site's hostname says the same thing.
+  let calLabel = calLabelFor(ev.calId);
+  try { if (/^(https?|webcal):\/\//i.test(calLabel)) calLabel = new URL(calLabel).hostname.replace(/^www\./, ''); }
+  catch (e) { /* keep the raw label */ }
+  document.getElementById('evtDetailsCal').textContent = calLabel;
 
-  // textContent, not innerHTML: a feed's description is someone else's text.
+  const whereRow = document.getElementById('evtDetailsWhereRow');
+  document.getElementById('evtDetailsWhere').textContent = ev.location || '';
+  whereRow.style.display = ev.location ? '' : 'none';
+
   const descEl = document.getElementById('evtDetailsDesc');
-  if (ev.description) { descEl.textContent = ev.description; descEl.style.display = ''; }
-  else descEl.style.display = 'none';
+  _evtDetailsFillDesc(descEl, ev.description || '');
+  descEl.style.display = ev.description ? '' : 'none';
 
   // Only ever link http(s) — a feed could carry any scheme, javascript: included.
   const linkEl = document.getElementById('evtDetailsLink');

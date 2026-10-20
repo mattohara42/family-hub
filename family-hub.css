@@ -2980,45 +2980,69 @@ body.nautical-mode #eventEditorModal .modal {
 .list-empty { color: var(--muted); font-size: var(--text-xs); text-align: center; padding: 6px 0; }
 
 /* ── Event Details (read-only events: ICS feeds, holidays, local calendars) ── */
-/* Unlike Settings/Event Editor, this modal never got its own opaque
-   background: it was inheriting the base .modal rule's `var(--surface)`,
-   which is deliberately translucent (for cards sitting over a background
-   photo) rather than solid. Over anything busy behind it (a background
-   photo, or just the Agenda list's own text) that read as illegible,
-   especially in dark mode. `--surface-solid` is the same per-theme token
-   Settings/Event Editor already use for exactly this. */
-.evt-details-modal { max-width: 460px; background: var(--surface-solid); }
+/* Opaque on purpose: the base .modal background is the translucent
+   `var(--surface)`, and over the Agenda list behind it that was illegible.
+   The selector is `.modal.evt-details-modal` (two classes) because the base
+   `.modal` rule sits later in this file and wins at equal specificity, which
+   is how the first attempt at this (a bare `.evt-details-modal`) silently
+   lost. --event-color is set inline from ev.color by openEventDetails(): a
+   top stripe plus a faint wash of it ties the card to the pill that was
+   tapped, without putting text on the colour itself (white on Banana/Citron
+   is the known low-contrast case). */
+.modal.evt-details-modal {
+  max-width: 460px;
+  border-top: 6px solid var(--event-color, var(--accent));
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--event-color, var(--accent)) 16%, var(--surface-solid)) 0,
+      var(--surface-solid) 140px);
+  box-shadow: 0 12px 48px rgba(0,0,0,.45), 0 2px 10px rgba(0,0,0,.25);
+}
 .evt-details-head {
   display: flex; align-items: flex-start; justify-content: space-between;
-  gap: 10px; margin-bottom: 4px;
+  gap: 10px; margin-bottom: 10px;
 }
 .evt-details-head h2 { margin-bottom: 0; line-height: 1.2; }
-.evt-details-when {
-  font-size: var(--fs-item); color: var(--text);
-  font-variant-numeric: tabular-nums;
-  margin-bottom: 10px;
-}
-/* The read-only badge is the whole point of this view — say it in words, and
-   carry the calendar's own colour so it still reads as that calendar. */
+/* Which calendar, as a chip in its own colour, then the read-only note in
+   words underneath: the lock is the point of this view, so it stays. */
 .evt-details-source {
-  display: inline-block;
-  font-size: var(--text-xs); color: var(--muted);
-  border-left: 3px solid var(--accent);
-  padding: 2px 0 2px 8px;
-  margin-bottom: 14px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
+  margin-bottom: 16px;
 }
-.evt-details-where {
-  font-size: var(--fs-meta); color: var(--text);
-  margin-bottom: 10px;
+.evt-details-cal {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: var(--fs-meta); font-weight: var(--weight-semi); color: var(--text);
+  padding: 3px 10px 3px 8px; border-radius: 999px;
+  background: color-mix(in srgb, var(--event-color, var(--accent)) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--event-color, var(--accent)) 45%, transparent);
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.evt-details-cal::before {
+  content: ''; flex-shrink: 0;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--event-color, var(--accent));
+}
+.evt-details-ro { font-size: var(--text-xs); color: var(--muted); }
+.evt-details-row {
+  display: grid; grid-template-columns: 1.5em 1fr; gap: 8px; align-items: baseline;
+  font-size: var(--fs-item); color: var(--text);
+  margin-bottom: 8px;
+}
+.evt-details-icon { text-align: center; }
+.evt-details-when { font-weight: var(--weight-semi); font-variant-numeric: tabular-nums; }
 .evt-details-desc {
+  margin-top: 14px; padding: 12px 14px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  border: 1px solid var(--line);
   font-size: var(--fs-meta); color: var(--text);
   line-height: var(--leading-loose);
   white-space: pre-wrap;      /* feed descriptions carry real newlines */
   overflow-wrap: anywhere;    /* and sometimes long unbroken URLs */
   max-height: 40vh; overflow-y: auto;
 }
-.evt-details-link { text-decoration: none; margin-top: 12px; display: inline-block; }
+.evt-details-desc a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.evt-details-link { text-decoration: none; margin-top: 12px; display: inline-block; align-self: flex-start; }
 
 /* ── Shopping List Category Grouping ── */
 .shop-cat-select {

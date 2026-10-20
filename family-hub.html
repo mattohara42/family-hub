@@ -1693,10 +1693,13 @@
       <button class="evt-editor-close-btn" onclick="closeEventDetails()" title="Close (Esc)" aria-label="Close event details">✕</button>
     </div>
 
-    <p class="evt-details-when" id="evtDetailsWhen"></p>
-    <div class="evt-details-source" id="evtDetailsSource"></div>
+    <div class="evt-details-source">
+      <span class="evt-details-cal" id="evtDetailsCal"></span>
+      <span class="evt-details-ro">🔒 Read-only, edit it where it's published</span>
+    </div>
 
-    <p class="evt-details-where" id="evtDetailsWhere" style="display:none"></p>
+    <p class="evt-details-row evt-details-when"><span class="evt-details-icon" aria-hidden="true">🕒</span><span id="evtDetailsWhen"></span></p>
+    <p class="evt-details-row" id="evtDetailsWhereRow" style="display:none"><span class="evt-details-icon" aria-hidden="true">📍</span><span id="evtDetailsWhere"></span></p>
     <div class="evt-details-desc" id="evtDetailsDesc" style="display:none"></div>
     <a class="btn btn-sm btn-secondary evt-details-link" id="evtDetailsLink"
        href="#" target="_blank" rel="noopener" style="display:none">↗ More info</a>
