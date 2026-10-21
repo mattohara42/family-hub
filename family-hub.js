@@ -2680,9 +2680,8 @@ function renderCalendarTabs() {
   LC_DEFS.forEach(lc => {
     const hasData =
       lc.id === LC_IDS.birthdays ? birthdays.length > 0 :
-      lc.id === LC_IDS.meds      ? medications.length > 0 :
       lc.id === LC_IDS.school    ? schoolPeriods.length > 0 :
-      lc.id === LC_IDS.trash     ? trashPickups.length > 0 : false;
+      lc.id === LC_IDS.recurring ? recurringItems.length > 0 : false;
     if (hasData) all.push({ id: lc.id, label: lc.label, color: lc.color });
   });
 
@@ -5897,13 +5896,6 @@ function attachFirestoreListeners() {
     injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
   }, _fsError));
 
-  // Medications
-  _fsUnsub.push(db.collection('medications').orderBy('createdAt').onSnapshot(snap => {
-    medications = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    lcRenderMedList();
-    injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
-  }, _fsError));
-
   // School schedule
   _fsUnsub.push(db.collection('schoolPeriods').orderBy('createdAt').onSnapshot(snap => {
     schoolPeriods = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -5925,10 +5917,10 @@ function attachFirestoreListeners() {
     renderCurrentView();
   }, _fsError));
 
-  // Trash & recycling
-  _fsUnsub.push(db.collection('trashPickups').orderBy('createdAt').onSnapshot(snap => {
-    trashPickups = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    lcRenderTrashList();
+  // Recurring (replaced the separate medications + trashPickups collections)
+  _fsUnsub.push(db.collection('recurringItems').orderBy('createdAt').onSnapshot(snap => {
+    recurringItems = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    lcRenderRecurringList();
     injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
   }, _fsError));
 
@@ -6056,9 +6048,8 @@ function runFirestoreMigrations() {
   // Simple record lists — additive migration (matches Budget/FamilyMembers precedent)
   [
     { ls: 'fh_birthdays',     col: 'birthdays',     label: 'Birthdays' },
-    { ls: 'fh_medications',   col: 'medications',   label: 'Medications' },
     { ls: 'fh_school',        col: 'schoolPeriods', label: 'SchoolPeriods' },
-    { ls: 'fh_trash',         col: 'trashPickups',  label: 'TrashPickups' },
+    { ls: 'fh_recurring',     col: 'recurringItems', label: 'Recurring' },
     { ls: 'fh_countdowns',    col: 'countdowns',    label: 'Countdowns' },
     { ls: 'fh_mealTemplates', col: 'mealTemplates', label: 'MealTemplates' },
     { ls: 'fh_recipeBox',     col: 'recipeBox',     label: 'RecipeBox' },
@@ -6076,6 +6067,29 @@ function runFirestoreMigrations() {
     batch.commit().then(() => {
       localStorage.removeItem(ls);
       console.log(`[${label}] Migrated`, legacy.length, 'item(s) from localStorage to Firestore.');
+    }).catch(_fsError);
+  });
+
+  // Medications + Trash & Recycling → Recurring. Doc ids derive from the old
+  // ones, so two devices running this at once write the same docs, not copies.
+  [
+    { col: 'medications',  prefix: 'med_',   convert: recurringFromMed },
+    { col: 'trashPickups', prefix: 'trash_', convert: recurringFromTrash },
+  ].forEach(({ col, prefix, convert }) => {
+    db.collection(col).get().then(snap => {
+      if (snap.empty) return;
+      const batch = db.batch();
+      snap.docs.forEach(doc => {
+        const old = doc.data();
+        batch.set(db.collection('recurringItems').doc(prefix + doc.id), {
+          ...convert(old),
+          createdAt: old.createdAt || firebase.firestore.FieldValue.serverTimestamp(),
+        });
+        batch.delete(doc.ref);
+      });
+      batch.commit().then(() => {
+        console.log('[Recurring] Migrated', snap.size, `item(s) from ${col}.`);
+      }).catch(_fsError);
     }).catch(_fsError);
   });
 
@@ -11107,9 +11121,8 @@ function sendToContact(phone) {
 // ── Local Calendars ────────────────────────────────────────────
 
 let birthdays    = lsGet('fh_birthdays',    []);
-let medications  = lsGet('fh_medications',  []);
 let schoolPeriods= lsGet('fh_school',       []);
-let trashPickups = lsGet('fh_trash',        []);
+let recurringItems = lcLoadRecurring();
 
 // School Day Cycle — a repeating "Day N" rotation (e.g. a 4-day A/B/C/D
 // schedule) computed from a start/end date, skipping weekends + entered
@@ -11121,15 +11134,13 @@ let schoolDaySubjects = lsGet('fh_schoolDaySubjects', []);  // [{id, subject, da
 
 const LC_IDS = {
   birthdays: 'local_birthdays',
-  meds:      'local_meds',
   school:    'local_school',
-  trash:     'local_trash',
+  recurring: 'local_recurring',
 };
 const LC_DEFS = [
   { id: LC_IDS.birthdays, label: '🎂 Birthdays',        color: '#e91e8c' },
-  { id: LC_IDS.meds,      label: '💊 Medications',       color: '#4caf82' },
   { id: LC_IDS.school,    label: '🏫 School',            color: '#61afef' },
-  { id: LC_IDS.trash,     label: '🗑 Trash & Recycling', color: '#8bc34a' },
+  { id: LC_IDS.recurring, label: '🔁 Recurring',         color: '#4caf82' },
 ];
 
 function lcDateKey(d) {
@@ -11191,28 +11202,6 @@ function injectLocalEvents() {
     });
   }
 
-  // Medications
-  if (!disabledCals.has(LC_IDS.meds)) {
-    medications.forEach(m => {
-      lcIterateDays(range, day => {
-        const dow = day.getDay(); // 0=Sun
-        const matches = m.days === 'daily'    ? true
-                      : m.days === 'weekdays' ? dow >= 1 && dow <= 5
-                      : m.days === 'weekends' ? dow === 0 || dow === 6
-                      : false;
-        if (!matches) return;
-        const key = lcDateKey(day);
-        const [hh, mm] = m.time.split(':').map(Number);
-        const startDT = new Date(day.getFullYear(), day.getMonth(), day.getDate(), hh, mm);
-        const endDT   = new Date(startDT.getTime() + 30*60000);
-        lcAddToCache(LC_IDS.meds, key, {
-          eventId: `med_${m.id}_${key}`, summary: `💊 ${m.name}${m.dosage ? ' · ' + m.dosage : ''}`,
-          color: '#4caf82', allDay: false, startDT, endDT, startDate: key, endDate: key,
-        });
-      });
-    });
-  }
-
   // School schedule
   if (!disabledCals.has(LC_IDS.school)) {
     schoolPeriods.forEach(p => {
@@ -11232,16 +11221,25 @@ function injectLocalEvents() {
     });
   }
 
-  // Trash & recycling
-  if (!disabledCals.has(LC_IDS.trash)) {
-    trashPickups.forEach(t => {
+  // Recurring (medications, trash day, home upkeep, …)
+  if (!disabledCals.has(LC_IDS.recurring)) {
+    recurringItems.forEach(r => {
       lcIterateDays(range, day => {
-        if (day.getDay() !== t.weekday) return;
+        if (!recurringOccursOn(r, day)) return;
         const key = lcDateKey(day);
-        lcAddToCache(LC_IDS.trash, key, {
-          eventId: `trash_${t.id}_${key}`, summary: `${t.emoji} ${t.label}`,
-          color: t.color, allDay: true, startDate: key, endDate: key,
-        });
+        const ev = {
+          eventId: `rec_${r.id}_${key}`, summary: `${r.emoji} ${r.name}`.trim(),
+          color: r.color, startDate: key, endDate: key,
+        };
+        if (r.time) {
+          const [hh, mm] = r.time.split(':').map(Number);
+          ev.allDay  = false;
+          ev.startDT = new Date(day.getFullYear(), day.getMonth(), day.getDate(), hh, mm);
+          ev.endDT   = new Date(ev.startDT.getTime() + 30*60000);
+        } else {
+          ev.allDay = true;
+        }
+        lcAddToCache(LC_IDS.recurring, key, ev);
       });
     });
   }
@@ -11262,9 +11260,9 @@ function lcOpenSettings() {
       Array.from({length:31},(_,i)=>`<option value="${i+1}">${i+1}</option>`).join('');
   }
   lcRenderBdayList();
-  lcRenderMedList();
   lcRenderSchoolList();
-  lcRenderTrashList();
+  lcRenderRecurringList();
+  lcCancelRecurEdit(); // a half-finished edit doesn't survive closing Settings
   scdOpenSettings();
 }
 
@@ -11278,9 +11276,9 @@ function lcRenderBdayList() {
     const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const date   = `${months[b.month-1]} ${b.day}${b.year ? ', '+b.year : ''}`;
     return `<div class="lc-item"><span class="lc-dot" style="background:#e91e8c"></span>
-      <span class="lc-item-label">${b.name}</span>
+      <span class="lc-item-label">${esc(b.name)}</span>
       <span class="lc-item-meta">${date}</span>
-      <button class="lc-del" onclick="lcDelBirthday('${b.id}')">✕</button></div>`;
+      <button class="lc-del" onclick="lcDelBirthday('${esc(b.id)}')">✕</button></div>`;
   }).join('');
 }
 async function lcAddBirthday() {
@@ -11315,48 +11313,6 @@ async function lcDelBirthday(id) {
   }
 }
 
-// ── Medications ──
-function lcRenderMedList() {
-  const el = document.getElementById('lcMedList');
-  if (!el) return;
-  if (!medications.length) { el.innerHTML = '<div class="lc-empty">No medications added yet.</div>'; return; }
-  el.innerHTML = medications.map(m =>
-    `<div class="lc-item"><span class="lc-dot" style="background:#4caf82"></span>
-      <span class="lc-item-label">${m.name}${m.dosage ? ' · '+m.dosage : ''}</span>
-      <span class="lc-item-meta">${m.time} · ${m.days}</span>
-      <button class="lc-del" onclick="lcDelMedication('${m.id}')">✕</button></div>`
-  ).join('');
-}
-async function lcAddMedication() {
-  const name   = document.getElementById('lcMedName').value.trim();
-  const dosage = document.getElementById('lcMedDosage').value.trim();
-  const time   = document.getElementById('lcMedTime').value;
-  const days   = document.getElementById('lcMedDays').value;
-  if (!name) { alert('Enter a medication name.'); return; }
-  const item = { name, dosage, time, days };
-  if (db) {
-    await db.collection('medications').add({ ...item, createdAt: firebase.firestore.FieldValue.serverTimestamp() }).catch(_fsWriteError);
-  } else {
-    item.id = String(Date.now());
-    medications.push(item);
-    localStorage.setItem('fh_medications', JSON.stringify(medications));
-    lcRenderMedList();
-    injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
-  }
-  document.getElementById('lcMedName').value = '';
-  document.getElementById('lcMedDosage').value = '';
-}
-async function lcDelMedication(id) {
-  if (db) {
-    await db.collection('medications').doc(id).delete().catch(_fsWriteError);
-  } else {
-    medications = medications.filter(m => m.id !== id);
-    localStorage.setItem('fh_medications', JSON.stringify(medications));
-    lcRenderMedList();
-    injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
-  }
-}
-
 // ── School schedule ──
 function lcRenderSchoolList() {
   const el = document.getElementById('lcSchoolList');
@@ -11364,10 +11320,10 @@ function lcRenderSchoolList() {
   if (!schoolPeriods.length) { el.innerHTML = '<div class="lc-empty">No classes added yet.</div>'; return; }
   const dayLabels = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   el.innerHTML = schoolPeriods.map(p =>
-    `<div class="lc-item"><span class="lc-dot" style="background:${p.color}"></span>
-      <span class="lc-item-label">${p.name}</span>
-      <span class="lc-item-meta">${p.startTime}–${p.endTime} · ${p.days.map(d=>dayLabels[d]).join(', ')}</span>
-      <button class="lc-del" onclick="lcDelSchool('${p.id}')">✕</button></div>`
+    `<div class="lc-item"><span class="lc-dot" style="background:${esc(p.color)}"></span>
+      <span class="lc-item-label">${esc(p.name)}</span>
+      <span class="lc-item-meta">${esc(p.startTime)}–${esc(p.endTime)} · ${p.days.map(d=>dayLabels[d]).join(', ')}</span>
+      <button class="lc-del" onclick="lcDelSchool('${esc(p.id)}')">✕</button></div>`
   ).join('');
 }
 async function lcAddSchoolPeriod() {
@@ -11570,44 +11526,207 @@ function scdOpenSettings() {
   lcRenderSchoolSubjectList();
 }
 
-// ── Trash & Recycling ──
-function lcRenderTrashList() {
-  const el = document.getElementById('lcTrashList');
+// ── Recurring ──
+// One list for anything on a schedule: medications, trash day, air filters.
+// Item: { name, emoji, color, startDate 'YYYY-MM-DD', every N, unit
+// 'day'|'week'|'month'|'year', weekdays [0-6] (week only), time 'HH:MM' or '' = all-day }.
+const LC_WEEKDAY_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+// Older devices may still hold the pre-merge lists in localStorage (no Firestore);
+// fold them in once. Firestore data is moved by runFirestoreMigrations().
+function lcLoadRecurring() {
+  const items = lsGet('fh_recurring', []);
+  const meds  = lsGet('fh_medications', []);
+  const trash = lsGet('fh_trash', []);
+  if (!meds.length && !trash.length) return items;
+  items.push(...meds.map(m => ({ ...recurringFromMed(m), id: 'med_' + m.id })),
+             ...trash.map(t => ({ ...recurringFromTrash(t), id: 'trash_' + t.id })));
+  localStorage.setItem('fh_recurring', JSON.stringify(items));
+  localStorage.removeItem('fh_medications');
+  localStorage.removeItem('fh_trash');
+  return items;
+}
+
+// Neither old list had a start date; Jan 1 is an arbitrary anchor that only
+// bounds history, since every converted rule repeats every 1 day/week.
+function recurringLegacyStart() { return `${new Date().getFullYear()}-01-01`; }
+
+function recurringFromMed(m) {
+  const weekdays = m.days === 'weekdays' ? [1,2,3,4,5] : m.days === 'weekends' ? [0,6] : null;
+  return {
+    name: m.name + (m.dosage ? ' · ' + m.dosage : ''), emoji: '💊', color: '#4caf82',
+    startDate: recurringLegacyStart(), every: 1, time: m.time || '',
+    ...(weekdays ? { unit: 'week', weekdays } : { unit: 'day' }),
+  };
+}
+
+function recurringFromTrash(t) {
+  return {
+    name: t.label, emoji: t.emoji || '🗑', color: t.color || '#8bc34a',
+    startDate: recurringLegacyStart(), every: 1, unit: 'week', weekdays: [t.weekday], time: '',
+  };
+}
+
+function recurringOccursOn(r, day) {
+  const [sy, sm, sd] = r.startDate.split('-').map(Number);
+  // UTC midnights so day/week arithmetic isn't skewed an hour by DST
+  const start = Date.UTC(sy, sm - 1, sd);
+  const cur   = Date.UTC(day.getFullYear(), day.getMonth(), day.getDate());
+  if (cur < start) return false;
+  const n = Math.max(1, r.every || 1);
+  if (r.unit === 'day') return ((cur - start) / 86400000) % n === 0;
+  if (r.unit === 'week') {
+    const days = r.weekdays?.length ? r.weekdays : [new Date(start).getUTCDay()];
+    if (!days.includes(day.getDay())) return false;
+    const weekOf = t => t - new Date(t).getUTCDay() * 86400000; // that week's Sunday
+    return ((weekOf(cur) - weekOf(start)) / (7 * 86400000)) % n === 0;
+  }
+  const months = (day.getFullYear() - sy) * 12 + day.getMonth() - (sm - 1);
+  if (r.unit === 'year' ? (months % 12 || (months / 12) % n) : months % n) return false;
+  // Same day of the month as the start, clamped so a 31st start still lands in short months
+  const lastDay = new Date(day.getFullYear(), day.getMonth() + 1, 0).getDate();
+  return day.getDate() === Math.min(sd, lastDay);
+}
+
+/** "Every 3 months from Jan 15", "Weekly on Tue · 8:00 AM" */
+function recurringSummary(r) {
+  const n = r.every || 1;
+  let s = n === 1 ? { day: 'Daily', week: 'Weekly', month: 'Monthly', year: 'Yearly' }[r.unit]
+                  : `Every ${n} ${r.unit}s`;
+  if (r.unit === 'week' && r.weekdays?.length) {
+    const days = [...r.weekdays].sort().join();
+    s = n === 1 && days === '1,2,3,4,5' ? 'Weekdays'
+      : n === 1 && days === '0,6'       ? 'Weekends'
+      : s + ' on ' + [...r.weekdays].sort().map(d => LC_WEEKDAY_SHORT[d]).join(', ');
+  }
+  if (r.unit === 'month' || r.unit === 'year' || n > 1) {
+    const [y, m, d] = r.startDate.split('-').map(Number);
+    s += ' from ' + new Date(y, m - 1, d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
+  return r.time ? `${s} · ${formatTime12(r.time)}` : s;
+}
+
+function lcRenderRecurringList() {
+  const el = document.getElementById('lcRecurList');
   if (!el) return;
-  if (!trashPickups.length) { el.innerHTML = '<div class="lc-empty">No pickups added yet.</div>'; return; }
-  const dayLabels = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-  el.innerHTML = trashPickups.map(t =>
-    `<div class="lc-item"><span class="lc-dot" style="background:${t.color}"></span>
-      <span class="lc-item-label">${t.emoji} ${t.label}</span>
-      <span class="lc-item-meta">${dayLabels[t.weekday]}</span>
-      <button class="lc-del" onclick="lcDelTrash('${t.id}')">✕</button></div>`
+  if (!recurringItems.length) { el.innerHTML = '<div class="lc-empty">Nothing recurring yet.</div>'; return; }
+  el.innerHTML = recurringItems.map(r =>
+    `<div class="lc-item"><span class="lc-dot" style="background:${esc(r.color)}"></span>
+      <span class="lc-recur-body">
+        <span class="lc-item-label">${esc(r.emoji)} ${esc(r.name)}</span>
+        <span class="lc-item-meta">${esc(recurringSummary(r))}</span>
+      </span>
+      <button class="lc-del" onclick="lcEditRecurring('${esc(r.id)}')" title="Edit">✎</button>
+      <button class="lc-del" onclick="lcDelRecurring('${esc(r.id)}')" title="Delete">✕</button></div>`
   ).join('');
 }
-async function lcAddTrash() {
-  const label   = document.getElementById('lcTrashLabel').value.trim();
-  const weekday = parseInt(document.getElementById('lcTrashDay').value);
-  const emoji   = document.getElementById('lcTrashEmoji').value;
-  const color   = document.getElementById('lcTrashColor').value;
-  if (!label) { alert('Enter a label.'); return; }
-  const item = { label, weekday, emoji, color };
+
+const RECUR_EMOJI = [
+  '🔁','💊','💉','🩺','🦷','🗑️','♻️','🌿','🪴','💧','🔋','🧯',
+  '🚨','🌬️','🧹','🧺','🛁','🍽️','🐶','🐱','🐟','🚗','⛽','🔧',
+  '💳','🧾','📦','📬','✂️','🏋️','📚','🔔',
+];
+
+// Weekday chips only mean something for a weekly rule. The start date only
+// changes the schedule for monthly/yearly rules (it picks the day) or an
+// interval of 2+ (it picks which weeks/days); otherwise it just bounds
+// history, so it stays hidden and a new item starts today.
+function lcRecurStartMatters() {
+  const unit = document.getElementById('lcRecurUnit').value;
+  const every = parseInt(document.getElementById('lcRecurEvery').value) || 1;
+  return unit === 'month' || unit === 'year' || every > 1;
+}
+function lcRecurScheduleChanged() {
+  const weekly = document.getElementById('lcRecurUnit').value === 'week';
+  document.querySelectorAll('.lc-recur-days-row').forEach(el => { el.style.display = weekly ? '' : 'none'; });
+  const showStart = lcRecurStartMatters();
+  document.querySelectorAll('.lc-recur-start-row').forEach(el => { el.style.display = showStart ? '' : 'none'; });
+}
+
+// Add and edit share one drill-in screen that replaces the Calendar panel;
+// while it's open the modal footer's Cancel/Save act on the item instead
+let lcRecurEditingId = null;
+function lcOpenRecurForm(r) {
+  const today = new Date();
+  lcRecurEditingId = r ? r.id : null;
+  document.getElementById('lcRecurFormTitle').textContent = r ? 'Edit recurring item' : 'New recurring item';
+  document.getElementById('lcRecurSaveBtn').textContent   = r ? 'Save' : 'Add';
+  document.getElementById('lcRecurName').value        = r ? r.name : '';
+  document.getElementById('lcRecurEmoji').textContent = r ? r.emoji || '🔁' : '🔁';
+  document.getElementById('lcRecurColor').value       = r ? r.color : '#4caf82';
+  document.getElementById('lcRecurEvery').value       = r ? r.every || 1 : 1;
+  document.getElementById('lcRecurUnit').value        = r ? r.unit : 'week';
+  document.getElementById('lcRecurStart').value       = r ? r.startDate : lcDateKey(today);
+  // A new weekly item starts ticked on today, so the chips never look empty
+  const days = r ? (r.unit === 'week' ? r.weekdays || [] : []) : [today.getDay()];
+  document.querySelectorAll('#lcRecurDays input').forEach(i => { i.checked = days.includes(parseInt(i.value)); });
+  document.getElementById('lcRecurAllDay').checked = !r?.time;
+  document.getElementById('lcRecurTime').value = r?.time || '08:00';
+  lcRecurAllDayChanged(); lcRecurScheduleChanged();
+  document.getElementById('settingsModal').classList.add('recur-editing');
+  document.querySelector('#settingsModal .settings-panels').scrollTop = 0;
+  if (!r) document.getElementById('lcRecurName').focus();
+}
+function lcNewRecurring() { lcOpenRecurForm(null); }
+function lcEditRecurring(id) {
+  const r = recurringItems.find(x => x.id === id);
+  if (r) lcOpenRecurForm(r);
+}
+function lcCancelRecurEdit() {
+  lcRecurEditingId = null;
+  document.getElementById('settingsModal').classList.remove('recur-editing');
+}
+
+function lcRecurAllDayChanged() {
+  document.getElementById('lcRecurTime').style.display = document.getElementById('lcRecurAllDay').checked ? 'none' : '';
+}
+
+async function lcAddRecurring() {
+  const name      = document.getElementById('lcRecurName').value.trim();
+  const emoji     = document.getElementById('lcRecurEmoji').textContent.trim();
+  const color     = document.getElementById('lcRecurColor').value;
+  const every     = Math.max(1, parseInt(document.getElementById('lcRecurEvery').value) || 1);
+  const unit      = document.getElementById('lcRecurUnit').value;
+  const editing   = recurringItems.find(r => r.id === lcRecurEditingId);
+  // Hidden start date: keep an edited item's own, so its history doesn't move
+  const startDate = lcRecurStartMatters() || !editing
+    ? document.getElementById('lcRecurStart').value : editing.startDate;
+  const allDay    = document.getElementById('lcRecurAllDay').checked;
+  const time      = allDay ? '' : document.getElementById('lcRecurTime').value;
+  if (!name)      { alert('Enter what recurs.'); return; }
+  if (!startDate) { alert('Pick a start date.'); return; }
+  if (!allDay && !time) { alert('Enter a time, or tick All day.'); return; }
+  const item = { name, emoji, color, startDate, every, unit, time };
+  if (unit === 'week') {
+    const checked = [...document.querySelectorAll('#lcRecurDays input:checked')].map(i => parseInt(i.value));
+    // None ticked: repeat on the start date's weekday
+    const [y, m, d] = startDate.split('-').map(Number);
+    item.weekdays = checked.length ? checked : [new Date(y, m - 1, d).getDay()];
+  }
+  const editId = lcRecurEditingId;
   if (db) {
-    await db.collection('trashPickups').add({ ...item, createdAt: firebase.firestore.FieldValue.serverTimestamp() }).catch(_fsWriteError);
+    // set(), not update(): a stale weekdays field must go when the unit changes
+    const write = editId
+      ? db.collection('recurringItems').doc(editId).set({ ...item, createdAt: recurringItems.find(r => r.id === editId)?.createdAt || firebase.firestore.FieldValue.serverTimestamp() })
+      : db.collection('recurringItems').add({ ...item, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+    await write.catch(_fsWriteError);
   } else {
-    item.id = String(Date.now());
-    trashPickups.push(item);
-    localStorage.setItem('fh_trash', JSON.stringify(trashPickups));
-    lcRenderTrashList();
+    if (editId) recurringItems = recurringItems.map(r => r.id === editId ? { ...item, id: editId } : r);
+    else recurringItems.push({ ...item, id: String(Date.now()) });
+    localStorage.setItem('fh_recurring', JSON.stringify(recurringItems));
+    lcRenderRecurringList();
     injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
   }
-  document.getElementById('lcTrashLabel').value = '';
+  lcCancelRecurEdit();
 }
-async function lcDelTrash(id) {
+async function lcDelRecurring(id) {
+  if (id === lcRecurEditingId) lcCancelRecurEdit();
   if (db) {
-    await db.collection('trashPickups').doc(id).delete().catch(_fsWriteError);
+    await db.collection('recurringItems').doc(id).delete().catch(_fsWriteError);
   } else {
-    trashPickups = trashPickups.filter(t => t.id !== id);
-    localStorage.setItem('fh_trash', JSON.stringify(trashPickups));
-    lcRenderTrashList();
+    recurringItems = recurringItems.filter(r => r.id !== id);
+    localStorage.setItem('fh_recurring', JSON.stringify(recurringItems));
+    lcRenderRecurringList();
     injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
   }
 }
@@ -12117,10 +12236,12 @@ function renderSettingsNav() {
 
 // Narrow-screen drill-in: return from a panel to the nav list.
 function settingsShowNav() {
+  lcCancelRecurEdit();
   document.getElementById('settingsBody').classList.remove('show-panel');
 }
 
 function switchSettingsTab(tab) {
+  lcCancelRecurEdit(); // the item editor's footer mode belongs to the Calendar panel only
   document.querySelectorAll('.settings-nav-item').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.tab === tab);
   });

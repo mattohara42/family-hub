@@ -3210,6 +3210,15 @@ body.eggs-unlocked .settings-nav-group--gated { display: block; }
   padding-top: 0;
   border-top: none;
 }
+/* Groups several .lc-section blocks (Calendar panel), so it reads a level
+   above their titles: same small caps as the settings nav labels */
+.settings-group-head {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--muted);
+  margin-bottom: 0;
+}
 
 /* Narrow: drill-in — show the nav list, tap an item to slide in its panel */
 @media (max-width: 700px) {
@@ -3248,7 +3257,7 @@ body.eggs-unlocked .settings-nav-group--gated { display: block; }
 /* ── Local Calendars settings panel ── */
 .lc-section {
   padding: 12px 0;
-  border-bottom: 1px solid rgba(255,255,255,.06);
+  border-bottom: 1px solid var(--line);
 }
 .lc-section-title {
   font-size: var(--text-sm);
@@ -3312,7 +3321,67 @@ body.eggs-unlocked .settings-nav-group--gated { display: block; }
 }
 body.light-mode .lc-input,
 body.light-mode .lc-select  { border-color: rgba(0,0,0,.15); }
-body.light-mode .lc-section { border-color: rgba(0,0,0,.08); }
+
+/* ── Recurring (Calendar settings) ── */
+.lc-recur-hint { margin: -4px 0 8px; }
+/* Name over schedule: a schedule summary beside the name crowded it out on phones */
+.lc-recur-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.lc-recur-body .lc-item-meta { white-space: normal; }
+
+/* Add/edit is a drill-in screen: #settingsModal.recur-editing hides the rest
+   of the Calendar panel and swaps the footer to the item's own Cancel/Save */
+.lc-recur-form { display: none; }
+#settingsModal.recur-editing .lc-recur-form { display: flex; }
+#settingsModal:not(.recur-editing) .settings-recur-action { display: none; }
+#settingsModal.recur-editing .settings-main-action,
+#settingsModal.recur-editing .settings-back,
+#settingsModal.recur-editing .lc-recur-listonly,
+#settingsModal.recur-editing .settings-panel[data-panel="calendar"] > :not(.lc-recur-section) { display: none; }
+
+.lc-recur-form { flex-direction: column; gap: 14px; }
+.lc-recur-form .lc-section-title { margin-bottom: 0; }
+.lc-recur-back {
+  align-self: flex-start;
+  background: none; border: none; padding: 4px 2px;
+  color: var(--accent); font-family: inherit;
+  font-size: var(--text-sm); font-weight: var(--weight-semi); cursor: pointer;
+}
+.lc-recur-what { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lc-recur-what .lc-input { flex: 1 1 160px; min-width: 0; }
+.lc-recur-emoji {
+  flex: 0 0 auto; width: 40px; height: 40px;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--surface2); font-size: 1.3rem; line-height: 1; cursor: pointer;
+}
+.lc-recur-color { flex: 0 0 auto; width: 28px; height: 28px; border-radius: 50%; overflow: hidden; }
+.lc-recur-color::-webkit-color-swatch-wrapper { padding: 0; }
+.lc-recur-color::-webkit-color-swatch { border: none; border-radius: 50%; }
+.lc-recur-color::-moz-color-swatch { border: none; border-radius: 50%; }
+
+.lc-recur-grid {
+  display: grid; grid-template-columns: auto 1fr;
+  gap: 12px 14px; align-items: center;
+}
+.lc-recur-label { font-size: var(--text-xs); font-weight: var(--weight-semi); color: var(--muted); }
+.lc-recur-field { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.lc-recur-text { font-size: var(--text-xs); color: var(--muted); }
+.lc-input-num  { flex: 0 0 auto; width: 56px; min-width: 0; }
+#lcRecurTime   { width: auto; }
+.lc-recur-allday { display: flex; align-items: center; gap: 6px; font-size: var(--text-xs); cursor: pointer; accent-color: var(--accent); }
+
+/* Weekday chips: the checkbox stays in the label for state and keyboard
+   focus, visually replaced by the letter */
+.lc-recur-days { display: flex; gap: 4px; min-width: 0; }
+/* Chips share the row and shrink a little rather than wrap one onto its own line */
+.lc-recur-days label { position: relative; cursor: pointer; flex: 1 1 0; max-width: 34px; min-width: 0; }
+.lc-recur-days input { position: absolute; opacity: 0; width: 0; height: 0; }
+.lc-recur-days span {
+  display: grid; place-items: center; aspect-ratio: 1;
+  border-radius: 50%; border: 1px solid var(--line);
+  font-size: var(--text-xs); font-weight: var(--weight-semi); color: var(--muted);
+}
+.lc-recur-days input:checked + span { background: var(--accent); border-color: var(--accent); color: #fff; }
+.lc-recur-days input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .panel-empty {
   text-align: center; padding: 32px 0;
@@ -4879,6 +4948,7 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
   }
   #settingsModal .settings-section-head,
   #settingsModal .lc-section-title      { font-size: 1.05rem !important; }
+  #settingsModal .settings-panel .settings-group-head { font-size: .8rem !important; }
   /* Helper copy one step below body text, so labels and controls lead */
   #settingsModal .settings-panel .settings-hint,
   #settingsModal .settings-panel .toggle-sub,
