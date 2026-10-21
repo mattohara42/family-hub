@@ -103,8 +103,9 @@
 
 <div id="configBanner">
   ⚠️ <strong>First-time setup required.</strong>
-  Open <code>family-hub.js</code> in a text editor and fill in your
-  <code>FIREBASE_CONFIG</code> and <code>GOOGLE_CLIENT_ID</code> near the top.
+  Set the <code>GOOGLE_CLIENT_ID</code> and <code>FIREBASE_CONFIG</code>
+  environment variables on Netlify and redeploy (or, for local dev, fill them
+  in in <code>config.js</code>).
   See <code>family-hub-setup.md</code> for step-by-step instructions.
 </div>
 
@@ -1754,6 +1755,7 @@
   </div>
 </div>
 
+<script src="config.js"></script>
 <script src="family-hub.js"></script>
   <!-- Google Sign-In loaded after family-hub.js so onGsiLoad() is defined -->
   <script src="https://accounts.google.com/gsi/client" async defer onload="onGsiLoad()"></script>

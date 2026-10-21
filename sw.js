@@ -17,6 +17,7 @@ const APP_SHELL = [
   '/family-hub.html',
   '/family-hub.css',
   '/family-hub.js',
+  '/config.js',
   '/favicon.svg',
   '/manifest.json',
   '/icon-192.png',

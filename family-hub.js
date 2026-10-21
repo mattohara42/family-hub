@@ -1,17 +1,12 @@
 // ════════════════════════════════════════════════════════════════
-//  🔧 CONFIGURATION — fill these in before opening the app
+//  🔧 CONFIGURATION: Firebase + Google client ID live in config.js
 // ════════════════════════════════════════════════════════════════
 
-const FIREBASE_CONFIG = {
-  apiKey:            "AIzaSyCq_WtqHd5WmJldlNptE8zchu2RmuAX_yE",
-  authDomain:        "familyhub-5fc43.firebaseapp.com",
-  projectId:         "familyhub-5fc43",
-  storageBucket:     "familyhub-5fc43.firebasestorage.app",
-  messagingSenderId: "941604403053",
-  appId:             "1:941604403053:web:4ba83f1a451693f69b8c64"
-};
-
-const GOOGLE_CLIENT_ID = "1023822683234-e0pslac1cag5ju2o26gl5c9kq36udr7q.apps.googleusercontent.com";
+// config.js loads first and sets window.FH_CONFIG. Missing or empty values
+// show the setup banner instead of crashing (see isConfigured below).
+const FH_CONFIG        = window.FH_CONFIG || {};
+const FIREBASE_CONFIG  = FH_CONFIG.firebase || {};
+const GOOGLE_CLIENT_ID = FH_CONFIG.googleClientId || '';
 const GOOGLE_SCOPES    = "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly";
 
 // Weather needs NO API key — it uses keyless Open-Meteo (see helpers below).
@@ -174,9 +169,7 @@ function lsGet(key, fallback) {
 }
 
 // ── Detect unconfigured state ──────────────────────────────────
-const isConfigured =
-  FIREBASE_CONFIG.apiKey !== "YOUR_FIREBASE_API_KEY" &&
-  GOOGLE_CLIENT_ID !== "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com";
+const isConfigured = Boolean(FIREBASE_CONFIG.apiKey && GOOGLE_CLIENT_ID);
 
 if (!isConfigured) {
   document.getElementById('configBanner').style.display = 'block';
@@ -1199,6 +1192,7 @@ window.addEventListener('load', () => {
 });
 
 function initGoogleAuth() {
+  if (!isConfigured) return;   // empty client_id makes GIS throw; the banner explains
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: GOOGLE_CLIENT_ID,
     scope: 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/photospicker.mediaitems.readonly',
