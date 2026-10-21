@@ -14,7 +14,7 @@ A three-file family dashboard. No build step, no npm, no framework — CDN scrip
 | `family-hub.css`  | All CSS (vars, layout, components, themes) |
 | `family-hub.js`   | All JS logic + config block at top |
 
-All three files must sit in the same directory. Serve via Netlify (prod) or `python3 -m http.server 8080` → `http://localhost:8080/family-hub.html`.
+All three files must sit in the same directory, alongside `config.js` (Firebase config + Google client ID as `window.FH_CONFIG`, loaded before `family-hub.js`). On Netlify, `netlify-build.js` rewrites `config.js` from the `GOOGLE_CLIENT_ID`/`FIREBASE_CONFIG` env vars when both are set, so a fork runs its own projects without editing tracked files; don't move those values back into `family-hub.js`. Serve via Netlify (prod) or `python3 -m http.server 8080` → `http://localhost:8080/family-hub.html`.
 
 Shared state (shopping, todo, budget) lives in Firebase Firestore. Photos are blobs in IndexedDB. Everything else is `let` globals + `localStorage` (`fh_*` keys).
 
@@ -132,7 +132,7 @@ When checking that a change worked in the browser, **default to `javascript_tool
 
 ## Project Files
 
-**App:** `family-hub.{html,css,js}` · `manifest.json` · `sw.js` (service worker) · `pond/` (vendored Pond Chimes subtree — screensaver mode)
+**App:** `family-hub.{html,css,js}` · `config.js` · `manifest.json` · `sw.js` (service worker) · `pond/` (vendored Pond Chimes subtree — screensaver mode)
 
 **Documentation:** `FEATURES.md` (detailed feature/reference map) · `family-hub-setup.md` (end-user setup) · `RETROSPECTIVE.md` (lessons learned) · `EASTER_EGGS.md` (phrase cheat sheet — what's currently live) · `CLAUDE.md` (this file)
 

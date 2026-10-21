@@ -1,8 +1,8 @@
 # Family Hub — Setup Guide
 
-*Last updated: 2026-06-14*
+*Last updated: 2026-10-21*
 
-Family Hub is a web dashboard made of three files — `family-hub.html`, `family-hub.css`, and `family-hub.js` — that run together in your browser. No installation is required, but a handful of free cloud accounts are needed to unlock the full feature set. This guide walks through every account, every step, and every value you need to configure.
+Family Hub is a web dashboard made of three files (`family-hub.html`, `family-hub.css` and `family-hub.js`), plus a small `config.js` that holds your Google and Firebase IDs. They run together in your browser. No installation is required, but a handful of free cloud accounts are needed to unlock the full feature set. This guide walks through every account, every step, and every value you need to configure.
 
 ---
 
@@ -22,16 +22,15 @@ Google OAuth and the Photos Picker **will not work** when you open the HTML file
 
 ### Option A — Netlify (recommended, accessible from any device)
 
-Family Hub is deployed as a static site on Netlify at **https://familial.netlify.app**. If you're using that instance, skip to Step 1 below. To deploy your own:
+The original Family Hub runs at **https://familial.netlify.app**, but that site is tied to its owner's Google and Firebase projects and only lets their family's accounts in. To run Family Hub for your own family, deploy your own copy:
 
-1. Push the three files to a GitHub repository
+1. **Fork** [mattohara42/family-hub](https://github.com/mattohara42/family-hub) on GitHub. Forking (rather than copying the files) lets you pull in future updates later.
 2. Go to [app.netlify.com](https://app.netlify.com) → **Add new site → Import an existing project**
-3. Connect GitHub → select the repo → set **Publish directory** to `.`, leave **Build command** blank
-4. Click **Deploy site** — note the assigned URL (e.g. `https://family-hub-xyz.netlify.app`)
-5. Add your API keys as Netlify environment variables (see Step 4b below) and redeploy
-6. Complete Steps 1 and 2 below, then add the Netlify domain to:
-   - **Google Cloud Console → OAuth Client → Authorized JavaScript Origins**
-   - **Firebase Console → Authentication → Settings → Authorized Domains**
+3. Connect GitHub → select your fork. `netlify.toml` already sets the publish directory, build command and functions folder, so keep the defaults.
+4. Click **Deploy site** and note the assigned URL (e.g. `https://family-hub-xyz.netlify.app`). Until you finish Steps 1 and 2, this first deploy still carries the original owner's IDs and sign-in won't work for you. That's expected.
+5. Complete Steps 1, 2 and 4 below. You never edit a file: everything goes into Netlify environment variables (summarised in [Netlify environment variables](#netlify-environment-variables)), and then you redeploy.
+
+You don't need to change the code at all. On every deploy, the build step (`netlify-build.js`) writes `config.js` from your `GOOGLE_CLIENT_ID` and `FIREBASE_CONFIG` variables. Your fork never diverges from the original, so updates merge cleanly.
 
 ### Option B — Local server (for development or offline use)
 
@@ -45,6 +44,8 @@ Family Hub is deployed as a static site on Netlify at **https://familial.netlify
 5. Open your browser to: `http://localhost:8080/family-hub.html`
 
 Leave that Terminal window open whenever you use Family Hub locally.
+
+Locally there's no build step, so the app reads `config.js` exactly as committed. To point a local copy at your own projects, edit the values in `config.js` directly, and don't commit that change if you deploy through Netlify env vars.
 
 > **On Windows:** Python 3 may need to be installed from [python.org](https://www.python.org). The command is the same.
 
@@ -81,6 +82,10 @@ Click each one → **Enable**.
 4. On the **Scopes** screen, click **Add or Remove Scopes** and add:
    - `https://www.googleapis.com/auth/calendar.events`
    - `https://www.googleapis.com/auth/calendar.readonly`
+   - `https://www.googleapis.com/auth/photospicker.mediaitems.readonly` (background photos)
+   - `https://www.googleapis.com/auth/userinfo.profile` and `https://www.googleapis.com/auth/userinfo.email` (your name and email, used for sign-in)
+
+   These five are exactly what the app requests (`GOOGLE_SCOPES` in `family-hub.js`). The Photos Picker scope only appears in the list once you've enabled the Photos Picker API in 1b.
    Then click **Update** and **Save and Continue**
 5. On the **Test users** screen, click **Add users** and add the Google accounts for every family member who will use the app
 6. Click **Save and Continue** → **Back to Dashboard**
@@ -91,20 +96,16 @@ Click each one → **Enable**.
 2. Application type: **Web application**
 3. Name: `Family Hub`
 4. Under **Authorized JavaScript origins**, click **Add URI** and add:
-   - `http://localhost:8080`
    - Your Netlify URL, e.g. `https://family-hub-xyz.netlify.app` (if using Netlify)
+   - `http://localhost:8080` (only if you'll also run it locally)
 5. Click **Create**
 6. Copy the **Client ID** — it looks like `123480809-abcdefg.apps.googleusercontent.com`
 
 ### 1e. Put the Client ID in the app
 
-Open `family-hub.js` in a text editor. Near the very top, find:
+**On Netlify:** go to your site → **Project configuration → Environment variables → Add a variable** and add `GOOGLE_CLIENT_ID` with the Client ID as its value. It's a public identifier, so it doesn't need to be marked secret.
 
-```js
-const GOOGLE_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com";
-```
-
-Replace it with your actual Client ID.
+**Running locally:** paste it into `googleClientId` in `config.js` instead.
 
 > **Don't want to set up Google OAuth?** You can skip Step 1 entirely and still
 > see your calendars: in ⚙️ **Settings → 📅 Calendar → 📡 ICS Subscriptions**,
@@ -118,7 +119,9 @@ Replace it with your actual Client ID.
 
 ## Step 2 — Firebase (Shared Real-Time Data)
 
-The following features sync in real time across all family members' devices via Firebase Firestore: Shopping List, To-Do List, Budget, Meal Plans, Family Members, and the Chore Chart. This step is optional — all features work locally without Firebase, but data won't be shared between devices.
+The following features sync in real time across all family members' devices via Firebase Firestore: Shopping List, To-Do List, Budget, Meal Plans, Family Members, and the Chore Chart.
+
+Use the **same Google account** for this step as for Step 1 (Firebase can even reuse the Google Cloud project from Step 1).
 
 ### 2a. Create a Firebase project
 
@@ -130,7 +133,7 @@ The following features sync in real time across all family members' devices via 
 ### 2b. Create a Firestore database
 
 1. In the left sidebar, click **Firestore Database → Create database**
-2. Select **Start in test mode** (allows open read/write — fine for family use on a private network)
+2. Select **Start in production mode**. You'll replace its locked-down default rules in Step 2e.
 3. Choose a region close to you → **Enable**
 
 ### 2c. Get your Firebase config
@@ -152,7 +155,22 @@ The following features sync in real time across all family members' devices via 
 
 ### 2d. Put the Firebase config in the app
 
-Open `family-hub.js` and find the `FIREBASE_CONFIG` constant near the very top. Replace the placeholder values with your actual config values.
+**On Netlify:** add an environment variable named `FIREBASE_CONFIG` and paste the whole snippet from 2c as its value, `const firebaseConfig =` and all. Strict JSON works too. If the value can't be read, the deploy fails with a message saying why, rather than publishing a broken site.
+
+Set **both** `GOOGLE_CLIENT_ID` and `FIREBASE_CONFIG`. If only one is set the deploy fails on purpose, because half a config would sign you in to one project and read data from another.
+
+**Running locally:** copy the values into the `firebase` block in `config.js` instead.
+
+### 2e. Turn on Google sign-in and lock the database to your family
+
+The app signs everyone into Firebase with the same Google account they use for the calendar. Firestore only answers people on your list.
+
+1. In the Firebase Console, go to **Authentication → Get started → Sign-in method**, enable **Google**, and save.
+2. Go to **Authentication → Settings → Authorized domains** and add your Netlify domain (e.g. `family-hub-xyz.netlify.app`). `localhost` is there by default.
+3. Open `firestore.rules` from your fork and replace the email list in `isAllowed()` with the Google accounts of everyone in your family.
+4. Go to **Firestore Database → Rules**, paste the whole file in, and click **Publish**.
+
+The email list only lives in the Firebase Console, not on Netlify, so editing `firestore.rules` in your fork is just for your own records. If someone can sign in but their lists stay empty and adding items does nothing, their email is missing from these rules or Google sign-in isn't enabled.
 
 ---
 
@@ -213,6 +231,19 @@ With `netlify dev` (port 8888), the function runs locally and reads `GEMINI_KEY`
 
 ---
 
+## Netlify environment variables
+
+All of these go in your Netlify site under **Project configuration → Environment variables**. Redeploy after changing any of them (**Deploys → Trigger deploy → Deploy site**).
+
+| Variable | Needed for | Step |
+|---|---|---|
+| `GOOGLE_CLIENT_ID` | Google sign-in, calendar, photos | 1e |
+| `FIREBASE_CONFIG` | Shared lists, budget, meals, chores | 2d |
+| `GEMINI_KEY` (secret) | Assistant, meal AI, daily briefing | 4b |
+| `OWM_KEY`, `TICKETMASTER_KEY` (secret) | Discover Events only, optional | |
+
+---
+
 ## Step 5 — First Launch Checklist
 
 Once all the above is done, open the app (your Netlify URL or `http://localhost:8080/family-hub.html`) and verify:
@@ -223,7 +254,7 @@ Once all the above is done, open the app (your Netlify URL or `http://localhost:
 - [ ] ⚙️ Settings → **🌤 Weather**: at least one location added (no key needed)
 - [ ] AI works: `GEMINI_KEY` set on Netlify (Step 4b); click a day in Week or Day view → plan a meal → try ✨ Suggest
 - [ ] **💰 Budget** sidebar card → **+ Add**: Add a recurring bill (e.g. Internet, $79.99, Monthly, day 1)
-- [ ] Shopping List and To-Do List add items and persist on reload
+- [ ] Shopping List and To-Do List add items and persist on reload (if not, re-check Step 2e)
 
 ---
 
@@ -670,7 +701,7 @@ Family Hub can be shared in two ways:
 | Photos don't appear as background | Re-open the Photos Picker and re-import — Picker sessions expire |
 | Calendar shows no events | Check that your Google account is a Test User in Cloud Console |
 | Calendars card shows nothing | The card shows a placeholder until you sign in — click **Sign in with Google** |
-| Lists don't sync | Verify Firebase config values are correct and Firestore is in test mode |
+| Lists don't sync | Check `FIREBASE_CONFIG` is set on Netlify and you redeployed, Google sign-in is enabled in Firebase Authentication, and the signed-in email is in your published Firestore rules (Step 2e) |
 | AI or Event Discovery not working on Netlify | Go to **Project Configuration → Environment variables** and confirm `GEMINI_KEY` (AI) and `OWM_KEY` (Event Discovery only) are set, then trigger a new deploy |
 | AI key not found on Netlify | Keys must be added before deploying — Netlify functions read env vars at runtime, but a fresh deploy is required after adding them |
 | Word of the Day shows "Loading…" | The dictionary API may be temporarily unavailable — click the ↺ refresh button |

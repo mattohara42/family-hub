@@ -10,7 +10,7 @@ A living reference of every feature, its key functions, state variables, localSt
 
 - **Three files:** `family-hub.html` (structure), `family-hub.css` (all styles), `family-hub.js` (all logic)
 - **Served via:** Netlify (production) or `python3 -m http.server 8080` → `http://localhost:8080/family-hub.html` (local dev)
-- **Config block:** Top of `family-hub.js` — `FIREBASE_CONFIG`, `GOOGLE_CLIENT_ID`, pinned API constants
+- **Config block:** `config.js` sets `window.FH_CONFIG` (Firebase config + Google client ID); `netlify-build.js` rewrites it from the `GOOGLE_CLIENT_ID`/`FIREBASE_CONFIG` env vars when both are set. Top of `family-hub.js` reads it into `FIREBASE_CONFIG`/`GOOGLE_CLIENT_ID` and holds the pinned API constants
 - **State:** Mix of `let` globals + `localStorage` + IndexedDB (photos only)
 - **Shared state:** Firebase Firestore (shopping list, to-do list, budget, meal plan, family members, chores)
 - **Theming:** CSS custom properties on `:root` — `--text`, `--surface`, `--surface2`, `--accent`, `--accent2`, `--muted`, `--card-bg-photo`, `--scrim`, etc.
@@ -67,7 +67,7 @@ family-hub.css    (stylesheet)
 
 family-hub.js     (all logic)
 ├── ── CONFIGURATION BLOCK (top) ──
-│   FIREBASE_CONFIG, GOOGLE_CLIENT_ID, WEATHER_*, pinned API constants
+│   FIREBASE_CONFIG, GOOGLE_CLIENT_ID (read from config.js), WEATHER_*, pinned API constants
 ├── ── STATE VARIABLES ──
 ├── ── FIREBASE INIT ──
 ├── ── GOOGLE AUTH ──

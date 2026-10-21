@@ -17,9 +17,9 @@
   <!-- Link previews (iMessage, Slack, etc.). These URLs must be absolute: the
        Open Graph spec requires it, and scrapers fetch the page out of context,
        so a relative path has nothing to resolve against. The origin below is
-       this project's deploy (also set as the repo's homepage) — change it if
-       you serve Family Hub somewhere else, or previews will point at a site
-       that isn't yours. Nothing at runtime reads these; they are for scrapers
+       this project's deploy (also set as the repo's homepage). On Netlify,
+       netlify-build.js swaps it for the site's own URL, so a fork's previews
+       point at the fork. Nothing at runtime reads these; they are for scrapers
        only, so localhost and LAN serving are unaffected. -->
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Family Hub" />
@@ -103,8 +103,9 @@
 
 <div id="configBanner">
   ⚠️ <strong>First-time setup required.</strong>
-  Open <code>family-hub.js</code> in a text editor and fill in your
-  <code>FIREBASE_CONFIG</code> and <code>GOOGLE_CLIENT_ID</code> near the top.
+  Set the <code>GOOGLE_CLIENT_ID</code> and <code>FIREBASE_CONFIG</code>
+  environment variables on Netlify and redeploy (or, for local dev, fill them
+  in in <code>config.js</code>).
   See <code>family-hub-setup.md</code> for step-by-step instructions.
 </div>
 
@@ -1754,6 +1755,7 @@
   </div>
 </div>
 
+<script src="config.js"></script>
 <script src="family-hub.js"></script>
   <!-- Google Sign-In loaded after family-hub.js so onGsiLoad() is defined -->
   <script src="https://accounts.google.com/gsi/client" async defer onload="onGsiLoad()"></script>
