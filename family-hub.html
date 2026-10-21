@@ -17,9 +17,9 @@
   <!-- Link previews (iMessage, Slack, etc.). These URLs must be absolute: the
        Open Graph spec requires it, and scrapers fetch the page out of context,
        so a relative path has nothing to resolve against. The origin below is
-       this project's deploy (also set as the repo's homepage) — change it if
-       you serve Family Hub somewhere else, or previews will point at a site
-       that isn't yours. Nothing at runtime reads these; they are for scrapers
+       this project's deploy (also set as the repo's homepage). On Netlify,
+       netlify-build.js swaps it for the site's own URL, so a fork's previews
+       point at the fork. Nothing at runtime reads these; they are for scrapers
        only, so localhost and LAN serving are unaffected. -->
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Family Hub" />

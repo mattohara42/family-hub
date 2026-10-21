@@ -7,7 +7,13 @@
 const FH_CONFIG        = window.FH_CONFIG || {};
 const FIREBASE_CONFIG  = FH_CONFIG.firebase || {};
 const GOOGLE_CLIENT_ID = FH_CONFIG.googleClientId || '';
-const GOOGLE_SCOPES    = "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly";
+const GOOGLE_SCOPES    = [
+  'https://www.googleapis.com/auth/calendar.events',
+  'https://www.googleapis.com/auth/calendar.readonly',
+  'https://www.googleapis.com/auth/userinfo.profile',
+  'https://www.googleapis.com/auth/userinfo.email',
+  'https://www.googleapis.com/auth/photospicker.mediaitems.readonly',
+].join(' ');
 
 // Weather needs NO API key — it uses keyless Open-Meteo (see helpers below).
 const WEATHER_CITY     = "";   // ← e.g. "Rochester, US"  (optional — can also set in ⚙️)
@@ -1195,7 +1201,7 @@ function initGoogleAuth() {
   if (!isConfigured) return;   // empty client_id makes GIS throw; the banner explains
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: GOOGLE_CLIENT_ID,
-    scope: 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/photospicker.mediaitems.readonly',
+    scope: GOOGLE_SCOPES,
     callback: async (resp) => {
       if (resp.error) {
         console.error('OAuth error', resp);

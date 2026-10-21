@@ -8,6 +8,9 @@
  *    projects without editing a tracked file. With neither set, the committed
  *    config.js ships as is. Setting only one fails the build, since half a
  *    config would sign in against one project and read data from another.
+ * 3. Points the absolute link-preview URLs in family-hub.html (og:url,
+ *    og:image, twitter:image) at this site, using Netlify's own URL env var.
+ *    A no-op on the original site; a fork's previews stop naming it.
  */
 const fs = require('fs');
 const vm = require('vm');
@@ -47,6 +50,16 @@ function buildConfigJs(env) {
        + `window.FH_CONFIG = ${JSON.stringify(config, null, 2)};\n`;
 }
 
+// The origin committed in family-hub.html's Open Graph tags.
+const COMMITTED_ORIGIN = 'https://familial.netlify.app';
+
+/** Returns html with the committed origin replaced by siteUrl's origin. */
+function stampSiteOrigin(html, siteUrl) {
+  if (!siteUrl) return html;
+  const origin = new URL(siteUrl).origin;
+  return html.split(COMMITTED_ORIGIN).join(origin);
+}
+
 if (require.main === module) {
   const version = `fh-${Date.now()}`;
 
@@ -64,6 +77,13 @@ if (require.main === module) {
   } else {
     console.log('[netlify-build] No GOOGLE_CLIENT_ID/FIREBASE_CONFIG env vars; using committed config.js');
   }
+
+  const html = fs.readFileSync('family-hub.html', 'utf8');
+  const stamped = stampSiteOrigin(html, process.env.URL);
+  if (stamped !== html) {
+    fs.writeFileSync('family-hub.html', stamped);
+    console.log(`[netlify-build] Link-preview URLs pointed at ${new URL(process.env.URL).origin}`);
+  }
 }
 
-module.exports = { buildConfigJs, parseFirebaseConfig };
+module.exports = { buildConfigJs, parseFirebaseConfig, stampSiteOrigin };

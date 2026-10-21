@@ -11,7 +11,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('vm');
-const { buildConfigJs } = require('../netlify-build.js');
+const { buildConfigJs, stampSiteOrigin } = require('../netlify-build.js');
 
 const CLIENT_ID = 'abc-123.apps.googleusercontent.com';
 const SNIPPET = `const firebaseConfig = {
@@ -51,4 +51,12 @@ test('only one of the two vars set fails the build', () => {
 test('unparseable or incomplete Firebase config fails the build', () => {
   assert.throws(() => buildConfigJs({ GOOGLE_CLIENT_ID: CLIENT_ID, FIREBASE_CONFIG: '{ apiKey: ' }), /not a valid object/);
   assert.throws(() => buildConfigJs({ GOOGLE_CLIENT_ID: CLIENT_ID, FIREBASE_CONFIG: '{ apiKey: "x" }' }), /projectId/);
+});
+
+test('link-preview URLs follow the deploying site', () => {
+  const html = '<meta property="og:image" content="https://familial.netlify.app/icon-512.png" />';
+  assert.equal(stampSiteOrigin(html, 'https://friend-hub.netlify.app/'),
+    '<meta property="og:image" content="https://friend-hub.netlify.app/icon-512.png" />');
+  assert.equal(stampSiteOrigin(html, 'https://familial.netlify.app'), html);
+  assert.equal(stampSiteOrigin(html, undefined), html);
 });
