@@ -38,6 +38,7 @@ you edit is what the browser runs.
 - Month / Week / Day views over multiple Google Calendars, colour-coded and individually toggleable
 - **ICS subscriptions** — subscribe to any public or secret `.ics` feed (school, sports, Outlook) with no Google sign-in at all; recurrence (`RRULE`/`EXDATE`/`TZID`) is expanded client-side
 - Year at a Glance mini-month strip, countdowns, and conflict detection
+- **Recurring items** (medications, trash and recycling, air filters, smoke alarm checks) on any every-N-days/weeks/months/years schedule, shown as their own calendar
 
 **Household**
 - **Shopping list**, **to-do list** and **budget** — shared in real time via Firestore, live on every device
