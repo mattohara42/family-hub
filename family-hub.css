@@ -1059,88 +1059,6 @@ body:not(.force-landscape).auto-portrait #bottomStrip {
   grid-template-columns: 1fr;
 }
 
-/* Large mobile */
-/* Mobile = narrower than 640px, or a phone turned sideways (short, landscape,
-   touch). Every mobile block repeats this full query, and updateIsMobile()
-   in family-hub.js mirrors it: keep all of them in sync. */
-@media (max-width: 640px), (max-height: 500px) and (orientation: landscape) and (pointer: coarse) {
-  /* The whole type scale below is sized for a wall panel read from a few
-     feet away. On a phone held at arm's length that reads as tiny body
-     copy next to one oversized date heading (#calMonthLabel). Scaling the
-     tokens up here — rather than the many individual font-size rules that
-     already reference them — keeps everything in one coherent scale. */
-  :root {
-    --text-xs:   0.80rem;
-    --text-sm:   0.88rem;
-    --text-base: 1.00rem;
-    --text-md:   1.10rem;
-    --text-lg:   1.30rem;
-  }
-
-  /* Edge-to-edge: the outer gutter and the card's border/radius/shadow are
-     desktop prettification that just cramp a phone screen. Safe-area insets
-     stay — that's hardware (notch/home indicator), not decoration. */
-  body {
-    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
-             env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
-  }
-  /* !important: the nautical/aurora/tactile theme overrides further down
-     target .card.cal-card with more classes in the selector, which outranks
-     a plain .cal-card rule regardless of source order — this has to win
-     over all of them, in every theme, so it doesn't chase each one. */
-  .cal-card {
-    border: none !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
-  }
-  .cal-app-title { font-size: var(--text-base); }
-  .layout { gap: 10px; }
-
-  .cal-view-tab { padding: 4px 10px; font-size: var(--text-sm); }
-  #calMonthLabel { min-width: 0; }
-
-
-  /* Month grid: shorter cells */
-  .cal-day { min-height: 54px; font-size: var(--text-xs); }
-  .cal-day-num { font-size: var(--text-xs); }
-  .cal-event { font-size: var(--text-xs); }
-
-  /* Week view: scroll horizontally rather than squish */
-  #weekView { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .week-grid { min-width: 520px; }
-  .week-day-col { min-height: 300px; }
-  .week-event { font-size: var(--text-xs); }
-
-  /* Day view: narrower time label */
-  .day-hour-row { grid-template-columns: 44px 1fr; }
-  .day-time-label { width: 44px; font-size: var(--text-xs); }
-  .day-hour-label { font-size: var(--text-xs); padding-right: 6px; }
-  .day-event-pill { font-size: var(--text-sm); }
-
-  /* Year strip: 3 columns */
-  .mini-grid { grid-template-columns: repeat(3, 1fr); padding: 10px; gap: 8px; }
-
-  /* Sidebar: stack single column, full-width cards */
-  .sidebar { flex-direction: column; align-items: stretch; }
-  .sidebar > .card { flex: none; width: 100%; box-sizing: border-box; }
-
-  /* Weather forecast rows */
-  .wx-day { font-size: var(--text-sm); gap: 5px; }
-
-  /* Settings modal: full width */
-  .modal-overlay { padding: 10px; padding-bottom: max(10px, env(safe-area-inset-bottom, 0px)); }
-  .modal { padding: 20px 16px; }
-}
-
-/* Small mobile */
-@media (max-width: 400px) {
-  .cal-view-tab { padding: 3px 7px; font-size: var(--text-xs); }
-  .cal-day { min-height: 44px; }
-  .mini-grid { grid-template-columns: repeat(2, 1fr); }
-  #calMonthLabel { font-size: 1rem; }
-  .week-grid { min-width: 460px; }
-}
-
 /* ── Card ── */
 .card {
   background: var(--surface);
@@ -1325,30 +1243,21 @@ body.nautical-mode .cal-month-nav button {
    centered rather than right-aligned so the tabs don't read as stranded in
    the row's left-hand dead space; padding/gap trimmed to reclaim a bit of
    vertical space for the calendar body below.
-   The #calMonthLabel font-size here must stay in *this* block, not the
-   earlier 640px block above (~line 1080): the unguarded desktop rule
-   further down the file (`#calMonthLabel { font-size: 1.6rem }`) is the
-   same specificity and wins any tie by source order regardless of which
-   media query it's in, so an override needs to come after it in the file
-   to actually take effect — the earlier block's attempt at this was
-   silently dead code. */
+   Like every phone override, this block has to come after the base rules
+   it overrides (see "Phone overrides (generic)" at the end of the file). */
 @media (max-width: 640px), (max-height: 500px) and (orientation: landscape) and (pointer: coarse) {
   .cal-card-header {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 4px;
     align-items: center;
     padding: 8px 14px 6px;
   }
   .cal-card-header .cal-title-zone { flex: 0 0 auto; }
   .cal-card-header .cal-month-nav  { flex: 1; justify-content: center; min-width: 0; flex-wrap: nowrap; }
-  .cal-card-header { flex-wrap: nowrap; }
   /* !important: the element carries an inline display:flex */
   .cal-card-header .cal-header-actions { display: none !important; }
-  /* min-width: 0 here, not in the earlier 640px block: the unguarded
-     140px min-width above wins over that one by source order, and a label
-     that can't shrink overflows its centred box to the left, over Refocus. */
-  #calMonthLabel { overflow: hidden; text-overflow: ellipsis; font-size: var(--text-md); min-width: 0; }
+  #calMonthLabel { overflow: hidden; text-overflow: ellipsis; font-size: var(--text-md); }
   .cal-card-header .cal-title-zone { gap: 6px; }
   /* Refocus as a compact round icon: the word "REFOCUS" alone took a third
      of the one-row header's width on a phone. */
@@ -4927,8 +4836,6 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
   #eventEditorModal .modal {
     max-height: 90svh;
     padding-bottom: max(28px, env(safe-area-inset-bottom, 0px));
-    padding-left: 12px;
-    padding-right: 12px;
   }
   /* .modal-overlay scrolls too (base rule), so this modal was sitting in
      two nested scroll containers: dragging near the top/bottom of its own
@@ -6163,3 +6070,93 @@ body.flavor-tactile #saverClockTime { font-family: var(--font-display); }
 .osk-key.osk-active { background: var(--accent, #6c8ef5); color: #fff; }
 .osk-key.osk-enter { background: var(--accent, #6c8ef5); color: #fff; }
 .osk-key.osk-hide  { flex: 0 0 56px; }
+
+/* ── Phone overrides (generic) ──
+   Kept at the very end of the file on purpose. A media query adds no
+   specificity, so an override at equal specificity only wins if it comes
+   after the base rule it targets. These blocks used to sit near the top,
+   ahead of most component rules, and several of their overrides (modal
+   padding, the small-phone month label, the Month label's min-width) were
+   silently dead. New phone tweaks that target a base rule go here, or
+   anywhere after that base rule. */
+/* Large mobile */
+/* Mobile = narrower than 640px, or a phone turned sideways (short, landscape,
+   touch). Every mobile block repeats this full query, and updateIsMobile()
+   in family-hub.js mirrors it: keep all of them in sync. */
+@media (max-width: 640px), (max-height: 500px) and (orientation: landscape) and (pointer: coarse) {
+  /* The whole type scale below is sized for a wall panel read from a few
+     feet away. On a phone held at arm's length that reads as tiny body
+     copy next to one oversized date heading (#calMonthLabel). Scaling the
+     tokens up here — rather than the many individual font-size rules that
+     already reference them — keeps everything in one coherent scale. */
+  :root {
+    --text-xs:   0.80rem;
+    --text-sm:   0.88rem;
+    --text-base: 1.00rem;
+    --text-md:   1.10rem;
+    --text-lg:   1.30rem;
+  }
+
+  /* Edge-to-edge: the outer gutter and the card's border/radius/shadow are
+     desktop prettification that just cramp a phone screen. Safe-area insets
+     stay — that's hardware (notch/home indicator), not decoration. */
+  body {
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+             env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  }
+  /* !important: the nautical/aurora/tactile theme overrides further down
+     target .card.cal-card with more classes in the selector, which outranks
+     a plain .cal-card rule regardless of source order — this has to win
+     over all of them, in every theme, so it doesn't chase each one. */
+  .cal-card {
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+  .cal-app-title { font-size: var(--text-base); }
+  .layout { gap: 10px; }
+
+  .cal-view-tab { padding: 4px 10px; font-size: var(--text-sm); }
+  #calMonthLabel { min-width: 0; }
+
+
+  /* Month grid: shorter cells */
+  .cal-day { min-height: 54px; font-size: var(--text-xs); }
+  .cal-day-num { font-size: var(--text-xs); }
+  .cal-event { font-size: var(--text-xs); }
+
+  /* Week view: scroll horizontally rather than squish */
+  #weekView { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .week-grid { min-width: 520px; }
+  .week-day-col { min-height: 300px; }
+  .week-event { font-size: var(--text-xs); }
+
+  /* Day view: narrower time label */
+  .day-hour-row { grid-template-columns: 44px 1fr; }
+  .day-time-label { width: 44px; font-size: var(--text-xs); }
+  .day-hour-label { font-size: var(--text-xs); padding-right: 6px; }
+  .day-event-pill { font-size: var(--text-sm); }
+
+  /* Year strip: 3 columns */
+  .mini-grid { grid-template-columns: repeat(3, 1fr); padding: 10px; gap: 8px; }
+
+  /* Sidebar: stack single column, full-width cards */
+  .sidebar { flex-direction: column; align-items: stretch; }
+  .sidebar > .card { flex: none; width: 100%; box-sizing: border-box; }
+
+  /* Weather forecast rows */
+  .wx-day { font-size: var(--text-sm); gap: 5px; }
+
+  /* Settings modal: full width */
+  .modal-overlay { padding: 10px; padding-bottom: max(10px, env(safe-area-inset-bottom, 0px)); }
+  .modal { padding: 20px 16px; }
+}
+
+/* Small mobile */
+@media (max-width: 400px) {
+  .cal-view-tab { padding: 3px 7px; font-size: var(--text-xs); }
+  .cal-day { min-height: 44px; }
+  .mini-grid { grid-template-columns: repeat(2, 1fr); }
+  #calMonthLabel { font-size: 1rem; }
+  .week-grid { min-width: 460px; }
+}
