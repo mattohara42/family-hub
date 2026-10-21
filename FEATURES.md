@@ -75,7 +75,7 @@ family-hub.js     (all logic)
 ├── ── CALENDAR ──             switchCalView, render*Grid, makeDayCell, loadAllCalendars
 ├── ── CALENDAR TABS ──        renderCalendarTabs
 ├── ── CALENDAR EVENT EDITOR── openEventEditor, saveCalEvent, deleteCalEvent
-├── ── LOCAL CALENDARS ──      injectLocalEvents, lcAddBirthday/lcAddRecurring/lcEditRecurring (✎ refills the add form, Add becomes Save)/etc. (LC_IDS, LC_DEFS); recurringOccursOn/recurringSummary for the 🔁 Recurring calendar
+├── ── LOCAL CALENDARS ──      injectLocalEvents, lcAddBirthday/lcAddRecurring/lcNewRecurring/lcEditRecurring (＋ Add or ✎ opens `lcOpenRecurForm()`, a drill-in screen: `#settingsModal.recur-editing` hides the rest of the Calendar panel and swaps the modal footer to the item's own Cancel/Add-or-Save, so there's only one Save on screen; `lcRecurScheduleChanged()` shows weekday chips for weekly only and Starts only when it changes the schedule)/etc. (LC_IDS, LC_DEFS); recurringOccursOn/recurringSummary for the 🔁 Recurring calendar
 ├── ── SCHOOL DAY CYCLE ──     schoolDayNumberFor, scdAddHoliday/scdAddSubject (Week/Day view badge only, no LC_IDS entry) — settings UI lives in its own top-level 'school' tab, not 'calendar' (see below)
 ├── ── BUDGET ──               renderBudgetCard (context-sensitive), budgetDatesInRange, budgetEventsForDate (privacy-gated), toggleBudgetPrivacy
 ├── ── WEATHER ──              showWeatherLocation, loadWeatherByCity, renderWeatherData,

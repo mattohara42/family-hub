@@ -870,44 +870,55 @@
           </div>
         </div>
 
-        <div class="lc-section" style="border-bottom:none">
-          <div class="lc-section-title">🔁 Recurring</div>
-          <p class="settings-hint lc-recur-hint">Medications, trash and recycling, air filters, smoke alarm checks: anything that repeats.</p>
-          <div id="lcRecurList" class="lc-list"></div>
+        <div class="lc-section lc-recur-section" style="border-bottom:none">
+          <div class="lc-section-title lc-recur-listonly">🔁 Recurring</div>
+          <p class="settings-hint lc-recur-hint lc-recur-listonly">Medications, trash and recycling, air filters, smoke alarm checks: anything that repeats.</p>
+          <div id="lcRecurList" class="lc-list lc-recur-listonly"></div>
+          <button type="button" class="btn btn-secondary btn-sm lc-recur-listonly" onclick="lcNewRecurring()">＋ Add recurring</button>
+          <!-- Drill-in screen: shown instead of the rest of this panel while
+               #settingsModal has .recur-editing; the modal footer's Cancel/Save
+               act on it then (see lcOpenRecurForm) -->
           <div class="lc-recur-form">
-            <div class="lc-add-row">
-              <input id="lcRecurName"  type="text" placeholder="What (e.g. Replace air filter)" class="lc-input" />
-              <input id="lcRecurEmoji" type="text" value="🔁" class="lc-input lc-input-emoji" maxlength="8" />
-              <button type="button" class="btn btn-secondary btn-sm" onclick="openEmojiPicker('lcRecurEmoji',this)" title="Pick emoji">😊</button>
-              <input id="lcRecurColor" type="color" value="#4caf82" class="lc-color" title="Color" />
+            <button type="button" class="lc-recur-back" onclick="lcCancelRecurEdit()">‹ Recurring</button>
+            <div class="lc-section-title" id="lcRecurFormTitle">New recurring item</div>
+            <div class="lc-recur-what">
+              <button type="button" id="lcRecurEmoji" class="lc-recur-emoji" data-emoji-anchor
+                      onclick="openEmojiPicker(null, this, em => { this.textContent = em; }, RECUR_EMOJI)"
+                      title="Change emoji" aria-label="Change emoji">🔁</button>
+              <input id="lcRecurName" type="text" placeholder="What repeats? (e.g. Replace air filter)" aria-label="Name" class="lc-input" />
+              <input id="lcRecurColor" type="color" value="#4caf82" class="lc-color lc-recur-color" title="Color on the calendar" aria-label="Color" />
             </div>
-            <div class="lc-add-row">
-              <span class="lc-recur-text">Every</span>
-              <input id="lcRecurEvery" type="number" min="1" max="99" value="1" class="lc-input lc-input-num" />
-              <select id="lcRecurUnit" class="lc-select" onchange="lcRecurUnitChanged()">
-                <option value="day">day(s)</option>
-                <option value="week" selected>week(s)</option>
-                <option value="month">month(s)</option>
-                <option value="year">year(s)</option>
-              </select>
-              <span class="lc-recur-text">starting</span>
-              <input id="lcRecurStart" type="date" class="lc-input lc-input-date" />
-            </div>
-            <div class="lc-day-checks" id="lcRecurDays" title="Leave all unticked to repeat on the start date's weekday">
-              <span class="lc-recur-text">On</span>
-              <label><input type="checkbox" value="0">Su</label>
-              <label><input type="checkbox" value="1">M</label>
-              <label><input type="checkbox" value="2">T</label>
-              <label><input type="checkbox" value="3">W</label>
-              <label><input type="checkbox" value="4">Th</label>
-              <label><input type="checkbox" value="5">F</label>
-              <label><input type="checkbox" value="6">Sa</label>
-            </div>
-            <div class="lc-add-row">
-              <label class="lc-recur-text lc-recur-allday"><input type="checkbox" id="lcRecurAllDay" checked onchange="lcRecurAllDayChanged()"> All day</label>
-              <input id="lcRecurTime" type="time" class="lc-input lc-input-sm" value="08:00" disabled />
-              <button id="lcRecurCancelBtn" class="btn btn-secondary btn-sm lc-recur-add" onclick="lcCancelRecurEdit()" style="display:none">Cancel</button>
-              <button id="lcRecurAddBtn" class="btn btn-primary btn-sm lc-recur-add" onclick="lcAddRecurring()">Add</button>
+            <div class="lc-recur-grid">
+              <label class="lc-recur-label" for="lcRecurEvery">Repeats</label>
+              <div class="lc-recur-field">
+                <span class="lc-recur-text">Every</span>
+                <input id="lcRecurEvery" type="number" min="1" max="99" value="1" class="lc-input lc-input-num" oninput="lcRecurScheduleChanged()" />
+                <select id="lcRecurUnit" class="lc-select" onchange="lcRecurScheduleChanged()" aria-label="Unit">
+                  <option value="day">day(s)</option>
+                  <option value="week" selected>week(s)</option>
+                  <option value="month">month(s)</option>
+                  <option value="year">year(s)</option>
+                </select>
+              </div>
+              <span class="lc-recur-label lc-recur-days-row">On</span>
+              <div class="lc-recur-days lc-recur-days-row" id="lcRecurDays" role="group" aria-label="Days of the week">
+                <label title="Sunday"><input type="checkbox" value="0"><span>S</span></label>
+                <label title="Monday"><input type="checkbox" value="1"><span>M</span></label>
+                <label title="Tuesday"><input type="checkbox" value="2"><span>T</span></label>
+                <label title="Wednesday"><input type="checkbox" value="3"><span>W</span></label>
+                <label title="Thursday"><input type="checkbox" value="4"><span>T</span></label>
+                <label title="Friday"><input type="checkbox" value="5"><span>F</span></label>
+                <label title="Saturday"><input type="checkbox" value="6"><span>S</span></label>
+              </div>
+              <label class="lc-recur-label lc-recur-start-row" for="lcRecurStart">Starts</label>
+              <div class="lc-recur-field lc-recur-start-row">
+                <input id="lcRecurStart" type="date" class="lc-input lc-input-date" />
+              </div>
+              <span class="lc-recur-label">Time</span>
+              <div class="lc-recur-field">
+                <label class="lc-recur-allday"><input type="checkbox" id="lcRecurAllDay" checked onchange="lcRecurAllDayChanged()"> All day</label>
+                <input id="lcRecurTime" type="time" class="lc-input lc-input-sm" value="08:00" aria-label="Time" />
+              </div>
             </div>
           </div>
         </div>
@@ -1378,8 +1389,10 @@
     </div><!-- /settings-body -->
 
     <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeSettings()">Cancel</button>
-      <button class="btn btn-primary" onclick="saveSettings()">Save</button>
+      <button class="btn btn-secondary settings-main-action" onclick="closeSettings()">Cancel</button>
+      <button class="btn btn-primary settings-main-action" onclick="saveSettings()">Save</button>
+      <button class="btn btn-secondary settings-recur-action" onclick="lcCancelRecurEdit()">Cancel</button>
+      <button class="btn btn-primary settings-recur-action" id="lcRecurSaveBtn" onclick="lcAddRecurring()">Add</button>
     </div>
   </div>
 </div>

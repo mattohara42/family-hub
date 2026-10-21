@@ -11262,10 +11262,7 @@ function lcOpenSettings() {
   lcRenderBdayList();
   lcRenderSchoolList();
   lcRenderRecurringList();
-  const recStart = document.getElementById('lcRecurStart');
-  if (recStart && !recStart.value) recStart.value = lcDateKey(new Date());
-  if (lcRecurEditingId) lcCancelRecurEdit(); // a half-finished edit doesn't survive closing Settings
-  lcRecurUnitChanged();
+  lcCancelRecurEdit(); // a half-finished edit doesn't survive closing Settings
   scdOpenSettings();
 }
 
@@ -11624,55 +11621,76 @@ function lcRenderRecurringList() {
   ).join('');
 }
 
-// Weekday checkboxes only mean something for a weekly rule
-function lcRecurUnitChanged() {
-  const unit = document.getElementById('lcRecurUnit')?.value;
-  const days = document.getElementById('lcRecurDays');
-  if (days) days.style.display = unit === 'week' ? '' : 'none';
+const RECUR_EMOJI = [
+  '🔁','💊','💉','🩺','🦷','🗑️','♻️','🌿','🪴','💧','🔋','🧯',
+  '🚨','🌬️','🧹','🧺','🛁','🍽️','🐶','🐱','🐟','🚗','⛽','🔧',
+  '💳','🧾','📦','📬','✂️','🏋️','📚','🔔',
+];
+
+// Weekday chips only mean something for a weekly rule. The start date only
+// changes the schedule for monthly/yearly rules (it picks the day) or an
+// interval of 2+ (it picks which weeks/days); otherwise it just bounds
+// history, so it stays hidden and a new item starts today.
+function lcRecurStartMatters() {
+  const unit = document.getElementById('lcRecurUnit').value;
+  const every = parseInt(document.getElementById('lcRecurEvery').value) || 1;
+  return unit === 'month' || unit === 'year' || every > 1;
+}
+function lcRecurScheduleChanged() {
+  const weekly = document.getElementById('lcRecurUnit').value === 'week';
+  document.querySelectorAll('.lc-recur-days-row').forEach(el => { el.style.display = weekly ? '' : 'none'; });
+  const showStart = lcRecurStartMatters();
+  document.querySelectorAll('.lc-recur-start-row').forEach(el => { el.style.display = showStart ? '' : 'none'; });
 }
 
-// Editing reuses the add form: fill it from the item, and Add becomes Save
+// Add and edit share one drill-in screen that replaces the Calendar panel;
+// while it's open the modal footer's Cancel/Save act on the item instead
 let lcRecurEditingId = null;
+function lcOpenRecurForm(r) {
+  const today = new Date();
+  lcRecurEditingId = r ? r.id : null;
+  document.getElementById('lcRecurFormTitle').textContent = r ? 'Edit recurring item' : 'New recurring item';
+  document.getElementById('lcRecurSaveBtn').textContent   = r ? 'Save' : 'Add';
+  document.getElementById('lcRecurName').value        = r ? r.name : '';
+  document.getElementById('lcRecurEmoji').textContent = r ? r.emoji || '🔁' : '🔁';
+  document.getElementById('lcRecurColor').value       = r ? r.color : '#4caf82';
+  document.getElementById('lcRecurEvery').value       = r ? r.every || 1 : 1;
+  document.getElementById('lcRecurUnit').value        = r ? r.unit : 'week';
+  document.getElementById('lcRecurStart').value       = r ? r.startDate : lcDateKey(today);
+  // A new weekly item starts ticked on today, so the chips never look empty
+  const days = r ? (r.unit === 'week' ? r.weekdays || [] : []) : [today.getDay()];
+  document.querySelectorAll('#lcRecurDays input').forEach(i => { i.checked = days.includes(parseInt(i.value)); });
+  document.getElementById('lcRecurAllDay').checked = !r?.time;
+  document.getElementById('lcRecurTime').value = r?.time || '08:00';
+  lcRecurAllDayChanged(); lcRecurScheduleChanged();
+  document.getElementById('settingsModal').classList.add('recur-editing');
+  document.querySelector('#settingsModal .settings-panels').scrollTop = 0;
+  if (!r) document.getElementById('lcRecurName').focus();
+}
+function lcNewRecurring() { lcOpenRecurForm(null); }
 function lcEditRecurring(id) {
   const r = recurringItems.find(x => x.id === id);
-  if (!r) return;
-  lcRecurEditingId = id;
-  document.getElementById('lcRecurName').value  = r.name;
-  document.getElementById('lcRecurEmoji').value = r.emoji;
-  document.getElementById('lcRecurColor').value = r.color;
-  document.getElementById('lcRecurEvery').value = r.every || 1;
-  document.getElementById('lcRecurUnit').value  = r.unit;
-  document.getElementById('lcRecurStart').value = r.startDate;
-  document.querySelectorAll('#lcRecurDays input').forEach(i => {
-    i.checked = r.unit === 'week' && (r.weekdays || []).includes(parseInt(i.value));
-  });
-  document.getElementById('lcRecurAllDay').checked = !r.time;
-  if (r.time) document.getElementById('lcRecurTime').value = r.time;
-  lcRecurAllDayChanged(); lcRecurUnitChanged(); lcRecurFormMode();
-  document.getElementById('lcRecurName').scrollIntoView({ block: 'nearest' });
+  if (r) lcOpenRecurForm(r);
 }
 function lcCancelRecurEdit() {
   lcRecurEditingId = null;
-  document.getElementById('lcRecurName').value = '';
-  document.querySelectorAll('#lcRecurDays input').forEach(i => { i.checked = false; });
-  lcRecurFormMode();
-}
-function lcRecurFormMode() {
-  document.getElementById('lcRecurAddBtn').textContent = lcRecurEditingId ? 'Save' : 'Add';
-  document.getElementById('lcRecurCancelBtn').style.display = lcRecurEditingId ? '' : 'none';
+  document.getElementById('settingsModal').classList.remove('recur-editing');
 }
 
 function lcRecurAllDayChanged() {
-  document.getElementById('lcRecurTime').disabled = document.getElementById('lcRecurAllDay').checked;
+  document.getElementById('lcRecurTime').style.display = document.getElementById('lcRecurAllDay').checked ? 'none' : '';
 }
 
 async function lcAddRecurring() {
   const name      = document.getElementById('lcRecurName').value.trim();
-  const emoji     = document.getElementById('lcRecurEmoji').value.trim();
+  const emoji     = document.getElementById('lcRecurEmoji').textContent.trim();
   const color     = document.getElementById('lcRecurColor').value;
   const every     = Math.max(1, parseInt(document.getElementById('lcRecurEvery').value) || 1);
   const unit      = document.getElementById('lcRecurUnit').value;
-  const startDate = document.getElementById('lcRecurStart').value;
+  const editing   = recurringItems.find(r => r.id === lcRecurEditingId);
+  // Hidden start date: keep an edited item's own, so its history doesn't move
+  const startDate = lcRecurStartMatters() || !editing
+    ? document.getElementById('lcRecurStart').value : editing.startDate;
   const allDay    = document.getElementById('lcRecurAllDay').checked;
   const time      = allDay ? '' : document.getElementById('lcRecurTime').value;
   if (!name)      { alert('Enter what recurs.'); return; }
@@ -12218,10 +12236,12 @@ function renderSettingsNav() {
 
 // Narrow-screen drill-in: return from a panel to the nav list.
 function settingsShowNav() {
+  lcCancelRecurEdit();
   document.getElementById('settingsBody').classList.remove('show-panel');
 }
 
 function switchSettingsTab(tab) {
+  lcCancelRecurEdit(); // the item editor's footer mode belongs to the Calendar panel only
   document.querySelectorAll('.settings-nav-item').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.tab === tab);
   });
