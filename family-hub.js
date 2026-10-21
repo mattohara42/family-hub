@@ -1842,7 +1842,7 @@ function renderDayGrid() {
     allDayEvts.forEach(ev => {
       const p = document.createElement('div');
       p.className = 'day-event-pill';
-      p.style.background = ev.color;
+      paintEventFill(p, ev.color);
       p.innerHTML = `<span class="evt-title">${(ev.holiday ? '🎉 ' : '') + esc(ev.summary) + (ev.recurringEventId ? ' ↻' : '')}</span>`;
       appendPillMeta(p, null, ev.members);
       p.style.cursor = 'pointer';
@@ -1975,7 +1975,7 @@ function renderDayGrid() {
       const endStr   = ev.endDT ? new Date(ev.endDT).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : null;
       const pill = document.createElement('div');
       pill.className = 'day-event-pill';
-      pill.style.background = ev.color;
+      paintEventFill(pill, ev.color);
       pill.innerHTML = `<span class="evt-title">${esc(ev.summary) + (ev.recurringEventId ? ' ↻' : '')}</span>`;
       appendPillMeta(pill, `${startStr}${endStr ? ' – ' + endStr : ''}`, ev.members);
       pill.style.cursor = 'pointer';
@@ -2167,14 +2167,14 @@ function renderMultidayOverlay() {
 
     const bar = document.createElement('div');
     bar.className = 'cal-multiday-bar' + (segOtherMonth ? ' other-month' : '');
-    bar.textContent = ev.summary;
+    bar.textContent = isMobile ? stripEmoji(ev.summary) : ev.summary;
     bar.title = ev.summary;
     bar.style.cssText =
       `left:${sc.left}px;` +
       `top:${sc.spacerTop + lane * (BAR_H + BAR_GAP)}px;` +
       `width:${ec.right - sc.left}px;` +
-      `height:${BAR_H}px;` +
-      `background:${ev.color};`;
+      `height:${BAR_H}px;`;
+    paintEventFill(bar, ev.color);
 
     bar.addEventListener('click', e => { e.stopPropagation(); onCalEventClick(ev); });
     // A read-only event's bar opens details but can never be dragged.
@@ -2328,7 +2328,7 @@ function makeDayCell(year, month, day, otherMonth, isToday) {
   sdEvts.slice(0, 3).forEach(ev => {
     const pill = document.createElement('div');
     pill.className = 'cal-event' + (ev.holiday ? ' cal-event-holiday' : '');
-    pill.style.background = ev.color;
+    paintEventFill(pill, ev.color);
     const pillText = document.createElement('span');
     // Mobile cells fit a few characters per line, and most titles open with a
     // member's name ("Jack hockey practice" → "Jack ..."). So on mobile the
@@ -2336,10 +2336,12 @@ function makeDayCell(year, month, day, otherMonth, isToday) {
     // a stripe in their color on the pill's left edge instead.
     const who = isMobile && !ev.holiday ? eventMemberNames(ev) : [];
     if (who.length) {
-      pillText.textContent = stripMemberNames(ev.summary, who);
+      pillText.textContent = stripEmoji(stripMemberNames(ev.summary, who));
       applyMemberStripes(pill, who);
     } else {
-      pillText.textContent = (ev.holiday ? '🎉 ' : '') + ev.summary + (ev.recurringEventId ? ' ↻' : '');
+      pillText.textContent = isMobile
+        ? stripEmoji(ev.summary) + (ev.recurringEventId ? ' ↻' : '')
+        : (ev.holiday ? '🎉 ' : '') + ev.summary + (ev.recurringEventId ? ' ↻' : '');
       if (!isMobile) appendMemberBadges(pill, ev.members);
     }
     pill.appendChild(pillText);
@@ -2596,7 +2598,8 @@ function renderAgendaView() {
         return (a.startDT || '') < (b.startDT || '') ? -1 : 1;
       });
 
-    if (!evts.length) continue;
+    const bills = budgetEventsForDate(key);   // [] while 👁 hides amounts
+    if (!evts.length && !bills.length) continue;
     hasAny = true;
 
     const hdr = document.createElement('div');
@@ -2608,6 +2611,7 @@ function renderAgendaView() {
       const row = document.createElement('div');
       row.className = 'agenda-event agenda-clickable';
       if (ev.color) row.style.setProperty('--event-color', ev.color);
+      row.style.color = readableTextOn(ev.color);
       row.onclick = () => onCalEventClick(ev);
 
       const info = document.createElement('div');
@@ -2633,6 +2637,16 @@ function renderAgendaView() {
       info.appendChild(timeEl);
       info.appendChild(title);
       row.appendChild(info);
+      el.appendChild(row);
+    });
+
+    // Bills due this day, after its events (same source as Day's "Bills Due Today")
+    bills.forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'agenda-event agenda-bill';
+      row.innerHTML = `<div class="agenda-info"><div class="agenda-time">Bill due</div>
+        <div class="agenda-title">💰 ${esc(item.name)}</div></div>
+        <div class="agenda-bill-amt">${fmt$(item.amount)}</div>`;
       el.appendChild(row);
     });
   }
@@ -3606,6 +3620,35 @@ function renderCountdownCard() {
 
 // ── Calendar Event Editor ─────────────────────────────────────
 let evtEditing = null; // { ev, calId } when editing; null when creating
+
+/** Text color that reads on an event's fill: dark on light colors (Google's
+ *  Banana/Citron, a pale holiday color), white otherwise. Unparseable or
+ *  missing colors get white, matching the var(--muted) fallback fill. */
+function readableTextOn(color) {
+  const hex = String(color || '').trim().replace(/^#/, '');
+  const full = hex.length === 3 ? hex.split('').map(c => c + c).join('') : hex;
+  if (!/^[0-9a-f]{6}$/i.test(full)) return '#fff';
+  const [r, g, b] = [0, 2, 4].map(i => {
+    const c = parseInt(full.slice(i, i + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.45 ? '#1f2328' : '#fff';
+}
+
+/** The shared event fill for Month pills/bars and Day pills: the event's own
+ *  calendar color (neutral if it has none) with text that reads on it. */
+function paintEventFill(el, color) {
+  el.style.background = color || 'var(--muted)';
+  el.style.color = readableTextOn(color);
+}
+
+// Emoji (with any variation selector / ZWJ sequence). Phone Month cells are a
+// few characters wide, and a leading 🗑️ or 🎉 wrapped onto its own line.
+const EMOJI_RE = /\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic})*\uFE0F?/gu;
+function stripEmoji(text) {
+  const t = String(text || '').replace(EMOJI_RE, '').replace(/\s+/g, ' ').trim();
+  return t || String(text || '');
+}
 
 function appendMemberBadges(container, members) {
   if (!members?.length) return;
