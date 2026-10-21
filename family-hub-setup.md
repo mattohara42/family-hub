@@ -218,7 +218,7 @@ The API key is stored as a server-side secret in Netlify — you never paste it 
 3. Click **Environment variables → Add a variable**
 4. Add:
    - Key: `GEMINI_KEY` — Value: your Gemini API key — check **Secret**
-   - *(`OWM_KEY` is only needed if you use the optional Event Discovery feature — the weather widget itself is keyless.)*
+   - *(`OWM_KEY` is only needed if you use the optional Event Discovery feature — the weather widget itself is keyless. Without it the 💡 Discover Events button simply doesn't appear. With it but no `TICKETMASTER_KEY`, everything except the Live Events tab works.)*
 5. Click **Save**, then trigger a new deploy (Deploys → **Trigger deploy → Deploy site**)
 
 After deploying, leave the **Gemini API key** field in ⚙️ Settings → 🤖 Assistant blank on every device, the wall panel included. The Assistant, meal planning and the daily briefing all go through the Netlify function, which holds the key. (Weather needs no key at all.)

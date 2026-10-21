@@ -139,6 +139,15 @@ exports.handler = async (event) => {
   const qs = event.queryStringParameters || {};
   const { location, radius, eventTypes, keyword, attractionId, venueId } = qs;
 
+  // Setup probe: the client hides Discover Events (and keyed source tabs)
+  // when a fork hasn't configured them, instead of failing on open.
+  if (qs.status) {
+    return json(200, {
+      configured: !!process.env.OWM_KEY,  // geocoding needs it; nothing works without
+      sources: { ticketmaster: !!process.env.TICKETMASTER_KEY }
+    });
+  }
+
   if (!location) {
     return json(400, { error: 'location parameter required' });
   }

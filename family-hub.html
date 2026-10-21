@@ -144,7 +144,7 @@
         <button id="calSettingsBtn" class="cal-header-settings-btn" onclick="openSettings()" title="Preferences" aria-label="Preferences">⚙️</button>
         <!-- Right: event discovery + view tabs -->
         <div class="cal-header-actions" style="display:flex;align-items:center;gap:12px">
-          <button id="eventsDiscoverBtn" class="cal-event-discover-btn" onclick="openEventsModal()" title="Discover nearby events" aria-label="Discover events">💡</button>
+          <button id="eventsDiscoverBtn" class="cal-event-discover-btn" style="display:none" onclick="openEventsModal()" title="Discover nearby events" aria-label="Discover events">💡</button>
           <div class="cal-view-tabs">
             <button class="cal-view-tab" id="viewTab_month"  onclick="switchCalView('month')">Month</button>
             <button class="cal-view-tab" id="viewTab_week"   onclick="switchCalView('week')">Week</button>
@@ -497,7 +497,7 @@
       <button class="mobile-sheet-tab" data-section="todo" onclick="setMobileListsSection('todo')">✅ To-Do</button>
       <button class="mobile-sheet-tab" id="mobileListsHomeTab" data-section="home" onclick="setMobileListsSection('home')" style="display:none">🏠 Home</button>
       <button class="mobile-sheet-tab" id="mobileListsAssistantTab" data-section="assistant" onclick="setMobileListsSection('assistant')" style="display:none">🤖 Assistant</button>
-      <button class="mobile-sheet-action" onclick="closeMobileLists();openEventsModal()" aria-label="Find events" title="Find events">💡</button>
+      <button id="mobileEventsBtn" class="mobile-sheet-action" style="display:none" onclick="closeMobileLists();openEventsModal()" aria-label="Find events" title="Find events">💡</button>
     </div>
     <!-- Shopping/To-Do/Home Assistant/Assistant cards are reparented in here by
          applyWidgetPlacement() on mobile (see MOBILE_SHEET_SECTIONS in
@@ -1297,6 +1297,16 @@
         <div class="settings-intro">
           <span>💡</span>
           <p>Finds concerts, library programs, sports and family activities nearby. Tap 💡 on the calendar to browse. Nothing is added to your calendar until you tap 📅 Add.</p>
+        </div>
+        <div class="toggle-row">
+          <label class="toggle-switch">
+            <input type="checkbox" id="eventsEnabled" />
+            <span class="toggle-track"></span>
+          </label>
+          <div>
+            <div class="toggle-label">Show 💡 Discover Events</div>
+            <div class="toggle-sub" id="eventsSetupNote">Turn off to hide the 💡 button on this device</div>
+          </div>
         </div>
         <div class="field">
           <label>Location</label>
