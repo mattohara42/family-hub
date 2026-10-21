@@ -2205,8 +2205,10 @@ function renderMonthGrid() {
   const year  = calViewDate.getFullYear();
   const month = calViewDate.getMonth();
 
+  // Short month on phones ("Nov 2026"): the one-row mobile header has room
+  // for about eight characters once Refocus and the budget toggle are showing.
   document.getElementById('calMonthLabel').textContent =
-    calViewDate.toLocaleDateString([], { month: 'long', year: 'numeric' });
+    calViewDate.toLocaleDateString([], { month: isMobile ? 'short' : 'long', year: 'numeric' });
 
   const grid = document.getElementById('calGrid');
   grid.innerHTML = '';

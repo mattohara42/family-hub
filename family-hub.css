@@ -1345,7 +1345,24 @@ body.nautical-mode .cal-month-nav button {
   .cal-card-header { flex-wrap: nowrap; }
   /* !important: the element carries an inline display:flex */
   .cal-card-header .cal-header-actions { display: none !important; }
-  #calMonthLabel { overflow: hidden; text-overflow: ellipsis; font-size: var(--text-md); }
+  /* min-width: 0 here, not in the earlier 640px block: the unguarded
+     140px min-width above wins over that one by source order, and a label
+     that can't shrink overflows its centred box to the left, over Refocus. */
+  #calMonthLabel { overflow: hidden; text-overflow: ellipsis; font-size: var(--text-md); min-width: 0; }
+  .cal-card-header .cal-title-zone { gap: 6px; }
+  /* Refocus as a compact round icon: the word "REFOCUS" alone took a third
+     of the one-row header's width on a phone. */
+  #backToTodayBtn {
+    font-size: 0 !important;
+    padding: 0 !important;
+    width: 32px !important;
+    height: 32px;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #backToTodayBtn::before { content: '\21BA'; font-size: 1.15rem; line-height: 1; }
   .cal-app-title-text { display: none; }
   .cal-view-select {
     display: block;
