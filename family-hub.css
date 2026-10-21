@@ -6138,6 +6138,9 @@ body.flavor-tactile #saverClockTime { font-family: var(--font-display); }
   .day-time-label { width: 44px; font-size: var(--text-xs); }
   .day-hour-label { font-size: var(--text-xs); padding-right: 6px; }
   .day-event-pill { font-size: var(--text-sm); }
+  /* The 44px label can't fit "All day ＋" (the ＋ overflowed onto "No all-day
+     events"), and #mobileAddFab already opens the editor on the viewed day */
+  .day-allday-row .day-add-btn { display: none; }
 
   /* Year strip: 3 columns */
   .mini-grid { grid-template-columns: repeat(3, 1fr); padding: 10px; gap: 8px; }
