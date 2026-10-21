@@ -539,6 +539,19 @@ After signing in:
 - In ⚙️ **Settings → 📅 Calendar**, you can assign custom labels and colors to each calendar
 - Toggle the **National Holidays** overlay on/off in calendar settings
 
+### Recurring Items
+
+Anything on a schedule that isn't in Google Calendar: medications, trash and recycling night, air filters, smoke alarm checks. They all show as one 🔁 Recurring calendar you can toggle like any other, and each item keeps its own color.
+
+1. ⚙️ **Settings → 📅 Calendar → 🔁 Recurring** → **＋ Add recurring**
+2. Tap the emoji to change it, type what repeats, and tap the color dot to pick its color
+3. **Repeats**: every N days, weeks, months or years. For weekly items, tap the days it falls on (e.g. every 2 weeks on Tue for biweekly recycling)
+4. **Starts** appears only when it changes the schedule: for monthly and yearly items it sets the day of the month, and for every-2+ items it sets which weeks or days count. Otherwise the item starts today
+5. **Time**: leave **All day** ticked, or untick it to set a time (useful for medications)
+6. Tap **Add**. To change an item later, tap ✎ beside it, edit, and tap **Save**. **Cancel** or **‹ Recurring** goes back without saving
+
+Recurring items are shared through Firestore, so they show on every device. If you used the older separate Medications or Trash & Recycling lists, those were moved into Recurring automatically.
+
 ### School Day Cycle
 
 Tracks a school's internal rotating day (e.g. a 4-day A/B/C/D schedule), shown as a small "Day N" badge in Week and Day calendar views only.
