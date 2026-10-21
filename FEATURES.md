@@ -75,7 +75,7 @@ family-hub.js     (all logic)
 ├── ── CALENDAR ──             switchCalView, render*Grid, makeDayCell, loadAllCalendars
 ├── ── CALENDAR TABS ──        renderCalendarTabs
 ├── ── CALENDAR EVENT EDITOR── openEventEditor, saveCalEvent, deleteCalEvent
-├── ── LOCAL CALENDARS ──      injectLocalEvents, lcAddBirthday/Medication/etc. (LC_IDS, LC_DEFS)
+├── ── LOCAL CALENDARS ──      injectLocalEvents, lcAddBirthday/lcAddRecurring/etc. (LC_IDS, LC_DEFS); recurringOccursOn/recurringSummary for the 🔁 Recurring calendar
 ├── ── SCHOOL DAY CYCLE ──     schoolDayNumberFor, scdAddHoliday/scdAddSubject (Week/Day view badge only, no LC_IDS entry) — settings UI lives in its own top-level 'school' tab, not 'calendar' (see below)
 ├── ── BUDGET ──               renderBudgetCard (context-sensitive), budgetDatesInRange, budgetEventsForDate (privacy-gated), toggleBudgetPrivacy
 ├── ── WEATHER ──              showWeatherLocation, loadWeatherByCity, renderWeatherData,
@@ -463,7 +463,7 @@ let familyMembers  = JSON.parse(localStorage.getItem('fh_familyMembers') || '[]'
 **Key functions:** `openSettings()`, `closeSettings()`, `saveSettings()`, `switchSettingsTab(tab)`, `renderSettingsNav()`
 **Tabs:** driven by the `SETTINGS_GROUPS` registry (nav groups → `{tab, label, desktopOnly?}` items) — `renderSettingsNav()` builds the nav from it and filters out `desktopOnly` items when `isMobile`, so adding a tab needs no separate mobile-visibility code. Current groups:
 - **General:** `look` (🎨 Look & Feel) · `screensaver` (🖼 Images, desktopOnly) · `family` (👨‍👩‍👧 Family) · `assistant` (🤖 Assistant)
-- **Calendar:** `calendar` (📅 Calendar — Google Calendars, ICS subs, Countdowns, Birthdays, Medications, Trash & Recycling) · `school` (🏫 School — School Day Cycle + Hourly Class Schedule, see the `SCHOOL DAY CYCLE` anchor-map entry near the top of this file) · `events` (💡 Events) · `mow` (🌿 Mowing, desktopOnly)
+- **Calendar:** `calendar` (📅 Calendar — two `.settings-group-head` groups: "Calendar sources" (Google Calendars, ICS subs) and "Added by the hub" (Countdowns, Birthdays, 🔁 Recurring). Recurring replaced the separate Medications and Trash & Recycling sections: one list for anything on a schedule, each item `{ name, emoji, color, startDate, every, unit: day|week|month|year, weekdays (week only), time ('' = all-day) }`, shown as the one `local_recurring` calendar. A month/year rule repeats on the start date's day of month, clamped to the last day in shorter months) · `school` (🏫 School — School Day Cycle + Hourly Class Schedule, see the `SCHOOL DAY CYCLE` anchor-map entry near the top of this file) · `events` (💡 Events) · `mow` (🌿 Mowing, desktopOnly)
 - **Widgets:** `widgets` (🧩 Widget Layout, desktopOnly) · `weather` (🌤 Weather, desktopOnly) · `feeds` (📊 Feeds, desktopOnly) · `shopping` (🛒 Shopping) · `chores` (⭐ Chores, desktopOnly) · `meals` (🍽 Meals) · `homeassistant` (🏠 Home Assistant)
 - **Advanced** *(gated)*: `eggs` (🥚 Easter Eggs) — hidden until unlocked
 
@@ -1008,9 +1008,8 @@ const HA_TOGGLE_DOMAINS = ['light', 'switch', 'fan', 'input_boolean'];
 | `fh_icsSubs` | JSON array | ICS Subscriptions | Fallback only — migrated to Firestore `icsSubs` collection (deduped by URL) on first Firebase-enabled run |
 | `fh_icsCache` | JSON object | ICS Subscriptions | Always local — fetched-event cache, not shared state |
 | `fh_birthdays` | JSON array | Life Admin | Fallback only — migrated to Firestore `birthdays` collection |
-| `fh_medications` | JSON array | Life Admin | Fallback only — migrated to Firestore `medications` collection |
+| `fh_recurring` | JSON array | Recurring | Fallback only — migrated to Firestore `recurringItems` collection. Legacy `fh_medications`/`fh_trash` are folded into it on load (`lcLoadRecurring()`) |
 | `fh_school` | JSON array | Life Admin | Fallback only — migrated to Firestore `schoolPeriods` collection |
-| `fh_trash` | JSON array | Life Admin | Fallback only — migrated to Firestore `trashPickups` collection |
 | `fh_schoolDayCycle` | JSON object | School Day Cycle | `{ startDate, endDate, cycleLength }` — fallback only, synced via Firestore `settings/schoolDayCycle` doc otherwise (defaults come from `SCHOOL_CYCLE_DEFAULTS`) |
 | `fh_schoolHolidays` | JSON array | School Day Cycle | Fallback only — migrated to Firestore `schoolHolidays` collection — `[{date, label}]`, weekdays skipped when computing Day N |
 | `fh_schoolDaySubjects` | JSON array | School Day Cycle | Fallback only — migrated to Firestore `schoolDaySubjects` collection — `[{subject, dayNumbers, members}]`, per-kid subject assignments keyed to the cycle's Day N |
@@ -1053,9 +1052,8 @@ const HA_TOGGLE_DOMAINS = ['light', 'switch', 'fan', 'input_boolean'];
 | `chores` | `createdAt` | Chore Chart |
 | `icsSubs` | `createdAt` | ICS calendar subscriptions |
 | `birthdays` | `createdAt` | Life Admin card |
-| `medications` | `createdAt` | Life Admin card |
+| `recurringItems` | `createdAt` | 🔁 Recurring (Calendar settings). `runFirestoreMigrations()` moves any legacy `medications`/`trashPickups` docs here (ids `med_<old>`/`trash_<old>`) and deletes the originals |
 | `schoolPeriods` | `createdAt` | Life Admin card |
-| `trashPickups` | `createdAt` | Life Admin card |
 | `schoolHolidays` | `date` | School Day Cycle non-school-day list |
 | `schoolDaySubjects` | `createdAt` | School Day Cycle per-kid subject assignments |
 | `countdowns` | `createdAt` | Countdown timers |

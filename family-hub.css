@@ -3210,6 +3210,15 @@ body.eggs-unlocked .settings-nav-group--gated { display: block; }
   padding-top: 0;
   border-top: none;
 }
+/* Groups several .lc-section blocks (Calendar panel), so it reads a level
+   above their titles: same small caps as the settings nav labels */
+.settings-group-head {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--muted);
+  margin-bottom: 0;
+}
 
 /* Narrow: drill-in — show the nav list, tap an item to slide in its panel */
 @media (max-width: 700px) {
@@ -3248,7 +3257,7 @@ body.eggs-unlocked .settings-nav-group--gated { display: block; }
 /* ── Local Calendars settings panel ── */
 .lc-section {
   padding: 12px 0;
-  border-bottom: 1px solid rgba(255,255,255,.06);
+  border-bottom: 1px solid var(--line);
 }
 .lc-section-title {
   font-size: var(--text-sm);
@@ -3312,7 +3321,19 @@ body.eggs-unlocked .settings-nav-group--gated { display: block; }
 }
 body.light-mode .lc-input,
 body.light-mode .lc-select  { border-color: rgba(0,0,0,.15); }
-body.light-mode .lc-section { border-color: rgba(0,0,0,.08); }
+
+/* ── Recurring (Calendar settings) ── */
+.lc-recur-hint { margin: -4px 0 8px; }
+.lc-recur-form { display: flex; flex-direction: column; gap: 6px; }
+.lc-recur-text { font-size: var(--text-xs); color: var(--muted); }
+.lc-recur-form .lc-day-checks { flex-wrap: wrap; }
+.lc-input-num  { flex: 0 0 auto; width: 56px; }
+.lc-input-emoji { flex: 0 0 auto; width: 48px; text-align: center; }
+/* Name over schedule: a schedule summary beside the name crowded it out on phones */
+.lc-recur-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.lc-recur-body .lc-item-meta { white-space: normal; }
+.lc-recur-allday { display: flex; align-items: center; gap: 4px; cursor: pointer; accent-color: var(--accent); }
+.lc-recur-add  { margin-left: auto; }
 
 .panel-empty {
   text-align: center; padding: 32px 0;
@@ -4879,6 +4900,7 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
   }
   #settingsModal .settings-section-head,
   #settingsModal .lc-section-title      { font-size: 1.05rem !important; }
+  #settingsModal .settings-panel .settings-group-head { font-size: .8rem !important; }
   /* Helper copy one step below body text, so labels and controls lead */
   #settingsModal .settings-panel .settings-hint,
   #settingsModal .settings-panel .toggle-sub,
@@ -4892,7 +4914,9 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
   #settingsModal .lc-add-row > .lc-select { flex: 1 1 88px; min-width: 0; width: auto; }
   /* ...unless it's just one box and its Add button, which fit on one line */
   #settingsModal .lc-add-row > .lc-input:first-child:not(:nth-last-child(2)) { flex-basis: 100%; }
-  #settingsModal #cdEmojiInput { flex: 0 0 52px; }
+  #settingsModal #cdEmojiInput,
+  #settingsModal #lcRecurEmoji { flex: 0 0 52px; }
+  #settingsModal #lcRecurEvery { flex: 0 0 64px; }
   #settingsModal .lc-add-row > input[type=time] { flex-basis: 110px; }
   #settingsModal .lc-add-row > input[type=date] { flex-basis: 140px; }
   /* Narrow theme buttons wrap some labels under their emoji and not others;

@@ -791,6 +791,8 @@
       <!-- ── Calendar ── -->
       <div class="settings-panel" data-panel="calendar">
 
+        <div class="settings-section-head settings-group-head">Calendar sources</div>
+
         <!-- Google Calendars (sign-in required) -->
         <div class="lc-section">
           <div class="lc-section-title">📅 Google Calendars</div>
@@ -814,7 +816,7 @@
         </div>
 
         <!-- ICS Subscriptions -->
-        <div class="lc-section">
+        <div class="lc-section" style="border-bottom:none">
           <div class="lc-section-title">📡 ICS Subscriptions</div>
           <div id="icsSubList" class="lc-list"></div>
           <div class="ics-add-form">
@@ -827,6 +829,8 @@
           </div>
           <div id="icsSubStatus" style="font-size:.75rem;color:var(--muted);margin-top:4px"></div>
         </div>
+
+        <div class="settings-section-head settings-group-head">Added by the hub</div>
 
         <!-- Countdowns -->
         <div class="lc-section">
@@ -866,41 +870,44 @@
           </div>
         </div>
 
-        <div class="lc-section">
-          <div class="lc-section-title">💊 Medications</div>
-          <div id="lcMedList" class="lc-list"></div>
-          <div class="lc-add-row">
-            <input id="lcMedName"   type="text" placeholder="Medication" class="lc-input" />
-            <input id="lcMedDosage" type="text" placeholder="Dosage" class="lc-input lc-input-sm" />
-            <input id="lcMedTime"   type="time" class="lc-input lc-input-sm" value="08:00" />
-            <select id="lcMedDays" class="lc-select">
-              <option value="daily">Daily</option>
-              <option value="weekdays">Weekdays</option>
-              <option value="weekends">Weekends</option>
-            </select>
-            <button class="btn btn-primary btn-sm" onclick="lcAddMedication()">Add</button>
-          </div>
-        </div>
-
         <div class="lc-section" style="border-bottom:none">
-          <div class="lc-section-title">🗑 Trash &amp; Recycling</div>
-          <div id="lcTrashList" class="lc-list"></div>
-          <div class="lc-add-row">
-            <input id="lcTrashLabel" type="text" placeholder="Label (e.g. Trash)" class="lc-input" />
-            <select id="lcTrashDay" class="lc-select">
-              <option value="0">Sunday</option><option value="1">Monday</option>
-              <option value="2">Tuesday</option><option value="3">Wednesday</option>
-              <option value="4">Thursday</option><option value="5">Friday</option>
-              <option value="6">Saturday</option>
-            </select>
-            <select id="lcTrashEmoji" class="lc-select">
-              <option value="🗑">🗑 Trash</option>
-              <option value="♻️">♻️ Recycling</option>
-              <option value="🌿">🌿 Compost</option>
-              <option value="📦">📦 Bulk Pickup</option>
-            </select>
-            <input id="lcTrashColor" type="color" value="#8bc34a" class="lc-color" title="Color" />
-            <button class="btn btn-primary btn-sm" onclick="lcAddTrash()">Add</button>
+          <div class="lc-section-title">🔁 Recurring</div>
+          <p class="settings-hint lc-recur-hint">Medications, trash and recycling, air filters, smoke alarm checks: anything that repeats.</p>
+          <div id="lcRecurList" class="lc-list"></div>
+          <div class="lc-recur-form">
+            <div class="lc-add-row">
+              <input id="lcRecurName"  type="text" placeholder="What (e.g. Replace air filter)" class="lc-input" />
+              <input id="lcRecurEmoji" type="text" value="🔁" class="lc-input lc-input-emoji" maxlength="8" />
+              <button type="button" class="btn btn-secondary btn-sm" onclick="openEmojiPicker('lcRecurEmoji',this)" title="Pick emoji">😊</button>
+              <input id="lcRecurColor" type="color" value="#4caf82" class="lc-color" title="Color" />
+            </div>
+            <div class="lc-add-row">
+              <span class="lc-recur-text">Every</span>
+              <input id="lcRecurEvery" type="number" min="1" max="99" value="1" class="lc-input lc-input-num" />
+              <select id="lcRecurUnit" class="lc-select" onchange="lcRecurUnitChanged()">
+                <option value="day">day(s)</option>
+                <option value="week" selected>week(s)</option>
+                <option value="month">month(s)</option>
+                <option value="year">year(s)</option>
+              </select>
+              <span class="lc-recur-text">starting</span>
+              <input id="lcRecurStart" type="date" class="lc-input lc-input-date" />
+            </div>
+            <div class="lc-day-checks" id="lcRecurDays" title="Leave all unticked to repeat on the start date's weekday">
+              <span class="lc-recur-text">On</span>
+              <label><input type="checkbox" value="0">Su</label>
+              <label><input type="checkbox" value="1">M</label>
+              <label><input type="checkbox" value="2">T</label>
+              <label><input type="checkbox" value="3">W</label>
+              <label><input type="checkbox" value="4">Th</label>
+              <label><input type="checkbox" value="5">F</label>
+              <label><input type="checkbox" value="6">Sa</label>
+            </div>
+            <div class="lc-add-row">
+              <label class="lc-recur-text lc-recur-allday"><input type="checkbox" id="lcRecurAllDay" checked onchange="lcRecurAllDayChanged()"> All day</label>
+              <input id="lcRecurTime" type="time" class="lc-input lc-input-sm" value="08:00" disabled />
+              <button class="btn btn-primary btn-sm lc-recur-add" onclick="lcAddRecurring()">Add</button>
+            </div>
           </div>
         </div>
 
