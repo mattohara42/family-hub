@@ -175,8 +175,8 @@ Allow a to-do item to have child items (sub-tasks). Collapsible in the list view
 
 ## Shopping List
 
-### ~~Shopping list categories~~ ✅ Done
-Items are tagged with a category (Produce, Dairy, Frozen, etc.) when added and grouped by aisle in the list view. Categories are collapsible and manageable in Settings → Shopping.
+### ~~Shopping list categories~~ Removed (2026-10-20)
+Shipped once (items tagged Produce, Dairy, Frozen, etc. and grouped by aisle), then removed in #77: the list is one flat list again. Old items may still carry a `category` field, which nothing reads.
 
 ### 📱 SMS delivery silently does nothing on a Raspberry Pi wall panel
 **Priority: Medium** — a live defect on the Pi, not just a missing feature.
