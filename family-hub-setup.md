@@ -82,6 +82,10 @@ Click each one → **Enable**.
 4. On the **Scopes** screen, click **Add or Remove Scopes** and add:
    - `https://www.googleapis.com/auth/calendar.events`
    - `https://www.googleapis.com/auth/calendar.readonly`
+   - `https://www.googleapis.com/auth/photospicker.mediaitems.readonly` (background photos)
+   - `https://www.googleapis.com/auth/userinfo.profile` and `https://www.googleapis.com/auth/userinfo.email` (your name and email, used for sign-in)
+
+   These five are exactly what the app requests (`GOOGLE_SCOPES` in `family-hub.js`). The Photos Picker scope only appears in the list once you've enabled the Photos Picker API in 1b.
    Then click **Update** and **Save and Continue**
 5. On the **Test users** screen, click **Add users** and add the Google accounts for every family member who will use the app
 6. Click **Save and Continue** → **Back to Dashboard**
