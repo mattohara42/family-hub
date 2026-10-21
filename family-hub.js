@@ -6482,6 +6482,9 @@ function renderFamilyMemberList() {
         </div>`;
       el.appendChild(row);
     });
+    // Rebuilt rows lose their safe-palette swatches; re-inject them or picking
+    // one (which re-renders via onSnapshot) leaves every row with no picker.
+    applySafePaletteMode();
   }
   populateTodoAssigneeDropdown();
   populateChoreAssigneeDropdown();
