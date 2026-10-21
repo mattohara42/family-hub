@@ -3327,13 +3327,14 @@ body.light-mode .lc-select  { border-color: rgba(0,0,0,.15); }
 .lc-recur-form { display: flex; flex-direction: column; gap: 6px; }
 .lc-recur-text { font-size: var(--text-xs); color: var(--muted); }
 .lc-recur-form .lc-day-checks { flex-wrap: wrap; }
-.lc-input-num  { flex: 0 0 auto; width: 56px; }
-.lc-input-emoji { flex: 0 0 auto; width: 48px; text-align: center; }
+.lc-input-num  { flex: 0 0 auto; width: 56px; min-width: 0; }
+.lc-input-emoji { flex: 0 0 auto; width: 48px; min-width: 0; text-align: center; }
 /* Name over schedule: a schedule summary beside the name crowded it out on phones */
 .lc-recur-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .lc-recur-body .lc-item-meta { white-space: normal; }
 .lc-recur-allday { display: flex; align-items: center; gap: 4px; cursor: pointer; accent-color: var(--accent); }
 .lc-recur-add  { margin-left: auto; }
+.lc-recur-add + .lc-recur-add { margin-left: 0; } /* Cancel shown while editing takes the push */
 
 .panel-empty {
   text-align: center; padding: 32px 0;

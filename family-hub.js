@@ -11264,6 +11264,7 @@ function lcOpenSettings() {
   lcRenderRecurringList();
   const recStart = document.getElementById('lcRecurStart');
   if (recStart && !recStart.value) recStart.value = lcDateKey(new Date());
+  if (lcRecurEditingId) lcCancelRecurEdit(); // a half-finished edit doesn't survive closing Settings
   lcRecurUnitChanged();
   scdOpenSettings();
 }
@@ -11278,9 +11279,9 @@ function lcRenderBdayList() {
     const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const date   = `${months[b.month-1]} ${b.day}${b.year ? ', '+b.year : ''}`;
     return `<div class="lc-item"><span class="lc-dot" style="background:#e91e8c"></span>
-      <span class="lc-item-label">${b.name}</span>
+      <span class="lc-item-label">${esc(b.name)}</span>
       <span class="lc-item-meta">${date}</span>
-      <button class="lc-del" onclick="lcDelBirthday('${b.id}')">✕</button></div>`;
+      <button class="lc-del" onclick="lcDelBirthday('${esc(b.id)}')">✕</button></div>`;
   }).join('');
 }
 async function lcAddBirthday() {
@@ -11322,10 +11323,10 @@ function lcRenderSchoolList() {
   if (!schoolPeriods.length) { el.innerHTML = '<div class="lc-empty">No classes added yet.</div>'; return; }
   const dayLabels = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   el.innerHTML = schoolPeriods.map(p =>
-    `<div class="lc-item"><span class="lc-dot" style="background:${p.color}"></span>
-      <span class="lc-item-label">${p.name}</span>
-      <span class="lc-item-meta">${p.startTime}–${p.endTime} · ${p.days.map(d=>dayLabels[d]).join(', ')}</span>
-      <button class="lc-del" onclick="lcDelSchool('${p.id}')">✕</button></div>`
+    `<div class="lc-item"><span class="lc-dot" style="background:${esc(p.color)}"></span>
+      <span class="lc-item-label">${esc(p.name)}</span>
+      <span class="lc-item-meta">${esc(p.startTime)}–${esc(p.endTime)} · ${p.days.map(d=>dayLabels[d]).join(', ')}</span>
+      <button class="lc-del" onclick="lcDelSchool('${esc(p.id)}')">✕</button></div>`
   ).join('');
 }
 async function lcAddSchoolPeriod() {
@@ -11618,7 +11619,8 @@ function lcRenderRecurringList() {
         <span class="lc-item-label">${esc(r.emoji)} ${esc(r.name)}</span>
         <span class="lc-item-meta">${esc(recurringSummary(r))}</span>
       </span>
-      <button class="lc-del" onclick="lcDelRecurring('${esc(r.id)}')">✕</button></div>`
+      <button class="lc-del" onclick="lcEditRecurring('${esc(r.id)}')" title="Edit">✎</button>
+      <button class="lc-del" onclick="lcDelRecurring('${esc(r.id)}')" title="Delete">✕</button></div>`
   ).join('');
 }
 
@@ -11627,6 +11629,37 @@ function lcRecurUnitChanged() {
   const unit = document.getElementById('lcRecurUnit')?.value;
   const days = document.getElementById('lcRecurDays');
   if (days) days.style.display = unit === 'week' ? '' : 'none';
+}
+
+// Editing reuses the add form: fill it from the item, and Add becomes Save
+let lcRecurEditingId = null;
+function lcEditRecurring(id) {
+  const r = recurringItems.find(x => x.id === id);
+  if (!r) return;
+  lcRecurEditingId = id;
+  document.getElementById('lcRecurName').value  = r.name;
+  document.getElementById('lcRecurEmoji').value = r.emoji;
+  document.getElementById('lcRecurColor').value = r.color;
+  document.getElementById('lcRecurEvery').value = r.every || 1;
+  document.getElementById('lcRecurUnit').value  = r.unit;
+  document.getElementById('lcRecurStart').value = r.startDate;
+  document.querySelectorAll('#lcRecurDays input').forEach(i => {
+    i.checked = r.unit === 'week' && (r.weekdays || []).includes(parseInt(i.value));
+  });
+  document.getElementById('lcRecurAllDay').checked = !r.time;
+  if (r.time) document.getElementById('lcRecurTime').value = r.time;
+  lcRecurAllDayChanged(); lcRecurUnitChanged(); lcRecurFormMode();
+  document.getElementById('lcRecurName').scrollIntoView({ block: 'nearest' });
+}
+function lcCancelRecurEdit() {
+  lcRecurEditingId = null;
+  document.getElementById('lcRecurName').value = '';
+  document.querySelectorAll('#lcRecurDays input').forEach(i => { i.checked = false; });
+  lcRecurFormMode();
+}
+function lcRecurFormMode() {
+  document.getElementById('lcRecurAddBtn').textContent = lcRecurEditingId ? 'Save' : 'Add';
+  document.getElementById('lcRecurCancelBtn').style.display = lcRecurEditingId ? '' : 'none';
 }
 
 function lcRecurAllDayChanged() {
@@ -11652,19 +11685,24 @@ async function lcAddRecurring() {
     const [y, m, d] = startDate.split('-').map(Number);
     item.weekdays = checked.length ? checked : [new Date(y, m - 1, d).getDay()];
   }
+  const editId = lcRecurEditingId;
   if (db) {
-    await db.collection('recurringItems').add({ ...item, createdAt: firebase.firestore.FieldValue.serverTimestamp() }).catch(_fsWriteError);
+    // set(), not update(): a stale weekdays field must go when the unit changes
+    const write = editId
+      ? db.collection('recurringItems').doc(editId).set({ ...item, createdAt: recurringItems.find(r => r.id === editId)?.createdAt || firebase.firestore.FieldValue.serverTimestamp() })
+      : db.collection('recurringItems').add({ ...item, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+    await write.catch(_fsWriteError);
   } else {
-    item.id = String(Date.now());
-    recurringItems.push(item);
+    if (editId) recurringItems = recurringItems.map(r => r.id === editId ? { ...item, id: editId } : r);
+    else recurringItems.push({ ...item, id: String(Date.now()) });
     localStorage.setItem('fh_recurring', JSON.stringify(recurringItems));
     lcRenderRecurringList();
     injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
   }
-  document.getElementById('lcRecurName').value = '';
-  document.querySelectorAll('#lcRecurDays input').forEach(i => { i.checked = false; });
+  lcCancelRecurEdit();
 }
 async function lcDelRecurring(id) {
+  if (id === lcRecurEditingId) lcCancelRecurEdit();
   if (db) {
     await db.collection('recurringItems').doc(id).delete().catch(_fsWriteError);
   } else {

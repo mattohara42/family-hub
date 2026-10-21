@@ -845,7 +845,7 @@
           <div class="lc-add-row" style="flex-wrap:wrap;gap:5px;margin-top:6px">
             <input id="cdLabelInput" type="text" placeholder="Countdown name" class="lc-input" />
             <input id="cdDateInput"  type="date"  class="lc-input lc-input-sm" />
-            <input id="cdEmojiInput" type="text"  placeholder="🎉" class="lc-input" style="width:42px;text-align:center" maxlength="8" />
+            <input id="cdEmojiInput" type="text"  placeholder="🎉" class="lc-input lc-input-emoji" maxlength="8" />
             <button type="button" class="btn btn-secondary btn-sm" onclick="openEmojiPicker('cdEmojiInput',this)" title="Pick emoji">😊</button>
             <button class="btn btn-primary btn-sm" onclick="addCountdown()">Add</button>
           </div>
@@ -906,7 +906,8 @@
             <div class="lc-add-row">
               <label class="lc-recur-text lc-recur-allday"><input type="checkbox" id="lcRecurAllDay" checked onchange="lcRecurAllDayChanged()"> All day</label>
               <input id="lcRecurTime" type="time" class="lc-input lc-input-sm" value="08:00" disabled />
-              <button class="btn btn-primary btn-sm lc-recur-add" onclick="lcAddRecurring()">Add</button>
+              <button id="lcRecurCancelBtn" class="btn btn-secondary btn-sm lc-recur-add" onclick="lcCancelRecurEdit()" style="display:none">Cancel</button>
+              <button id="lcRecurAddBtn" class="btn btn-primary btn-sm lc-recur-add" onclick="lcAddRecurring()">Add</button>
             </div>
           </div>
         </div>
