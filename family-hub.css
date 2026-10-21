@@ -2282,7 +2282,7 @@ body.has-bg.light-mode .day-hour-row.current-hour { background: rgba(190,198,225
 .day-meal-chip:hover .meal-remove-btn { opacity: 1; }
 
 /* ── Meal Planning — Suggestion Modal ── */
-.meal-modal-inner { max-width: 640px; }
+.modal.meal-modal-inner { max-width: 640px; }
 .meal-suggestion {
   background: var(--surface2); border-radius: 10px;
   padding: 14px 16px; margin-bottom: 10px;
@@ -2310,7 +2310,7 @@ body.has-bg.light-mode .day-hour-row.current-hour { background: rgba(190,198,225
 }
 
 /* ── Meal Planning — Detail Modal ── */
-.meal-detail-modal { max-width: 480px; }
+.modal.meal-detail-modal { max-width: 480px; }
 .meal-detail-img-wrap {
   width: 100%; height: 200px;
   border-radius: 12px; overflow: hidden;
@@ -2960,7 +2960,7 @@ body.nautical-mode #eventEditorModal .modal {
   display: flex; align-items: flex-start; justify-content: space-between;
   gap: 10px; margin-bottom: 4px;
 }
-.evt-details-head h2 { margin-bottom: 0; line-height: 1.2; }
+.modal .evt-details-head h2 { margin-bottom: 0; line-height: 1.2; }
 .evt-details-when {
   font-size: var(--fs-item); color: var(--text);
   font-variant-numeric: tabular-nums;
