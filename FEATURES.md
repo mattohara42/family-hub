@@ -748,6 +748,8 @@ A handful of triggers aren't tied to any franchise (birthday, politeness, dark-m
 
 **Overview:** Discover local events (concerts, shows, family activities, library programs, sports) within a configurable radius. Calendar-aware (shows free/busy conflicts), weather-aware, and uses intelligent IndexedDB caching with background refresh.
 
+**Availability (added 2026-10-21):** both 💡 buttons (`#eventsDiscoverBtn`, `#mobileEventsBtn`) start `display:none`. On load `probeEventsBackend()` calls `/.netlify/functions/events?status=1`, which answers `{ configured: !!OWM_KEY, sources: { ticketmaster: !!TICKETMASTER_KEY } }` without geocoding; `applyEventsAvailability()` shows 💡 only when that says configured **and** the per-device Settings → Events toggle (`#eventsEnabled`, `fh_eventsEnabled`, default on) is on. No function at all (plain `http.server`, a failed fetch) counts as not configured. Without `TICKETMASTER_KEY` the 🎟️ Live Events tab is hidden and the modal opens on the next tab, since that tab could only ever be empty. `#eventsSetupNote` under the toggle says why 💡 is hidden. This exists so a fork that skips the optional event keys never sees a broken feature.
+
 **UX:** Click 💡 button on calendar header → modal opens with cached events → fresh data fetches in background → modal updates with age label ("Fresh — just now" to "⚠️ Cached — may be outdated").
 
 **Data sources (multi-API aggregation):**
@@ -767,6 +769,8 @@ Sources 6 and 7 both emit `source: 'towns'` and share the single "🎪 Town Even
 ```js
 let eventLocation       = lsGet('fh_eventLocation', 'Rochester');
 let eventMaxDistance    = lsGet('fh_eventMaxDistance', 120);  // minutes driving time (converted to radius)
+let eventsEnabled       = lsGet('fh_eventsEnabled', true);   // per-device 💡 toggle
+let eventsBackend       = null;       // setup probe result; null until it answers
 let eventsData          = [];         // filtered/sorted for display
 let eventsRawData       = [];         // raw from API + calendar conflicts
 let eventsSort          = 'distance'; // or 'date'
@@ -775,6 +779,7 @@ let eventsModalOpen     = false;
 ```
 
 **Key functions:**
+- `probeEventsBackend()` / `applyEventsAvailability()` — setup probe on load; show/hide 💡 and the Live Events tab
 - `openEventsModal()` — reads cached events from IndexedDB, shows immediately; fetches fresh data in background
 - `fetchAndUpdateEvents()` — calls `/.netlify/functions/events?location=<>&radius=<>`, saves to IndexedDB, re-renders modal (caching is inline here, not a separate function)
 - `addEventToCalendar(event)` — opens event editor modal; reuses `saveCalEvent()` for Google Calendar write
@@ -797,7 +802,7 @@ let eventsModalOpen     = false;
 
 **CSS classes:** `.event-card`, `.event-type-badge`, `.event-weather`, `.event-calendar-indicator`, `.event-age-label`, `.event-distance-pill`
 
-**localStorage:** `fh_eventLocation`, `fh_eventMaxDistance`
+**localStorage:** `fh_eventLocation`, `fh_eventMaxDistance`, `fh_eventsEnabled`
 
 **IndexedDB:** Database `fh_events` (v1)
 - Object store `events` (keyPath: id) with indexes: byDate, byType, byDistance
@@ -1043,6 +1048,7 @@ const HA_TOGGLE_DOMAINS = ['light', 'switch', 'fan', 'input_boolean'];
 | `fh_saverPondTap` | string | Screensaver | Pond tap behavior: `'play'` (default) or `'wake'` |
 | `fh_eventLocation` | string | Event Discovery | Default search location (default `'Rochester'`) |
 | `fh_eventMaxDistance` | number | Event Discovery | Max distance in minutes driving time (default 120) |
+| `fh_eventsEnabled` | boolean | Event Discovery | Show the 💡 button on this device (default `true`); hidden regardless when the function reports no `OWM_KEY` |
 
 **Firestore collections:**
 

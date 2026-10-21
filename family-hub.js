@@ -232,6 +232,8 @@ let wxActivityEnabled   = lsGet('fh_wxActivity', true);    // activity tags stri
 // ── Event Discovery ──
 let eventLocation       = lsGet('fh_eventLocation', 'Rochester');  // City name for event search
 let eventMaxDistance    = lsGet('fh_eventMaxDistance', 120);       // Minutes: 30, 60, or 120
+let eventsEnabled       = lsGet('fh_eventsEnabled', true);         // per-device 💡 toggle
+let eventsBackend       = null;  // setup probe result: { configured, sources }; null until it answers
 let userName        = localStorage.getItem('fh_name') || 'Someone';
 let appTitle        = localStorage.getItem('fh_appTitle') || 'Family Hub';
 let appTitleEmoji   = localStorage.getItem('fh_appTitleEmoji') || '🏠';
@@ -1114,6 +1116,7 @@ window.addEventListener('load', () => {
     });
     setInterval(maybeReloadForUpdate, 20000);
   }
+  probeEventsBackend();
   if (!isConfigured) return;
   // GSI may already be ready (cached) or will call onGsiLoad when it loads
   if (typeof google !== 'undefined' && google.accounts) {
@@ -12328,6 +12331,7 @@ function openSettings() {
 
   // ── Event settings ──
   document.getElementById('eventLocation').value = eventLocation;
+  document.getElementById('eventsEnabled').checked = eventsEnabled;
   document.querySelector(`input[name="eventDistance"][value="${eventMaxDistance}"]`).checked = true;
   // Render diet checkboxes
   const dietGrid = document.getElementById('mealDietGrid');
@@ -12508,6 +12512,9 @@ function saveSettings() {
   eventMaxDistance = parseInt(document.querySelector(`input[name="eventDistance"]:checked`).value) || 120;
   localStorage.setItem('fh_eventLocation', eventLocation);
   localStorage.setItem('fh_eventMaxDistance', String(eventMaxDistance));
+  eventsEnabled = document.getElementById('eventsEnabled').checked;
+  localStorage.setItem('fh_eventsEnabled', JSON.stringify(eventsEnabled));
+  applyEventsAvailability();
   const hncEl = document.getElementById('newsHeadlineCount');
   if (hncEl) { newsHeadlineCount = parseInt(hncEl.value) || 5; saveNewsFeeds(); }
   if (widgetVisibility.news)  loadNewsFeeds();
@@ -13487,6 +13494,41 @@ let eventsCategories = {};     // Category objects from backend: { id: { id, nam
 let eventsSearchKeyword = '';  // Keyword search filter
 let eventsSearchArtist = '';   // Artist/performer search filter
 let eventsSearchVenue = '';    // Venue search filter
+
+// Discover Events only shows once the Netlify function says it's set up
+// (OWM_KEY for geocoding). A fork without the key, or plain http.server with
+// no function at all, just never shows 💡 instead of erroring on open.
+// Both 💡 buttons start display:none in the HTML for the same reason.
+async function probeEventsBackend() {
+  try {
+    const r = await fetch('/.netlify/functions/events?status=1');
+    eventsBackend = r.ok ? await r.json() : { configured: false };
+  } catch {
+    eventsBackend = { configured: false };
+  }
+  applyEventsAvailability();
+}
+
+function applyEventsAvailability() {
+  const show = eventsEnabled && !!eventsBackend?.configured;
+  ['eventsDiscoverBtn', 'mobileEventsBtn'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = show ? '' : 'none';
+  });
+  const note = document.getElementById('eventsSetupNote');
+  if (note) note.textContent = eventsBackend && !eventsBackend.configured
+    ? 'Hidden: needs OWM_KEY set on Netlify (see the setup guide)'
+    : 'Turn off to hide the 💡 button on this device';
+
+  // Live Events needs TICKETMASTER_KEY; without it the tab would only ever be empty
+  const tmTab = document.querySelector('.events-source-tabs .event-tab[data-source="ticketmaster"]');
+  const tmOn = !!eventsBackend?.sources?.ticketmaster;
+  if (tmTab) tmTab.style.display = tmOn ? '' : 'none';
+  if (!tmOn && eventsSourceTab === 'ticketmaster') {
+    const first = document.querySelector('.events-source-tabs .event-tab:not([data-source="ticketmaster"])');
+    if (first) selectEventSource(first);
+  }
+}
 
 async function openEventsModal() {
   eventsModalOpen = true;
