@@ -1529,6 +1529,7 @@ body.has-bg .cal-day.today {
   width: 32px; height: 32px;
   font-size: 1rem;
   margin-left: 6px;
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, #fff 85%, transparent);
 }
 .agenda-title > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .agenda-empty {
@@ -2923,6 +2924,9 @@ body.nautical-mode #eventEditorModal .modal {
   width: 14px; height: 14px; border-radius: 50%;
   font-size: .58rem; font-weight: 700; color: #fff;
   margin-left: 3px; flex-shrink: 0; vertical-align: middle;
+  /* Light inner ring so a badge stays visible on an event filled with the
+     same member color. Inset, so an overflow:hidden parent can't clip it */
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #fff 85%, transparent);
 }
 .evt-editor-select {
   background: var(--surface2); color: var(--text);
