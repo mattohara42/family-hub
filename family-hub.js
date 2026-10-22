@@ -5714,17 +5714,34 @@ function activeCalViewEl() {
     : calView === 'day' ? 'dayView' : 'agendaView');
 }
 
-// Anything between the touch and the wrapper that scrolls sideways (the week
-// grid on a narrow screen) owns the horizontal gesture itself — stand down.
-function calSwipeBlocked(target, wrap) {
+// The sideways scroller between the touch and the wrapper, if any (the week
+// grid on a narrow screen). It owns the horizontal gesture until it's scrolled
+// to the edge the swipe heads for (calScrollerAtEdge), then the swipe pages.
+function calSwipeScroller(target, wrap) {
   for (let el = target; el && el !== wrap; el = el.parentElement) {
     // Overflowing alone isn't enough — an ellipsised event title overflows its
     // day cell without being scrollable. Only a real scroller takes the gesture.
     if (el.scrollWidth <= el.clientWidth + 1) continue;
     const ox = getComputedStyle(el).overflowX;
-    if (ox === 'auto' || ox === 'scroll') return true;
+    if (ox === 'auto' || ox === 'scroll') return el;
   }
-  return false;
+  return null;
+}
+
+// Finger moving left (dx < 0) scrolls toward the right end, and vice versa.
+// Only a swipe that starts already at that end pages, so scrolling up to the
+// edge never spills into a period change mid-gesture.
+function calScrollerAtEdge(el, dx) {
+  return dx < 0 ? el.scrollLeft + el.clientWidth >= el.scrollWidth - 1
+                : el.scrollLeft <= 1;
+}
+
+// After a week change on a narrow screen, show the side the swipe came in
+// from: next week opens on Sunday, previous week on Saturday.
+function calResetWeekScroll(delta) {
+  if (calView !== 'week') return;
+  const el = document.getElementById('weekView');
+  if (el) el.scrollLeft = delta > 0 ? 0 : el.scrollWidth;
 }
 
 function calSetDrag(wrap, px) {
@@ -5748,6 +5765,7 @@ function slideCalPeriod(delta, fromPx = 0) {
   if (!wrap || !active || calSliding || prefersReducedMotion()) {
     if (wrap) calSettleDrag(wrap);
     changeCalPeriod(delta);
+    calResetWeekScroll(delta);
     return;
   }
   calSliding = true;
@@ -5763,12 +5781,18 @@ function slideCalPeriod(delta, fromPx = 0) {
   ghost.classList.add('cal-view-ghost');
   ghost.style.transform = `translate3d(${fromPx}px,0,0)`;
   ghost.style.opacity   = wrap.style.opacity || '1';
+  // The clone loses #weekView's id rules: keep its column layout and the
+  // sideways scroll position, or the outgoing week jumps back to Sunday
+  ghost.style.flexDirection = getComputedStyle(active).flexDirection;
+  ghost.style.overflow      = 'hidden';
   wrap.appendChild(ghost);
+  ghost.scrollLeft = active.scrollLeft;
 
   // Hand the drag offset over to the ghost, then re-render underneath it.
   calSettleDrag(wrap);
   wrap.style.transition = 'none';
   changeCalPeriod(delta);
+  calResetWeekScroll(delta);
 
   // Park the incoming view just off the edge, alongside the ghost. This must
   // land before .cal-sliding turns transitions on, or the jump animates too.
@@ -5795,13 +5819,13 @@ function slideCalPeriod(delta, fromPx = 0) {
 function setupCalSwipe() {
   const wrap = document.getElementById('calViews');
   if (!wrap) return;
-  let startX = 0, startY = 0, startT = 0, axis = null, tracking = false;
+  let startX = 0, startY = 0, startT = 0, axis = null, tracking = false, scroller = null;
 
   wrap.addEventListener('touchstart', e => {
     tracking = false;
     axis     = null;
     if (e.touches.length !== 1 || calSliding) return;
-    if (calSwipeBlocked(e.target, wrap)) return;
+    scroller = calSwipeScroller(e.target, wrap);
     startX   = e.touches[0].clientX;
     startY   = e.touches[0].clientY;
     startT   = e.timeStamp;
@@ -5816,6 +5840,8 @@ function setupCalSwipe() {
       if (Math.abs(dx) < CAL_SWIPE_AXIS_LOCK && Math.abs(dy) < CAL_SWIPE_AXIS_LOCK) return;
       // Vertical wins: leave the gesture to the scroller and stay out of it.
       if (Math.abs(dy) >= Math.abs(dx)) { tracking = false; return; }
+      // Mid-scroller: the scroller keeps the gesture, as a plain scroll.
+      if (scroller && !calScrollerAtEdge(scroller, dx)) { tracking = false; return; }
       axis = 'x';
       wrap.classList.add('cal-dragging');
     }
