@@ -143,7 +143,7 @@ let disabledCals = new Set(); // calendar IDs toggled off by user
 - `switchCalView(view)` — switches between month/week/day, saves to localStorage
 - `renderCurrentView()` — dispatches to the correct render function; also calls `renderBudgetCard()`
 - `renderMonthGrid()` — builds the month grid in `#calGrid`
-- `renderWeekGrid()` — builds the 7-column week grid in `#weekView`
+- `renderWeekGrid()` — builds the 7-column week grid in `#weekView`. The columns share one set of rows via CSS subgrid (`.week-grid`: header, `.week-todo-strip`, `.week-day-allday`, `.week-day-body`, `.week-budget-strip`, `.week-meals-strip`), so each band lines up across the week even when only some days have it; every child sets its own `grid-row`. All-day events go in `.week-day-allday`, timed ones in `.week-day-body` (2026-10-22)
 - `renderDayGrid()` — builds the day timeline in `#dayView`
 - `makeDayCell(year, month, day, otherMonth, isToday)` — creates one month grid cell
 - `changeCalPeriod(delta)` — navigates forward/back by period (the instant change; `slideCalPeriod()` wraps it with the swipe transition)
