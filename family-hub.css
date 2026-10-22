@@ -6255,11 +6255,33 @@ body.flavor-tactile #saverClockTime { font-family: var(--font-display); }
   .cal-day-num { font-size: var(--text-xs); }
   .cal-event { font-size: var(--text-xs); }
 
-  /* Week view: scroll horizontally rather than squish */
-  #weekView { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .week-grid { min-width: 520px; }
-  .week-day-col { min-height: 300px; }
-  .week-event { font-size: var(--text-xs); }
+  /* Week view: the days stack as full-width rows instead of seven columns
+     scrolling sideways, so a sideways swipe always means "next week" like
+     every other view. Each row keeps the desktop band order (header, all-day,
+     timed, to-dos + chores, bills, meals), just top to bottom in DOM order:
+     the subgrid row placement is switched off. The grid itself scrolls
+     vertically; overflow-x stays hidden so calSwipeScroller() ignores it. */
+  .week-grid {
+    display: flex; flex-direction: column; gap: 6px;
+    overflow-y: auto; overflow-x: hidden;
+    overscroll-behavior-y: contain;
+    padding-bottom: 72px;   /* last day scrolls clear of #mobileAddFab */
+  }
+  .week-day-col { display: flex; flex-direction: column; flex-shrink: 0; }
+  .week-day-col > * { grid-row: auto; }
+  .week-day-header {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px;
+    text-align: left; padding: 6px 8px;
+  }
+  .week-day-num { margin: 0; }
+  .school-day-badge, .school-day-subjects { margin-top: 0; }
+  .week-day-body { overflow: visible; padding: 4px 6px; }
+  .week-day-allday { padding: 4px 6px 0; }
+  .week-tasks-strip { padding: 4px 6px 5px; }
+  .week-empty { margin-top: 0; text-align: left; }
+  .week-event { font-size: var(--text-sm); padding: 4px 8px; }
+  .week-event-time { display: inline; margin-right: 6px; }
+  .week-meal-item, .week-add-meal-btn { min-height: 0; padding: 6px 8px; font-size: var(--text-sm); }
 
   /* Day view: narrower time label */
   .day-hour-row { grid-template-columns: 44px 1fr; }
@@ -6291,5 +6313,4 @@ body.flavor-tactile #saverClockTime { font-family: var(--font-display); }
   .cal-day { min-height: 44px; }
   .mini-grid { grid-template-columns: repeat(2, 1fr); }
   #calMonthLabel { font-size: 1rem; }
-  .week-grid { min-width: 460px; }
 }

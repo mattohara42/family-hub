@@ -1611,6 +1611,14 @@ function checkCalendarEasterEggs() {
 }
 
 // ── Week View ─────────────────────────────────────────────────
+// On a phone the Week days stack and the grid scrolls vertically. Re-renders
+// of the same week (data arriving, a to-do ticked, a trip to another view and
+// back) keep the scroll position; a different week opens on today if it's in
+// it, otherwise on Sunday. top stays null (follow today) until the user
+// scrolls, since rows above today grow as calendar data arrives. Tracked from
+// scroll events because a hidden view reads scrollTop 0.
+let weekListScroll = { week: null, top: null };
+
 function renderWeekGrid() {
   const container = document.getElementById('weekView');
   container.innerHTML = '';
@@ -1824,6 +1832,18 @@ function renderWeekGrid() {
     grid.appendChild(col);
   }
   container.appendChild(grid);
+
+  const weekKey = weekStart.getTime();
+  if (weekListScroll.week !== weekKey) weekListScroll = { week: weekKey, top: null };
+  const todayCol = grid.querySelector('.week-day-col.today');
+  grid.scrollTop = weekListScroll.top ?? (todayCol
+    ? todayCol.getBoundingClientRect().top - grid.getBoundingClientRect().top : 0);
+  const setTop = grid.scrollTop;
+  grid.addEventListener('scroll', () => {
+    // Our own scrollTop write fires this too; only a real move unpins today
+    if (weekListScroll.top !== null || Math.abs(grid.scrollTop - setTop) > 1)
+      weekListScroll.top = grid.scrollTop;
+  }, { passive: true });
 
   // Bulk "add all week's ingredients to shopping list" button
   const bulkBar = document.createElement('div');
@@ -5736,14 +5756,6 @@ function calScrollerAtEdge(el, dx) {
                 : el.scrollLeft <= 1;
 }
 
-// After a week change on a narrow screen, show the side the swipe came in
-// from: next week opens on Sunday, previous week on Saturday.
-function calResetWeekScroll(delta) {
-  if (calView !== 'week') return;
-  const el = document.getElementById('weekView');
-  if (el) el.scrollLeft = delta > 0 ? 0 : el.scrollWidth;
-}
-
 function calSetDrag(wrap, px) {
   const fade = Math.min(Math.abs(px) / (wrap.clientWidth || 1), 1);
   wrap.style.transform = `translate3d(${px}px,0,0)`;
@@ -5765,7 +5777,6 @@ function slideCalPeriod(delta, fromPx = 0) {
   if (!wrap || !active || calSliding || prefersReducedMotion()) {
     if (wrap) calSettleDrag(wrap);
     changeCalPeriod(delta);
-    calResetWeekScroll(delta);
     return;
   }
   calSliding = true;
@@ -5781,18 +5792,18 @@ function slideCalPeriod(delta, fromPx = 0) {
   ghost.classList.add('cal-view-ghost');
   ghost.style.transform = `translate3d(${fromPx}px,0,0)`;
   ghost.style.opacity   = wrap.style.opacity || '1';
-  // The clone loses #weekView's id rules: keep its column layout and the
-  // sideways scroll position, or the outgoing week jumps back to Sunday
+  // The clone loses #weekView's id rules (keep its column layout) and every
+  // scroll position (on a phone the stacked week list would jump to Sunday)
   ghost.style.flexDirection = getComputedStyle(active).flexDirection;
   ghost.style.overflow      = 'hidden';
   wrap.appendChild(ghost);
-  ghost.scrollLeft = active.scrollLeft;
+  const ghostList = ghost.querySelector('.week-grid');
+  if (ghostList) ghostList.scrollTop = active.querySelector('.week-grid').scrollTop;
 
   // Hand the drag offset over to the ghost, then re-render underneath it.
   calSettleDrag(wrap);
   wrap.style.transition = 'none';
   changeCalPeriod(delta);
-  calResetWeekScroll(delta);
 
   // Park the incoming view just off the edge, alongside the ghost. This must
   // land before .cal-sliding turns transitions on, or the jump animates too.
