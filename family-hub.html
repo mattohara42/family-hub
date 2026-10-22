@@ -133,13 +133,12 @@
              the sidebar control card's ⚙️); hidden by default so it drops out
              of the 3-column desktop grid below (see .cal-header-settings-btn) -->
         <!-- Mobile-only view switcher, so the header fits one row. Hidden by
-             default like ⚙️ below; Week stays desktop-only (the hidden option
-             only exists so the control isn't blank if Week was last used). -->
+             default like ⚙️ below. -->
         <select id="calViewSelect" class="cal-view-select" onchange="switchCalView(this.value)" aria-label="Calendar view">
           <option value="month">Month</option>
           <option value="day">Day</option>
           <option value="agenda">Agenda</option>
-          <option value="week" hidden>Week</option>
+          <option value="week">Week</option>
         </select>
         <button id="calSettingsBtn" class="cal-header-settings-btn" onclick="openSettings()" title="Preferences" aria-label="Preferences">⚙️</button>
         <!-- Right: event discovery + view tabs -->
