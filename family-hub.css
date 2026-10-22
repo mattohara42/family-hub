@@ -2161,12 +2161,19 @@ body.has-bg.light-mode .week-day-col.today { background: rgba(190,198,225,0.75);
   display: flex; flex-direction: column; gap: 2px;
   overflow-y: auto;
 }
+/* Sized to match .agenda-event: title at --fs-title, time at --fs-meta,
+   same padding and radius, so one event reads the same size in every list */
 .week-event {
-  font-size: var(--text-xs); padding: 2px 5px;
-  border-radius: 3px; color: #fff;
+  font-size: var(--fs-title); font-weight: var(--weight-semi);
+  line-height: var(--leading-tight);
+  padding: 8px 10px 8px 12px;
+  border-radius: 8px; color: #fff;
   overflow: hidden;
 }
-.week-event-time { font-size: var(--text-xs); opacity: .85; display: block; }
+.week-event-time {
+  font-size: var(--fs-meta); font-weight: normal; opacity: .85; display: block;
+  margin-bottom: 3px; font-variant-numeric: tabular-nums;
+}
 .week-empty { font-size: var(--text-xs); color: var(--muted); text-align: center; margin-top: 10px; opacity: .5; }
 
 /* ── Day View ── */
@@ -2217,9 +2224,11 @@ body.has-bg.light-mode .day-hour-row.current-hour { background: rgba(190,198,225
   padding: 3px 5px;
   display: flex; flex-direction: column; gap: 2px;
 }
+/* Sized to match .agenda-event (see .week-event above) */
 .day-event-pill {
-  font-size: var(--text-sm); padding: 4px 8px;
-  border-radius: 5px; color: #fff;
+  font-size: var(--fs-title); line-height: var(--leading-tight);
+  padding: 8px 10px 8px 12px;
+  border-radius: 8px; color: #fff;
   display: flex; flex-direction: column;
 }
 .day-event-pill .evt-title { font-weight: var(--weight-semi); }
@@ -2228,7 +2237,7 @@ body.has-bg.light-mode .day-hour-row.current-hour { background: rgba(190,198,225
    this, badges appended straight into the column-flex pill above each land
    on their own row, stacking vertically instead of sitting beside the time. */
 .day-event-pill .evt-meta {
-  display: flex; align-items: center; gap: 4px;
+  display: flex; align-items: center; gap: 4px; margin-top: 3px;
 }
 .day-event-pill .evt-meta .evt-member-badge { margin-left: 0; }
 
@@ -4954,7 +4963,7 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
   .day-hour-label { padding: 3px 8px 0 0; }
   .day-time-label { padding-top: 2px; padding-right: 8px; }
   .agenda-day-header { padding: 12px 10px 5px; }
-  .agenda-event  { padding: 7px 10px; }
+  .agenda-event, .day-event-pill, .week-event { padding: 7px 10px; }
 
   /* Event editor: `90vh` is iOS Safari's *large* viewport (assumes the
      address bar is collapsed), so with the bar visible the modal's bottom —
@@ -6279,7 +6288,6 @@ body.flavor-tactile #saverClockTime { font-family: var(--font-display); }
   .week-day-allday { padding: 4px 6px 0; }
   .week-tasks-strip { padding: 4px 6px 5px; }
   .week-empty { margin-top: 0; text-align: left; }
-  .week-event { font-size: var(--text-sm); padding: 4px 8px; }
   .week-event-time { display: inline; margin-right: 6px; }
   .week-meal-item, .week-add-meal-btn { min-height: 0; padding: 6px 8px; font-size: var(--text-sm); }
 
@@ -6287,7 +6295,6 @@ body.flavor-tactile #saverClockTime { font-family: var(--font-display); }
   .day-hour-row { grid-template-columns: 44px 1fr; }
   .day-time-label { width: 44px; font-size: var(--text-xs); }
   .day-hour-label { font-size: var(--text-xs); padding-right: 6px; }
-  .day-event-pill { font-size: var(--text-sm); }
   /* The 44px label can't fit "All day ＋" (the ＋ overflowed onto "No all-day
      events"), and #mobileAddFab already opens the editor on the viewed day */
   .day-allday-row .day-add-btn { display: none; }
