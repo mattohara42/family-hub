@@ -2051,10 +2051,10 @@ body.nautical-mode .wx-ticker { background: rgba(200,169,110,.06); border-top-co
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   /* Rows shared by every day column (via subgrid on .week-day-col):
-     header · to-dos · all-day · timed events · bills · meals. A section one
-     day lacks still takes the row's height there, so each band lines up
-     across the week. Only the timed-events row grows. */
-  grid-template-rows: auto auto auto 1fr auto auto;
+     header · all-day · timed events · to-dos + chores · bills · meals. A
+     section one day lacks still takes the row's height there, so each band
+     lines up across the week. Only the timed-events row grows. */
+  grid-template-rows: auto auto 1fr auto auto auto;
   column-gap: 3px; row-gap: 0;
   flex: 1;
   min-height: 0;
@@ -2063,8 +2063,11 @@ body.nautical-mode .wx-ticker { background: rgba(200,169,110,.06); border-top-co
 .week-day-col {
   display: grid;
   grid-row: 1 / -1;
-  grid-template-rows: auto auto auto 1fr auto auto;   /* no-subgrid fallback */
+  grid-template-rows: auto auto 1fr auto auto auto;   /* no-subgrid fallback */
   grid-template-rows: subgrid;
+  /* minmax(0,…) so a nowrap line (a long to-do) ellipsizes instead of
+     widening the track past the column and pushing the header off-centre */
+  grid-template-columns: minmax(0, 1fr);
   min-height: 0;
   /* Stronger than --line (a hairline divider elsewhere) so each day reads
      as its own column rather than blending into the grid's background. */
@@ -2129,20 +2132,29 @@ body.has-bg.light-mode .week-day-col.today { background: rgba(190,198,225,0.75);
   font-size: var(--text-xs); color: var(--text);
   background: color-mix(in srgb, var(--accent2) 16%, var(--surface2));
   border-radius: 8px; padding: 1px 5px;
+  /* A narrow column wraps the badge under the name instead of clipping it */
+  max-width: 100%; box-sizing: border-box;
+  flex-wrap: wrap; justify-content: center;
 }
-.week-todo-strip {
-  grid-row: 2;
-  border-bottom: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
-  padding: 4px 5px 5px;
+.week-tasks-strip {
+  grid-row: 4;
+  border-top: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+  padding: 4px 3px 5px;
+  display: flex; flex-direction: column; gap: 2px;
   background: color-mix(in srgb, var(--accent) 6%, transparent);
 }
+.week-todo-item {
+  font-size: var(--text-xs); color: var(--accent);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  padding: 1px 2px;
+}
 .week-day-allday {
-  grid-row: 3;
+  grid-row: 2;
   padding: 4px 3px 0;
   display: flex; flex-direction: column; gap: 2px;
 }
 .week-day-body {
-  grid-row: 4; min-height: 0;
+  grid-row: 3; min-height: 0;
   padding: 4px 3px;
   display: flex; flex-direction: column; gap: 2px;
   overflow-y: auto;
