@@ -2242,12 +2242,12 @@ body.has-bg.light-mode .day-hour-row.current-hour { background: rgba(190,198,225
 .day-event-pill .evt-meta .evt-member-badge { margin-left: 0; }
 
 /* ── Event depth ── */
-/* Every event fill (Month pills and bars, Day pills, Agenda rows) gets a
+/* Every event fill (Month pills and bars, Day and Week pills, Agenda rows) gets a
    faint bezel (light top edge, dark bottom edge) plus a soft drop shadow.
    The bezel carries the depth in dark themes, the shadow in light ones.
    Mobile Month's member stripes ride in --member-stripes (applyMemberStripes())
    so an inline box-shadow doesn't wipe this out, or the other way round. */
-.cal-event, .cal-multiday-bar, .day-event-pill, .agenda-event {
+.cal-event, .cal-multiday-bar, .day-event-pill, .week-event, .agenda-event {
   box-shadow:
     var(--member-stripes, 0 0 transparent),
     inset 0 1px 0 rgba(255,255,255,.30),
