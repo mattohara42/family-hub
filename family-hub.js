@@ -3652,9 +3652,11 @@ function renderCountdownCard() {
 // ── Calendar Event Editor ─────────────────────────────────────
 let evtEditing = null; // { ev, calId } when editing; null when creating
 
-/** Text color that reads on an event's fill: dark on light colors (Google's
- *  Banana/Citron, a pale holiday color), white otherwise. Unparseable or
- *  missing colors get white, matching the var(--muted) fallback fill. */
+/** Text color that reads on an event's fill: white unless white would fall
+ *  under 3:1 contrast (luminance above 0.30), then dark, which always reads
+ *  better there. That catches mid-tones like Okabe-Ito orange, not just
+ *  Banana/Citron. Unparseable or missing colors get white, matching the
+ *  var(--muted) fallback fill. */
 function readableTextOn(color) {
   const hex = String(color || '').trim().replace(/^#/, '');
   const full = hex.length === 3 ? hex.split('').map(c => c + c).join('') : hex;
@@ -3663,7 +3665,7 @@ function readableTextOn(color) {
     const c = parseInt(full.slice(i, i + 2), 16) / 255;
     return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
   });
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.45 ? '#1f2328' : '#fff';
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.30 ? '#1f2328' : '#fff';
 }
 
 /** The shared event fill for Month pills/bars and Day pills: the event's own
