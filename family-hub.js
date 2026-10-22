@@ -1693,7 +1693,7 @@ function renderWeekGrid() {
     const weekEventPill = ev => {
       const pill = document.createElement('div');
       pill.className = 'week-event';
-      pill.style.background = ev.color;
+      paintEventFill(pill, ev.color);
       pill.title = ev.summary;
       if (!ev.allDay && ev.startDT) {
         const t = document.createElement('span');
