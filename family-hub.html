@@ -586,15 +586,16 @@
           <label>Flavor</label>
           <div id="flavorButtons" style="display:flex;gap:8px;flex-wrap:wrap"></div>
         </div>
-        <div class="toggle-row">
-          <label class="toggle-switch">
-            <input type="checkbox" id="safePaletteToggle" />
-            <span class="toggle-track"></span>
-          </label>
-          <div>
-            <div class="toggle-label">Colorblind-safe swatches</div>
-            <div class="toggle-sub">Swaps color pickers for a safe palette.</div>
-          </div>
+        <div class="field">
+          <label for="calPaletteSelect">Calendar colors</label>
+          <select id="calPaletteSelect" onchange="renderCalPalettePreview()">
+            <option value="off">Everyone's own picks</option>
+            <option value="soft">Soft palette</option>
+            <option value="earthy">Earthy palette</option>
+            <option value="colorblind">Colorblind-safe palette</option>
+          </select>
+          <div class="toggle-sub">A palette colors family members in list order and gives calendars, holidays and recurring items softer matching colors. Shared with every device.</div>
+          <div id="calPalettePreview"></div>
         </div>
         <div class="settings-desktop-only">
         <div class="settings-section-head">Layout &amp; display</div>

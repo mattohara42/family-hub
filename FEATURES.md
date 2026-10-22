@@ -169,6 +169,16 @@ let disabledCals = new Set(); // calendar IDs toggled off by user
 - **Budget:** all three views read `budgetEventsForDate(dateKey)` for their bill pills (Month's `.cal-event-budget`, Week's `.week-budget-strip`, Day's `.budget-day-section`) — see §12 Budget for the privacy-toggle gate that lives inside that one function.
 - **Event pill member badges:** `.day-event-pill` is `flex-direction: column` (title above time), so `appendMemberBadges()` — which just appends siblings — would give each badge its own row below the time instead of sitting beside it. `appendPillMeta(pill, timeText, members)` (family-hub.js, next to `appendMemberBadges`) wraps time + badges in one `.evt-meta` flex row instead; called from both of `renderDayGrid()`'s pill builders (the all-day row passes `timeText: null`). Skips building the row entirely when there's neither a time nor any members, so an all-day pill with nobody assigned doesn't grow an empty row.
 
+#### Calendar Palettes (curated colors)
+
+Settings → Look & Feel → Theme → **Calendar colors** (`#calPaletteSelect`, preview in `#calPalettePreview` via `renderCalPalettePreview()`). `calPalette` is `'off'` (everyone's own picks) or a key of `CAL_PALETTES` (`soft`, `earthy`, `colorblind`). It is synced in Firestore `settings/calendarPalette` through `saveFsSetting()`, so every device shows the same colors; `fh_calPalette` only holds it when there's no Firestore.
+
+While a palette is on, nobody's hand-picked color is used. Each palette has two sets. `people` goes to family members by list position (▲▼ reorders change who gets what) and `events`, a softer set, goes to every other source in `paletteSourceKeys()` order: Google calendars, Holidays, ICS subs, Birthdays, then each School period (`school_<id>`) and Recurring item (`rec_<id>`). Both cycle when slots outnumber colors. Turning the palette off restores the stored picks, which are never overwritten.
+
+Two accessors carry this, and any new color read should go through them rather than `m.color`/`sub.color`/`cal.color`: **`memberColor(m)`** and **`sourceColor(key, own)`**. Event colors are stamped at cache time (`cacheCalEvents()` args in `loadAllCalendars()`, `injectIcsEvent()`, `injectLocalEvents()`), so a palette change runs `refreshCalPalette()`, which refetches and redraws the lists. Pickers step aside: `body.cal-palette-on` hides `input.lc-color`, the `.cal-color-wrap` pickers are rendered `disabled`, and a member row shows a `.palette-dot` instead.
+
+The `colorblind` palette replaced the old per-device "Colorblind-safe swatches" toggle (`fh_safePalette`, converted on load, then uploaded by `runFirestoreMigrations()` if no palette is synced yet). It still sets `body.safe-palette-on`, which keeps Tactile decoration suppressed (KTD-4).
+
 #### Event Details (read-only events)
 
 Clicking any calendar event runs through **`onCalEventClick(ev)`**: ours opens the
