@@ -1524,6 +1524,13 @@ body.has-bg .cal-day.today {
   text-overflow: ellipsis;
   line-height: var(--leading-tight);
 }
+/* Member initials sized to read across the room (base badge is 14px) */
+.agenda-title .evt-member-badge {
+  width: 32px; height: 32px;
+  font-size: 1rem;
+  margin-left: 6px;
+}
+.agenda-title > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .agenda-empty {
   text-align: center;
   color: var(--muted);
@@ -2042,14 +2049,21 @@ body.nautical-mode .wx-ticker { background: rgba(200,169,110,.06); border-top-co
 .week-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  grid-template-rows: 1fr; /* columns grow to fill available height */
-  gap: 3px;
+  /* Rows shared by every day column (via subgrid on .week-day-col):
+     header · to-dos · all-day · timed events · bills · meals. A section one
+     day lacks still takes the row's height there, so each band lines up
+     across the week. Only the timed-events row grows. */
+  grid-template-rows: auto auto auto 1fr auto auto;
+  column-gap: 3px; row-gap: 0;
   flex: 1;
   min-height: 0;
   margin-top: 4px;
 }
 .week-day-col {
-  display: flex; flex-direction: column;
+  display: grid;
+  grid-row: 1 / -1;
+  grid-template-rows: auto auto auto 1fr auto auto;   /* no-subgrid fallback */
+  grid-template-rows: subgrid;
   min-height: 0;
   /* Stronger than --line (a hairline divider elsewhere) so each day reads
      as its own column rather than blending into the grid's background. */
@@ -2058,6 +2072,7 @@ body.nautical-mode .wx-ticker { background: rgba(200,169,110,.06); border-top-co
   background: var(--surface2);
 }
 .week-day-header {
+  grid-row: 1;
   text-align: center;
   padding: 3px 4px 2px;
   border-bottom: 1px solid rgba(128,128,128,.12);
@@ -2114,8 +2129,20 @@ body.has-bg.light-mode .week-day-col.today { background: rgba(190,198,225,0.75);
   background: color-mix(in srgb, var(--accent2) 16%, var(--surface2));
   border-radius: 8px; padding: 1px 5px;
 }
+.week-todo-strip {
+  grid-row: 2;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+  padding: 4px 5px 5px;
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+.week-day-allday {
+  grid-row: 3;
+  padding: 4px 3px 0;
+  display: flex; flex-direction: column; gap: 2px;
+}
 .week-day-body {
-  flex: 1; padding: 4px 3px;
+  grid-row: 4; min-height: 0;
+  padding: 4px 3px;
   display: flex; flex-direction: column; gap: 2px;
   overflow-y: auto;
 }
@@ -2207,6 +2234,7 @@ body.has-bg.light-mode .day-hour-row.current-hour { background: rgba(190,198,225
 
 /* ── Meal Planning — Week strip ── */
 .week-meals-strip {
+  grid-row: 6;
   border-top: 1px solid rgba(128,128,128,.12);
   padding: 4px 4px 5px;
   display: flex; flex-direction: column; gap: 2px;
@@ -2532,6 +2560,7 @@ body.nautical-mode .meal-adjust-chip:hover { background: var(--accent2); border-
   .school-day-scrolling .school-day-track { animation: none; }
 }
 .week-budget-strip {
+  grid-row: 5;
   border-top: 1px solid color-mix(in srgb, var(--red) 25%, transparent);
   padding: 4px 5px 5px; background: color-mix(in srgb, var(--red) 7%, transparent);
 }

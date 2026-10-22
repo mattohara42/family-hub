@@ -1680,7 +1680,7 @@ function renderWeekGrid() {
     const weekTodos = todosDueOnDate(dateKey);
     if (weekTodos.length) {
       const todoStrip = document.createElement('div');
-      todoStrip.style.cssText = 'border-bottom:1px solid color-mix(in srgb, var(--accent) 20%, transparent);padding:4px 5px 5px;background:color-mix(in srgb, var(--accent) 6%, transparent);flex-shrink:0';
+      todoStrip.className = 'week-todo-strip';
       weekTodos.forEach(todo => {
         const el = document.createElement('div');
         el.style.cssText = 'font-size:.62rem;color:var(--accent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:1px 3px';
@@ -1692,55 +1692,62 @@ function renderWeekGrid() {
     }
 
     // Events
-    const body = document.createElement('div');
-    body.className = 'week-day-body';
-
     const evts = Object.entries(calEventCache)
       .filter(([calId]) => !disabledCals.has(calId))
       .flatMap(([, byDate]) => byDate[dateKey] || [])
-      .sort((a, b) => {
-        if (a.allDay && !b.allDay) return -1;
-        if (!a.allDay && b.allDay) return 1;
-        return (a.startDT || '') < (b.startDT || '') ? -1 : 1;
-      });
+      .sort((a, b) => (a.startDT || '') < (b.startDT || '') ? -1 : 1);
 
+    const weekEventPill = ev => {
+      const pill = document.createElement('div');
+      pill.className = 'week-event';
+      pill.style.background = ev.color;
+      pill.title = ev.summary;
+      if (!ev.allDay && ev.startDT) {
+        const t = document.createElement('span');
+        t.className = 'week-event-time';
+        t.textContent = new Date(ev.startDT).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        pill.appendChild(t);
+      }
+      const s = document.createElement('span');
+      s.textContent = (ev.holiday ? '🎉 ' : '') + ev.summary + (ev.recurringEventId ? ' ↻' : '');
+      pill.appendChild(s);
+      appendMemberBadges(pill, ev.members);
+      pill.onclick = e => { e.stopPropagation(); onCalEventClick(ev); };
+      if (isEventEditable(ev)) {
+        pill.draggable = true;
+        pill.addEventListener('dragstart', e => {
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', JSON.stringify({
+            eventId: ev.eventId, calId: ev.calId, allDay: ev.allDay,
+            startDT: ev.startDT, endDT: ev.endDT,
+            startDate: ev.startDate, endDate: ev.endDate,
+          }));
+          setTimeout(() => pill.classList.add('cal-dnd-dragging'), 0);
+        });
+        pill.addEventListener('dragend', () => pill.classList.remove('cal-dnd-dragging'));
+      }
+      return pill;
+    };
+
+    // All-day events get their own band (a shared grid row, see .week-grid)
+    // so timed events start at the same height in every column
+    const allDayEvts = evts.filter(ev => ev.allDay);
+    if (allDayEvts.length) {
+      const allDay = document.createElement('div');
+      allDay.className = 'week-day-allday';
+      allDayEvts.forEach(ev => allDay.appendChild(weekEventPill(ev)));
+      col.appendChild(allDay);
+    }
+
+    const body = document.createElement('div');
+    body.className = 'week-day-body';
     if (!evts.length) {
       const empty = document.createElement('div');
       empty.className = 'week-empty';
       empty.textContent = '—';
       body.appendChild(empty);
     } else {
-      evts.forEach(ev => {
-        const pill = document.createElement('div');
-        pill.className = 'week-event';
-        pill.style.background = ev.color;
-        pill.title = ev.summary;
-        if (!ev.allDay && ev.startDT) {
-          const t = document.createElement('span');
-          t.className = 'week-event-time';
-          t.textContent = new Date(ev.startDT).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-          pill.appendChild(t);
-        }
-        const s = document.createElement('span');
-        s.textContent = (ev.holiday ? '🎉 ' : '') + ev.summary + (ev.recurringEventId ? ' ↻' : '');
-        pill.appendChild(s);
-        appendMemberBadges(pill, ev.members);
-        pill.onclick = e => { e.stopPropagation(); onCalEventClick(ev); };
-        if (isEventEditable(ev)) {
-          pill.draggable = true;
-          pill.addEventListener('dragstart', e => {
-            e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData('text/plain', JSON.stringify({
-              eventId: ev.eventId, calId: ev.calId, allDay: ev.allDay,
-              startDT: ev.startDT, endDT: ev.endDT,
-              startDate: ev.startDate, endDate: ev.endDate,
-            }));
-            setTimeout(() => pill.classList.add('cal-dnd-dragging'), 0);
-          });
-          pill.addEventListener('dragend', () => pill.classList.remove('cal-dnd-dragging'));
-        }
-        body.appendChild(pill);
-      });
+      evts.filter(ev => !ev.allDay).forEach(ev => body.appendChild(weekEventPill(ev)));
     }
 
     col.appendChild(body);
