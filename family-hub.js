@@ -1545,7 +1545,8 @@ function renderCurrentView() {
       const ws = getWeekStart(calViewDate);
       const todayWs = getWeekStart(now);
       awayFromToday = ws.toDateString() !== todayWs.toDateString();
-    } else if (calView === 'day') {
+    } else if (calView === 'day' || calView === 'agenda') {
+      // Agenda's 30-day window starts on calViewDate itself
       awayFromToday = calViewDate.toDateString() !== now.toDateString();
     }
     btn.style.display = awayFromToday ? '' : 'none';
