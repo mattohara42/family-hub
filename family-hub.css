@@ -1147,9 +1147,11 @@ body.nautical-mode .card {
   transition: transform var(--cal-slide) cubic-bezier(.22,.61,.36,1),
               opacity   var(--cal-slide) ease;
 }
-/* The week grid scrolls horizontally on narrow screens — that gesture is its
-   own, and setupCalSwipe() stands down inside it (see calSwipeBlocked). */
-#weekView { touch-action: pan-x pan-y pinch-zoom; }
+/* The week grid scrolls horizontally on narrow screens. That gesture is its
+   own until the grid is at the edge the swipe heads for; then setupCalSwipe()
+   pages the week (calScrollerAtEdge). No sideways overscroll, so iOS doesn't
+   rubber-band the grid under the page slide. */
+#weekView { touch-action: pan-x pan-y pinch-zoom; overscroll-behavior-x: none; }
 
 @media (prefers-reduced-motion: reduce) {
   .cal-views, .cal-view-ghost, .cal-views.cal-sliding > * { transition: none; }
