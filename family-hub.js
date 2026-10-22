@@ -5908,6 +5908,8 @@ function attachFirestoreListeners() {
     }
     renderFamilyMemberList();
     renderChoreCard();
+    lcRenderBdayList();
+    renderCurrentView();   // birthdays take member colors
     migrateSmsContactsToMembers();
   }, _fsError));
 
@@ -11230,7 +11232,7 @@ function injectLocalEvents() {
           const age = b.year ? ` (turns ${yr - b.year})` : '';
           lcAddToCache(LC_IDS.birthdays, key, {
             eventId: `bday_${b.id}_${yr}`, summary: `🎂 ${b.name}'s Birthday${age}`,
-            color: sourceColor(LC_IDS.birthdays, '#e91e8c'), allDay: true, startDate: key, endDate: key,
+            color: birthdayColor(b), allDay: true, startDate: key, endDate: key,
           });
         }
       }
@@ -11305,6 +11307,13 @@ function lcOpenSettings() {
 
 
 // ── Birthdays ──
+/** A family member's birthday takes their color; anyone else's, the Birthdays calendar's. */
+function birthdayColor(b) {
+  const name = (b.name || '').trim().toLowerCase();
+  const m = familyMembers.find(m => m.name.trim().toLowerCase() === name);
+  return memberColor(m) || sourceColor(LC_IDS.birthdays, '#e91e8c');
+}
+
 function lcRenderBdayList() {
   const el = document.getElementById('lcBdayList');
   if (!el) return;
@@ -11312,7 +11321,7 @@ function lcRenderBdayList() {
   el.innerHTML = birthdays.map(b => {
     const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const date   = `${months[b.month-1]} ${b.day}${b.year ? ', '+b.year : ''}`;
-    return `<div class="lc-item"><span class="lc-dot" style="background:${sourceColor(LC_IDS.birthdays, '#e91e8c')}"></span>
+    return `<div class="lc-item"><span class="lc-dot" style="background:${birthdayColor(b)}"></span>
       <span class="lc-item-label">${esc(b.name)}</span>
       <span class="lc-item-meta">${date}</span>
       <button class="lc-del" onclick="lcDelBirthday('${esc(b.id)}')">✕</button></div>`;
