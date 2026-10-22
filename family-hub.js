@@ -245,8 +245,8 @@ let assistantName   = localStorage.getItem('fh_assistantName') || 'Family Assist
 const CAL_PALETTES = {
   soft: {
     label:  'Soft',
-    people: ['#E07A5F','#3D7DCA','#5FA582','#9B72CF','#E3A33B','#D16D8F','#3AA6A0','#7E8CE0'],
-    // Each at ~3.5:1 against the white text readableTextOn() puts on them
+    // Every color here, people and events, gives white text at least ~3.5:1
+    people: ['#DB6546','#3D7DCA','#549575','#9B72CF','#B97D1A','#CF688B','#359791','#7382DD'],
     events: ['#788AA5','#9F8561','#679180','#9780AE','#AE7E67','#799066','#9B874A','#6B8EA0'],
   },
   earthy: {
