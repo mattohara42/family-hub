@@ -761,29 +761,30 @@ body.has-bg .day-hour-row {
   padding: 0;
   color: inherit;
 }
-.safe-swatches {
-  display: none;
-  flex-wrap: wrap;
-  gap: 3px;
-  align-items: center;
-}
-.safe-palette-on input.lc-color { display: none; }
-.safe-palette-on .safe-swatches { display: flex; }
-.color-swatch {
-  width: 22px;
-  height: 22px;
-  border-radius: 4px;
-  border: 2px solid transparent;
-  cursor: pointer;
+/* ── Calendar Palettes ── */
+/* A palette assigns every calendar color, so hand pickers step aside. */
+.cal-palette-on input.lc-color { display: none; }
+.cal-palette-on .cal-color-wrap,
+.cal-palette-on .cal-color-wrap input[type=color] { cursor: default; }
+.palette-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
   flex-shrink: 0;
-  padding: 0;
-  transition: border-color 0.12s, transform 0.1s;
-  outline: none;
+  display: inline-block;
+  border: 1px solid var(--line);
 }
-.color-swatch:hover { border-color: var(--text); transform: scale(1.15); }
-.color-swatch.swatch-selected {
-  border-color: var(--text);
-  box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--text);
+#calPalettePreview { margin-top: 8px; }
+.palette-preview-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+.palette-preview-row > span:first-child {
+  width: 56px;
+  font-size: var(--text-xs);
+  color: var(--muted);
 }
 
 /* ── Control card (top of sidebar) ── */

@@ -238,12 +238,34 @@ let userName        = localStorage.getItem('fh_name') || 'Someone';
 let appTitle        = localStorage.getItem('fh_appTitle') || 'Family Hub';
 let appTitleEmoji   = localStorage.getItem('fh_appTitleEmoji') || '🏠';
 let assistantName   = localStorage.getItem('fh_assistantName') || 'Family Assistant';
-let safePaletteMode = lsGet('fh_safePalette', false);
-const SAFE_COLORS = [
-  '#000000','#E69F00','#56B4E9','#009E73',
-  '#F0E442','#0072B2','#D55E00','#CC79A7',
-  '#FFFFFF','#888888','#CC3311','#33BBEE',
-];
+// Curated calendar palettes (synced, settings/calendarPalette). When one is on,
+// nobody's hand-picked color is used: 'people' goes to family members in list
+// order and 'events' to every calendar source in paletteSourceKeys() order,
+// both cycling when there are more slots than colors. 'off' = everyone's picks.
+const CAL_PALETTES = {
+  soft: {
+    label:  'Soft',
+    people: ['#E07A5F','#3D7DCA','#5FA582','#9B72CF','#E3A33B','#D16D8F','#3AA6A0','#7E8CE0'],
+    events: ['#9AA8BC','#B9A68C','#94B3A6','#B3A2C4','#C9A99A','#A7B79A','#C2B280','#9DB4C0'],
+  },
+  earthy: {
+    label:  'Earthy',
+    people: ['#B5562F','#C99A2E','#5E7F3F','#2F6F7E','#7D4E6D','#A0673D','#46638F','#8E3B46'],
+    events: ['#A39B8B','#B3A47E','#8F9C87','#8A9FA3','#A08F98','#B09A85','#919AAB','#A68C80'],
+  },
+  // Okabe-Ito for people, Paul Tol's "light" scheme for everything else.
+  colorblind: {
+    label:  'Colorblind-safe',
+    people: ['#E69F00','#56B4E9','#009E73','#F0E442','#0072B2','#D55E00','#CC79A7'],
+    events: ['#77AADD','#99DDFF','#44BB99','#BBCC33','#EEDD88','#EE8866','#FFAABB','#DDDDDD'],
+  },
+};
+// The old per-device "Colorblind-safe swatches" toggle became the colorblind palette.
+if (lsGet('fh_safePalette', false) && localStorage.getItem('fh_calPalette') === null) {
+  localStorage.setItem('fh_calPalette', JSON.stringify('colorblind'));
+}
+localStorage.removeItem('fh_safePalette');
+let calPalette = lsGet('fh_calPalette', 'off');
 let familyMembers   = lsGet('fh_familyMembers', []);
 // each: { name: string }
 let todoItems       = []; // in-memory mirror of Firestore 'todo' collection for calendar use
@@ -1128,7 +1150,7 @@ window.addEventListener('load', () => {
   renderFlavorButtons();
   applyAppTitle();
   applyAssistantName();
-  applySafePaletteMode();
+  applyCalPalette();
   applyLayoutMode();
   if (new URLSearchParams(location.search).get('tv') === '1') tvMode = true;
   applyTvMode();
@@ -2545,7 +2567,7 @@ async function loadAllCalendars() {
         + `&timeMin=${timeMin}&timeMax=${timeMax}`;
       const r    = await fetch(url, { headers: { Authorization: `Bearer ${googleToken}` } });
       const data = await r.json();
-      if (data.items) cacheCalEvents(calEventCache, id, data.items, color, false);
+      if (data.items) cacheCalEvents(calEventCache, id, data.items, sourceColor(id, color), false);
     } catch(e) { console.warn('Cal error', id, e); }
   });
 
@@ -2558,7 +2580,7 @@ async function loadAllCalendars() {
           + `&timeMin=${timeMin}&timeMax=${timeMax}`;
         const r    = await fetch(url, { headers: { Authorization: `Bearer ${googleToken}` } });
         const data = await r.json();
-        if (data.items) cacheCalEvents(calEventCache, HOLIDAYS_ID, data.items, holidaysColor, true);
+        if (data.items) cacheCalEvents(calEventCache, HOLIDAYS_ID, data.items, sourceColor(HOLIDAYS_ID, holidaysColor), true);
       } catch(e) { console.warn('Holidays error', e); }
     })());
   }
@@ -2675,17 +2697,17 @@ function renderCalendarTabs() {
 
   tabs.innerHTML = '';
 
-  const all = [...calendarMeta];
-  if (showHolidays) all.push({ id: HOLIDAYS_ID, label: 'Holidays', color: holidaysColor });
+  const all = calendarMeta.map(c => ({ ...c, color: sourceColor(c.id, c.color) }));
+  if (showHolidays) all.push({ id: HOLIDAYS_ID, label: 'Holidays', color: sourceColor(HOLIDAYS_ID, holidaysColor) });
   // ICS subscriptions
-  icsSubs.forEach(sub => all.push({ id: sub.id, label: sub.label, color: sub.color }));
+  icsSubs.forEach(sub => all.push({ id: sub.id, label: sub.label, color: sourceColor(sub.id, sub.color) }));
   // Local calendars that have data
   LC_DEFS.forEach(lc => {
     const hasData =
       lc.id === LC_IDS.birthdays ? birthdays.length > 0 :
       lc.id === LC_IDS.school    ? schoolPeriods.length > 0 :
       lc.id === LC_IDS.recurring ? recurringItems.length > 0 : false;
-    if (hasData) all.push({ id: lc.id, label: lc.label, color: lc.color });
+    if (hasData) all.push({ id: lc.id, label: lc.label, color: sourceColor(lc.id, lc.color) });
   });
 
   if (!all.length) {
@@ -2744,12 +2766,13 @@ function renderSettingCalList() {
     // Color swatch / picker
     const colorWrap = document.createElement('div');
     colorWrap.className = 'cal-color-wrap';
-    colorWrap.style.background = color;
+    colorWrap.style.background = sourceColor(id, color);
     const swatch = document.createElement('div');
     swatch.className = 'cal-color-swatch';
     const colorInput = document.createElement('input');
     colorInput.type = 'color';
     colorInput.value = color;
+    colorInput.disabled = !!activePalette();
     colorInput.oninput = e => {
       calendarMeta[i].color = e.target.value;
       colorWrap.style.background = e.target.value;
@@ -2810,12 +2833,13 @@ function renderSettingCalList() {
 
     const colorWrap = document.createElement('div');
     colorWrap.className = 'cal-color-wrap';
-    colorWrap.style.background = holidaysColor;
+    colorWrap.style.background = sourceColor(HOLIDAYS_ID, holidaysColor);
     const swatch = document.createElement('div');
     swatch.className = 'cal-color-swatch';
     const colorInput = document.createElement('input');
     colorInput.type = 'color';
     colorInput.value = holidaysColor;
+    colorInput.disabled = !!activePalette();
     colorInput.oninput = e => {
       holidaysColor = e.target.value;
       localStorage.setItem('fh_holidaysColor', holidaysColor);
@@ -3091,7 +3115,7 @@ function injectIcsEvent(sub, ev) {
     description: ev.description || '',
     location:    ev.location    || '',
     url:         ev.url         || '',
-    color:       sub.color,
+    color:       sourceColor(sub.id, sub.color),
     holiday:     false,
     readOnly:    true,   // subscription: eventId is the feed's UID, calId a sub
     allDay:      !!ev.start?.date,
@@ -3216,12 +3240,13 @@ function renderIcsSubList() {
     // Color picker
     const colorWrap = document.createElement('div');
     colorWrap.className = 'cal-color-wrap';
-    colorWrap.style.background = sub.color;
+    colorWrap.style.background = sourceColor(sub.id, sub.color);
     const swatch = document.createElement('div');
     swatch.className = 'cal-color-swatch';
     const colorInput = document.createElement('input');
     colorInput.type = 'color';
     colorInput.value = sub.color;
+    colorInput.disabled = !!activePalette();
     // Preview on input, persist on change: every Firestore write fires the
     // icsSubs snapshot, which rebuilds this list and drops the open picker.
     colorInput.onchange = e => {
@@ -3658,10 +3683,11 @@ function appendMemberBadges(container, members) {
   if (!members?.length) return;
   members.forEach(name => {
     const m = familyMembers.find(fm => fm.name === name);
-    if (!m?.color) return;
+    const color = memberColor(m);
+    if (!color) return;
     const badge = document.createElement('span');
     badge.className = 'evt-member-badge';
-    badge.style.background = m.color;
+    badge.style.background = color;
     badge.title = name;
     badge.textContent = name[0].toUpperCase();
     container.appendChild(badge);
@@ -3703,7 +3729,7 @@ function stripMemberNames(summary, names) {
 /** One 2px stripe per member, in their color, down the pill's left edge.
  *  Members without a color get none. */
 function applyMemberStripes(pill, names) {
-  const colors = names.map(n => familyMembers.find(m => m.name === n)?.color).filter(Boolean);
+  const colors = names.map(n => memberColor(familyMembers.find(m => m.name === n))).filter(Boolean);
   if (!colors.length) return;
   pill.style.boxShadow = colors.map((c, i) => `inset ${2 * (i + 1)}px 0 0 ${c}`).reverse().join(', ');
   pill.style.paddingLeft = `${2 * colors.length + 2}px`;
@@ -3848,7 +3874,7 @@ function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
     writableCals.forEach(cal => {
       const btn = document.createElement('button');
       btn.className = 'evt-editor-cal-opt';
-      btn.style.color = cal.color;
+      btn.style.color = sourceColor(cal.id, cal.color);
       btn.textContent = cal.label || cal.id.split('@')[0];
       btn.dataset.calId = cal.id;
       const defaultCalId = ev?.calId || writableCals[0].id;
@@ -3874,18 +3900,19 @@ function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
       chip.dataset.memberName = m.name;
       chip.textContent = m.name;
       const selected = ev?.members?.includes(m.name) || false;
+      const color = memberColor(m);
       // Unselected chips tint from the member's own color (via currentColor,
       // see .evt-member-chip in CSS); selected chips go solid + white text,
       // so leave color unset there and let the .selected CSS rule apply it.
-      chip.style.color = selected ? '' : (m.color || '');
+      chip.style.color = selected ? '' : (color || '');
       if (selected) {
         chip.classList.add('selected');
-        chip.style.background = chip.style.borderColor = m.color || 'var(--accent)';
+        chip.style.background = chip.style.borderColor = color || 'var(--accent)';
       }
       chip.onclick = () => {
         const nowSelected = chip.classList.toggle('selected');
-        chip.style.background = chip.style.borderColor = nowSelected ? (m.color || 'var(--accent)') : '';
-        chip.style.color = nowSelected ? '' : (m.color || '');
+        chip.style.background = chip.style.borderColor = nowSelected ? (color || 'var(--accent)') : '';
+        chip.style.color = nowSelected ? '' : (color || '');
       };
       membersContainer.appendChild(chip);
     });
@@ -5974,6 +6001,9 @@ function attachFirestoreListeners() {
     if (doc.exists) mowConfig = { ...MOW_CONFIG, ...doc.data().value };
     _mowReco = null;
   }, _fsError));
+  _fsUnsub.push(db.collection('settings').doc('calendarPalette').onSnapshot(doc => {
+    if (doc.exists && doc.data().value !== calPalette) { calPalette = doc.data().value; refreshCalPalette(); }
+  }, _fsError));
   _fsUnsub.push(db.collection('settings').doc('schoolDayCycle').onSnapshot(doc => {
     if (doc.exists) schoolDayCycle = { ...SCHOOL_CYCLE_DEFAULTS, ...doc.data().value };
     scdRenderCycleStatus(); scdRenderSubjectDayChecks(); renderCurrentView();
@@ -6124,6 +6154,7 @@ function runFirestoreMigrations() {
     { ls: 'fh_mealDietPrefs',  key: 'mealDietPrefs' },
     { ls: 'fh_mowConfig',      key: 'mowConfig' },
     { ls: 'fh_schoolDayCycle', key: 'schoolDayCycle' },
+    { ls: 'fh_calPalette',     key: 'calendarPalette' },
     { ls: 'fh_haConfig',       key: 'homeAssistant' },   // token is NOT synced — see the Home Assistant section
   ].forEach(({ ls, key }) => {
     const raw = localStorage.getItem(ls);
@@ -6394,7 +6425,9 @@ function makeTodoItem(item, onToggle, onDelete) {
 // Post-fetch pass: override ev.color for events whose title contains a member name.
 // Longer names matched first to avoid "Jack" stealing "Jackson's" events.
 function applyMemberColors() {
-  const colored = familyMembers.filter(m => m.color).sort((a, b) => b.name.length - a.name.length);
+  const colored = familyMembers.filter(m => memberColor(m))
+    .map(m => ({ name: m.name, color: memberColor(m) }))
+    .sort((a, b) => b.name.length - a.name.length);
   if (!colored.length) return;
   Object.values(calEventCache).forEach(byDate => {
     Object.values(byDate).forEach(evts => {
@@ -6474,12 +6507,14 @@ function renderFamilyMemberList() {
       row.innerHTML = `
         <div style="display:flex;align-items:center;gap:6px">
           <span style="flex:1">👤 ${esc(m.name)}</span>
-          <input type="color" value="${m.color || '#6c8ef5'}"
+          ${activePalette()
+            ? `<span class="palette-dot" style="background:${memberColor(m)}" title="Color from the ${esc(activePalette().label)} palette"></span>`
+            : `<input type="color" value="${m.color || '#6c8ef5'}"
                  title="Calendar event color for ${esc(m.name)}"
                  class="lc-color"
                  onchange="setFamilyMemberColor(${colorArg},this.value)"
                  style="width:24px;height:24px;border:none;border-radius:4px;cursor:pointer;padding:0;background:none;flex-shrink:0;opacity:${m.color ? '1' : '0.4'}"
-                 oninput="this.style.opacity='1'">
+                 oninput="this.style.opacity='1'">`}
           <select onchange="setFamilyMemberGender(${genderArg},this.value)"
                   style="font-size:.75rem;padding:2px 4px;border-radius:5px;background:var(--surface);border:1px solid rgba(255,255,255,.15);color:var(--text);cursor:pointer"
                   title="Pronouns used by the assistant">
@@ -6499,9 +6534,6 @@ function renderFamilyMemberList() {
         </div>`;
       el.appendChild(row);
     });
-    // Rebuilt rows lose their safe-palette swatches; re-inject them or picking
-    // one (which re-renders via onSnapshot) leaves every row with no picker.
-    applySafePaletteMode();
   }
   populateTodoAssigneeDropdown();
   populateChoreAssigneeDropdown();
@@ -6777,7 +6809,7 @@ function renderChoreCard() {
     const pct = Math.min(100, Math.round((pts / threshold) * 100));
     const rewardLabel = member.rewardName ? ` → ${member.rewardName}` : '';
     header.innerHTML = `
-      <span class="chore-member-name" style="color:${member.color || 'var(--accent)'}">
+      <span class="chore-member-name" style="color:${memberColor(member) || 'var(--accent)'}">
         ${esc(member.name)}
       </span>
       <span class="chore-pts-total">${pts} / ${threshold} pts${rewardLabel}</span>
@@ -6932,7 +6964,7 @@ function renderChoreRewardList() {
     const row = document.createElement('div');
     row.style.cssText = 'background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:10px';
     row.innerHTML = `
-      <div style="font-weight:var(--weight-semi);margin-bottom:8px;color:${m.color || 'var(--accent)'}">
+      <div style="font-weight:var(--weight-semi);margin-bottom:8px;color:${memberColor(m) || 'var(--accent)'}">
         ${esc(m.name)}
         <span style="font-weight:400;color:var(--muted);margin-left:6px;font-size:.8rem">${m.points || 0} pts earned</span>
       </div>
@@ -11198,7 +11230,7 @@ function injectLocalEvents() {
           const age = b.year ? ` (turns ${yr - b.year})` : '';
           lcAddToCache(LC_IDS.birthdays, key, {
             eventId: `bday_${b.id}_${yr}`, summary: `🎂 ${b.name}'s Birthday${age}`,
-            color: '#e91e8c', allDay: true, startDate: key, endDate: key,
+            color: sourceColor(LC_IDS.birthdays, '#e91e8c'), allDay: true, startDate: key, endDate: key,
           });
         }
       }
@@ -11208,6 +11240,7 @@ function injectLocalEvents() {
   // School schedule
   if (!disabledCals.has(LC_IDS.school)) {
     schoolPeriods.forEach(p => {
+      const color = sourceColor('school_' + p.id, p.color);
       lcIterateDays(range, day => {
         const dow = day.getDay();
         if (!p.days.includes(dow)) return;
@@ -11218,7 +11251,7 @@ function injectLocalEvents() {
         const endDT   = new Date(day.getFullYear(), day.getMonth(), day.getDate(), eh, em);
         lcAddToCache(LC_IDS.school, key, {
           eventId: `school_${p.id}_${key}`, summary: `🏫 ${p.name}`,
-          color: p.color, allDay: false, startDT, endDT, startDate: key, endDate: key,
+          color, allDay: false, startDT, endDT, startDate: key, endDate: key,
         });
       });
     });
@@ -11227,12 +11260,13 @@ function injectLocalEvents() {
   // Recurring (medications, trash day, home upkeep, …)
   if (!disabledCals.has(LC_IDS.recurring)) {
     recurringItems.forEach(r => {
+      const color = sourceColor('rec_' + r.id, r.color);
       lcIterateDays(range, day => {
         if (!recurringOccursOn(r, day)) return;
         const key = lcDateKey(day);
         const ev = {
           eventId: `rec_${r.id}_${key}`, summary: `${r.emoji} ${r.name}`.trim(),
-          color: r.color, startDate: key, endDate: key,
+          color, startDate: key, endDate: key,
         };
         if (r.time) {
           const [hh, mm] = r.time.split(':').map(Number);
@@ -11278,7 +11312,7 @@ function lcRenderBdayList() {
   el.innerHTML = birthdays.map(b => {
     const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const date   = `${months[b.month-1]} ${b.day}${b.year ? ', '+b.year : ''}`;
-    return `<div class="lc-item"><span class="lc-dot" style="background:#e91e8c"></span>
+    return `<div class="lc-item"><span class="lc-dot" style="background:${sourceColor(LC_IDS.birthdays, '#e91e8c')}"></span>
       <span class="lc-item-label">${esc(b.name)}</span>
       <span class="lc-item-meta">${date}</span>
       <button class="lc-del" onclick="lcDelBirthday('${esc(b.id)}')">✕</button></div>`;
@@ -11323,7 +11357,7 @@ function lcRenderSchoolList() {
   if (!schoolPeriods.length) { el.innerHTML = '<div class="lc-empty">No classes added yet.</div>'; return; }
   const dayLabels = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   el.innerHTML = schoolPeriods.map(p =>
-    `<div class="lc-item"><span class="lc-dot" style="background:${esc(p.color)}"></span>
+    `<div class="lc-item"><span class="lc-dot" style="background:${esc(sourceColor('school_' + p.id, p.color))}"></span>
       <span class="lc-item-label">${esc(p.name)}</span>
       <span class="lc-item-meta">${esc(p.startTime)}–${esc(p.endTime)} · ${p.days.map(d=>dayLabels[d]).join(', ')}</span>
       <button class="lc-del" onclick="lcDelSchool('${esc(p.id)}')">✕</button></div>`
@@ -11614,7 +11648,7 @@ function lcRenderRecurringList() {
   if (!el) return;
   if (!recurringItems.length) { el.innerHTML = '<div class="lc-empty">Nothing recurring yet.</div>'; return; }
   el.innerHTML = recurringItems.map(r =>
-    `<div class="lc-item"><span class="lc-dot" style="background:${esc(r.color)}"></span>
+    `<div class="lc-item"><span class="lc-dot" style="background:${esc(sourceColor('rec_' + r.id, r.color))}"></span>
       <span class="lc-recur-body">
         <span class="lc-item-label">${esc(r.emoji)} ${esc(r.name)}</span>
         <span class="lc-item-meta">${esc(recurringSummary(r))}</span>
@@ -11810,35 +11844,64 @@ const EMOJI_PICKER_OPTIONS = [
   '🎪','🚀','🎭','🎁','🎉','🐘','🌋','🏕️',
 ];
 
-function applySafePaletteMode() {
-  document.body.classList.toggle('safe-palette-on', safePaletteMode);
-  document.querySelectorAll('input.lc-color').forEach(input => {
-    let swatches = input.nextElementSibling;
-    if (!swatches || !swatches.classList.contains('safe-swatches')) {
-      swatches = document.createElement('div');
-      swatches.className = 'safe-swatches';
-      SAFE_COLORS.forEach(color => {
-        const s = document.createElement('button');
-        s.type = 'button';
-        s.className = 'color-swatch';
-        s.style.background = color;
-        s.title = color;
-        s.onclick = () => {
-          input.value = color;
-          swatches.querySelectorAll('.color-swatch').forEach(b => b.classList.remove('swatch-selected'));
-          s.classList.add('swatch-selected');
-          input.dispatchEvent(new Event('change', { bubbles: true }));
-          input.dispatchEvent(new Event('input',  { bubbles: true }));
-        };
-        swatches.appendChild(s);
-      });
-      input.insertAdjacentElement('afterend', swatches);
-    }
-    const cur = input.value.toUpperCase();
-    swatches.querySelectorAll('.color-swatch').forEach(s => {
-      s.classList.toggle('swatch-selected', s.title.toUpperCase() === cur);
-    });
-  });
+// ── Calendar Palettes ──
+
+function activePalette() { return CAL_PALETTES[calPalette] || null; }
+
+/** A member's calendar color: their palette slot (list order) while a palette
+ *  is on, otherwise their own pick (null = no color). */
+function memberColor(m) {
+  const p = activePalette();
+  if (!p || !m) return m?.color || null;
+  return p.people[Math.max(familyMembers.indexOf(m), 0) % p.people.length];
+}
+
+/** Every non-member color source, in the order palette slots are handed out:
+ *  Google calendars first so the main ones never share a color. */
+function paletteSourceKeys() {
+  return [
+    ...calendarMeta.map(c => c.id), HOLIDAYS_ID, ...icsSubs.map(s => s.id), LC_IDS.birthdays,
+    ...schoolPeriods.map(p => 'school_' + p.id), ...recurringItems.map(r => 'rec_' + r.id),
+  ];
+}
+
+/** A calendar source's color: its palette slot while a palette is on,
+ *  otherwise `own`. Group rows with no slot of their own (the School and
+ *  Recurring tabs) take the first one. */
+function sourceColor(key, own) {
+  const p = activePalette();
+  if (!p) return own;
+  return p.events[Math.max(paletteSourceKeys().indexOf(key), 0) % p.events.length];
+}
+
+function applyCalPalette() {
+  document.body.classList.toggle('cal-palette-on', !!activePalette());
+  // Keeps the old toggle's class, which also strips Tactile decoration (KTD-4).
+  document.body.classList.toggle('safe-palette-on', calPalette === 'colorblind');
+}
+
+/** Re-stamp event colors and redraw everything that shows them. */
+function refreshCalPalette() {
+  applyCalPalette();
+  if (googleToken) loadAllCalendars();
+  else loadIcsSubs().then(() => { renderCalendarTabs(); renderCurrentView(); });
+  renderFamilyMemberList();
+  renderSettingCalList();
+  renderIcsSubList();
+  lcRenderSchoolList();
+  lcRenderRecurringList();
+  lcRenderBdayList();
+}
+
+/** Settings preview: each palette's family and event colors. */
+function renderCalPalettePreview() {
+  const el = document.getElementById('calPalettePreview');
+  if (!el) return;
+  const p = CAL_PALETTES[document.getElementById('calPaletteSelect').value];
+  el.innerHTML = p ? ['people', 'events'].map(k => `<div class="palette-preview-row">
+      <span>${k === 'people' ? 'Family' : 'Events'}</span>
+      ${p[k].map(c => `<span class="palette-dot" style="background:${c}"></span>`).join('')}
+    </div>`).join('') : '';
 }
 
 function applyAppTitle() {
@@ -12390,7 +12453,8 @@ function openSettings() {
   });
   renderChoreRewardList();
   lcOpenSettings();
-  document.getElementById('safePaletteToggle').checked = safePaletteMode;
+  document.getElementById('calPaletteSelect').value = CAL_PALETTES[calPalette] ? calPalette : 'off';
+  renderCalPalettePreview();
   document.querySelector(`input[name="assistantWelcome"][value="${assistantWelcomeMode}"]`).checked = true;
   document.getElementById('tvModeToggle').checked = tvMode;
   // Easter egg category toggles
@@ -12405,7 +12469,6 @@ function openSettings() {
   document.getElementById('haTestResult').className   = 'ha-test';
   renderHaEntitySettings();
   document.getElementById('settingsModal').style.display = 'flex';
-  applySafePaletteMode();
   trapFocus(document.querySelector('#settingsModal .modal'), document.getElementById('settingsBtn'), closeSettings);
 }
 
@@ -12453,9 +12516,12 @@ function saveSettings() {
   localStorage.setItem('fh_wxActivity',    JSON.stringify(wxActivityEnabled));
   localStorage.setItem('fh_wxEnabledViews', JSON.stringify(wxEnabledViews));
   applyWxViewToggles();
-  safePaletteMode = document.getElementById('safePaletteToggle').checked;
-  localStorage.setItem('fh_safePalette', JSON.stringify(safePaletteMode));
-  applySafePaletteMode();
+  const newPalette = document.getElementById('calPaletteSelect').value;
+  const paletteChanged = newPalette !== calPalette;
+  if (paletteChanged) {
+    calPalette = newPalette;
+    saveFsSetting('calendarPalette', 'fh_calPalette', calPalette);
+  }
   const welcomeRadio = document.querySelector('input[name="assistantWelcome"]:checked');
   if (welcomeRadio) {
     assistantWelcomeMode = welcomeRadio.value;
@@ -12552,6 +12618,7 @@ function saveSettings() {
     else localStorage.removeItem('fh_haToken');
   }
   closeSettings();
+  if (paletteChanged) refreshCalPalette();
   if (haUrlError) showToast('⚠️ Home Assistant URL not saved: ' + haUrlError, 6000);
   startHaPolling();
   injectLocalEvents();
