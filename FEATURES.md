@@ -175,6 +175,8 @@ Settings → Look & Feel → Theme → **Calendar colors** (`#calPaletteSelect`,
 
 While a palette is on, nobody's hand-picked color is used. Each palette has two sets. `people` goes to family members by list position (▲▼ reorders change who gets what) and `events`, a softer set, goes to every other source in `paletteSourceKeys()` order: Google calendars, Holidays, ICS subs, Birthdays, then each School period (`school_<id>`) and Recurring item (`rec_<id>`). Both cycle when slots outnumber colors. Turning the palette off restores the stored picks, which are never overwritten.
 
+A birthday whose name matches a family member (whole name, case-insensitive) takes that member's color through `birthdayColor(b)`, palette or not; anyone else's uses the Birthdays color. The member snapshot re-renders the calendar so this holds when members load after birthdays.
+
 Two accessors carry this, and any new color read should go through them rather than `m.color`/`sub.color`/`cal.color`: **`memberColor(m)`** and **`sourceColor(key, own)`**. Event colors are stamped at cache time (`cacheCalEvents()` args in `loadAllCalendars()`, `injectIcsEvent()`, `injectLocalEvents()`), so a palette change runs `refreshCalPalette()`, which refetches and redraws the lists. Pickers step aside: `body.cal-palette-on` hides `input.lc-color`, the `.cal-color-wrap` pickers are rendered `disabled`, and a member row shows a `.palette-dot` instead.
 
 The `colorblind` palette replaced the old per-device "Colorblind-safe swatches" toggle (`fh_safePalette`, converted on load, then uploaded by `runFirestoreMigrations()` if no palette is synced yet). It still sets `body.safe-palette-on`, which keeps Tactile decoration suppressed (KTD-4).
