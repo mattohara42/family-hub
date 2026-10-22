@@ -1676,21 +1676,6 @@ function renderWeekGrid() {
     }
     col.appendChild(hdr);
 
-    // ── To-Do due on this day (always at TOP, just under header) ──
-    const weekTodos = todosDueOnDate(dateKey);
-    if (weekTodos.length) {
-      const todoStrip = document.createElement('div');
-      todoStrip.className = 'week-todo-strip';
-      weekTodos.forEach(todo => {
-        const el = document.createElement('div');
-        el.style.cssText = 'font-size:.62rem;color:var(--accent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:1px 3px';
-        el.textContent = '✅ ' + todo.text + (todo.assignedTo ? ' · ' + todo.assignedTo : '');
-        el.title = todo.text;
-        todoStrip.appendChild(el);
-      });
-      col.appendChild(todoStrip);
-    }
-
     // Events
     const evts = Object.entries(calEventCache)
       .filter(([calId]) => !disabledCals.has(calId))
@@ -1730,8 +1715,11 @@ function renderWeekGrid() {
     };
 
     // All-day events get their own band (a shared grid row, see .week-grid)
-    // so timed events start at the same height in every column
-    const allDayEvts = evts.filter(ev => ev.allDay);
+    // so timed events start at the same height in every column. All-day
+    // Recurring items (trash day, upkeep) are chores, so they sit with the
+    // to-dos at the bottom instead
+    const isChore = ev => ev.allDay && ev.calId === LC_IDS.recurring;
+    const allDayEvts = evts.filter(ev => ev.allDay && !isChore(ev));
     if (allDayEvts.length) {
       const allDay = document.createElement('div');
       allDay.className = 'week-day-allday';
@@ -1751,6 +1739,23 @@ function renderWeekGrid() {
     }
 
     col.appendChild(body);
+
+    // ── To-Dos due and all-day Recurring items, below the timed events ──
+    const weekTodos = todosDueOnDate(dateKey);
+    const choreEvts = evts.filter(isChore);
+    if (weekTodos.length || choreEvts.length) {
+      const tasksStrip = document.createElement('div');
+      tasksStrip.className = 'week-tasks-strip';
+      choreEvts.forEach(ev => tasksStrip.appendChild(weekEventPill(ev)));
+      weekTodos.forEach(todo => {
+        const el = document.createElement('div');
+        el.className = 'week-todo-item';
+        el.textContent = '✅ ' + todo.text + (todo.assignedTo ? ' · ' + todo.assignedTo : '');
+        el.title = todo.text;
+        tasksStrip.appendChild(el);
+      });
+      col.appendChild(tasksStrip);
+    }
 
     // Drop zone: the whole day column accepts dragged events
     if (googleToken) {
