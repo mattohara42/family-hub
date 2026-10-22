@@ -246,7 +246,8 @@ const CAL_PALETTES = {
   soft: {
     label:  'Soft',
     people: ['#E07A5F','#3D7DCA','#5FA582','#9B72CF','#E3A33B','#D16D8F','#3AA6A0','#7E8CE0'],
-    events: ['#9AA8BC','#B9A68C','#94B3A6','#B3A2C4','#C9A99A','#A7B79A','#C2B280','#9DB4C0'],
+    // Each at ~3.5:1 against the white text readableTextOn() puts on them
+    events: ['#788AA5','#9F8561','#679180','#9780AE','#AE7E67','#799066','#9B874A','#6B8EA0'],
   },
   earthy: {
     label:  'Earthy',
@@ -3732,7 +3733,8 @@ function stripMemberNames(summary, names) {
 function applyMemberStripes(pill, names) {
   const colors = names.map(n => memberColor(familyMembers.find(m => m.name === n))).filter(Boolean);
   if (!colors.length) return;
-  pill.style.boxShadow = colors.map((c, i) => `inset ${2 * (i + 1)}px 0 0 ${c}`).reverse().join(', ');
+  // A variable, not box-shadow itself, so the pill keeps its Event depth layers
+  pill.style.setProperty('--member-stripes', colors.map((c, i) => `inset ${2 * (i + 1)}px 0 0 ${c}`).reverse().join(', '));
   pill.style.paddingLeft = `${2 * colors.length + 2}px`;
 }
 
