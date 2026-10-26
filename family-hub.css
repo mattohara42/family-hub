@@ -6262,6 +6262,17 @@ html.wall-display .school-day-subject-chip { padding: 2px 7px; border-radius: 10
 @media (min-width: 1200px) {
   html.wall-display .layout { grid-template-columns: 1fr 380px; }
 }
+/* Finger-sized scrollbars (Chromium's default is a few px wide). The :is()
+   lifts these to tie the Nautical/Aurora `.sidebar::-webkit-scrollbar` rules,
+   and coming later wins the tie. Scrollbars hidden with scrollbar-width: none
+   stay hidden, since that property overrides ::-webkit-scrollbar. */
+html.wall-display :is(*, .sidebar)::-webkit-scrollbar { width: 18px; height: 18px; }
+html.wall-display :is(*, .sidebar)::-webkit-scrollbar-track { background: color-mix(in srgb, var(--muted) 12%, transparent); border-radius: 9px; }
+html.wall-display :is(*, .sidebar)::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--muted) 75%, transparent);
+  border: 3px solid transparent; background-clip: padding-box;
+  border-radius: 9px; min-height: 48px;
+}
 
 /* ── Phone overrides (generic) ──
    Kept at the very end of the file on purpose. A media query adds no
