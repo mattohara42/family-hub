@@ -38,6 +38,7 @@ you edit is what the browser runs.
 - Month / Week / Day views over multiple Google Calendars, colour-coded and individually toggleable
 - **ICS subscriptions** — subscribe to any public or secret `.ics` feed (school, sports, Outlook) with no Google sign-in at all; recurrence (`RRULE`/`EXDATE`/`TZID`) is expanded client-side
 - Year at a Glance mini-month strip, countdowns, and conflict detection
+- **Recurring items** (medications, trash and recycling, air filters, smoke alarm checks) on any every-N-days/weeks/months/years schedule, shown as their own calendar
 
 **Household**
 - **Shopping list**, **to-do list** and **budget** — shared in real time via Firestore, live on every device
@@ -87,12 +88,14 @@ Production runs on Netlify as a static site at **[familial.netlify.app](https://
 | `netlify/functions/ics.js`    | ICS feed proxy (CORS + SSRF-guarded) |
 | `netlify/functions/news.js`   | RSS/Atom proxy for headline feeds |
 
-Publish directory is `.`; the build command (`node netlify-build.js`) only stamps a fresh
-cache version into `sw.js` so each deploy invalidates the old service-worker cache.
+Publish directory is `.`; the build command (`node netlify-build.js`) stamps a fresh
+cache version into `sw.js` so each deploy invalidates the old service-worker cache, and
+writes `config.js` from env vars when they're set (below).
 
 Backend keys are set as Netlify environment variables — `GEMINI_KEY`, `TICKETMASTER_KEY`,
-`OWM_KEY`. Client-side config (Firebase, Google OAuth client ID) lives in the config block at
-the top of `family-hub.js`.
+`OWM_KEY`. Client-side config (Firebase, Google OAuth client ID) lives in `config.js`. A fork
+running its own Google/Firebase projects sets `GOOGLE_CLIENT_ID` and `FIREBASE_CONFIG` on
+Netlify instead of editing that file; see [family-hub-setup.md](family-hub-setup.md).
 
 **Any new serving origin must be added to Google Cloud Console → Authorized JavaScript
 Origins _and_ Firebase Console → Authorized Domains**, or sign-in silently fails.
@@ -103,6 +106,7 @@ Origins _and_ Firebase Console → Authorized Domains**, or sign-in silently fai
 family-hub.html        markup + CDN script tags (no inline CSS/JS)
 family-hub.css         all styling — vars, layout, components, themes, flavors
 family-hub.js          all logic + the config block at the top
+config.js              Firebase + Google client ID (rewritten from env vars on deploy)
 manifest.json  sw.js   PWA manifest and service worker
 firestore.rules        Firestore security rules (auth-gated)
 netlify.toml           headers, redirects, CSP-adjacent config

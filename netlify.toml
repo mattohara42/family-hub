@@ -19,8 +19,12 @@
     Referrer-Policy = "strict-origin-when-cross-origin"
     Permissions-Policy = "geolocation=(self), microphone=(self), camera=()"
 
-# Never cache the HTML entry point or service worker — users must always get
-# the latest version so SW updates are picked up promptly.
+# Never cache the HTML entry point, service worker, or app CSS/JS — users
+# must always get the latest version. The service worker's own fetch handler
+# is network-first, but that fetch() still runs underneath the browser's own
+# HTTP cache: without this, a normal reload (not a hard refresh) could keep
+# serving a stale cached family-hub.css/js response without ever reaching
+# the network the SW thinks it's hitting.
 [[headers]]
   for = "/family-hub.html"
   [headers.values]
@@ -28,5 +32,20 @@
 
 [[headers]]
   for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/family-hub.css"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/family-hub.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/config.js"
   [headers.values]
     Cache-Control = "no-cache"

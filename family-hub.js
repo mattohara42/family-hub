@@ -1,18 +1,19 @@
 // ════════════════════════════════════════════════════════════════
-//  🔧 CONFIGURATION — fill these in before opening the app
+//  🔧 CONFIGURATION: Firebase + Google client ID live in config.js
 // ════════════════════════════════════════════════════════════════
 
-const FIREBASE_CONFIG = {
-  apiKey:            "AIzaSyCq_WtqHd5WmJldlNptE8zchu2RmuAX_yE",
-  authDomain:        "familyhub-5fc43.firebaseapp.com",
-  projectId:         "familyhub-5fc43",
-  storageBucket:     "familyhub-5fc43.firebasestorage.app",
-  messagingSenderId: "941604403053",
-  appId:             "1:941604403053:web:4ba83f1a451693f69b8c64"
-};
-
-const GOOGLE_CLIENT_ID = "1023822683234-e0pslac1cag5ju2o26gl5c9kq36udr7q.apps.googleusercontent.com";
-const GOOGLE_SCOPES    = "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly";
+// config.js loads first and sets window.FH_CONFIG. Missing or empty values
+// show the setup banner instead of crashing (see isConfigured below).
+const FH_CONFIG        = window.FH_CONFIG || {};
+const FIREBASE_CONFIG  = FH_CONFIG.firebase || {};
+const GOOGLE_CLIENT_ID = FH_CONFIG.googleClientId || '';
+const GOOGLE_SCOPES    = [
+  'https://www.googleapis.com/auth/calendar.events',
+  'https://www.googleapis.com/auth/calendar.readonly',
+  'https://www.googleapis.com/auth/userinfo.profile',
+  'https://www.googleapis.com/auth/userinfo.email',
+  'https://www.googleapis.com/auth/photospicker.mediaitems.readonly',
+].join(' ');
 
 // Weather needs NO API key — it uses keyless Open-Meteo (see helpers below).
 const WEATHER_CITY     = "";   // ← e.g. "Rochester, US"  (optional — can also set in ⚙️)
@@ -136,6 +137,13 @@ function geminiFetch(body) {
   return fetch('/.netlify/functions/ai', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ model: GEMINI_MODEL, ...body }),
+  }).then(r => {
+    // A non-JSON reply means there's no function here (python http.server's 501,
+    // or a 404 page), not a Gemini error, which the proxy passes through as JSON.
+    if ((r.headers.get('content-type') || '').includes('json')) return r;
+    return new Response(JSON.stringify({ error: { message:
+      'No AI proxy here and no Gemini key on this device. Run `netlify dev`, or add a key in ⚙️ Settings → 🤖 Assistant.' } }),
+      { status: r.status, headers: { 'Content-Type': 'application/json' } });
   });
 }
 
@@ -167,9 +175,7 @@ function lsGet(key, fallback) {
 }
 
 // ── Detect unconfigured state ──────────────────────────────────
-const isConfigured =
-  FIREBASE_CONFIG.apiKey !== "YOUR_FIREBASE_API_KEY" &&
-  GOOGLE_CLIENT_ID !== "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com";
+const isConfigured = Boolean(FIREBASE_CONFIG.apiKey && GOOGLE_CLIENT_ID);
 
 if (!isConfigured) {
   document.getElementById('configBanner').style.display = 'block';
@@ -226,16 +232,41 @@ let wxActivityEnabled   = lsGet('fh_wxActivity', true);    // activity tags stri
 // ── Event Discovery ──
 let eventLocation       = lsGet('fh_eventLocation', 'Rochester');  // City name for event search
 let eventMaxDistance    = lsGet('fh_eventMaxDistance', 120);       // Minutes: 30, 60, or 120
+let eventsEnabled       = lsGet('fh_eventsEnabled', true);         // per-device 💡 toggle
+let eventsBackend       = null;  // setup probe result: { configured, sources }; null until it answers
 let userName        = localStorage.getItem('fh_name') || 'Someone';
 let appTitle        = localStorage.getItem('fh_appTitle') || 'Family Hub';
 let appTitleEmoji   = localStorage.getItem('fh_appTitleEmoji') || '🏠';
 let assistantName   = localStorage.getItem('fh_assistantName') || 'Family Assistant';
-let safePaletteMode = lsGet('fh_safePalette', false);
-const SAFE_COLORS = [
-  '#000000','#E69F00','#56B4E9','#009E73',
-  '#F0E442','#0072B2','#D55E00','#CC79A7',
-  '#FFFFFF','#888888','#CC3311','#33BBEE',
-];
+// Curated calendar palettes (synced, settings/calendarPalette). When one is on,
+// nobody's hand-picked color is used: 'people' goes to family members in list
+// order and 'events' to every calendar source in paletteSourceKeys() order,
+// both cycling when there are more slots than colors. 'off' = everyone's picks.
+const CAL_PALETTES = {
+  soft: {
+    label:  'Soft',
+    // Every color here, people and events, gives white text at least ~3.5:1
+    people: ['#DB6546','#3D7DCA','#549575','#9B72CF','#B97D1A','#CF688B','#359791','#7382DD'],
+    events: ['#788AA5','#9F8561','#679180','#9780AE','#AE7E67','#799066','#9B874A','#6B8EA0'],
+  },
+  earthy: {
+    label:  'Earthy',
+    people: ['#B5562F','#C99A2E','#5E7F3F','#2F6F7E','#7D4E6D','#A0673D','#46638F','#8E3B46'],
+    events: ['#A39B8B','#B3A47E','#8F9C87','#8A9FA3','#A08F98','#B09A85','#919AAB','#A68C80'],
+  },
+  // Okabe-Ito for people, Paul Tol's "light" scheme for everything else.
+  colorblind: {
+    label:  'Colorblind-safe',
+    people: ['#E69F00','#56B4E9','#009E73','#F0E442','#0072B2','#D55E00','#CC79A7'],
+    events: ['#77AADD','#99DDFF','#44BB99','#BBCC33','#EEDD88','#EE8866','#FFAABB','#DDDDDD'],
+  },
+};
+// The old per-device "Colorblind-safe swatches" toggle became the colorblind palette.
+if (lsGet('fh_safePalette', false) && localStorage.getItem('fh_calPalette') === null) {
+  localStorage.setItem('fh_calPalette', JSON.stringify('colorblind'));
+}
+localStorage.removeItem('fh_safePalette');
+let calPalette = lsGet('fh_calPalette', 'off');
 let familyMembers   = lsGet('fh_familyMembers', []);
 // each: { name: string }
 let todoItems       = []; // in-memory mirror of Firestore 'todo' collection for calendar use
@@ -253,8 +284,12 @@ const FLAVORS = [
 const _savedFlavor  = localStorage.getItem('fh_flavor');
 let appFlavor       = FLAVORS.some(f => f.id === _savedFlavor) ? _savedFlavor : 'basic';  // design-system layer, orthogonal to appMode
 // Compute isMobile boolean for viewport-width-dependent logic
+// A phone turned sideways is ~930px wide but only ~430px tall, so width alone
+// handed it the desktop layout squeezed into a strip. Mirrors the CSS mobile
+// query (family-hub.css, every `max-width: 640px` block).
 function updateIsMobile() {
-  return window.innerWidth < 640;
+  return window.innerWidth < 640
+    || window.matchMedia('(max-height: 500px) and (orientation: landscape) and (pointer: coarse)').matches;
 }
 let isMobile = updateIsMobile();
 
@@ -265,6 +300,8 @@ window.addEventListener('resize', () => {
   isMobile = updateIsMobile();
   if (wasMobile !== isMobile) {
     applyWidgetPlacement();
+    applyBudgetPrivacy();   // calBudgetPrivacyBtn only shows under isMobile
+    if (calView === 'month') renderMonthGrid(); // pill labels differ under isMobile
     resetSaverIdleTimer();  // screensaver is desktop-only; re-arm/disarm on crossing
   }
 });
@@ -328,14 +365,6 @@ let mealPantryDef   = localStorage.getItem('fh_mealPantry')               || '';
 let mealTemplates   = lsGet('fh_mealTemplates', []);
 let recipeBox        = lsGet('fh_recipeBox', []);
 let _manualMealIngredients = []; // ingredients being built for the manual-entry meal form
-// ── Shopping categories ───────────────────────────────────────────────────
-const SHOP_DEFAULT_CATEGORIES = ['Produce','Dairy','Meat & Seafood','Bakery','Frozen','Pantry','Beverages','Household','Other'];
-const SHOP_CATEGORY_ICONS = {
-  'Produce':'🥦','Dairy':'🧀','Meat & Seafood':'🥩','Bakery':'🍞',
-  'Frozen':'🧊','Pantry':'🥫','Beverages':'🧃','Household':'🧹','Other':'📦'
-};
-let shopCategories = lsGet('fh_shopCategories', SHOP_DEFAULT_CATEGORIES.slice());
-let shopCollapsed  = {};   // { categoryName: true } — true means collapsed
 // ── Family Assistant state ─────────────────────────────────────────────────
 const ASSISTANT_HISTORY_KEY = 'fh_assistantHistory';
 const ASSISTANT_HISTORY_MAX = 40; // store up to 40 half-turns (~20 exchanges)
@@ -348,6 +377,10 @@ let assistantHistory = (()=>{
 let shopItemsCache    = [];   // in-memory mirror of shopping items for context
 let assistantRecognition = null;  // SpeechRecognition instance
 let assistantListening   = false; // true while mic is open
+let assistantVoiceSent   = false; // this mic session already sent its final result
+let assistantVoiceEngine = lsGet('fh_voiceEngine', 'browser'); // 'browser' (SpeechRecognition) | 'gemini' (record + Gemini transcribes)
+let assistantRecorder    = null;  // MediaRecorder while a Gemini-voice clip is recording
+let assistantSending     = false; // a sendAssistantMessage() round-trip is in flight
 let assistantTTS         = lsGet('fh_assistantTTS', false); // read replies aloud
 let assistantWelcomeMode = localStorage.getItem('fh_assistantWelcome') || 'ticker'; // 'static' | 'ticker'
 let oskEnabled           = lsGet('fh_osk', false); // on-screen keyboard for keyboardless wall displays
@@ -559,6 +592,13 @@ function applyWidgetVisibility() {
 // ── Budget ───────────────────────────────────────────────────────────────────
 let budgetItems = []; // populated by Firestore onSnapshot (or localStorage fallback)
 const BUDGET_COLOR = '#e57373'; // persisted on the Firestore record; render paths use var(--red) via CSS
+// Per-device "privacy" toggle — hides $ content everywhere it can appear
+// (the sidebar card, and the Month/Week/Day calendar views' bill pills)
+// while leaving the sidebar card + toggle button visible, so a public wall
+// display can be flipped to Budget and back without walking through
+// Settings. Independent of widgetVisibility.budget, which controls whether
+// the whole card exists on this device at all.
+let budgetHidden = lsGet('fh_budgetHidden', false);
 
 // ── Chore Chart state ───────────────────────────────────────────
 let choreItems = []; // { id, text, points, assignedTo (member id), doneDate }
@@ -597,14 +637,16 @@ function budgetDatesInRange(item, startD, endD) {
   return results;
 }
 
-/** All budget events for a given date key (YYYY-MM-DD) */
 /** Returns todo items with dueDate === dateKey that are not done */
 function todosDueOnDate(dateKey) {
   return todoItems.filter(t => t.dueDate === dateKey && !t.done);
 }
 
+// All budget events for a given date key (YYYY-MM-DD). Gated on budgetHidden
+// so every render path that reads it — the sidebar card, and the Month/Week/
+// Day calendar views' bill pills — honors the privacy toggle from one place.
 function budgetEventsForDate(dateKey) {
-  if (!budgetItems.length) return [];
+  if (!budgetItems.length || budgetHidden) return [];
   const d = new Date(dateKey + 'T00:00:00');
   return budgetItems.filter(item => budgetDatesInRange(item, d, d).length > 0);
 }
@@ -643,11 +685,11 @@ function renderBudgetCard() {
 
   // ── Compute range & label from the active calendar view ──
   let start, end, periodLabel, summaryTitle;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateKey(new Date());
 
   if (calView === 'week') {
     const ws = getWeekStart(calViewDate);
-    const we = new Date(ws.getTime() + 6 * 86400000);
+    const we = addDays(ws, 6);
     start = ws; end = we;
     const sameMonth = ws.getMonth() === we.getMonth();
     periodLabel = sameMonth
@@ -682,7 +724,7 @@ function renderBudgetCard() {
   if (totalCard && totalInner) {
     // Week range anchored to calViewDate
     const ws = getWeekStart(calViewDate);
-    const we = new Date(ws.getTime() + 6 * 86400000);
+    const we = addDays(ws, 6);
     const weekItems = [];
     budgetItems.forEach(item => budgetDatesInRange(item, ws, we).forEach(d => weekItems.push(item)));
     const weekTotal = weekItems.reduce((s, item) => s + item.amount, 0);
@@ -812,6 +854,45 @@ function renderBudgetCard() {
     manageList.appendChild(r);
   });
   body.appendChild(manageList);
+
+  applyBudgetPrivacy();
+}
+
+// Applied after every renderBudgetCard() so it always has the last word on
+// whether the $ content is showing, regardless of what triggered the render.
+function applyBudgetPrivacy() {
+  const body   = document.getElementById('budgetCardBody');
+  const total  = document.getElementById('budgetTotalCard');
+  const addBtn = document.getElementById('budgetAddBtn');
+  const notice = document.getElementById('budgetHiddenNotice');
+  const btn    = document.getElementById('budgetPrivacyBtn');
+  if (body)   body.style.display   = budgetHidden ? 'none' : '';
+  if (total && budgetHidden) total.style.display = 'none';
+  if (addBtn) addBtn.style.display = budgetHidden ? 'none' : '';
+  if (notice) notice.style.display = budgetHidden ? '' : 'none';
+  if (btn) {
+    btn.textContent = budgetHidden ? '🙈' : '👁';
+    btn.title = budgetHidden ? 'Show bill amounts' : 'Hide bill amounts (privacy)';
+  }
+  // The sidebar Budget card (btn, above) isn't reachable on mobile at all —
+  // this is the same toggleBudgetPrivacy()/budgetHidden gate, surfaced in the
+  // calendar header instead so a phone has *some* way to flip it. Only shown
+  // once the family actually has budget items to hide.
+  const calBtn = document.getElementById('calBudgetPrivacyBtn');
+  if (calBtn) {
+    calBtn.style.display = (isMobile && budgetItems.length) ? '' : 'none';
+    calBtn.textContent = budgetHidden ? '🙈' : '👁';
+    calBtn.title = budgetHidden ? 'Show bill amounts' : 'Hide bill amounts (privacy)';
+    calBtn.setAttribute('aria-label', calBtn.title);
+  }
+}
+function toggleBudgetPrivacy() {
+  budgetHidden = !budgetHidden;
+  localStorage.setItem('fh_budgetHidden', JSON.stringify(budgetHidden));
+  // renderCurrentView() re-renders Month/Week/Day (budgetEventsForDate() gates
+  // on budgetHidden) and ends by calling renderBudgetCard(), which itself
+  // calls applyBudgetPrivacy() — one call refreshes both surfaces.
+  renderCurrentView();
 }
 
 function openBudgetCardAdd() {
@@ -821,7 +902,7 @@ function openBudgetCardAdd() {
   document.getElementById('biAmount').value     = '';
   document.getElementById('biFreq').value       = 'monthly';
   document.getElementById('biDayOfMonth').value = new Date().getDate();
-  document.getElementById('biStartDate').value  = new Date().toISOString().slice(0, 10);
+  document.getElementById('biStartDate').value  = localDateKey(new Date());
   updateBudgetFormFields();
   form.style.display = '';
   document.getElementById('biName').focus();
@@ -1024,6 +1105,12 @@ window.onerror = (msg, src, line, col, err) => {
 // clients.claim, so when a new sw.js lands it takes control and fires
 // controllerchange — we reload to pick it up, but only while idle (no modal
 // open, no interaction for 60s) so we never interrupt someone mid-edit.
+// netlify-build.js stamps a unique CACHE_VERSION on every deploy, so two
+// deploys landing a few minutes apart (e.g. two merged PRs back to back)
+// each look like a fresh update — without a cooldown, that reloads the tab
+// once per deploy in quick succession, which reads as a reload loop even
+// though each one is a distinct, legitimate update.
+const RELOAD_COOLDOWN_MS = 5 * 60000;
 let _swUpdatePending = false;
 let _lastActivityTs  = Date.now();
 function markActivity() { _lastActivityTs = Date.now(); }
@@ -1033,6 +1120,10 @@ function maybeReloadForUpdate() {
     .some(m => getComputedStyle(m).display !== 'none');
   if (busy) return;
   if (Date.now() - _lastActivityTs < 60000) return;
+  let lastReload = 0;
+  try { lastReload = Number(sessionStorage.getItem('fh_lastAutoReload')) || 0; } catch {}
+  if (Date.now() - lastReload < RELOAD_COOLDOWN_MS) return;
+  try { sessionStorage.setItem('fh_lastAutoReload', String(Date.now())); } catch {}
   location.reload();
 }
 
@@ -1049,6 +1140,7 @@ window.addEventListener('load', () => {
     });
     setInterval(maybeReloadForUpdate, 20000);
   }
+  probeEventsBackend();
   if (!isConfigured) return;
   // GSI may already be ready (cached) or will call onGsiLoad when it loads
   if (typeof google !== 'undefined' && google.accounts) {
@@ -1061,7 +1153,7 @@ window.addEventListener('load', () => {
   renderFlavorButtons();
   applyAppTitle();
   applyAssistantName();
-  applySafePaletteMode();
+  applyCalPalette();
   applyLayoutMode();
   if (new URLSearchParams(location.search).get('tv') === '1') tvMode = true;
   applyTvMode();
@@ -1074,6 +1166,7 @@ window.addEventListener('load', () => {
   switchCalView(calView);   // sets up tabs + renders the right view
   renderYearStrip();
   setupCalSwipe();
+  setupMobileSheetDrag();
   // Load ICS subs even without Google auth; loadAllCalendars also calls this for signed-in users
   if (icsSubs.length && !googleToken) {
     loadIcsSubs().then(() => { renderCalendarTabs(); renderCurrentView(); renderYearStrip(); });
@@ -1081,7 +1174,6 @@ window.addEventListener('load', () => {
   setupListeners();
   loadBgFromDb();
   populateTodoAssigneeDropdown();
-  populateShopCategorySelect();
   applyWidgetPlacement();   // moves cards to sidebar/bottom, then calls applyWidgetVisibility
   initWidgetDragDrop();
   renderBudgetCard();
@@ -1134,9 +1226,10 @@ window.addEventListener('load', () => {
 });
 
 function initGoogleAuth() {
+  if (!isConfigured) return;   // empty client_id makes GIS throw; the banner explains
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: GOOGLE_CLIENT_ID,
-    scope: 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/photospicker.mediaitems.readonly',
+    scope: GOOGLE_SCOPES,
     callback: async (resp) => {
       if (resp.error) {
         console.error('OAuth error', resp);
@@ -1206,9 +1299,12 @@ function signOut() {
   currentUser = null; googleToken = null;
   localStorage.removeItem('fh_user');
   document.getElementById('calNotSignedIn').style.display = '';
-  document.getElementById('calendarTabs').innerHTML = '';
   calEventCache = {};
   disabledCals.clear();
+  // Mirror onSignedIn()'s settings-panel toggle in reverse — the sign-out
+  // button lives inside settingCalSignedIn, so it must hide with the rest
+  document.getElementById('settingCalNotSignedIn').style.display = '';
+  document.getElementById('settingCalSignedIn').style.display = 'none';
   updateStatusPill();
   renderCurrentView();
   renderYearStrip();
@@ -1282,7 +1378,7 @@ function renderCtrlStatusView() {
   const googleOk   = !!currentUser;
   const calOk      = googleOk && (typeof calendarMeta !== 'undefined') && calendarMeta.length > 0;
   const weatherOk  = !!(typeof weatherLocations !== 'undefined' && weatherLocations.length > 0);
-  const aiOk       = !!(typeof mealAiKey !== 'undefined' && mealAiKey);
+  const aiOnDevice = !!(typeof mealAiKey !== 'undefined' && mealAiKey);
 
   const firebaseDesc = !configOk
     ? 'Add FIREBASE_CONFIG to family-hub.js'
@@ -1316,8 +1412,8 @@ function renderCtrlStatusView() {
     },
     {
       label: 'Gemini AI',
-      desc:  aiOk ? 'AI Studio key active — meal planning enabled' : 'Add an AI Studio key in ⚙️ Meals to enable AI meal planning',
-      ok: aiOk
+      desc:  aiOnDevice ? 'Using the Gemini key saved on this device' : 'Using the server key on Netlify (GEMINI_KEY)',
+      ok: true
     },
   ];
 
@@ -1392,15 +1488,23 @@ function getWeekStart(date) {
   return d;
 }
 
+// Step by calendar days, not 86400000 ms: a DST day is 23 or 25 hours, so
+// ms math from local midnight lands on the wrong date (Nov 1 + 24h = Nov 1).
+function addDays(date, n) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + n);
+  return d;
+}
+
 function changeCalPeriod(delta) {
   if (calView === 'month') {
     calViewDate = new Date(calViewDate.getFullYear(), calViewDate.getMonth() + delta, 1);
   } else if (calView === 'week') {
-    calViewDate = new Date(calViewDate.getTime() + delta * 7 * 86400000);
+    calViewDate = addDays(calViewDate, delta * 7);
   } else if (calView === 'agenda') {
-    calViewDate = new Date(calViewDate.getTime() + delta * 30 * 86400000);
+    calViewDate = addDays(calViewDate, delta * 30);
   } else {
-    calViewDate = new Date(calViewDate.getTime() + delta * 86400000);
+    calViewDate = addDays(calViewDate, delta);
   }
   renderCurrentView();
   renderYearStrip();
@@ -1424,6 +1528,8 @@ function switchCalView(view) {
     const btn = document.getElementById('viewTab_' + v);
     if (btn) btn.classList.toggle('active', v === view);
   });
+  const sel = document.getElementById('calViewSelect');   // mobile's one-row header
+  if (sel) sel.value = view;
   renderCurrentView();
   if (googleToken) loadAllCalendars();
 }
@@ -1450,7 +1556,8 @@ function renderCurrentView() {
       const ws = getWeekStart(calViewDate);
       const todayWs = getWeekStart(now);
       awayFromToday = ws.toDateString() !== todayWs.toDateString();
-    } else if (calView === 'day') {
+    } else if (calView === 'day' || calView === 'agenda') {
+      // Agenda's 30-day window starts on calViewDate itself
       awayFromToday = calViewDate.toDateString() !== now.toDateString();
     }
     btn.style.display = awayFromToday ? '' : 'none';
@@ -1472,7 +1579,7 @@ function checkCalendarEasterEggs() {
   if (existing) existing.remove();
   const todayInView = (() => {
     if (calView === 'month')  return calViewDate.getFullYear() === now.getFullYear() && calViewDate.getMonth() === now.getMonth();
-    if (calView === 'week')   return getWeekStart(calViewDate) <= now && now <= new Date(getWeekStart(calViewDate).getTime() + 6*86400000);
+    if (calView === 'week')   return getWeekStart(calViewDate) <= now && now <= addDays(getWeekStart(calViewDate), 6);
     if (calView === 'day')    return calViewDate.toDateString() === now.toDateString();
     return true; // agenda
   })();
@@ -1514,12 +1621,20 @@ function checkCalendarEasterEggs() {
 }
 
 // ── Week View ─────────────────────────────────────────────────
+// On a phone the Week days stack and the grid scrolls vertically. Re-renders
+// of the same week (data arriving, a to-do ticked, a trip to another view and
+// back) keep the scroll position; a different week opens on today if it's in
+// it, otherwise on Sunday. top stays null (follow today) until the user
+// scrolls, since rows above today grow as calendar data arrives. Tracked from
+// scroll events because a hidden view reads scrollTop 0.
+let weekListScroll = { week: null, top: null };
+
 function renderWeekGrid() {
   const container = document.getElementById('weekView');
   container.innerHTML = '';
   const today     = new Date();
   const weekStart = getWeekStart(calViewDate);
-  const weekEnd   = new Date(weekStart.getTime() + 6 * 86400000);
+  const weekEnd   = addDays(weekStart, 6);
 
   // Nav label
   const sameMonth = weekStart.getMonth() === weekEnd.getMonth();
@@ -1539,7 +1654,7 @@ function renderWeekGrid() {
   grid.className = 'week-grid';
 
   for (let i = 0; i < 7; i++) {
-    const day    = new Date(weekStart.getTime() + i * 86400000);
+    const day    = addDays(weekStart, i);
     const isToday = day.toDateString() === today.toDateString();
     const dateKey = `${day.getFullYear()}-${String(day.getMonth()+1).padStart(2,'0')}-${String(day.getDate()).padStart(2,'0')}`;
 
@@ -1551,6 +1666,26 @@ function renderWeekGrid() {
     hdr.className = 'week-day-header';
     hdr.innerHTML = `<div class="week-day-dow">${DOW[i].slice(0,3)}</div>
                      <div class="week-day-num">${day.getDate()}</div>`;
+    const weekCycleDayNum = schoolDayNumberFor(dateKey);
+    if (weekCycleDayNum != null) {
+      const cycleBadge = document.createElement('div');
+      cycleBadge.className = 'school-day-badge';
+      cycleBadge.textContent = `Day ${weekCycleDayNum}`;
+      hdr.appendChild(cycleBadge);
+      const cycleSubjects = schoolDaySubjectsForDayNumber(weekCycleDayNum);
+      if (cycleSubjects.length) {
+        const subjectsRow = document.createElement('div');
+        subjectsRow.className = 'school-day-subjects';
+        cycleSubjects.forEach(s => {
+          const chip = document.createElement('span');
+          chip.className = 'school-day-subject-chip';
+          chip.textContent = s.subject;
+          appendMemberBadges(chip, s.members);
+          subjectsRow.appendChild(chip);
+        });
+        hdr.appendChild(subjectsRow);
+      }
+    }
     if (googleToken) {
       hdr.title = 'Click to add event';
       hdr.style.cursor = 'pointer';
@@ -1559,74 +1694,86 @@ function renderWeekGrid() {
     }
     col.appendChild(hdr);
 
-    // ── To-Do due on this day (always at TOP, just under header) ──
-    const weekTodos = todosDueOnDate(dateKey);
-    if (weekTodos.length) {
-      const todoStrip = document.createElement('div');
-      todoStrip.style.cssText = 'border-bottom:1px solid color-mix(in srgb, var(--accent) 20%, transparent);padding:4px 5px 5px;background:color-mix(in srgb, var(--accent) 6%, transparent);flex-shrink:0';
-      weekTodos.forEach(todo => {
-        const el = document.createElement('div');
-        el.style.cssText = 'font-size:.62rem;color:var(--accent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:1px 3px';
-        el.textContent = '✅ ' + todo.text + (todo.assignedTo ? ' · ' + todo.assignedTo : '');
-        el.title = todo.text;
-        todoStrip.appendChild(el);
-      });
-      col.appendChild(todoStrip);
-    }
-
     // Events
-    const body = document.createElement('div');
-    body.className = 'week-day-body';
-
     const evts = Object.entries(calEventCache)
       .filter(([calId]) => !disabledCals.has(calId))
       .flatMap(([, byDate]) => byDate[dateKey] || [])
-      .sort((a, b) => {
-        if (a.allDay && !b.allDay) return -1;
-        if (!a.allDay && b.allDay) return 1;
-        return (a.startDT || '') < (b.startDT || '') ? -1 : 1;
-      });
+      .sort((a, b) => (a.startDT || '') < (b.startDT || '') ? -1 : 1);
 
+    const weekEventPill = ev => {
+      const pill = document.createElement('div');
+      pill.className = 'week-event';
+      paintEventFill(pill, ev.color);
+      pill.title = ev.summary;
+      if (!ev.allDay && ev.startDT) {
+        const t = document.createElement('span');
+        t.className = 'week-event-time';
+        t.textContent = new Date(ev.startDT).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        pill.appendChild(t);
+      }
+      const s = document.createElement('span');
+      s.textContent = (ev.holiday ? '🎉 ' : '') + ev.summary + (ev.recurringEventId ? ' ↻' : '');
+      pill.appendChild(s);
+      appendMemberBadges(pill, ev.members);
+      pill.onclick = e => { e.stopPropagation(); onCalEventClick(ev); };
+      if (isEventEditable(ev)) {
+        pill.draggable = true;
+        pill.addEventListener('dragstart', e => {
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', JSON.stringify({
+            eventId: ev.eventId, calId: ev.calId, allDay: ev.allDay,
+            startDT: ev.startDT, endDT: ev.endDT,
+            startDate: ev.startDate, endDate: ev.endDate,
+          }));
+          setTimeout(() => pill.classList.add('cal-dnd-dragging'), 0);
+        });
+        pill.addEventListener('dragend', () => pill.classList.remove('cal-dnd-dragging'));
+      }
+      return pill;
+    };
+
+    // All-day events get their own band (a shared grid row, see .week-grid)
+    // so timed events start at the same height in every column. All-day
+    // Recurring items (trash day, upkeep) are chores, so they sit with the
+    // to-dos at the bottom instead
+    const isChore = ev => ev.allDay && ev.calId === LC_IDS.recurring;
+    const allDayEvts = evts.filter(ev => ev.allDay && !isChore(ev));
+    if (allDayEvts.length) {
+      const allDay = document.createElement('div');
+      allDay.className = 'week-day-allday';
+      allDayEvts.forEach(ev => allDay.appendChild(weekEventPill(ev)));
+      col.appendChild(allDay);
+    }
+
+    const body = document.createElement('div');
+    body.className = 'week-day-body';
     if (!evts.length) {
       const empty = document.createElement('div');
       empty.className = 'week-empty';
       empty.textContent = '—';
       body.appendChild(empty);
     } else {
-      evts.forEach(ev => {
-        const pill = document.createElement('div');
-        pill.className = 'week-event';
-        pill.style.background = ev.color;
-        pill.title = ev.summary;
-        if (!ev.allDay && ev.startDT) {
-          const t = document.createElement('span');
-          t.className = 'week-event-time';
-          t.textContent = new Date(ev.startDT).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-          pill.appendChild(t);
-        }
-        const s = document.createElement('span');
-        s.textContent = (ev.holiday ? '🎉 ' : '') + ev.summary + (ev.recurringEventId ? ' ↻' : '');
-        pill.appendChild(s);
-        appendMemberBadges(pill, ev.members);
-        pill.onclick = e => { e.stopPropagation(); onCalEventClick(ev); };
-        if (isEventEditable(ev)) {
-          pill.draggable = true;
-          pill.addEventListener('dragstart', e => {
-            e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData('text/plain', JSON.stringify({
-              eventId: ev.eventId, calId: ev.calId, allDay: ev.allDay,
-              startDT: ev.startDT, endDT: ev.endDT,
-              startDate: ev.startDate, endDate: ev.endDate,
-            }));
-            setTimeout(() => pill.classList.add('cal-dnd-dragging'), 0);
-          });
-          pill.addEventListener('dragend', () => pill.classList.remove('cal-dnd-dragging'));
-        }
-        body.appendChild(pill);
-      });
+      evts.filter(ev => !ev.allDay).forEach(ev => body.appendChild(weekEventPill(ev)));
     }
 
     col.appendChild(body);
+
+    // ── To-Dos due and all-day Recurring items, below the timed events ──
+    const weekTodos = todosDueOnDate(dateKey);
+    const choreEvts = evts.filter(isChore);
+    if (weekTodos.length || choreEvts.length) {
+      const tasksStrip = document.createElement('div');
+      tasksStrip.className = 'week-tasks-strip';
+      choreEvts.forEach(ev => tasksStrip.appendChild(weekEventPill(ev)));
+      weekTodos.forEach(todo => {
+        const el = document.createElement('div');
+        el.className = 'week-todo-item';
+        el.textContent = '✅ ' + todo.text + (todo.assignedTo ? ' · ' + todo.assignedTo : '');
+        el.title = todo.text;
+        tasksStrip.appendChild(el);
+      });
+      col.appendChild(tasksStrip);
+    }
 
     // Drop zone: the whole day column accepts dragged events
     if (googleToken) {
@@ -1651,11 +1798,6 @@ function renderWeekGrid() {
         el.title = `${item.name} — ${fmt$(item.amount)}`;
         budgetStrip.appendChild(el);
       });
-      const dayTotal = budgetDayItems.reduce((s, it) => s + it.amount, 0);
-      const tot = document.createElement('div');
-      tot.className = 'week-budget-total';
-      tot.textContent = fmt$(dayTotal);
-      budgetStrip.appendChild(tot);
       budgetStrip.onclick = scrollToBudgetCard;
       budgetStrip.style.cursor = 'pointer';
       col.appendChild(budgetStrip);
@@ -1700,6 +1842,18 @@ function renderWeekGrid() {
     grid.appendChild(col);
   }
   container.appendChild(grid);
+
+  const weekKey = weekStart.getTime();
+  if (weekListScroll.week !== weekKey) weekListScroll = { week: weekKey, top: null };
+  const todayCol = grid.querySelector('.week-day-col.today');
+  grid.scrollTop = weekListScroll.top ?? (todayCol
+    ? todayCol.getBoundingClientRect().top - grid.getBoundingClientRect().top : 0);
+  const setTop = grid.scrollTop;
+  grid.addEventListener('scroll', () => {
+    // Our own scrollTop write fires this too; only a real move unpins today
+    if (weekListScroll.top !== null || Math.abs(grid.scrollTop - setTop) > 1)
+      weekListScroll.top = grid.scrollTop;
+  }, { passive: true });
 
   // Bulk "add all week's ingredients to shopping list" button
   const bulkBar = document.createElement('div');
@@ -1757,9 +1911,9 @@ function renderDayGrid() {
     allDayEvts.forEach(ev => {
       const p = document.createElement('div');
       p.className = 'day-event-pill';
-      p.style.background = ev.color;
+      paintEventFill(p, ev.color);
       p.innerHTML = `<span class="evt-title">${(ev.holiday ? '🎉 ' : '') + esc(ev.summary) + (ev.recurringEventId ? ' ↻' : '')}</span>`;
-      appendMemberBadges(p, ev.members);
+      appendPillMeta(p, null, ev.members);
       p.style.cursor = 'pointer';
       p.onclick = () => onCalEventClick(ev);
       adPills.appendChild(p);
@@ -1772,6 +1926,41 @@ function renderDayGrid() {
   allDayRow.appendChild(adPills);
   wrap.appendChild(allDayRow);
 
+  // ── School Day Cycle section (day view) — one line; see startMarqueeIfOverflowing() ──
+  const dayCycleNum = schoolDayNumberFor(dateKey);
+  if (dayCycleNum != null) {
+    const cycleSection = document.createElement('div');
+    cycleSection.className = 'school-day-section';
+    const line = document.createElement('div');
+    line.className = 'school-day-line';
+    const label = document.createElement('span');
+    label.className = 'school-day-label';
+    label.style.color = 'var(--accent2)';
+    label.textContent = `🔁 Day ${dayCycleNum}`;
+    const track = document.createElement('span');
+    track.className = 'school-day-track';
+    schoolDaySubjectsForDayNumber(dayCycleNum).forEach((s, i) => {
+      if (i > 0) {
+        const sep = document.createElement('span');
+        sep.className = 'school-day-sep';
+        sep.textContent = '·';
+        track.appendChild(sep);
+      }
+      const item = document.createElement('span');
+      item.className = 'school-day-item';
+      const nameEl = document.createElement('span');
+      nameEl.className = 'school-day-subject-name';
+      nameEl.textContent = s.subject;
+      item.appendChild(nameEl);
+      appendMemberBadges(item, s.members);
+      track.appendChild(item);
+    });
+    line.appendChild(label);
+    line.appendChild(track);
+    cycleSection.appendChild(line);
+    wrap.appendChild(cycleSection);
+    startMarqueeIfOverflowing(line, track);
+  }
 
   // ── Budget section (day view) ──
   const budgetDayItems = budgetEventsForDate(dateKey);
@@ -1855,10 +2044,9 @@ function renderDayGrid() {
       const endStr   = ev.endDT ? new Date(ev.endDT).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : null;
       const pill = document.createElement('div');
       pill.className = 'day-event-pill';
-      pill.style.background = ev.color;
-      pill.innerHTML = `<span class="evt-title">${esc(ev.summary) + (ev.recurringEventId ? ' ↻' : '')}</span>
-                        <span class="evt-time">${startStr}${endStr ? ' – ' + endStr : ''}</span>`;
-      appendMemberBadges(pill, ev.members);
+      paintEventFill(pill, ev.color);
+      pill.innerHTML = `<span class="evt-title">${esc(ev.summary) + (ev.recurringEventId ? ' ↻' : '')}</span>`;
+      appendPillMeta(pill, `${startStr}${endStr ? ' – ' + endStr : ''}`, ev.members);
       pill.style.cursor = 'pointer';
       pill.onclick = () => onCalEventClick(ev);
       slot.appendChild(pill);
@@ -2040,16 +2228,22 @@ function renderMultidayOverlay() {
     const ec = cellMap[endDate];
     if (!sc || !ec) return;
 
+    // Match the dimming single-day pills get from their (other-month) cell:
+    // the bar lives in a sibling overlay, not inside the cell, so it never
+    // inherited .cal-day.other-month's opacity on its own.
+    const segOtherMonth = segDates(startDate, endDate)
+      .every(dk => cellMap[dk]?.el.classList.contains('other-month'));
+
     const bar = document.createElement('div');
-    bar.className = 'cal-multiday-bar';
-    bar.textContent = ev.summary;
+    bar.className = 'cal-multiday-bar' + (segOtherMonth ? ' other-month' : '');
+    bar.textContent = isMobile ? stripEmoji(ev.summary) : ev.summary;
     bar.title = ev.summary;
     bar.style.cssText =
       `left:${sc.left}px;` +
       `top:${sc.spacerTop + lane * (BAR_H + BAR_GAP)}px;` +
       `width:${ec.right - sc.left}px;` +
-      `height:${BAR_H}px;` +
-      `background:${ev.color};`;
+      `height:${BAR_H}px;`;
+    paintEventFill(bar, ev.color);
 
     bar.addEventListener('click', e => { e.stopPropagation(); onCalEventClick(ev); });
     // A read-only event's bar opens details but can never be dragged.
@@ -2080,8 +2274,10 @@ function renderMonthGrid() {
   const year  = calViewDate.getFullYear();
   const month = calViewDate.getMonth();
 
+  // Short month on phones ("Nov 2026"): the one-row mobile header has room
+  // for about eight characters once Refocus and the budget toggle are showing.
   document.getElementById('calMonthLabel').textContent =
-    calViewDate.toLocaleDateString([], { month: 'long', year: 'numeric' });
+    calViewDate.toLocaleDateString([], { month: isMobile ? 'short' : 'long', year: 'numeric' });
 
   const grid = document.getElementById('calGrid');
   grid.innerHTML = '';
@@ -2106,7 +2302,7 @@ function renderMonthGrid() {
   // Determine which column indices (0=Sun … 6=Sat) belong to the current week
   const todayInThisMonth = today.getFullYear() === year && today.getMonth() === month;
   const currentWeekStart = todayInThisMonth ? getWeekStart(today) : null;
-  const currentWeekEnd   = currentWeekStart ? new Date(currentWeekStart.getTime() + 6 * 86400000) : null;
+  const currentWeekEnd   = currentWeekStart ? addDays(currentWeekStart, 6) : null;
   const inCurrentWeek = d => currentWeekStart && d >= currentWeekStart && d <= currentWeekEnd;
 
   // Prev-month filler
@@ -2138,6 +2334,30 @@ function renderMonthGrid() {
   requestAnimationFrame(() => renderMultidayOverlay());
 }
 
+/** Month cell tap. On mobile the cell is too small to review a day's events
+ *  (pills collapse to a dot under 400px), so it opens that day in Day view;
+ *  Day view's own ＋ controls and the FAB still create events from there.
+ *  Desktop keeps the tap-to-create behavior. */
+function onMonthDayTap(dateKey) {
+  if (isMobile) {
+    calViewDate = new Date(dateKey + 'T00:00:00');
+    switchCalView('day');
+    renderYearStrip();
+  } else {
+    openEventEditor(null, dateKey);
+  }
+}
+
+/** Bill and to-do pills in a Month cell have no editor of their own. On
+ *  mobile a tap on one opens the day like a tap anywhere else in the cell;
+ *  on desktop they stay inert rather than opening a blank new-event editor. */
+function monthInfoPillClick(dateKey) {
+  return e => {
+    e.stopPropagation();
+    if (isMobile) onMonthDayTap(dateKey);
+  };
+}
+
 function makeDayCell(year, month, day, otherMonth, isToday) {
   const cell = document.createElement('div');
   const canAdd = !otherMonth && !!googleToken;
@@ -2149,7 +2369,7 @@ function makeDayCell(year, month, day, otherMonth, isToday) {
   if (!otherMonth && googleToken) {
     num.title = 'Click to add event';
     num.style.cursor = 'pointer';
-    num.onclick = e => { e.stopPropagation(); openEventEditor(null, key); };
+    num.onclick = e => { e.stopPropagation(); onMonthDayTap(key); };
   }
   cell.appendChild(num);
 
@@ -2159,10 +2379,11 @@ function makeDayCell(year, month, day, otherMonth, isToday) {
   const evts = Object.entries(calEventCache)
     .filter(([calId]) => !disabledCals.has(calId))
     .flatMap(([, byDate]) => byDate[key] || []);
-  // Cell-level click opens new event editor
-  if (!otherMonth && googleToken) {
+  // Cell-level click opens new event editor (desktop) or that day's Day view
+  // (mobile, where the cell is too small to show the day's events)
+  if (isMobile || (!otherMonth && googleToken)) {
     cell.style.cursor = 'pointer';
-    cell.onclick = () => openEventEditor(null, key);
+    cell.onclick = () => onMonthDayTap(key);
   }
 
   // Spacer placeholder — height set by renderMultidayOverlay() so single-day pills
@@ -2178,11 +2399,23 @@ function makeDayCell(year, month, day, otherMonth, isToday) {
   sdEvts.slice(0, 3).forEach(ev => {
     const pill = document.createElement('div');
     pill.className = 'cal-event' + (ev.holiday ? ' cal-event-holiday' : '');
-    pill.style.background = ev.color;
+    paintEventFill(pill, ev.color);
     const pillText = document.createElement('span');
-    pillText.textContent = (ev.holiday ? '🎉 ' : '') + ev.summary + (ev.recurringEventId ? ' ↻' : '');
+    // Mobile cells fit a few characters per line, and most titles open with a
+    // member's name ("Jack hockey practice" → "Jack ..."). So on mobile the
+    // names come out of the title ("Hockey practice") and each member becomes
+    // a stripe in their color on the pill's left edge instead.
+    const who = isMobile && !ev.holiday ? eventMemberNames(ev) : [];
+    if (who.length) {
+      pillText.textContent = stripEmoji(stripMemberNames(ev.summary, who));
+      applyMemberStripes(pill, who);
+    } else {
+      pillText.textContent = isMobile
+        ? stripEmoji(ev.summary) + (ev.recurringEventId ? ' ↻' : '')
+        : (ev.holiday ? '🎉 ' : '') + ev.summary + (ev.recurringEventId ? ' ↻' : '');
+      if (!isMobile) appendMemberBadges(pill, ev.members);
+    }
     pill.appendChild(pillText);
-    appendMemberBadges(pill, ev.members);
     pill.title = ev.summary;
     pill.onclick = e => { e.stopPropagation(); onCalEventClick(ev); };
     if (isEventEditable(ev)) {
@@ -2226,9 +2459,10 @@ function makeDayCell(year, month, day, otherMonth, isToday) {
   budgetDay.forEach(item => {
     const pill = document.createElement('div');
     pill.className = 'cal-event-budget';
-    pill.textContent = `💰 ${item.name} ${fmt$(item.amount)}`;
+    // Mobile cells only fit the first few letters, so lead with the name.
+    pill.textContent = isMobile ? `${item.name} ${fmt$(item.amount)}` : `💰 ${item.name} ${fmt$(item.amount)}`;
     pill.title = `${item.name} — ${fmt$(item.amount)} (${freqLabel(item)})`;
-    pill.onclick = e => e.stopPropagation();
+    pill.onclick = monthInfoPillClick(key);
     cell.appendChild(pill);
   });
 
@@ -2238,7 +2472,7 @@ function makeDayCell(year, month, day, otherMonth, isToday) {
     pill.className = 'cal-event-todo';
     pill.textContent = '✅ ' + todo.text + (todo.assignedTo ? ' · ' + todo.assignedTo : '');
     pill.title = todo.text + (todo.assignedTo ? ' — assigned to ' + todo.assignedTo : '');
-    pill.onclick = e => e.stopPropagation();
+    pill.onclick = monthInfoPillClick(key);
     cell.appendChild(pill);
   });
 
@@ -2250,17 +2484,35 @@ function setupWormHold(cell) {
   let holdTimer = null;
   const HOLD_MS = 3000;
 
+  let spawned = false;
+  let lastTouchEnd = 0;
+
   const start = () => {
-    holdTimer = setTimeout(() => spawnWorm(cell), HOLD_MS);
+    spawned = false;
+    holdTimer = setTimeout(() => { spawned = true; spawnWorm(cell); }, HOLD_MS);
   };
   const cancel = () => { clearTimeout(holdTimer); holdTimer = null; };
+  // Ignore the emulated mousedown a browser fires right after a touch ends,
+  // or it restarts the hold and clears `spawned` before the click lands.
+  const mouseStart = () => { if (Date.now() - lastTouchEnd > 800) start(); };
 
-  cell.addEventListener('mousedown', start);
+  cell.addEventListener('mousedown', mouseStart);
   cell.addEventListener('mouseup', cancel);
   cell.addEventListener('mouseleave', cancel);
-  cell.addEventListener('touchstart', e => { e.preventDefault(); start(); }, { passive: false });
-  cell.addEventListener('touchend', cancel);
+  // Passive on purpose: preventDefault() on touchstart suppresses the click
+  // that follows, which silently broke every Month cell tap on touch devices.
+  cell.addEventListener('touchstart', start, { passive: true });
+  cell.addEventListener('touchmove', cancel, { passive: true }); // swipe/scroll isn't a hold
+  cell.addEventListener('touchend', () => { lastTouchEnd = Date.now(); cancel(); });
   cell.addEventListener('touchcancel', cancel);
+  // A completed hold is the Easter egg, not a tap: swallow the release's click
+  // so the worm isn't immediately replaced by Day view / the event editor.
+  cell.addEventListener('click', e => {
+    if (!spawned) return;
+    spawned = false;
+    e.stopImmediatePropagation();
+    e.preventDefault();
+  }, true);
 }
 
 function spawnWorm(cell) {
@@ -2273,15 +2525,66 @@ function spawnWorm(cell) {
   setTimeout(() => worm.remove(), 2200);
 }
 
+// Push onto a day's cached event array unless it's already there. Google's
+// holiday calendar has a known history of listing the same holiday twice
+// under different event IDs (post-migration duplicates), so holiday events
+// dedupe by summary; everything else dedupes by eventId, which is only ever
+// repeated by a genuine re-fetch of the same instance (e.g. an ICS feed
+// re-injecting an occurrence, or two overlapping loads racing into the cache).
+function pushEventDeduped(arr, base) {
+  const isDup = base.holiday
+    ? arr.some(e => e.summary === base.summary)
+    : arr.some(e => e.eventId && e.eventId === base.eventId);
+  if (!isDup) arr.push(base);
+}
+
+/** Store Google Calendar API items under target[calId][YYYY-MM-DD], with time
+ *  data. target is calEventCache for the view, or the Assistant's own window. */
+function cacheCalEvents(target, calId, items, color, holiday = false) {
+  if (!target[calId]) target[calId] = {};
+  items.forEach(ev => {
+    const startDate = ev.start?.date || ev.start?.dateTime?.slice(0,10);
+    if (!startDate) return;
+    const base = {
+      eventId:   ev.id || null,
+      calId,
+      summary:   ev.summary || (holiday ? '(Holiday)' : '(No title)'),
+      description: ev.description || '',
+      color, holiday,
+      allDay:    !!ev.start?.date,
+      startDT:   ev.start?.dateTime || null,
+      endDT:     ev.end?.dateTime   || null,
+      startDate:        ev.start?.date     || null,
+      endDate:          ev.end?.date       || null,
+      members:          (ev.extendedProperties?.private?.fhMembers || '').split(',').map(s => s.trim()).filter(Boolean),
+      recurringEventId: ev.recurringEventId || null,
+      location:         ev.location || '',
+    };
+    // Multi-day all-day events: cache on every date in their range
+    if (base.allDay && base.startDate && base.endDate && base.endDate > base.startDate) {
+      const endD = new Date(base.endDate + 'T00:00:00');
+      for (let d = new Date(base.startDate + 'T00:00:00'); d < endD; d.setDate(d.getDate() + 1)) {
+        const key = d.toISOString().slice(0, 10);
+        if (!target[calId][key]) target[calId][key] = [];
+        pushEventDeduped(target[calId][key], base);
+      }
+    } else {
+      if (!target[calId][startDate]) target[calId][startDate] = [];
+      pushEventDeduped(target[calId][startDate], base);
+    }
+  });
+}
+
 async function loadAllCalendars() {
   if (!googleToken) return;
+  assistantCalCache.fetchedAt = 0;   // events may have changed; refetch on the next question
   document.getElementById('calendarStatus').innerHTML = '<span class="spinner"></span>';
 
   // Compute date range based on current view
   let timeMin, timeMax;
   if (calView === 'week') {
     const ws = getWeekStart(calViewDate);
-    const we = new Date(ws.getTime() + 6 * 86400000);
+    const we = addDays(ws, 6);
     we.setHours(23, 59, 59);
     timeMin = ws.toISOString(); timeMax = we.toISOString();
   } else if (calView === 'day') {
@@ -2290,7 +2593,7 @@ async function loadAllCalendars() {
     timeMax = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59).toISOString();
   } else if (calView === 'agenda') {
     const start = new Date(calViewDate); start.setHours(0, 0, 0, 0);
-    const end   = new Date(start.getTime() + 30 * 86400000); end.setHours(23, 59, 59);
+    const end   = addDays(start, 30); end.setHours(23, 59, 59);
     timeMin = start.toISOString(); timeMax = end.toISOString();
   } else {
     const year = calViewDate.getFullYear(), month = calViewDate.getMonth();
@@ -2300,42 +2603,6 @@ async function loadAllCalendars() {
 
   calEventCache = {};
 
-  // Helper: store events under their calendar ID, including time data
-  function cacheEvents(calId, items, color, holiday = false) {
-    if (!calEventCache[calId]) calEventCache[calId] = {};
-    items.forEach(ev => {
-      const startDate = ev.start?.date || ev.start?.dateTime?.slice(0,10);
-      if (!startDate) return;
-      const base = {
-        eventId:   ev.id || null,
-        calId,
-        summary:   ev.summary || (holiday ? '(Holiday)' : '(No title)'),
-        description: ev.description || '',
-        color, holiday,
-        allDay:    !!ev.start?.date,
-        startDT:   ev.start?.dateTime || null,
-        endDT:     ev.end?.dateTime   || null,
-        startDate:        ev.start?.date     || null,
-        endDate:          ev.end?.date       || null,
-        members:          (ev.extendedProperties?.private?.fhMembers || '').split(',').map(s => s.trim()).filter(Boolean),
-        recurringEventId: ev.recurringEventId || null,
-        location:         ev.location || '',
-      };
-      // Multi-day all-day events: cache on every date in their range
-      if (base.allDay && base.startDate && base.endDate && base.endDate > base.startDate) {
-        const endD = new Date(base.endDate + 'T00:00:00');
-        for (let d = new Date(base.startDate + 'T00:00:00'); d < endD; d.setDate(d.getDate() + 1)) {
-          const key = d.toISOString().slice(0, 10);
-          if (!calEventCache[calId][key]) calEventCache[calId][key] = [];
-          calEventCache[calId][key].push(base);
-        }
-      } else {
-        if (!calEventCache[calId][startDate]) calEventCache[calId][startDate] = [];
-        calEventCache[calId][startDate].push(base);
-      }
-    });
-  }
-
   // Fetch user calendars
   const fetches = calendarMeta.map(async ({ id, color }) => {
     try {
@@ -2344,7 +2611,7 @@ async function loadAllCalendars() {
         + `&timeMin=${timeMin}&timeMax=${timeMax}`;
       const r    = await fetch(url, { headers: { Authorization: `Bearer ${googleToken}` } });
       const data = await r.json();
-      if (data.items) cacheEvents(id, data.items, color, false);
+      if (data.items) cacheCalEvents(calEventCache, id, data.items, sourceColor(id, color), false);
     } catch(e) { console.warn('Cal error', id, e); }
   });
 
@@ -2357,7 +2624,7 @@ async function loadAllCalendars() {
           + `&timeMin=${timeMin}&timeMax=${timeMax}`;
         const r    = await fetch(url, { headers: { Authorization: `Bearer ${googleToken}` } });
         const data = await r.json();
-        if (data.items) cacheEvents(HOLIDAYS_ID, data.items, holidaysColor, true);
+        if (data.items) cacheCalEvents(calEventCache, HOLIDAYS_ID, data.items, sourceColor(HOLIDAYS_ID, holidaysColor), true);
       } catch(e) { console.warn('Holidays error', e); }
     })());
   }
@@ -2402,7 +2669,8 @@ function renderAgendaView() {
         return (a.startDT || '') < (b.startDT || '') ? -1 : 1;
       });
 
-    if (!evts.length) continue;
+    const bills = budgetEventsForDate(key);   // [] while 👁 hides amounts
+    if (!evts.length && !bills.length) continue;
     hasAny = true;
 
     const hdr = document.createElement('div');
@@ -2414,6 +2682,7 @@ function renderAgendaView() {
       const row = document.createElement('div');
       row.className = 'agenda-event agenda-clickable';
       if (ev.color) row.style.setProperty('--event-color', ev.color);
+      row.style.color = readableTextOn(ev.color);
       row.onclick = () => onCalEventClick(ev);
 
       const info = document.createElement('div');
@@ -2441,6 +2710,16 @@ function renderAgendaView() {
       row.appendChild(info);
       el.appendChild(row);
     });
+
+    // Bills due this day, after its events (same source as Day's "Bills Due Today")
+    bills.forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'agenda-event agenda-bill';
+      row.innerHTML = `<div class="agenda-info"><div class="agenda-time">Bill due</div>
+        <div class="agenda-title">💰 ${esc(item.name)}</div></div>
+        <div class="agenda-bill-amt">${fmt$(item.amount)}</div>`;
+      el.appendChild(row);
+    });
   }
 
   if (!hasAny) {
@@ -2462,18 +2741,17 @@ function renderCalendarTabs() {
 
   tabs.innerHTML = '';
 
-  const all = [...calendarMeta];
-  if (showHolidays) all.push({ id: HOLIDAYS_ID, label: 'Holidays', color: holidaysColor });
+  const all = calendarMeta.map(c => ({ ...c, color: sourceColor(c.id, c.color) }));
+  if (showHolidays) all.push({ id: HOLIDAYS_ID, label: 'Holidays', color: sourceColor(HOLIDAYS_ID, holidaysColor) });
   // ICS subscriptions
-  icsSubs.forEach(sub => all.push({ id: sub.id, label: sub.label, color: sub.color }));
+  icsSubs.forEach(sub => all.push({ id: sub.id, label: sub.label, color: sourceColor(sub.id, sub.color) }));
   // Local calendars that have data
   LC_DEFS.forEach(lc => {
     const hasData =
       lc.id === LC_IDS.birthdays ? birthdays.length > 0 :
-      lc.id === LC_IDS.meds      ? medications.length > 0 :
       lc.id === LC_IDS.school    ? schoolPeriods.length > 0 :
-      lc.id === LC_IDS.trash     ? trashPickups.length > 0 : false;
-    if (hasData) all.push({ id: lc.id, label: lc.label, color: lc.color });
+      lc.id === LC_IDS.recurring ? recurringItems.length > 0 : false;
+    if (hasData) all.push({ id: lc.id, label: lc.label, color: sourceColor(lc.id, lc.color) });
   });
 
   if (!all.length) {
@@ -2532,12 +2810,13 @@ function renderSettingCalList() {
     // Color swatch / picker
     const colorWrap = document.createElement('div');
     colorWrap.className = 'cal-color-wrap';
-    colorWrap.style.background = color;
+    colorWrap.style.background = sourceColor(id, color);
     const swatch = document.createElement('div');
     swatch.className = 'cal-color-swatch';
     const colorInput = document.createElement('input');
     colorInput.type = 'color';
     colorInput.value = color;
+    colorInput.disabled = !!activePalette();
     colorInput.oninput = e => {
       calendarMeta[i].color = e.target.value;
       colorWrap.style.background = e.target.value;
@@ -2598,12 +2877,13 @@ function renderSettingCalList() {
 
     const colorWrap = document.createElement('div');
     colorWrap.className = 'cal-color-wrap';
-    colorWrap.style.background = holidaysColor;
+    colorWrap.style.background = sourceColor(HOLIDAYS_ID, holidaysColor);
     const swatch = document.createElement('div');
     swatch.className = 'cal-color-swatch';
     const colorInput = document.createElement('input');
     colorInput.type = 'color';
     colorInput.value = holidaysColor;
+    colorInput.disabled = !!activePalette();
     colorInput.oninput = e => {
       holidaysColor = e.target.value;
       localStorage.setItem('fh_holidaysColor', holidaysColor);
@@ -2677,7 +2957,7 @@ let icsSubs      = lsGet('fh_icsSubs', []);    // [{id, url, label, color}]
 let icsCache     = lsGet('fh_icsCache', {});   // {id: {fetchedAt, events[]}}
 const ICS_TTL_MS = 4 * 60 * 60 * 1000;        // refresh every 4 hours
 
-/** Parse an ICS text string into a flat array of event objects compatible with cacheEvents(). */
+/** Parse an ICS text string into a flat array of event objects compatible with cacheCalEvents(). */
 function parseIcs(text) {
   const events = [];
   // Unfold folded lines (continuation lines start with a space OR tab), per RFC 5545.
@@ -2879,7 +3159,7 @@ function injectIcsEvent(sub, ev) {
     description: ev.description || '',
     location:    ev.location    || '',
     url:         ev.url         || '',
-    color:       sub.color,
+    color:       sourceColor(sub.id, sub.color),
     holiday:     false,
     readOnly:    true,   // subscription: eventId is the feed's UID, calId a sub
     allDay:      !!ev.start?.date,
@@ -2892,12 +3172,12 @@ function injectIcsEvent(sub, ev) {
   if (entry.allDay && entry.startDate && entry.endDate && entry.endDate > entry.startDate) {
     const endD = new Date(entry.endDate + 'T00:00:00');
     for (let d = new Date(entry.startDate + 'T00:00:00'); d < endD; d.setDate(d.getDate() + 1)) {
-      (cache[localDateKey(d)] ||= []).push(entry);
+      pushEventDeduped((cache[localDateKey(d)] ||= []), entry);
     }
   } else {
     // Date key from the actual local instant (handles UTC/zoned/floating uniformly).
     const key = entry.allDay ? entry.startDate : localDateKey(new Date(entry.startDT));
-    (cache[key] ||= []).push(entry);
+    pushEventDeduped((cache[key] ||= []), entry);
   }
 }
 
@@ -3004,18 +3284,23 @@ function renderIcsSubList() {
     // Color picker
     const colorWrap = document.createElement('div');
     colorWrap.className = 'cal-color-wrap';
-    colorWrap.style.background = sub.color;
+    colorWrap.style.background = sourceColor(sub.id, sub.color);
     const swatch = document.createElement('div');
     swatch.className = 'cal-color-swatch';
     const colorInput = document.createElement('input');
     colorInput.type = 'color';
     colorInput.value = sub.color;
+    colorInput.disabled = !!activePalette();
+    // Preview on input, persist on change: every Firestore write fires the
+    // icsSubs snapshot, which rebuilds this list and drops the open picker.
+    colorInput.onchange = e => {
+      if (db) db.collection('icsSubs').doc(sub.id).update({ color: e.target.value }).catch(_fsWriteError);
+      else localStorage.setItem('fh_icsSubs', JSON.stringify(icsSubs));
+    };
     colorInput.oninput = e => {
       const newColor = e.target.value;
       icsSubs[i].color = newColor;
       colorWrap.style.background = newColor;
-      if (db) db.collection('icsSubs').doc(sub.id).update({ color: newColor }).catch(_fsWriteError);
-      else localStorage.setItem('fh_icsSubs', JSON.stringify(icsSubs));
       // Update color on already-cached events so the live calendar reflects immediately
       if (calEventCache[sub.id]) {
         Object.values(calEventCache[sub.id]).forEach(dayEvts =>
@@ -3035,9 +3320,14 @@ function renderIcsSubList() {
     labelInput.value = sub.label;
     labelInput.title = sub.url;
     labelInput.placeholder = 'Label';
-    labelInput.oninput = e => {
-      icsSubs[i].label = e.target.value;
-      if (db) db.collection('icsSubs').doc(sub.id).update({ label: e.target.value }).catch(_fsWriteError);
+    labelInput.enterKeyHint = 'done';
+    labelInput.onkeydown = e => { if (e.key === 'Enter') labelInput.blur(); };
+    // Persist on change (blur/Enter), not per keystroke: each write fires the
+    // icsSubs snapshot, which rebuilds this list and steals focus mid-word.
+    labelInput.onchange = e => {
+      const label = e.target.value.trim() || sub.url;
+      icsSubs[i].label = label;
+      if (db) db.collection('icsSubs').doc(sub.id).update({ label }).catch(_fsWriteError);
       else localStorage.setItem('fh_icsSubs', JSON.stringify(icsSubs));
       renderCalendarTabs();
     };
@@ -3057,8 +3347,7 @@ function renderIcsSubList() {
       renderCountdownCard();
     };
     const wdText = document.createElement('span');
-    wdText.textContent = 'Wkdays';
-    wdText.style.cssText = 'font-size:.68rem;color:var(--muted);white-space:nowrap';
+    wdText.textContent = 'Weekdays-only countdowns';
     wdLabel.appendChild(wdCheck);
     wdLabel.appendChild(wdText);
 
@@ -3087,9 +3376,14 @@ function renderIcsSubList() {
     row.appendChild(visToggle);
     row.appendChild(colorWrap);
     row.appendChild(labelInput);
-    row.appendChild(wdLabel);
     row.appendChild(removeBtn);
-    el.appendChild(row);
+    // Weekdays toggle sits on its own line under the label, so the label
+    // input keeps the row's full width on a phone.
+    const item = document.createElement('div');
+    item.className = 'ics-sub-item';
+    item.appendChild(row);
+    item.appendChild(wdLabel);
+    el.appendChild(item);
   });
 }
 
@@ -3400,17 +3694,129 @@ function renderCountdownCard() {
 // ── Calendar Event Editor ─────────────────────────────────────
 let evtEditing = null; // { ev, calId } when editing; null when creating
 
+/** Text color that reads on an event's fill: white unless white would fall
+ *  under 3:1 contrast (luminance above 0.30), then dark, which always reads
+ *  better there. That catches mid-tones like Okabe-Ito orange, not just
+ *  Banana/Citron. Unparseable or missing colors get white, matching the
+ *  var(--muted) fallback fill. */
+function readableTextOn(color) {
+  const hex = String(color || '').trim().replace(/^#/, '');
+  const full = hex.length === 3 ? hex.split('').map(c => c + c).join('') : hex;
+  if (!/^[0-9a-f]{6}$/i.test(full)) return '#fff';
+  const [r, g, b] = [0, 2, 4].map(i => {
+    const c = parseInt(full.slice(i, i + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.30 ? '#1f2328' : '#fff';
+}
+
+/** The shared event fill for Month pills/bars and Day pills: the event's own
+ *  calendar color (neutral if it has none) with text that reads on it. */
+function paintEventFill(el, color) {
+  el.style.background = color || 'var(--muted)';
+  el.style.color = readableTextOn(color);
+}
+
+// Emoji (with any variation selector / ZWJ sequence). Phone Month cells are a
+// few characters wide, and a leading 🗑️ or 🎉 wrapped onto its own line.
+const EMOJI_RE = /\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic})*\uFE0F?/gu;
+function stripEmoji(text) {
+  const t = String(text || '').replace(EMOJI_RE, '').replace(/\s+/g, ' ').trim();
+  return t || String(text || '');
+}
+
 function appendMemberBadges(container, members) {
   if (!members?.length) return;
   members.forEach(name => {
     const m = familyMembers.find(fm => fm.name === name);
-    if (!m?.color) return;
+    const color = memberColor(m);
+    if (!color) return;
     const badge = document.createElement('span');
     badge.className = 'evt-member-badge';
-    badge.style.background = m.color;
+    badge.style.background = color;
     badge.title = name;
     badge.textContent = name[0].toUpperCase();
     container.appendChild(badge);
+  });
+}
+
+/** Matches a member's name as a whole word, possessive included ("Jack's"). */
+function memberNameRe(name, flags) {
+  const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`\\b${esc}(['’]s)?\\b`, flags);
+}
+
+/** An event's members: its explicit assignment, else every member named as
+ *  a whole word in the title. [] when there's no member. */
+function eventMemberNames(ev) {
+  if (ev.members?.length) return ev.members;
+  return familyMembers.map(m => m.name).filter(name => memberNameRe(name, 'i').test(ev.summary || ''));
+}
+
+/** The title with member names taken out, plus the joiners that only made
+ *  sense between them ("Jack & Matt", "Jack, Matt and Kate") and any dash or
+ *  colon left at either end: "Jack & Matt - Dentist" → "Dentist". An "and"
+ *  elsewhere in the title stays. Falls back to the full title when nothing
+ *  would be left. */
+function stripMemberNames(summary, names) {
+  const NAME = '\u0000';
+  let t = summary || '';
+  names.forEach(name => { t = t.replace(memberNameRe(name, 'gi'), NAME); });
+  const joined = new RegExp(`${NAME}\\s*(?:,|&|\\+|\\band\\b)\\s*${NAME}`, 'i');
+  while (joined.test(t)) t = t.replace(joined, NAME);
+  t = t.replace(new RegExp(`\\s+(?:with|for)\\s+${NAME}\\s*$`, 'i'), '');   // "Lunch with Jack"
+  t = t.split(NAME).join(' ')
+       .replace(/\s+/g, ' ')
+       .replace(/^[\s,&+:\-–—/|]+|[\s,&+:\-–—/|]+$/g, '');
+  if (!t) return summary || '';
+  return t[0].toUpperCase() + t.slice(1);
+}
+
+/** One 2px stripe per member, in their color, down the pill's left edge.
+ *  Members without a color get none. */
+function applyMemberStripes(pill, names) {
+  const colors = names.map(n => memberColor(familyMembers.find(m => m.name === n))).filter(Boolean);
+  if (!colors.length) return;
+  // A variable, not box-shadow itself, so the pill keeps its Event depth layers
+  pill.style.setProperty('--member-stripes', colors.map((c, i) => `inset ${2 * (i + 1)}px 0 0 ${c}`).reverse().join(', '));
+  pill.style.paddingLeft = `${2 * colors.length + 2}px`;
+}
+
+// `.day-event-pill` is flex-direction:column, so appending badges straight
+// into it (like appendMemberBadges does everywhere else) gives each badge
+// its own row below the time instead of sitting beside it. Wrap time +
+// badges in one horizontal row; skip the row entirely when there's neither
+// (an all-day pill with no assigned members), so it doesn't add empty space.
+function appendPillMeta(pill, timeText, members) {
+  if (!timeText && !members?.length) return;
+  const meta = document.createElement('span');
+  meta.className = 'evt-meta';
+  if (timeText) {
+    const time = document.createElement('span');
+    time.className = 'evt-time';
+    time.textContent = timeText;
+    meta.appendChild(time);
+  }
+  pill.appendChild(meta);
+  appendMemberBadges(meta, members);
+}
+
+// Most days `track`'s content fits `lineEl` and should just sit still — an
+// always-running ticker (see .wx-ticker/.assistant-ticker) would be motion
+// for its own sake on the common case. Only measure-and-animate the rare day
+// that overflows (e.g. 3+ subjects), and let CSS's `animation-delay` supply
+// the "pause a beat before scrolling" part. Deferred a frame so `lineEl` has
+// real layout — it's usually still being inserted into a detached `wrap`
+// when this runs.
+function startMarqueeIfOverflowing(lineEl, trackEl) {
+  requestAnimationFrame(() => {
+    // trackEl.clientWidth is the box flex actually gave it (shrunk to fit
+    // lineEl once the label's width is subtracted); scrollWidth is its
+    // full, unclipped content width — the gap between them is what's cut off.
+    const overflow = trackEl.scrollWidth - trackEl.clientWidth;
+    if (overflow <= 1) return;
+    trackEl.style.setProperty('--marquee-dist', `-${overflow}px`);
+    lineEl.classList.add('school-day-scrolling');
   });
 }
 
@@ -3498,11 +3904,11 @@ function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
 
   // Times
   if (ev?.startDT) {
-    document.getElementById('evtEdStart').value = _evtLocalTime(ev.startDT);
-    document.getElementById('evtEdEnd').value   = _evtLocalTime(ev.endDT);
+    setEvtEdTime('evtEdStart', _evtLocalTime(ev.startDT));
+    setEvtEdTime('evtEdEnd',   _evtLocalTime(ev.endDT));
   } else {
-    document.getElementById('evtEdStart').value = startTime || '09:00';
-    document.getElementById('evtEdEnd').value   = endTime   || '10:00';
+    setEvtEdTime('evtEdStart', startTime || '09:00');
+    setEvtEdTime('evtEdEnd',   endTime   || '10:00');
   }
 
   // Calendar selector — only writable calendars (not holidays, not 'group.v.calendar')
@@ -3515,7 +3921,7 @@ function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
     writableCals.forEach(cal => {
       const btn = document.createElement('button');
       btn.className = 'evt-editor-cal-opt';
-      btn.style.color = cal.color;
+      btn.style.color = sourceColor(cal.id, cal.color);
       btn.textContent = cal.label || cal.id.split('@')[0];
       btn.dataset.calId = cal.id;
       const defaultCalId = ev?.calId || writableCals[0].id;
@@ -3541,18 +3947,19 @@ function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
       chip.dataset.memberName = m.name;
       chip.textContent = m.name;
       const selected = ev?.members?.includes(m.name) || false;
+      const color = memberColor(m);
       // Unselected chips tint from the member's own color (via currentColor,
       // see .evt-member-chip in CSS); selected chips go solid + white text,
       // so leave color unset there and let the .selected CSS rule apply it.
-      chip.style.color = selected ? '' : (m.color || '');
+      chip.style.color = selected ? '' : (color || '');
       if (selected) {
         chip.classList.add('selected');
-        chip.style.background = m.color || 'var(--accent)';
+        chip.style.background = chip.style.borderColor = color || 'var(--accent)';
       }
       chip.onclick = () => {
         const nowSelected = chip.classList.toggle('selected');
-        chip.style.background = nowSelected ? (m.color || 'var(--accent)') : '';
-        chip.style.color = nowSelected ? '' : (m.color || '');
+        chip.style.background = chip.style.borderColor = nowSelected ? (color || 'var(--accent)') : '';
+        chip.style.color = nowSelected ? '' : (color || '');
       };
       membersContainer.appendChild(chip);
     });
@@ -3580,11 +3987,20 @@ function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
   document.getElementById('evtEdEndsUntil').value = dk;
   toggleEvtEdEnds();
 
+  document.body.classList.add('evt-editor-open');   // hides the mobile ＋ FAB
   document.getElementById('eventEditorModal').style.display = 'flex';
   trapFocus(document.querySelector('#eventEditorModal .modal'), null, closeEventEditor);
 }
 
+/** Mobile ＋ FAB. In Day view the new event defaults to the day on screen,
+ *  so browsing to Friday and tapping ＋ starts a Friday event; Month and
+ *  Agenda span many days, so they keep the today default. */
+function openNewEventFromFab() {
+  openEventEditor(null, calView === 'day' ? localDateKey(calViewDate) : undefined);
+}
+
 function closeEventEditor() {
+  document.body.classList.remove('evt-editor-open');
   document.getElementById('eventEditorModal').style.display = 'none';
   releaseFocusTrap();
   evtEditing = null;
@@ -3733,7 +4149,36 @@ function autoAdvanceEvtEnd() {
   if (endEl.value && endEl.value > startEl.value) return;   // valid range — leave it
   const [h, m] = startEl.value.split(':').map(Number);
   const end = Math.min(h * 60 + m + 60, 23 * 60 + 59);       // +1h, clamp to 23:59
-  endEl.value = `${String(Math.floor(end / 60)).padStart(2,'0')}:${String(end % 60).padStart(2,'0')}`;
+  setEvtEdTime('evtEdEnd', `${String(Math.floor(end / 60)).padStart(2,'0')}:${String(end % 60).padStart(2,'0')}`);
+}
+
+// Start/End time are <select>s of 15-minute steps rather than <input
+// type=time>: iOS and Android's native time pickers ignore `step`, so the
+// minute wheel always offered all 60 minutes. Values stay "HH:MM" so every
+// reader of .value is unchanged.
+function fillEvtEdTimeOptions(sel) {
+  const fmt = { hour: 'numeric', minute: '2-digit' };
+  for (let m = 0; m < 24 * 60; m += 15) {
+    const v = `${String(Math.floor(m / 60)).padStart(2,'0')}:${String(m % 60).padStart(2,'0')}`;
+    sel.add(new Option(new Date(2000, 0, 1, Math.floor(m / 60), m % 60).toLocaleTimeString([], fmt), v));
+  }
+}
+
+/** Set a time select, adding an option in order when the value is off the
+ *  15-minute grid (an existing event at 9:10, or the 23:59 end clamp) so it
+ *  shows as-is instead of the select silently going blank. */
+function setEvtEdTime(id, hhmm) {
+  const sel = document.getElementById(id);
+  if (!sel.options.length) fillEvtEdTimeOptions(sel);
+  // Drop a previous off-grid option so they don't pile up across sessions
+  [...sel.options].forEach(o => { if (o.dataset.offGrid && o.value !== hhmm) o.remove(); });
+  if (hhmm && ![...sel.options].some(o => o.value === hhmm)) {
+    const [h, m] = hhmm.split(':').map(Number);
+    const opt = new Option(new Date(2000, 0, 1, h, m).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }), hhmm);
+    opt.dataset.offGrid = '1';
+    sel.add(opt, [...sel.options].find(o => o.value > hhmm) || null);
+  }
+  sel.value = hhmm;
 }
 
 function evtEdStatus(msg, isError) {
@@ -3876,7 +4321,7 @@ async function rescheduleEvent(ev, newDateKey) {
   if (!googleToken || !ev.eventId) return;
   const oldDateKey = ev.startDate || ev.startDT?.slice(0, 10);
   if (!oldDateKey || oldDateKey === newDateKey) return;
-  if (newDateKey === new Date().toISOString().slice(0, 10) && eggCategories.ui) {
+  if (newDateKey === localDateKey(new Date()) && eggCategories.ui) {
     showToast('⚡ Back to the future!', 2500);
   }
 
@@ -5299,17 +5744,26 @@ function activeCalViewEl() {
     : calView === 'day' ? 'dayView' : 'agendaView');
 }
 
-// Anything between the touch and the wrapper that scrolls sideways (the week
-// grid on a narrow screen) owns the horizontal gesture itself — stand down.
-function calSwipeBlocked(target, wrap) {
+// The sideways scroller between the touch and the wrapper, if any (the week
+// grid on a narrow screen). It owns the horizontal gesture until it's scrolled
+// to the edge the swipe heads for (calScrollerAtEdge), then the swipe pages.
+function calSwipeScroller(target, wrap) {
   for (let el = target; el && el !== wrap; el = el.parentElement) {
     // Overflowing alone isn't enough — an ellipsised event title overflows its
     // day cell without being scrollable. Only a real scroller takes the gesture.
     if (el.scrollWidth <= el.clientWidth + 1) continue;
     const ox = getComputedStyle(el).overflowX;
-    if (ox === 'auto' || ox === 'scroll') return true;
+    if (ox === 'auto' || ox === 'scroll') return el;
   }
-  return false;
+  return null;
+}
+
+// Finger moving left (dx < 0) scrolls toward the right end, and vice versa.
+// Only a swipe that starts already at that end pages, so scrolling up to the
+// edge never spills into a period change mid-gesture.
+function calScrollerAtEdge(el, dx) {
+  return dx < 0 ? el.scrollLeft + el.clientWidth >= el.scrollWidth - 1
+                : el.scrollLeft <= 1;
 }
 
 function calSetDrag(wrap, px) {
@@ -5348,7 +5802,13 @@ function slideCalPeriod(delta, fromPx = 0) {
   ghost.classList.add('cal-view-ghost');
   ghost.style.transform = `translate3d(${fromPx}px,0,0)`;
   ghost.style.opacity   = wrap.style.opacity || '1';
+  // The clone loses #weekView's id rules (keep its column layout) and every
+  // scroll position (on a phone the stacked week list would jump to Sunday)
+  ghost.style.flexDirection = getComputedStyle(active).flexDirection;
+  ghost.style.overflow      = 'hidden';
   wrap.appendChild(ghost);
+  const ghostList = ghost.querySelector('.week-grid');
+  if (ghostList) ghostList.scrollTop = active.querySelector('.week-grid').scrollTop;
 
   // Hand the drag offset over to the ghost, then re-render underneath it.
   calSettleDrag(wrap);
@@ -5380,13 +5840,13 @@ function slideCalPeriod(delta, fromPx = 0) {
 function setupCalSwipe() {
   const wrap = document.getElementById('calViews');
   if (!wrap) return;
-  let startX = 0, startY = 0, startT = 0, axis = null, tracking = false;
+  let startX = 0, startY = 0, startT = 0, axis = null, tracking = false, scroller = null;
 
   wrap.addEventListener('touchstart', e => {
     tracking = false;
     axis     = null;
     if (e.touches.length !== 1 || calSliding) return;
-    if (calSwipeBlocked(e.target, wrap)) return;
+    scroller = calSwipeScroller(e.target, wrap);
     startX   = e.touches[0].clientX;
     startY   = e.touches[0].clientY;
     startT   = e.timeStamp;
@@ -5401,6 +5861,8 @@ function setupCalSwipe() {
       if (Math.abs(dx) < CAL_SWIPE_AXIS_LOCK && Math.abs(dy) < CAL_SWIPE_AXIS_LOCK) return;
       // Vertical wins: leave the gesture to the scroller and stay out of it.
       if (Math.abs(dy) >= Math.abs(dx)) { tracking = false; return; }
+      // Mid-scroller: the scroller keeps the gesture, as a plain scroll.
+      if (scroller && !calScrollerAtEdge(scroller, dx)) { tracking = false; return; }
       axis = 'x';
       wrap.classList.add('cal-dragging');
     }
@@ -5451,7 +5913,7 @@ function _fsWriteError(e) {
 }
 
 // Single-doc settings sync (whole-array/object value, no per-item id) — used by
-// shopCategories, stockTickers, weatherLocations, mealDietPrefs, mowConfig.
+// stockTickers, weatherLocations, mealDietPrefs, mowConfig.
 function saveFsSetting(fsKey, lsKey, value) {
   if (db) db.collection('settings').doc(fsKey).set({ value }).catch(_fsWriteError);
   else localStorage.setItem(lsKey, JSON.stringify(value));
@@ -5510,6 +5972,8 @@ function attachFirestoreListeners() {
     }
     renderFamilyMemberList();
     renderChoreCard();
+    lcRenderBdayList();
+    renderCurrentView();   // birthdays take member colors
     migrateSmsContactsToMembers();
   }, _fsError));
 
@@ -5528,13 +5992,6 @@ function attachFirestoreListeners() {
     injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
   }, _fsError));
 
-  // Medications
-  _fsUnsub.push(db.collection('medications').orderBy('createdAt').onSnapshot(snap => {
-    medications = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    lcRenderMedList();
-    injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
-  }, _fsError));
-
   // School schedule
   _fsUnsub.push(db.collection('schoolPeriods').orderBy('createdAt').onSnapshot(snap => {
     schoolPeriods = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -5542,10 +5999,24 @@ function attachFirestoreListeners() {
     injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
   }, _fsError));
 
-  // Trash & recycling
-  _fsUnsub.push(db.collection('trashPickups').orderBy('createdAt').onSnapshot(snap => {
-    trashPickups = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    lcRenderTrashList();
+  // School Day Cycle — non-school days (skipped in the Day N count)
+  _fsUnsub.push(db.collection('schoolHolidays').orderBy('date').onSnapshot(snap => {
+    schoolHolidays = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    lcRenderSchoolHolidayList();
+    scdRenderCycleStatus(); renderCurrentView();
+  }, _fsError));
+
+  // School Day Cycle — per-kid subject assignments (subject × day numbers × members)
+  _fsUnsub.push(db.collection('schoolDaySubjects').orderBy('createdAt').onSnapshot(snap => {
+    schoolDaySubjects = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    lcRenderSchoolSubjectList();
+    renderCurrentView();
+  }, _fsError));
+
+  // Recurring (replaced the separate medications + trashPickups collections)
+  _fsUnsub.push(db.collection('recurringItems').orderBy('createdAt').onSnapshot(snap => {
+    recurringItems = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    lcRenderRecurringList();
     injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
   }, _fsError));
 
@@ -5577,10 +6048,6 @@ function attachFirestoreListeners() {
   }, _fsError));
 
   // Shared settings (single doc per key, whole value synced)
-  _fsUnsub.push(db.collection('settings').doc('shopCategories').onSnapshot(doc => {
-    if (doc.exists) shopCategories = doc.data().value;
-    populateShopCategorySelect(); renderShopCategorySettings(); renderLocalList('shopping');
-  }, _fsError));
   _fsUnsub.push(db.collection('settings').doc('stockTickers').onSnapshot(doc => {
     if (doc.exists) stockTickers = doc.data().value;
     renderStockTickerList(); loadStockQuotes(true);
@@ -5599,6 +6066,13 @@ function attachFirestoreListeners() {
   _fsUnsub.push(db.collection('settings').doc('mowConfig').onSnapshot(doc => {
     if (doc.exists) mowConfig = { ...MOW_CONFIG, ...doc.data().value };
     _mowReco = null;
+  }, _fsError));
+  _fsUnsub.push(db.collection('settings').doc('calendarPalette').onSnapshot(doc => {
+    if (doc.exists && doc.data().value !== calPalette) { calPalette = doc.data().value; refreshCalPalette(); }
+  }, _fsError));
+  _fsUnsub.push(db.collection('settings').doc('schoolDayCycle').onSnapshot(doc => {
+    if (doc.exists) schoolDayCycle = { ...SCHOOL_CYCLE_DEFAULTS, ...doc.data().value };
+    scdRenderCycleStatus(); scdRenderSubjectDayChecks(); renderCurrentView();
   }, _fsError));
 
   // One-time localStorage → Firestore migrations. Writes require auth, so only
@@ -5673,9 +6147,8 @@ function runFirestoreMigrations() {
   // Simple record lists — additive migration (matches Budget/FamilyMembers precedent)
   [
     { ls: 'fh_birthdays',     col: 'birthdays',     label: 'Birthdays' },
-    { ls: 'fh_medications',   col: 'medications',   label: 'Medications' },
     { ls: 'fh_school',        col: 'schoolPeriods', label: 'SchoolPeriods' },
-    { ls: 'fh_trash',         col: 'trashPickups',  label: 'TrashPickups' },
+    { ls: 'fh_recurring',     col: 'recurringItems', label: 'Recurring' },
     { ls: 'fh_countdowns',    col: 'countdowns',    label: 'Countdowns' },
     { ls: 'fh_mealTemplates', col: 'mealTemplates', label: 'MealTemplates' },
     { ls: 'fh_recipeBox',     col: 'recipeBox',     label: 'RecipeBox' },
@@ -5693,6 +6166,29 @@ function runFirestoreMigrations() {
     batch.commit().then(() => {
       localStorage.removeItem(ls);
       console.log(`[${label}] Migrated`, legacy.length, 'item(s) from localStorage to Firestore.');
+    }).catch(_fsError);
+  });
+
+  // Medications + Trash & Recycling → Recurring. Doc ids derive from the old
+  // ones, so two devices running this at once write the same docs, not copies.
+  [
+    { col: 'medications',  prefix: 'med_',   convert: recurringFromMed },
+    { col: 'trashPickups', prefix: 'trash_', convert: recurringFromTrash },
+  ].forEach(({ col, prefix, convert }) => {
+    db.collection(col).get().then(snap => {
+      if (snap.empty) return;
+      const batch = db.batch();
+      snap.docs.forEach(doc => {
+        const old = doc.data();
+        batch.set(db.collection('recurringItems').doc(prefix + doc.id), {
+          ...convert(old),
+          createdAt: old.createdAt || firebase.firestore.FieldValue.serverTimestamp(),
+        });
+        batch.delete(doc.ref);
+      });
+      batch.commit().then(() => {
+        console.log('[Recurring] Migrated', snap.size, `item(s) from ${col}.`);
+      }).catch(_fsError);
     }).catch(_fsError);
   });
 
@@ -5719,11 +6215,12 @@ function runFirestoreMigrations() {
   // Shared settings (single doc per key) — migrate only if not already synced
   // elsewhere, so the first device to sign in "wins" rather than clobbering.
   [
-    { ls: 'fh_shopCategories', key: 'shopCategories' },
     { ls: 'fh_stockTickers',   key: 'stockTickers' },
     { ls: 'fh_wlocations',     key: 'weatherLocations' },
     { ls: 'fh_mealDietPrefs',  key: 'mealDietPrefs' },
     { ls: 'fh_mowConfig',      key: 'mowConfig' },
+    { ls: 'fh_schoolDayCycle', key: 'schoolDayCycle' },
+    { ls: 'fh_calPalette',     key: 'calendarPalette' },
     { ls: 'fh_haConfig',       key: 'homeAssistant' },   // token is NOT synced — see the Home Assistant section
   ].forEach(({ ls, key }) => {
     const raw = localStorage.getItem(ls);
@@ -5771,11 +6268,8 @@ function renderTodoList() {
   if (!ul) return;
   ul.innerHTML = '';
   const hasDone = todoItems.some(i => i.done);
-  const hasAny  = todoItems.length > 0;
   const doneBtn = document.getElementById('todoClearDoneBtn');
-  const allBtn  = document.getElementById('todoClearAllBtn');
   if (doneBtn) doneBtn.style.display = hasDone ? '' : 'none';
-  if (allBtn)  allBtn.style.display  = hasAny  ? '' : 'none';
   if (!todoItems.length) { empty.style.display = ''; return; }
   empty.style.display = 'none';
 
@@ -5807,11 +6301,11 @@ function renderFsList(ulId, emptyId, docs, collection) {
   if (collection === 'shopping') {
     const entries = docs.map(doc => {
       const d = doc.data();
-      return { text: d.text, done: d.done, by: d.by, category: d.category || 'Other',
+      return { text: d.text, done: d.done, by: d.by,
                onToggle: () => toggleFs(collection, doc.id, d.done),
                onDelete: () => deleteFs(collection, doc.id) };
     });
-    renderShopGrouped(entries);
+    renderShopList(entries);
     return;
   }
   const ul = document.getElementById(ulId);
@@ -5873,11 +6367,11 @@ function renderLocalList(col) {
   if (col === 'shopping') {
     const items = getLocalList('shopping');
     const entries = items.map((item, i) => ({
-      text: item.text, done: item.done, by: item.by, category: item.category || 'Other',
+      text: item.text, done: item.done, by: item.by,
       onToggle: () => { items[i].done = !items[i].done; saveLocalList('shopping', items); renderLocalList('shopping'); },
       onDelete: () => { items.splice(i, 1); saveLocalList('shopping', items); renderLocalList('shopping'); },
     }));
-    renderShopGrouped(entries);
+    renderShopList(entries);
     return;
   }
   const ulId    = col === 'todo' ? 'todoList' : 'shopList';
@@ -5947,7 +6441,7 @@ function makeTodoItem(item, onToggle, onDelete) {
   wrap.appendChild(label);
 
   // Badges row (due date + assignee)
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateKey(new Date());
   const hasBadge = item.dueDate || item.assignedTo;
   if (hasBadge) {
     const badges = document.createElement('div');
@@ -5997,7 +6491,9 @@ function makeTodoItem(item, onToggle, onDelete) {
 // Post-fetch pass: override ev.color for events whose title contains a member name.
 // Longer names matched first to avoid "Jack" stealing "Jackson's" events.
 function applyMemberColors() {
-  const colored = familyMembers.filter(m => m.color).sort((a, b) => b.name.length - a.name.length);
+  const colored = familyMembers.filter(m => memberColor(m))
+    .map(m => ({ name: m.name, color: memberColor(m) }))
+    .sort((a, b) => b.name.length - a.name.length);
   if (!colored.length) return;
   Object.values(calEventCache).forEach(byDate => {
     Object.values(byDate).forEach(evts => {
@@ -6077,12 +6573,14 @@ function renderFamilyMemberList() {
       row.innerHTML = `
         <div style="display:flex;align-items:center;gap:6px">
           <span style="flex:1">👤 ${esc(m.name)}</span>
-          <input type="color" value="${m.color || '#6c8ef5'}"
+          ${activePalette()
+            ? `<span class="palette-dot" style="background:${memberColor(m)}" title="Color from the ${esc(activePalette().label)} palette"></span>`
+            : `<input type="color" value="${m.color || '#6c8ef5'}"
                  title="Calendar event color for ${esc(m.name)}"
                  class="lc-color"
                  onchange="setFamilyMemberColor(${colorArg},this.value)"
                  style="width:24px;height:24px;border:none;border-radius:4px;cursor:pointer;padding:0;background:none;flex-shrink:0;opacity:${m.color ? '1' : '0.4'}"
-                 oninput="this.style.opacity='1'">
+                 oninput="this.style.opacity='1'">`}
           <select onchange="setFamilyMemberGender(${genderArg},this.value)"
                   style="font-size:.75rem;padding:2px 4px;border-radius:5px;background:var(--surface);border:1px solid rgba(255,255,255,.15);color:var(--text);cursor:pointer"
                   title="Pronouns used by the assistant">
@@ -6255,12 +6753,12 @@ function addTodo() {
   }
 }
 
-function renderShopGrouped(entries) {
+function renderShopList(entries) {
   const ul    = document.getElementById('shopList');
   const empty = document.getElementById('shopEmpty');
   if (!ul) return;
   ul.innerHTML = '';
-  shopItemsCache = entries.map(({ text, done, by, category }) => ({ text, done, by, category }));
+  shopItemsCache = entries.map(({ text, done, by }) => ({ text, done, by }));
   const hasDone = entries.some(i => i.done);
   const hasAny  = entries.length > 0;
   const doneBtn = document.getElementById('shopClearDoneBtn');
@@ -6269,53 +6767,7 @@ function renderShopGrouped(entries) {
   if (allBtn)  allBtn.style.display  = hasAny  ? '' : 'none';
   if (!entries.length) { empty.style.display = ''; return; }
   empty.style.display = 'none';
-
-  // Ordered: known categories first, then any custom ones found in items
-  const usedCats = [...new Set(entries.map(e => e.category || 'Other'))];
-  const orderedCats = [
-    ...shopCategories.filter(c => usedCats.includes(c)),
-    ...usedCats.filter(c => !shopCategories.includes(c))
-  ];
-
-  orderedCats.forEach(cat => {
-    const items = entries.filter(e => (e.category || 'Other') === cat);
-    if (!items.length) return;
-    const icon        = SHOP_CATEGORY_ICONS[cat] || '📦';
-    const isCollapsed = !!shopCollapsed[cat];
-    const undone      = items.filter(i => !i.done).length;
-
-    const groupLi = document.createElement('li');
-    groupLi.className = 'shop-cat-group';
-
-    const header = document.createElement('div');
-    header.className = 'shop-cat-header' + (isCollapsed ? ' collapsed' : '');
-    const nameSpan = document.createElement('span');
-    nameSpan.className = 'shop-cat-name';
-    nameSpan.textContent = `${icon} ${cat}`;
-    const countSpan = document.createElement('span');
-    countSpan.className = 'shop-cat-count';
-    countSpan.textContent = undone;
-    const toggleSpan = document.createElement('span');
-    toggleSpan.className = 'shop-cat-toggle';
-    toggleSpan.textContent = '▾';
-    header.appendChild(nameSpan);
-    header.appendChild(countSpan);
-    header.appendChild(toggleSpan);
-
-    const itemsUl = document.createElement('ul');
-    itemsUl.className = 'shop-cat-items' + (isCollapsed ? ' hidden' : '');
-    items.forEach(item => itemsUl.appendChild(makeListItem(item.text, item.done, item.by, item.onToggle, item.onDelete)));
-
-    header.onclick = () => {
-      shopCollapsed[cat] = !shopCollapsed[cat];
-      header.classList.toggle('collapsed');
-      itemsUl.classList.toggle('hidden');
-    };
-
-    groupLi.appendChild(header);
-    groupLi.appendChild(itemsUl);
-    ul.appendChild(groupLi);
-  });
+  entries.forEach(item => ul.appendChild(makeListItem(item.text, item.done, item.by, item.onToggle, item.onDelete)));
 
   // Easter egg: exactly 9 pending items
   const pendingCount = entries.filter(i => !i.done).length;
@@ -6339,69 +6791,15 @@ function triggerOneRing() {
   }, 4000);
 }
 
-function populateShopCategorySelect() {
-  const sel = document.getElementById('shopCategorySelect');
-  if (!sel) return;
-  const prev = sel.value;
-  sel.innerHTML = shopCategories.map(c =>
-    `<option value="${c}">${SHOP_CATEGORY_ICONS[c] || '📦'} ${c}</option>`
-  ).join('');
-  if (prev && shopCategories.includes(prev)) sel.value = prev;
-}
-
-function renderShopCategorySettings() {
-  const list = document.getElementById('shopCategoryList');
-  if (!list) return;
-  list.innerHTML = '';
-  shopCategories.forEach((cat, i) => {
-    const row = document.createElement('div');
-    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:3px 0;font-size:var(--text-sm)';
-    const icon = SHOP_CATEGORY_ICONS[cat] || '📦';
-    const nameSpan = document.createElement('span');
-    nameSpan.style.flex = '1';
-    nameSpan.textContent = `${icon} ${cat}`;
-    const delBtn = document.createElement('button');
-    delBtn.className = 'btn btn-sm';
-    delBtn.style.cssText = 'padding:1px 7px;background:var(--surface2);color:var(--red)';
-    delBtn.textContent = '✕';
-    delBtn.onclick = () => removeShopCategory(i);
-    row.appendChild(nameSpan);
-    row.appendChild(delBtn);
-    list.appendChild(row);
-  });
-}
-
-function addShopCategory() {
-  const input = document.getElementById('newShopCategoryInput');
-  const name  = input.value.trim();
-  if (!name || shopCategories.includes(name)) return;
-  input.value = '';
-  shopCategories.push(name);
-  saveFsSetting('shopCategories', 'fh_shopCategories', shopCategories);
-  populateShopCategorySelect();
-  renderShopCategorySettings();
-  renderLocalList('shopping');
-}
-
-function removeShopCategory(idx) {
-  const removed = shopCategories[idx];
-  delete shopCollapsed[removed];
-  shopCategories.splice(idx, 1);
-  saveFsSetting('shopCategories', 'fh_shopCategories', shopCategories);
-  populateShopCategorySelect();
-  renderShopCategorySettings();
-}
-
 function addShop() {
   const input = document.getElementById('shopInput');
   const text  = input.value.trim();
   if (!text) return;
-  const category = document.getElementById('shopCategorySelect')?.value || 'Other';
   input.value = '';
-  if (db) { addToFs('shopping', text, { category }); }
+  if (db) { addToFs('shopping', text); }
   else {
     const items = getLocalList('shopping');
-    items.push({ text, done: false, by: userName, category });
+    items.push({ text, done: false, by: userName });
     saveLocalList('shopping', items);
     renderLocalList('shopping');
   }
@@ -6424,10 +6822,6 @@ function clearAllLocal(col) {
     saveLocalList(col, []);
     renderLocalList(col);
   }
-}
-function clearAllTodo() {
-  if (!confirm('Clear all to-do items?')) return;
-  db ? clearAllFs('todo') : clearAllLocal('todo');
 }
 function clearAllShopping() {
   if (!confirm('Clear all shopping items?')) return;
@@ -6452,7 +6846,7 @@ function clearDoneLocal(col) {
 function renderChoreCard() {
   const body = document.getElementById('choreCardBody');
   if (!body) return;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateKey(new Date());
 
   if (!familyMembers.length) {
     body.innerHTML = '<div class="list-empty" style="display:block">Add family members in Settings to get started.</div>';
@@ -6481,7 +6875,7 @@ function renderChoreCard() {
     const pct = Math.min(100, Math.round((pts / threshold) * 100));
     const rewardLabel = member.rewardName ? ` → ${member.rewardName}` : '';
     header.innerHTML = `
-      <span class="chore-member-name" style="color:${member.color || 'var(--accent)'}">
+      <span class="chore-member-name" style="color:${memberColor(member) || 'var(--accent)'}">
         ${esc(member.name)}
       </span>
       <span class="chore-pts-total">${pts} / ${threshold} pts${rewardLabel}</span>
@@ -6551,7 +6945,7 @@ function renderChoreCard() {
 }
 
 async function toggleChore(choreId, memberId, pts, wasDone) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateKey(new Date());
   const newDoneDate = wasDone ? null : today;
   const pointsDelta = wasDone ? -(pts) : pts;
 
@@ -6636,7 +7030,7 @@ function renderChoreRewardList() {
     const row = document.createElement('div');
     row.style.cssText = 'background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:10px';
     row.innerHTML = `
-      <div style="font-weight:var(--weight-semi);margin-bottom:8px;color:${m.color || 'var(--accent)'}">
+      <div style="font-weight:var(--weight-semi);margin-bottom:8px;color:${memberColor(m) || 'var(--accent)'}">
         ${esc(m.name)}
         <span style="font-weight:400;color:var(--muted);margin-left:6px;font-size:.8rem">${m.points || 0} pts earned</span>
       </div>
@@ -7532,7 +7926,7 @@ const WOTD_FALLBACKS = {
 };
 
 async function loadWotd(force = false) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateKey(new Date());
   const cached = lsGet('fh_wotd', null);
   if (!force && cached && cached.date === today && cached.definition) {
     renderWotd(cached);
@@ -7596,7 +7990,7 @@ function refreshWotd() {
 // ── Dad Joke of the Day ───────────────────────────────────────────────────────
 
 async function loadDadJoke(force = false) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateKey(new Date());
   const cached = lsGet('fh_dadjoke', null);
   if (!force && cached && cached.date === today) {
     renderDadJoke(cached.joke);
@@ -7737,7 +8131,7 @@ const QUOTES = [
 ];
 
 function loadQuote(force = false) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateKey(new Date());
   if (!force) {
     const cached = lsGet('fh_quote', null);
     if (cached && cached.date === today) { renderQuote(cached); return; }
@@ -7827,14 +8221,6 @@ function showAIPermissionError(provider, rawMsg = '') {
 async function generateMealSuggestions() {
   const wrap = document.getElementById('mealSuggestionsWrap');
 
-  if (!mealAiKey) {
-    wrap.innerHTML = `
-      <div style="background:var(--surface2);border-radius:10px;padding:16px;font-size:.85rem">
-        <strong>⚙️ API key required</strong><br><br>
-        Add your key in <strong>Settings → 🤖 Assistant</strong>.
-      </div>`;
-    return;
-  }
 
   const style       = document.getElementById('mealStyleInput').value.trim();
   const pantry      = document.getElementById('mealPantryInput').value.trim();
@@ -7871,12 +8257,12 @@ async function generateMealSuggestions() {
   const prompt =
 `Suggest ${countStr} for a family meal plan.
 ${style       ? `Cuisine/style preference: ${style}` : ''}
-${pantry      ? `On-hand ingredients to incorporate: ${pantry}` : ''}
 ${calContext  ? `Calendar events today (gauge busyness/time): ${calContext}` : ''}
 ${existingStr ? `Already planned today: ${existingStr}` : ''}
 Dietary preferences: ${dietStr}
 ${variantGuide}
 Prioritise healthy, nutritious, well-balanced options.
+${pantry      ? `REQUIRED: On-hand ingredients: ${pantry}. Every single suggested meal MUST use at least one of these on-hand ingredients as a main component of the dish — do not suggest a meal that uses none of them.` : ''}
 Choose the best matching recipe site from: allrecipes, seriouseats, nytcooking, epicurious, simplyrecipes, bonappetit.
 
 Return ONLY a valid JSON array — no markdown, no explanation. Each element:
@@ -8004,12 +8390,12 @@ function addIngredientsToShopping(ingredients, label) {
 
   let added = 0;
   if (db) {
-    ingredients.forEach(ing => { addToFs('shopping', ing, { category: 'Other' }); added++; });
+    ingredients.forEach(ing => { addToFs('shopping', ing); added++; });
   } else {
     const items = getLocalList('shopping');
     ingredients.forEach(ing => {
       if (!items.some(i => i.text.toLowerCase() === ing.toLowerCase())) {
-        items.push({ text: ing, done: false, by: userName, category: 'Other' });
+        items.push({ text: ing, done: false, by: userName });
         added++;
       }
     });
@@ -8037,7 +8423,7 @@ function exportWeekMealsToShopping() {
   let mealCount = 0;
 
   for (let i = 0; i < 7; i++) {
-    const d = new Date(weekStart.getTime() + i * 86400000);
+    const d = addDays(weekStart, i);
     const dk = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     ['breakfast','lunch','dinner'].forEach(type => {
       const meal = (mealPlan[dk] || {})[type];
@@ -8062,10 +8448,10 @@ function exportWeekMealsToShopping() {
   }
 
   if (db) {
-    toAdd.forEach(ing => addToFs('shopping', ing, { category: 'Other' }));
+    toAdd.forEach(ing => addToFs('shopping', ing));
   } else {
     const items = getLocalList('shopping');
-    toAdd.forEach(ing => items.push({ text: ing, done: false, by: userName, category: 'Other' }));
+    toAdd.forEach(ing => items.push({ text: ing, done: false, by: userName }));
     saveLocalList('shopping', items);
     renderLocalList('shopping');
   }
@@ -8091,8 +8477,7 @@ async function saveMealTemplate() {
   const weekStart = calView === 'week' ? getWeekStart(calViewDate) : getWeekStart(new Date());
   const week = [];
   for (let i = 0; i < 7; i++) {
-    const d = new Date(weekStart.getTime() + i * 86400000);
-    const dk = d.toISOString().slice(0, 10);
+    const dk = localDateKey(addDays(weekStart, i));
     const dm = mealPlan[dk] || {};
     week.push({
       breakfast: dm.breakfast || null,
@@ -8125,14 +8510,14 @@ async function applyMealTemplate(id) {
 
   const weekStart = getWeekStart(new Date());
   const targetDates = Array.from({length: 7}, (_, i) =>
-    new Date(weekStart.getTime() + i * 86400000).toISOString().slice(0, 10));
+    localDateKey(addDays(weekStart, i)));
 
   const hasExisting = targetDates.some(dk => {
     const dm = mealPlan[dk] || {};
     return dm.breakfast || dm.lunch || dm.dinner;
   });
   const weekLabel = `${weekStart.toLocaleDateString([],{month:'short',day:'numeric'})} – ${
-    new Date(weekStart.getTime()+6*86400000).toLocaleDateString([],{month:'short',day:'numeric'})}`;
+    addDays(weekStart, 6).toLocaleDateString([],{month:'short',day:'numeric'})}`;
 
   if (hasExisting && !confirm(`Apply "${tmpl.name}" to this week (${weekLabel})?\nExisting meals will be replaced.`)) return;
 
@@ -8166,7 +8551,7 @@ function renderMealTemplateList() {
   if (!list) return;
   list.innerHTML = '';
   if (!mealTemplates.length) {
-    list.innerHTML = '<div style="color:var(--muted);font-size:.8rem;padding:4px 0">No templates yet — plan a week then click Save Week.</div>';
+    list.innerHTML = '<div style="color:var(--muted);font-size:.8rem;padding:4px 0">No templates yet. Plan a week, then tap Save Week.</div>';
     return;
   }
   mealTemplates.forEach(tmpl => {
@@ -8783,7 +9168,6 @@ async function adjustMeal() {
   const instruction = document.getElementById('mealAdjustInput').value.trim();
   const statusEl    = document.getElementById('mealAdjustStatus');
   if (!instruction) { statusEl.innerHTML = '<span style="color:var(--muted);font-size:.8rem">Describe a change or tap a chip first.</span>'; return; }
-  if (!mealAiKey)   { statusEl.innerHTML = '<span style="color:var(--accent2);font-size:.8rem">⚙️ Add a Gemini API key in Settings → 🤖 Assistant.</span>'; return; }
 
   const meal = (mealPlan[_mealDetailDate] || {})[_mealDetailType];
   if (!meal) { closeMealDetail(); return; }
@@ -8984,6 +9368,43 @@ function mowContextSection() {
 // ── Family Assistant ───────────────────────────────────────────────────────
 
 /** Gather current app state into a system prompt for the AI. */
+// ── Assistant calendar window ──
+// calEventCache only holds the period on screen (one day in Day view, one
+// month in Month view), so the Assistant keeps its own 30-day fetch of the
+// Google calendars. ICS subscriptions already cover months ahead in
+// calEventCache, so those are read from there.
+const ASSISTANT_CAL_DAYS   = 30;
+const ASSISTANT_CAL_TTL_MS = 10 * 60 * 1000;
+let assistantCalCache = { fetchedAt: 0, events: {} };
+
+async function refreshAssistantCalendar() {
+  if (!googleToken || Date.now() - assistantCalCache.fetchedAt < ASSISTANT_CAL_TTL_MS) return;
+  const start = new Date(); start.setHours(0, 0, 0, 0);
+  const end   = new Date(start); end.setDate(end.getDate() + ASSISTANT_CAL_DAYS); end.setHours(23, 59, 59);
+  const events = {};
+  await Promise.all(calendarMeta.map(async ({ id, color }) => {
+    try {
+      const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(id)}/events`
+        + `?maxResults=250&orderBy=startTime&singleEvents=true`
+        + `&timeMin=${start.toISOString()}&timeMax=${end.toISOString()}`;
+      const r    = await fetch(url, { headers: { Authorization: `Bearer ${googleToken}` } });
+      const data = await r.json();
+      if (data.items) cacheCalEvents(events, id, data.items, color);
+    } catch (e) { console.warn('Assistant cal error', id, e); }
+  }));
+  assistantCalCache = { fetchedAt: Date.now(), events };
+}
+
+/** Non-holiday events on a date for the Assistant: its own Google fetch where
+ *  it has one, plus everything else calEventCache holds (ICS, local cals). */
+function assistantEventsOn(dateStr) {
+  const own = assistantCalCache.fetchedAt ? assistantCalCache.events : {};
+  return [
+    ...Object.values(own).flatMap(byDate => byDate[dateStr] || []),
+    ...Object.entries(calEventCache).filter(([calId]) => !own[calId]).flatMap(([, byDate]) => byDate[dateStr] || []),
+  ].filter(e => !e.holiday);
+}
+
 function buildAssistantContext() {
   const today = new Date();
   const fmt = (d, opts) => d.toLocaleDateString('en-US', opts);
@@ -8997,9 +9418,7 @@ function buildAssistantContext() {
     const dateStr = localDateStr(d);
     const label = i === 0 ? 'Today' : i === 1 ? 'Tomorrow'
                 : fmt(d, { weekday: 'long', month: 'short', day: 'numeric' });
-    const evts = Object.values(calEventCache)
-      .flatMap(calDays => calDays[dateStr] || [])
-      .filter(e => !e.holiday)
+    const evts = assistantEventsOn(dateStr)
       .sort((a, b) => {
         if (a.allDay && !b.allDay) return -1;
         if (!a.allDay && b.allDay) return 1;
@@ -9014,6 +9433,26 @@ function buildAssistantContext() {
       });
     if (evts.length) calLines.push(`  ${label}: ${evts.join(', ')}`);
   }
+  // Days 8-30: titles only, to keep the prompt small
+  const laterLines = [];
+  for (let i = 7; i < ASSISTANT_CAL_DAYS; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() + i);
+    const titles = assistantEventsOn(localDateStr(d)).map(e => e.summary);
+    if (titles.length) laterLines.push(`  ${fmt(d, { weekday: 'short', month: 'short', day: 'numeric' })}: ${titles.join(', ')}`);
+  }
+
+  // ── Birthdays (the hub's own list), soonest first ──
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const bdayLines = birthdays.map(b => {
+    const next = new Date(today.getFullYear(), b.month - 1, b.day);
+    if (next < todayStart) next.setFullYear(next.getFullYear() + 1);
+    return { b, next, days: Math.round((next - todayStart) / 86400000) };
+  }).sort((x, y) => x.days - y.days).map(({ b, next, days }) => {
+    const when = days === 0 ? 'today' : days === 1 ? 'tomorrow' : `in ${days} days`;
+    const age  = b.year ? `, turns ${next.getFullYear() - b.year}` : '';
+    return `  • ${b.name}: ${fmt(next, { weekday: 'short', month: 'short', day: 'numeric' })} (${when}${age})`;
+  });
 
   // ── Meal plan: next 7 days ──
   const mealLines = [];
@@ -9094,6 +9533,12 @@ Weather: ${weatherSummary}
 
 Calendar — next 7 days:
 ${calLines.length ? calLines.join('\n') : '  (no upcoming events)'}
+
+Calendar — the 3 weeks after that (titles only):
+${laterLines.length ? laterLines.join('\n') : '  (nothing scheduled)'}
+
+Birthdays (soonest first):
+${bdayLines.length ? bdayLines.join('\n') : '  (none added)'}
 ${mowContextSection()}
 Meal plan — next 7 days:
 ${mealLines.length ? mealLines.join('\n') : '  (no meals planned)'}
@@ -9130,7 +9575,8 @@ GUIDELINES:
 - When asked about weather ("will it rain?", "is it going to be hot?"), use the real weather data above.
 - When asked when to mow the lawn (or do yard work), use "Best times to mow" above — recommend the top pick, explain the reasoning briefly, and offer to add it to the calendar (you can assign a family member). If that section is absent, say the forecast or a weather location isn't available.
 - When an event clearly belongs to a specific family member ("Mom's dentist", "soccer for Jake", "Ava has a recital"), pass that person's name in the Member field of addEvent so the event is color-coded to them. Use the closest matching name from the family members list above — never invent a name that isn't listed.
-- To change or remove an event, use editEvent / removeEvent with words from its title. It acts on the soonest upcoming match; the confirmation names which event, so the user can correct you if it picked the wrong one. Only do this when clearly asked.
+- To change or remove an event, use editEvent / removeEvent with words from its title. It acts on the soonest upcoming match. The app then shows the user a Yes/No card naming the exact event, and nothing changes until they tap Yes, so phrase your reply as what you're about to do ("I'll move it once you confirm"), never as already done. Only do this when clearly asked.
+- When asked about birthdays ("whose birthday is next?", "how old is Mom turning?"), use the Birthdays list above. Calendar events titled as birthdays count too.
 - When asked "what's for dinner?" or "what's the meal plan?", use the meal plan data above.
 - When asked about family members or who is assigned to something, use the family members list.
 - Do not repeat raw data back verbatim — synthesise and be helpful.
@@ -9168,10 +9614,10 @@ function fuzzyTextMatch(stored, query) {
 
 // ── Assistant action handlers (each returns a confirmation string) ──
 function assistantAddShopping(item) {
-  if (db) { addToFs('shopping', item, { category: 'Other' }); }
+  if (db) { addToFs('shopping', item); }
   else {
     const items = getLocalList('shopping');
-    items.push({ text: item, done: false, by: userName, category: 'Other' });
+    items.push({ text: item, done: false, by: userName });
     saveLocalList('shopping', items);
     renderLocalList('shopping');
   }
@@ -9379,7 +9825,7 @@ async function assistantAddBudget(name, amountStr, freqRaw) {
   const item = { name, amount, frequency: freq, color: BUDGET_COLOR };
   if (freq === 'monthly')  item.dayOfMonth = today.getDate();
   if (freq === 'weekly')   item.dayOfWeek  = today.getDay();
-  if (freq === 'biweekly') item.startDate  = today.toISOString().slice(0, 10);
+  if (freq === 'biweekly') item.startDate  = localDateKey(today);
   if (freq === 'yearly')   { item.month = today.getMonth(); item.dayOfMonth = today.getDate(); }
   if (db) {
     item.createdAt = firebase.firestore.FieldValue.serverTimestamp();
@@ -9393,6 +9839,70 @@ async function assistantAddBudget(name, amountStr, freqRaw) {
   return `✓ Added bill "${name}" — ${fmt$(amount)} (${freq})`;
 }
 
+// ── Assistant confirm cards ──
+// Event edits and removals act on Google Calendar straight away, and a voice
+// mishearing ("remove the dentist" → the wrong event) can't be undone from the
+// panel. So they wait on a Yes/No card naming the exact event first. Adds stay
+// instant: a wrong add is visible and easy to delete. Cards aren't persisted.
+let assistantPendingConfirms = [];   // [{ id, type, parts, question }]
+let assistantConfirmSeq      = 0;
+
+function _evtWhen(e) {
+  return e.allDay ? e.date : new Date(e.startDT).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+}
+
+/** Run the same checks the action would, then phrase the Yes/No question.
+ *  Returns { error } for anything that would fail anyway, else { question }. */
+function describeEventChange(type, parts) {
+  const [query, dateOrNew] = parts;
+  if (!query)       return { error: `⚠️ Which event should I ${type === 'removeEvent' ? 'remove' : 'change'}?` };
+  if (!googleToken) return { error: `⚠️ Sign in with Google to let me change calendar events` };
+  if (type === 'removeEvent') {
+    const e = findCalEvent(query, dateOrNew);
+    return e ? { question: `Remove "${e.summary}" (${_evtWhen(e)})?` } : { error: _noEditableEventMsg(query, dateOrNew) };
+  }
+  const e = findCalEvent(query);
+  if (!e) return { error: _noEditableEventMsg(query) };
+  const [, newDate, newTime, newTitle] = parts;
+  const shift   = computeEventShift(e, newDate, newTime);
+  const changes = [];
+  if (shift) changes.push(shift.start.dateTime ? `move it to ${new Date(shift.start.dateTime).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })}` : `move it to ${shift.start.date}`);
+  if (newTitle && newTitle.trim()) changes.push(`rename it "${newTitle.trim()}"`);
+  if (!changes.length) return { error: `⚠️ Nothing to change on "${e.summary}"` };
+  return { question: `Change "${e.summary}" (${_evtWhen(e)}): ${changes.join(' and ')}?` };
+}
+
+function renderAssistantConfirms(container) {
+  assistantPendingConfirms.forEach(c => {
+    const div = document.createElement('div');
+    div.className = 'assistant-msg ai assistant-confirm';
+    div.innerHTML = `<div>${esc(c.question)}</div>
+      <div class="assistant-confirm-actions">
+        <button class="btn btn-sm ${c.type === 'removeEvent' ? 'btn-danger' : 'btn-primary'}" onclick="resolveAssistantConfirm(${c.id}, true)">Yes</button>
+        <button class="btn btn-sm" onclick="resolveAssistantConfirm(${c.id}, false)">No</button>
+      </div>`;
+    container.appendChild(div);
+  });
+}
+
+async function resolveAssistantConfirm(id, yes) {
+  const c = assistantPendingConfirms.find(p => p.id === id);
+  if (!c) return;   // already answered (double tap)
+  assistantPendingConfirms = assistantPendingConfirms.filter(p => p.id !== id);
+  renderAssistantMessages();
+  let msg = 'Okay, I left it as it is.';
+  if (yes) {
+    const [a, b, d, t] = c.parts;
+    try {
+      msg = c.type === 'removeEvent' ? await assistantRemoveEvent(a, b) : await assistantEditEvent(a, b, d, t);
+    } catch (e) { msg = `⚠️ Action failed: ${e.message}`; }
+  }
+  assistantHistory.push({ role: 'model', parts: [{ text: msg }] });
+  saveAssistantHistory();
+  renderAssistantMessages();
+  speakAssistant(msg);
+}
+
 /** Execute parsed assistant actions; returns an array of confirmation strings. */
 async function executeAssistantActions(actions) {
   const confirmMsgs = [];
@@ -9404,8 +9914,12 @@ async function executeAssistantActions(actions) {
       else if (type === 'completeTodo')  confirmMsgs.push(await assistantCompleteTodo(value));
       else if (type === 'checkShopping') confirmMsgs.push(await assistantCheckShopping(value));
       else if (type === 'addEvent')      confirmMsgs.push(await assistantAddEvent(parts[0], parts[1], parts[2], parts[3]));
-      else if (type === 'editEvent')     confirmMsgs.push(await assistantEditEvent(parts[0], parts[1], parts[2], parts[3]));
-      else if (type === 'removeEvent')   confirmMsgs.push(await assistantRemoveEvent(parts[0], parts[1]));
+      else if (type === 'editEvent' || type === 'removeEvent') {
+        // Not run yet: these wait for an explicit Yes on a confirm card.
+        const ask = describeEventChange(type, parts);
+        if (ask.error) confirmMsgs.push(ask.error);
+        else assistantPendingConfirms.push({ id: ++assistantConfirmSeq, type, parts, question: ask.question });
+      }
       else if (type === 'setMeal')       confirmMsgs.push(await assistantSetMeal(parts[0], parts[1], parts.slice(2).join('|')));
       else if (type === 'addBudget')     confirmMsgs.push(await assistantAddBudget(parts[0], parts[1], parts[2]));
     } catch (e) {
@@ -9440,6 +9954,7 @@ function renderAssistantMessages() {
     div.innerHTML = formatAssistantText(turn.parts[0].text);
     container.appendChild(div);
   });
+  renderAssistantConfirms(container);
   container.scrollTop = container.scrollHeight;
 }
 
@@ -9668,7 +10183,7 @@ const EASTER_EGG_FRANCHISES = [
     },
     t => {
       if (!/^(what'?s for dinner|what are we (having|eating) (for )?dinner)[.!?]?$/.test(t)) return null;
-      const dinner = (mealPlan[new Date().toISOString().slice(0, 10)] || {}).dinner;
+      const dinner = (mealPlan[localDateKey(new Date())] || {}).dinner;
       if (!dinner) return `In a hole in the ground there lived a hobbit. And that hobbit had absolutely no idea what was for dinner either. Perhaps you'd like to plan something?`;
       return null; // let Gemini handle it — there's an actual meal planned
     },
@@ -9724,7 +10239,7 @@ const EASTER_EGG_FRANCHISES = [
   { id: 'fewgoodmen', label: '⚖️ A Few Good Men', triggers: [
     t => {
       if (!/you can'?t handle the truth/.test(t)) return null;
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localDateKey(new Date());
       const overdue = todoItems.filter(i => !i.done && i.date && i.date < today);
       const uncheckedShop = shopItemsCache.filter(i => !i.done);
       const unplanned = !((mealPlan[today] || {}).breakfast || (mealPlan[today] || {}).lunch || (mealPlan[today] || {}).dinner);
@@ -9751,7 +10266,7 @@ const EASTER_EGG_FRANCHISES = [
   { id: 'apollo13', label: '🌕 Apollo 13', triggers: [
     t => {
       if (!/houston,? we (have|'?ve got) a problem/.test(t)) return null;
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localDateKey(new Date());
       const overdue = todoItems.filter(i => !i.done && i.date && i.date < today);
       const uncheckedShop = shopItemsCache.filter(i => !i.done);
       const unplanned = !((mealPlan[today] || {}).breakfast || (mealPlan[today] || {}).lunch || (mealPlan[today] || {}).dinner);
@@ -10013,7 +10528,7 @@ function checkAssistantEasterEgg(text) {
 
 /** Build a brief plain-text summary of today for easter egg responses. */
 function buildDailyBriefingSummary() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateKey(new Date());
   const lines = [];
   const pending = todoItems.filter(i => !i.done);
   if (pending.length) lines.push(`📋 ${pending.length} to-do item${pending.length === 1 ? '' : 's'} pending`);
@@ -10028,17 +10543,21 @@ function buildDailyBriefingSummary() {
 
 /** Send the typed message to Gemini and render the reply. */
 async function sendAssistantMessage() {
+  // One request at a time: a second send while Gemini is answering would run
+  // the same actions twice (e.g. add an item to Shopping twice). Leave any
+  // text in the box so it can be sent once the first reply lands.
+  if (assistantSending) return;
   const input = document.getElementById('assistantInput');
   const text  = input.value.trim();
   if (!text) return;
+  assistantSending = true;
+  try { await _sendAssistantMessage(input, text); }
+  finally { assistantSending = false; }
+}
+
+async function _sendAssistantMessage(input, text) {
   if ('speechSynthesis' in window) speechSynthesis.cancel();  // stop reading any prior reply
   input.value = '';
-
-  if (!mealAiKey) {
-    assistantHistory.push({ role: 'model', parts: [{ text: 'I need a Gemini API key to work. Add one in ⚙️ Settings → 🤖 Assistant.' }] });
-    renderAssistantMessages();
-    return;
-  }
 
   // Add user turn and show it immediately
   assistantHistory.push({ role: 'user', parts: [{ text }] });
@@ -10063,6 +10582,7 @@ async function sendAssistantMessage() {
 
   try {
     await refreshMowReco();   // keep the mow recommendation fresh in context
+    await refreshAssistantCalendar();   // its own 30-day window, not just the view's
     const systemPrompt = buildAssistantContext();
     const resp = await geminiFetch({
       systemInstruction: { parts: [{ text: systemPrompt }] },
@@ -10083,6 +10603,7 @@ async function sendAssistantMessage() {
     const data     = await resp.json();
     const rawReply = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "Sorry, I didn't get a response.";
     const { text: cleanText, actions } = extractAssistantActions(rawReply);
+    const askedBefore = assistantPendingConfirms.length;
     const confirms = await executeAssistantActions(actions);
 
     // Append confirmation note to reply if actions were taken
@@ -10093,7 +10614,8 @@ async function sendAssistantMessage() {
     assistantHistory.push({ role: 'model', parts: [{ text: finalText }] });
     saveAssistantHistory();
     renderAssistantMessages();
-    speakAssistant(finalText);   // read aloud if TTS is on
+    // read aloud if TTS is on, including any Yes/No question this turn raised
+    speakAssistant([finalText, ...assistantPendingConfirms.slice(askedBefore).map(c => c.question)].join(' '));
 
   } catch(e) {
     thinkEl.remove();
@@ -10121,6 +10643,7 @@ function clearAssistantChat() {
 const BRIEFING_DATE_KEY   = 'fh_briefingDate';
 const BRIEFING_TEXT_KEY   = 'fh_briefingText';
 const BRIEFING_BUCKET_KEY = 'fh_briefingBucket'; // 'morning'|'afternoon'|'evening'
+const BRIEFING_NAME_KEY   = 'fh_briefingName';   // userName the cached briefing greets
 
 function toggleBriefing() {
   const banner = document.getElementById('briefingBanner');
@@ -10144,7 +10667,6 @@ const BRIEFING_AUTOSHOWN_KEY = 'fh_briefingAutoShown';   // date we last auto-op
 // on a long-open kiosk). Respects dismissal — once auto-shown for the day it
 // won't re-pop, and the user can still open it by hand via the pill.
 function maybeAutoBriefing() {
-  if (!mealAiKey) return;                                 // generator needs a client key
   const today = localDateKey(new Date());
   if (localStorage.getItem(BRIEFING_AUTOSHOWN_KEY) === today) return;
   localStorage.setItem(BRIEFING_AUTOSHOWN_KEY, today);
@@ -10154,7 +10676,7 @@ function maybeAutoBriefing() {
 /** Show (or generate) the daily briefing banner above the chat. */
 async function loadDailyBriefing() {
   const banner = document.getElementById('briefingBanner');
-  if (!banner || !mealAiKey) return;
+  if (!banner) return;
 
   const _now = new Date();
   const today = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}-${String(_now.getDate()).padStart(2,'0')}`;
@@ -10165,8 +10687,10 @@ async function loadDailyBriefing() {
   const cachedDate   = localStorage.getItem(BRIEFING_DATE_KEY);
   const cachedBucket = localStorage.getItem(BRIEFING_BUCKET_KEY);
   const cachedText   = localStorage.getItem(BRIEFING_TEXT_KEY);
+  const cachedName   = localStorage.getItem(BRIEFING_NAME_KEY);
 
-  if (cachedDate === today && cachedBucket === bucket && cachedText) {
+  // The greeting names the user, so a name change in Settings invalidates it.
+  if (cachedDate === today && cachedBucket === bucket && cachedName === userName && cachedText) {
     showBriefingBanner(cachedText);
     return;
   }
@@ -10175,11 +10699,12 @@ async function loadDailyBriefing() {
   showBriefingBanner(null, true); // show loading state
   try {
     await refreshMowReco();        // include a fresh mow recommendation in context
+    await refreshAssistantCalendar();   // its own 30-day window, not just the view's
     const context = buildAssistantContext();
     const prompt = `${context}
 
 ---
-Write a warm, concise daily briefing (3–5 sentences max). Your response MUST begin with exactly "${greeting}, ${userName || 'there'}!" — do not alter this opening phrase. Then cover:
+Write a warm, concise daily briefing (3–5 sentences max). Your response MUST begin with exactly "${greeting}, ${userName === 'Someone' ? 'there' : userName}!" — do not alter this opening phrase. Then cover:
 1. Any calendar events or tasks due today
 2. Today's weather highlights (if available)
 3. Any bills due soon or a notable meal planned
@@ -10198,6 +10723,7 @@ Be specific and personal. Use the family data above, including the correct prono
       localStorage.setItem(BRIEFING_DATE_KEY,   today);
       localStorage.setItem(BRIEFING_BUCKET_KEY, bucket);
       localStorage.setItem(BRIEFING_TEXT_KEY,   text);
+      localStorage.setItem(BRIEFING_NAME_KEY,   userName);
       showBriefingBanner(text);
     } else {
       banner.style.display = 'none';
@@ -10378,6 +10904,7 @@ async function initAssistantVoice() {
 
   assistantRecognition.onstart = () => {
     assistantListening = true;
+    assistantVoiceSent = false;
     setMicState('recording');
     clearMicPrimingMessage();
     const inp = document.getElementById('assistantInput');
@@ -10388,7 +10915,12 @@ async function initAssistantVoice() {
     const transcript = Array.from(event.results).map(r => r[0].transcript).join('');
     const inp = document.getElementById('assistantInput');
     if (inp) inp.value = transcript;
+    // iOS WebKit (Safari and every other iOS browser) can deliver the final
+    // result twice, so send only the first and end the session ourselves.
     if (event.results[event.results.length - 1].isFinal) {
+      if (assistantVoiceSent) return;
+      assistantVoiceSent = true;
+      try { assistantRecognition.abort(); } catch {}
       stopAssistantMic();
       sendAssistantMessage();
     }
@@ -10411,7 +10943,15 @@ async function initAssistantVoice() {
         appendAssistantNote('No microphone found. Check that one is connected.');
         break;
       case 'network':
-        appendAssistantNote('Voice recognition needs an internet connection (your browser sends audio to a speech-recognition service).');
+        // Chromium builds without Google's API keys (Raspberry Pi OS ships one)
+        // fail every session this way, so switch this device to Gemini for good.
+        if (canRecordAssistantVoice()) {
+          assistantVoiceEngine = 'gemini';
+          localStorage.setItem('fh_voiceEngine', JSON.stringify('gemini'));
+          appendAssistantNote("This browser's built-in speech recognition isn't working, so voice on this device now goes through Gemini. Tap 🎤, speak, then tap 🎤 again to send.");
+        } else {
+          appendAssistantNote("Voice recognition failed: this browser couldn't reach its speech-recognition service.");
+        }
         break;
       case 'aborted':
         // user cancelled — silent
@@ -10458,6 +10998,7 @@ function toggleAssistantMic() {
   const state  = micBtn?.getAttribute('data-mic-state');
 
   if (state === 'denied') { showMicDeniedHelp(); return; }
+  if (assistantVoiceEngine === 'gemini') { toggleGeminiRecording(state); return; }
   if (state === 'recording' || assistantListening) { assistantRecognition.stop(); return; }
 
   // 'prompt' — show priming message before the browser dialog fires
@@ -10489,6 +11030,108 @@ function stopAssistantMic() {
   }
   const input = document.getElementById('assistantInput');
   if (input && input.placeholder === 'Listening…') input.placeholder = 'Ask anything…';
+}
+
+// ── Assistant voice via Gemini ──
+// Fallback for browsers whose SpeechRecognition can't reach its service: record
+// the clip ourselves, have Gemini transcribe it, then send it like a spoken turn.
+// Tap to start, tap again to stop (capped at GEMINI_VOICE_MAX_MS).
+const GEMINI_VOICE_MAX_MS = 20000;
+
+function canRecordAssistantVoice() {
+  return !!(navigator.mediaDevices?.getUserMedia && window.MediaRecorder);
+}
+
+async function toggleGeminiRecording(state) {
+  if (assistantRecorder) { assistantRecorder.stop(); return; }
+  if (state === 'prompt') showMicPrimingMessage();
+
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (e) {
+    clearMicPrimingMessage();
+    if (e.name === 'NotAllowedError')      { setMicState('denied'); showMicDeniedHelp(); }
+    else if (e.name === 'NotFoundError')   appendAssistantNote('No microphone found. Check that one is connected.');
+    else                                   appendAssistantNote(`Voice error: ${e.message}`);
+    return;
+  }
+  clearMicPrimingMessage();
+
+  const chunks   = [];
+  const recorder = new MediaRecorder(stream);
+  assistantRecorder = recorder;
+  recorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+  const capTimer = setTimeout(() => { if (recorder.state === 'recording') recorder.stop(); }, GEMINI_VOICE_MAX_MS);
+  recorder.onstop = () => {
+    clearTimeout(capTimer);
+    stream.getTracks().forEach(t => t.stop());
+    assistantRecorder = null;
+    stopAssistantMic();
+    transcribeAssistantVoice(new Blob(chunks, { type: recorder.mimeType }));
+  };
+  recorder.start();
+
+  assistantListening = true;
+  setMicState('recording');
+  const inp = document.getElementById('assistantInput');
+  if (inp) { inp.value = ''; inp.placeholder = 'Listening…'; }
+}
+
+async function transcribeAssistantVoice(blob) {
+  const input = document.getElementById('assistantInput');
+  if (blob.size < 1000) { appendAssistantNote('No speech detected — try again.'); return; }
+  if (input) input.placeholder = 'Transcribing…';
+  try {
+    // WAV rather than the recorder's WebM: WAV is on Gemini's documented audio list.
+    const wav  = await blobToWav16k(blob);
+    const resp = await geminiFetch({
+      contents: [{ parts: [
+        { text: 'Transcribe this audio exactly as spoken. Reply with only the transcript, or with nothing if there is no speech.' },
+        { inlineData: { mimeType: 'audio/wav', data: await blobToBase64(wav) } },
+      ] }],
+      generationConfig: { temperature: 0 },
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      appendAssistantNote(`Couldn't transcribe: ${err.error?.message || `HTTP ${resp.status}`}`);
+      return;
+    }
+    const data = await resp.json();
+    const text = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('').trim();
+    if (!text) { appendAssistantNote('No speech detected — try again.'); return; }
+    if (input) input.value = text;
+    sendAssistantMessage();
+  } catch (e) {
+    appendAssistantNote(`Couldn't transcribe: ${e.message}`);
+  } finally {
+    if (input && input.placeholder === 'Transcribing…') input.placeholder = 'Ask anything…';
+  }
+}
+
+/** Decode a recorded clip and re-encode it as 16 kHz mono 16-bit PCM WAV. */
+async function blobToWav16k(blob) {
+  const RATE = 16000;
+  // decodeAudioData resamples to its context's rate, so this lands at 16 kHz.
+  const decoded = await new OfflineAudioContext(1, 1, RATE).decodeAudioData(await blob.arrayBuffer());
+  const pcm  = decoded.getChannelData(0);
+  const view = new DataView(new ArrayBuffer(44 + pcm.length * 2));
+  const tag  = (off, s) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
+  tag(0, 'RIFF'); view.setUint32(4, 36 + pcm.length * 2, true); tag(8, 'WAVE');
+  tag(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+  view.setUint32(24, RATE, true); view.setUint32(28, RATE * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+  tag(36, 'data'); view.setUint32(40, pcm.length * 2, true);
+  for (let i = 0; i < pcm.length; i++) view.setInt16(44 + i * 2, Math.max(-1, Math.min(1, pcm[i])) * 0x7fff, true);
+  return new Blob([view], { type: 'audio/wav' });
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload  = () => resolve(r.result.split(',')[1]);
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(blob);
+  });
 }
 
 /** Append a small italic note to the chat (for non-critical voice feedback). */
@@ -10578,21 +11221,26 @@ function sendToContact(phone) {
 // ── Local Calendars ────────────────────────────────────────────
 
 let birthdays    = lsGet('fh_birthdays',    []);
-let medications  = lsGet('fh_medications',  []);
 let schoolPeriods= lsGet('fh_school',       []);
-let trashPickups = lsGet('fh_trash',        []);
+let recurringItems = lcLoadRecurring();
+
+// School Day Cycle — a repeating "Day N" rotation (e.g. a 4-day A/B/C/D
+// schedule) computed from a start/end date, skipping weekends + entered
+// non-school days. Shown only in Week/Day view — see renderWeekGrid/renderDayGrid.
+const SCHOOL_CYCLE_DEFAULTS = { startDate: '', endDate: '', cycleLength: 4 };
+let schoolDayCycle    = { ...SCHOOL_CYCLE_DEFAULTS, ...lsGet('fh_schoolDayCycle', {}) };
+let schoolHolidays    = lsGet('fh_schoolHolidays', []);     // [{id, date, label}] — non-school weekdays, skipped in the count
+let schoolDaySubjects = lsGet('fh_schoolDaySubjects', []);  // [{id, subject, dayNumbers:[1,3], members:['Kate']}]
 
 const LC_IDS = {
   birthdays: 'local_birthdays',
-  meds:      'local_meds',
   school:    'local_school',
-  trash:     'local_trash',
+  recurring: 'local_recurring',
 };
 const LC_DEFS = [
   { id: LC_IDS.birthdays, label: '🎂 Birthdays',        color: '#e91e8c' },
-  { id: LC_IDS.meds,      label: '💊 Medications',       color: '#4caf82' },
   { id: LC_IDS.school,    label: '🏫 School',            color: '#61afef' },
-  { id: LC_IDS.trash,     label: '🗑 Trash & Recycling', color: '#8bc34a' },
+  { id: LC_IDS.recurring, label: '🔁 Recurring',         color: '#4caf82' },
 ];
 
 function lcDateKey(d) {
@@ -10609,7 +11257,7 @@ function lcGetRange() {
   const d = calViewDate;
   if (calView === 'week') {
     const ws = getWeekStart(d);
-    return { start: ws, end: new Date(ws.getTime() + 6*86400000) };
+    return { start: ws, end: addDays(ws, 6) };
   }
   if (calView === 'day') {
     const s = new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -10617,7 +11265,7 @@ function lcGetRange() {
   }
   if (calView === 'agenda') {
     const s = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    return { start: s, end: new Date(s.getTime() + 30*86400000) };
+    return { start: s, end: addDays(s, 30) };
   }
   // month
   return {
@@ -10647,38 +11295,17 @@ function injectLocalEvents() {
           const age = b.year ? ` (turns ${yr - b.year})` : '';
           lcAddToCache(LC_IDS.birthdays, key, {
             eventId: `bday_${b.id}_${yr}`, summary: `🎂 ${b.name}'s Birthday${age}`,
-            color: '#e91e8c', allDay: true, startDate: key, endDate: key,
+            color: birthdayColor(b), allDay: true, startDate: key, endDate: key,
           });
         }
       }
     });
   }
 
-  // Medications
-  if (!disabledCals.has(LC_IDS.meds)) {
-    medications.forEach(m => {
-      lcIterateDays(range, day => {
-        const dow = day.getDay(); // 0=Sun
-        const matches = m.days === 'daily'    ? true
-                      : m.days === 'weekdays' ? dow >= 1 && dow <= 5
-                      : m.days === 'weekends' ? dow === 0 || dow === 6
-                      : false;
-        if (!matches) return;
-        const key = lcDateKey(day);
-        const [hh, mm] = m.time.split(':').map(Number);
-        const startDT = new Date(day.getFullYear(), day.getMonth(), day.getDate(), hh, mm);
-        const endDT   = new Date(startDT.getTime() + 30*60000);
-        lcAddToCache(LC_IDS.meds, key, {
-          eventId: `med_${m.id}_${key}`, summary: `💊 ${m.name}${m.dosage ? ' · ' + m.dosage : ''}`,
-          color: '#4caf82', allDay: false, startDT, endDT, startDate: key, endDate: key,
-        });
-      });
-    });
-  }
-
   // School schedule
   if (!disabledCals.has(LC_IDS.school)) {
     schoolPeriods.forEach(p => {
+      const color = sourceColor('school_' + p.id, p.color);
       lcIterateDays(range, day => {
         const dow = day.getDay();
         if (!p.days.includes(dow)) return;
@@ -10689,22 +11316,32 @@ function injectLocalEvents() {
         const endDT   = new Date(day.getFullYear(), day.getMonth(), day.getDate(), eh, em);
         lcAddToCache(LC_IDS.school, key, {
           eventId: `school_${p.id}_${key}`, summary: `🏫 ${p.name}`,
-          color: p.color, allDay: false, startDT, endDT, startDate: key, endDate: key,
+          color, allDay: false, startDT, endDT, startDate: key, endDate: key,
         });
       });
     });
   }
 
-  // Trash & recycling
-  if (!disabledCals.has(LC_IDS.trash)) {
-    trashPickups.forEach(t => {
+  // Recurring (medications, trash day, home upkeep, …)
+  if (!disabledCals.has(LC_IDS.recurring)) {
+    recurringItems.forEach(r => {
+      const color = sourceColor('rec_' + r.id, r.color);
       lcIterateDays(range, day => {
-        if (day.getDay() !== t.weekday) return;
+        if (!recurringOccursOn(r, day)) return;
         const key = lcDateKey(day);
-        lcAddToCache(LC_IDS.trash, key, {
-          eventId: `trash_${t.id}_${key}`, summary: `${t.emoji} ${t.label}`,
-          color: t.color, allDay: true, startDate: key, endDate: key,
-        });
+        const ev = {
+          eventId: `rec_${r.id}_${key}`, summary: `${r.emoji} ${r.name}`.trim(),
+          color, startDate: key, endDate: key,
+        };
+        if (r.time) {
+          const [hh, mm] = r.time.split(':').map(Number);
+          ev.allDay  = false;
+          ev.startDT = new Date(day.getFullYear(), day.getMonth(), day.getDate(), hh, mm);
+          ev.endDT   = new Date(ev.startDT.getTime() + 30*60000);
+        } else {
+          ev.allDay = true;
+        }
+        lcAddToCache(LC_IDS.recurring, key, ev);
       });
     });
   }
@@ -10725,13 +11362,21 @@ function lcOpenSettings() {
       Array.from({length:31},(_,i)=>`<option value="${i+1}">${i+1}</option>`).join('');
   }
   lcRenderBdayList();
-  lcRenderMedList();
   lcRenderSchoolList();
-  lcRenderTrashList();
+  lcRenderRecurringList();
+  lcCancelRecurEdit(); // a half-finished edit doesn't survive closing Settings
+  scdOpenSettings();
 }
 
 
 // ── Birthdays ──
+/** A family member's birthday takes their color; anyone else's, the Birthdays calendar's. */
+function birthdayColor(b) {
+  const name = (b.name || '').trim().toLowerCase();
+  const m = familyMembers.find(m => m.name.trim().toLowerCase() === name);
+  return memberColor(m) || sourceColor(LC_IDS.birthdays, '#e91e8c');
+}
+
 function lcRenderBdayList() {
   const el = document.getElementById('lcBdayList');
   if (!el) return;
@@ -10739,10 +11384,10 @@ function lcRenderBdayList() {
   el.innerHTML = birthdays.map(b => {
     const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const date   = `${months[b.month-1]} ${b.day}${b.year ? ', '+b.year : ''}`;
-    return `<div class="lc-item"><span class="lc-dot" style="background:#e91e8c"></span>
-      <span class="lc-item-label">${b.name}</span>
+    return `<div class="lc-item"><span class="lc-dot" style="background:${birthdayColor(b)}"></span>
+      <span class="lc-item-label">${esc(b.name)}</span>
       <span class="lc-item-meta">${date}</span>
-      <button class="lc-del" onclick="lcDelBirthday('${b.id}')">✕</button></div>`;
+      <button class="lc-del" onclick="lcDelBirthday('${esc(b.id)}')">✕</button></div>`;
   }).join('');
 }
 async function lcAddBirthday() {
@@ -10777,48 +11422,6 @@ async function lcDelBirthday(id) {
   }
 }
 
-// ── Medications ──
-function lcRenderMedList() {
-  const el = document.getElementById('lcMedList');
-  if (!el) return;
-  if (!medications.length) { el.innerHTML = '<div class="lc-empty">No medications added yet.</div>'; return; }
-  el.innerHTML = medications.map(m =>
-    `<div class="lc-item"><span class="lc-dot" style="background:#4caf82"></span>
-      <span class="lc-item-label">${m.name}${m.dosage ? ' · '+m.dosage : ''}</span>
-      <span class="lc-item-meta">${m.time} · ${m.days}</span>
-      <button class="lc-del" onclick="lcDelMedication('${m.id}')">✕</button></div>`
-  ).join('');
-}
-async function lcAddMedication() {
-  const name   = document.getElementById('lcMedName').value.trim();
-  const dosage = document.getElementById('lcMedDosage').value.trim();
-  const time   = document.getElementById('lcMedTime').value;
-  const days   = document.getElementById('lcMedDays').value;
-  if (!name) { alert('Enter a medication name.'); return; }
-  const item = { name, dosage, time, days };
-  if (db) {
-    await db.collection('medications').add({ ...item, createdAt: firebase.firestore.FieldValue.serverTimestamp() }).catch(_fsWriteError);
-  } else {
-    item.id = String(Date.now());
-    medications.push(item);
-    localStorage.setItem('fh_medications', JSON.stringify(medications));
-    lcRenderMedList();
-    injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
-  }
-  document.getElementById('lcMedName').value = '';
-  document.getElementById('lcMedDosage').value = '';
-}
-async function lcDelMedication(id) {
-  if (db) {
-    await db.collection('medications').doc(id).delete().catch(_fsWriteError);
-  } else {
-    medications = medications.filter(m => m.id !== id);
-    localStorage.setItem('fh_medications', JSON.stringify(medications));
-    lcRenderMedList();
-    injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
-  }
-}
-
 // ── School schedule ──
 function lcRenderSchoolList() {
   const el = document.getElementById('lcSchoolList');
@@ -10826,10 +11429,10 @@ function lcRenderSchoolList() {
   if (!schoolPeriods.length) { el.innerHTML = '<div class="lc-empty">No classes added yet.</div>'; return; }
   const dayLabels = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   el.innerHTML = schoolPeriods.map(p =>
-    `<div class="lc-item"><span class="lc-dot" style="background:${p.color}"></span>
-      <span class="lc-item-label">${p.name}</span>
-      <span class="lc-item-meta">${p.startTime}–${p.endTime} · ${p.days.map(d=>dayLabels[d]).join(', ')}</span>
-      <button class="lc-del" onclick="lcDelSchool('${p.id}')">✕</button></div>`
+    `<div class="lc-item"><span class="lc-dot" style="background:${esc(sourceColor('school_' + p.id, p.color))}"></span>
+      <span class="lc-item-label">${esc(p.name)}</span>
+      <span class="lc-item-meta">${esc(p.startTime)}–${esc(p.endTime)} · ${p.days.map(d=>dayLabels[d]).join(', ')}</span>
+      <button class="lc-del" onclick="lcDelSchool('${esc(p.id)}')">✕</button></div>`
   ).join('');
 }
 async function lcAddSchoolPeriod() {
@@ -10863,44 +11466,376 @@ async function lcDelSchool(id) {
   }
 }
 
-// ── Trash & Recycling ──
-function lcRenderTrashList() {
-  const el = document.getElementById('lcTrashList');
+// ── School Day Cycle ──
+// Distinct from "School Schedule" above (weekly recurring class periods with
+// times) — this is the school's internal Day 1/2/3/4… rotation, weekdays
+// only, skipping entered non-school days. Not a calendar event source: it
+// renders as a header badge in Week/Day view only (see renderWeekGrid /
+// renderDayGrid), so it isn't registered in LC_IDS/LC_DEFS.
+function schoolHolidaySet() {
+  return new Set(schoolHolidays.map(h => h.date));
+}
+
+// dateKey: 'YYYY-MM-DD'. Returns the 1-indexed cycle day number for that
+// date, or null if it's outside the configured range, a weekend, or an
+// entered non-school day.
+function schoolDayNumberFor(dateKey) {
+  const { startDate, endDate, cycleLength } = schoolDayCycle;
+  if (!startDate || !endDate || !cycleLength) return null;
+  if (dateKey < startDate || dateKey > endDate) return null;
+  const target = new Date(dateKey + 'T00:00:00');
+  if (target.getDay() === 0 || target.getDay() === 6) return null;
+  const skip = schoolHolidaySet();
+  if (skip.has(dateKey)) return null;
+  let count = 0;
+  const cur = new Date(startDate + 'T00:00:00');
+  while (cur <= target) {
+    const dow = cur.getDay();
+    if (dow !== 0 && dow !== 6 && !skip.has(localDateKey(cur))) count++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return count === 0 ? null : ((count - 1) % cycleLength) + 1;
+}
+
+function schoolDaySubjectsForDayNumber(n) {
+  if (n == null) return [];
+  return schoolDaySubjects.filter(s => s.dayNumbers.includes(n));
+}
+
+async function scdSaveCycle() {
+  const startDate   = document.getElementById('scdStartDate').value;
+  const endDate      = document.getElementById('scdEndDate').value;
+  const cycleLength = Math.max(2, Math.min(10, parseInt(document.getElementById('scdCycleLength').value, 10) || 4));
+  if (startDate && endDate && endDate < startDate) { alert('End date must be after start date.'); return; }
+  schoolDayCycle = { startDate, endDate, cycleLength };
+  saveFsSetting('schoolDayCycle', 'fh_schoolDayCycle', schoolDayCycle);
+  scdRenderCycleStatus();
+  scdRenderSubjectDayChecks();
+  renderCurrentView();
+}
+
+function scdRenderCycleStatus() {
+  const el = document.getElementById('scdCycleStatus');
   if (!el) return;
-  if (!trashPickups.length) { el.innerHTML = '<div class="lc-empty">No pickups added yet.</div>'; return; }
-  const dayLabels = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-  el.innerHTML = trashPickups.map(t =>
-    `<div class="lc-item"><span class="lc-dot" style="background:${t.color}"></span>
-      <span class="lc-item-label">${t.emoji} ${t.label}</span>
-      <span class="lc-item-meta">${dayLabels[t.weekday]}</span>
-      <button class="lc-del" onclick="lcDelTrash('${t.id}')">✕</button></div>`
+  if (!schoolDayCycle.startDate || !schoolDayCycle.endDate) {
+    el.textContent = 'Set a start and end date to begin tracking.';
+    return;
+  }
+  const todayNum = schoolDayNumberFor(localDateKey(new Date()));
+  el.textContent = todayNum != null
+    ? `Today is Day ${todayNum} of ${schoolDayCycle.cycleLength}.`
+    : 'Today falls outside the school year (or is a weekend / non-school day).';
+}
+
+function lcRenderSchoolHolidayList() {
+  const el = document.getElementById('scdHolidayList');
+  if (!el) return;
+  if (!schoolHolidays.length) { el.innerHTML = '<div class="lc-empty">No non-school days added yet.</div>'; return; }
+  const sorted = [...schoolHolidays].sort((a, b) => a.date < b.date ? -1 : 1);
+  el.innerHTML = sorted.map(h =>
+    `<div class="lc-item">
+      <span class="lc-item-label">${esc(h.label || 'Day off')}</span>
+      <span class="lc-item-meta">${esc(h.date)}</span>
+      <button class="lc-del" onclick="scdDelHoliday('${h.id}')">✕</button></div>`
   ).join('');
 }
-async function lcAddTrash() {
-  const label   = document.getElementById('lcTrashLabel').value.trim();
-  const weekday = parseInt(document.getElementById('lcTrashDay').value);
-  const emoji   = document.getElementById('lcTrashEmoji').value;
-  const color   = document.getElementById('lcTrashColor').value;
-  if (!label) { alert('Enter a label.'); return; }
-  const item = { label, weekday, emoji, color };
+async function scdAddHoliday() {
+  const date  = document.getElementById('scdHolidayDate').value;
+  const label = document.getElementById('scdHolidayLabel').value.trim();
+  if (!date) { alert('Pick a date.'); return; }
+  const item = { date, label };
   if (db) {
-    await db.collection('trashPickups').add({ ...item, createdAt: firebase.firestore.FieldValue.serverTimestamp() }).catch(_fsWriteError);
+    await db.collection('schoolHolidays').add({ ...item, createdAt: firebase.firestore.FieldValue.serverTimestamp() }).catch(_fsWriteError);
   } else {
     item.id = String(Date.now());
-    trashPickups.push(item);
-    localStorage.setItem('fh_trash', JSON.stringify(trashPickups));
-    lcRenderTrashList();
+    schoolHolidays.push(item);
+    localStorage.setItem('fh_schoolHolidays', JSON.stringify(schoolHolidays));
+    lcRenderSchoolHolidayList();
+    renderCurrentView();
+  }
+  document.getElementById('scdHolidayDate').value = '';
+  document.getElementById('scdHolidayLabel').value = '';
+}
+async function scdDelHoliday(id) {
+  if (db) {
+    await db.collection('schoolHolidays').doc(id).delete().catch(_fsWriteError);
+  } else {
+    schoolHolidays = schoolHolidays.filter(h => h.id !== id);
+    localStorage.setItem('fh_schoolHolidays', JSON.stringify(schoolHolidays));
+    lcRenderSchoolHolidayList();
+    renderCurrentView();
+  }
+}
+
+function scdRenderSubjectDayChecks() {
+  const el = document.getElementById('scdSubjectDays');
+  if (!el) return;
+  const n = schoolDayCycle.cycleLength || 4;
+  el.innerHTML = Array.from({ length: n }, (_, i) => i + 1)
+    .map(d => `<label><input type="checkbox" value="${d}">D${d}</label>`).join('');
+}
+function scdRenderSubjectMemberChecks() {
+  const el = document.getElementById('scdSubjectMembers');
+  if (!el) return;
+  el.innerHTML = familyMembers.length
+    ? familyMembers.map(m => `<label><input type="checkbox" value="${esc(m.name)}">${esc(m.name)}</label>`).join('')
+    : '<span class="lc-empty" style="padding:0">Add family members in Settings → Family first.</span>';
+}
+function lcRenderSchoolSubjectList() {
+  const el = document.getElementById('scdSubjectList');
+  if (!el) return;
+  if (!schoolDaySubjects.length) { el.innerHTML = '<div class="lc-empty">No subjects added yet.</div>'; return; }
+  el.innerHTML = schoolDaySubjects.map(s =>
+    `<div class="lc-item">
+      <span class="lc-item-label">${esc(s.subject)} — ${s.members.map(esc).join(', ')}</span>
+      <span class="lc-item-meta">Day ${s.dayNumbers.join(', ')}</span>
+      <button class="lc-del" onclick="scdDelSubject('${s.id}')">✕</button></div>`
+  ).join('');
+}
+async function scdAddSubject() {
+  const subject     = document.getElementById('scdSubjectName').value.trim();
+  const dayNumbers  = [...document.querySelectorAll('#scdSubjectDays input:checked')].map(i => parseInt(i.value));
+  const members     = [...document.querySelectorAll('#scdSubjectMembers input:checked')].map(i => i.value);
+  if (!subject)          { alert('Enter a subject name.'); return; }
+  if (!dayNumbers.length) { alert('Select at least one day.'); return; }
+  if (!members.length)    { alert('Select at least one family member.'); return; }
+  const item = { subject, dayNumbers, members };
+  if (db) {
+    await db.collection('schoolDaySubjects').add({ ...item, createdAt: firebase.firestore.FieldValue.serverTimestamp() }).catch(_fsWriteError);
+  } else {
+    item.id = String(Date.now());
+    schoolDaySubjects.push(item);
+    localStorage.setItem('fh_schoolDaySubjects', JSON.stringify(schoolDaySubjects));
+    lcRenderSchoolSubjectList();
+    renderCurrentView();
+  }
+  document.getElementById('scdSubjectName').value = '';
+  scdRenderSubjectDayChecks();
+  scdRenderSubjectMemberChecks();
+}
+async function scdDelSubject(id) {
+  if (db) {
+    await db.collection('schoolDaySubjects').doc(id).delete().catch(_fsWriteError);
+  } else {
+    schoolDaySubjects = schoolDaySubjects.filter(s => s.id !== id);
+    localStorage.setItem('fh_schoolDaySubjects', JSON.stringify(schoolDaySubjects));
+    lcRenderSchoolSubjectList();
+    renderCurrentView();
+  }
+}
+
+function scdOpenSettings() {
+  document.getElementById('scdStartDate').value   = schoolDayCycle.startDate || '';
+  document.getElementById('scdEndDate').value     = schoolDayCycle.endDate || '';
+  document.getElementById('scdCycleLength').value = schoolDayCycle.cycleLength || 4;
+  scdRenderCycleStatus();
+  lcRenderSchoolHolidayList();
+  scdRenderSubjectDayChecks();
+  scdRenderSubjectMemberChecks();
+  lcRenderSchoolSubjectList();
+}
+
+// ── Recurring ──
+// One list for anything on a schedule: medications, trash day, air filters.
+// Item: { name, emoji, color, startDate 'YYYY-MM-DD', every N, unit
+// 'day'|'week'|'month'|'year', weekdays [0-6] (week only), time 'HH:MM' or '' = all-day }.
+const LC_WEEKDAY_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+// Older devices may still hold the pre-merge lists in localStorage (no Firestore);
+// fold them in once. Firestore data is moved by runFirestoreMigrations().
+function lcLoadRecurring() {
+  const items = lsGet('fh_recurring', []);
+  const meds  = lsGet('fh_medications', []);
+  const trash = lsGet('fh_trash', []);
+  if (!meds.length && !trash.length) return items;
+  items.push(...meds.map(m => ({ ...recurringFromMed(m), id: 'med_' + m.id })),
+             ...trash.map(t => ({ ...recurringFromTrash(t), id: 'trash_' + t.id })));
+  localStorage.setItem('fh_recurring', JSON.stringify(items));
+  localStorage.removeItem('fh_medications');
+  localStorage.removeItem('fh_trash');
+  return items;
+}
+
+// Neither old list had a start date; Jan 1 is an arbitrary anchor that only
+// bounds history, since every converted rule repeats every 1 day/week.
+function recurringLegacyStart() { return `${new Date().getFullYear()}-01-01`; }
+
+function recurringFromMed(m) {
+  const weekdays = m.days === 'weekdays' ? [1,2,3,4,5] : m.days === 'weekends' ? [0,6] : null;
+  return {
+    name: m.name + (m.dosage ? ' · ' + m.dosage : ''), emoji: '💊', color: '#4caf82',
+    startDate: recurringLegacyStart(), every: 1, time: m.time || '',
+    ...(weekdays ? { unit: 'week', weekdays } : { unit: 'day' }),
+  };
+}
+
+function recurringFromTrash(t) {
+  return {
+    name: t.label, emoji: t.emoji || '🗑', color: t.color || '#8bc34a',
+    startDate: recurringLegacyStart(), every: 1, unit: 'week', weekdays: [t.weekday], time: '',
+  };
+}
+
+function recurringOccursOn(r, day) {
+  const [sy, sm, sd] = r.startDate.split('-').map(Number);
+  // UTC midnights so day/week arithmetic isn't skewed an hour by DST
+  const start = Date.UTC(sy, sm - 1, sd);
+  const cur   = Date.UTC(day.getFullYear(), day.getMonth(), day.getDate());
+  if (cur < start) return false;
+  const n = Math.max(1, r.every || 1);
+  if (r.unit === 'day') return ((cur - start) / 86400000) % n === 0;
+  if (r.unit === 'week') {
+    const days = r.weekdays?.length ? r.weekdays : [new Date(start).getUTCDay()];
+    if (!days.includes(day.getDay())) return false;
+    const weekOf = t => t - new Date(t).getUTCDay() * 86400000; // that week's Sunday
+    return ((weekOf(cur) - weekOf(start)) / (7 * 86400000)) % n === 0;
+  }
+  const months = (day.getFullYear() - sy) * 12 + day.getMonth() - (sm - 1);
+  if (r.unit === 'year' ? (months % 12 || (months / 12) % n) : months % n) return false;
+  // Same day of the month as the start, clamped so a 31st start still lands in short months
+  const lastDay = new Date(day.getFullYear(), day.getMonth() + 1, 0).getDate();
+  return day.getDate() === Math.min(sd, lastDay);
+}
+
+/** "Every 3 months from Jan 15", "Weekly on Tue · 8:00 AM" */
+function recurringSummary(r) {
+  const n = r.every || 1;
+  let s = n === 1 ? { day: 'Daily', week: 'Weekly', month: 'Monthly', year: 'Yearly' }[r.unit]
+                  : `Every ${n} ${r.unit}s`;
+  if (r.unit === 'week' && r.weekdays?.length) {
+    const days = [...r.weekdays].sort().join();
+    s = n === 1 && days === '1,2,3,4,5' ? 'Weekdays'
+      : n === 1 && days === '0,6'       ? 'Weekends'
+      : s + ' on ' + [...r.weekdays].sort().map(d => LC_WEEKDAY_SHORT[d]).join(', ');
+  }
+  if (r.unit === 'month' || r.unit === 'year' || n > 1) {
+    const [y, m, d] = r.startDate.split('-').map(Number);
+    s += ' from ' + new Date(y, m - 1, d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
+  return r.time ? `${s} · ${formatTime12(r.time)}` : s;
+}
+
+function lcRenderRecurringList() {
+  const el = document.getElementById('lcRecurList');
+  if (!el) return;
+  if (!recurringItems.length) { el.innerHTML = '<div class="lc-empty">Nothing recurring yet.</div>'; return; }
+  el.innerHTML = recurringItems.map(r =>
+    `<div class="lc-item"><span class="lc-dot" style="background:${esc(sourceColor('rec_' + r.id, r.color))}"></span>
+      <span class="lc-recur-body">
+        <span class="lc-item-label">${esc(r.emoji)} ${esc(r.name)}</span>
+        <span class="lc-item-meta">${esc(recurringSummary(r))}</span>
+      </span>
+      <button class="lc-del" onclick="lcEditRecurring('${esc(r.id)}')" title="Edit">✎</button>
+      <button class="lc-del" onclick="lcDelRecurring('${esc(r.id)}')" title="Delete">✕</button></div>`
+  ).join('');
+}
+
+const RECUR_EMOJI = [
+  '🔁','💊','💉','🩺','🦷','🗑️','♻️','🌿','🪴','💧','🔋','🧯',
+  '🚨','🌬️','🧹','🧺','🛁','🍽️','🐶','🐱','🐟','🚗','⛽','🔧',
+  '💳','🧾','📦','📬','✂️','🏋️','📚','🔔',
+];
+
+// Weekday chips only mean something for a weekly rule. The start date only
+// changes the schedule for monthly/yearly rules (it picks the day) or an
+// interval of 2+ (it picks which weeks/days); otherwise it just bounds
+// history, so it stays hidden and a new item starts today.
+function lcRecurStartMatters() {
+  const unit = document.getElementById('lcRecurUnit').value;
+  const every = parseInt(document.getElementById('lcRecurEvery').value) || 1;
+  return unit === 'month' || unit === 'year' || every > 1;
+}
+function lcRecurScheduleChanged() {
+  const weekly = document.getElementById('lcRecurUnit').value === 'week';
+  document.querySelectorAll('.lc-recur-days-row').forEach(el => { el.style.display = weekly ? '' : 'none'; });
+  const showStart = lcRecurStartMatters();
+  document.querySelectorAll('.lc-recur-start-row').forEach(el => { el.style.display = showStart ? '' : 'none'; });
+}
+
+// Add and edit share one drill-in screen that replaces the Calendar panel;
+// while it's open the modal footer's Cancel/Save act on the item instead
+let lcRecurEditingId = null;
+function lcOpenRecurForm(r) {
+  const today = new Date();
+  lcRecurEditingId = r ? r.id : null;
+  document.getElementById('lcRecurFormTitle').textContent = r ? 'Edit recurring item' : 'New recurring item';
+  document.getElementById('lcRecurSaveBtn').textContent   = r ? 'Save' : 'Add';
+  document.getElementById('lcRecurName').value        = r ? r.name : '';
+  document.getElementById('lcRecurEmoji').textContent = r ? r.emoji || '🔁' : '🔁';
+  document.getElementById('lcRecurColor').value       = r ? r.color : '#4caf82';
+  document.getElementById('lcRecurEvery').value       = r ? r.every || 1 : 1;
+  document.getElementById('lcRecurUnit').value        = r ? r.unit : 'week';
+  document.getElementById('lcRecurStart').value       = r ? r.startDate : lcDateKey(today);
+  // A new weekly item starts ticked on today, so the chips never look empty
+  const days = r ? (r.unit === 'week' ? r.weekdays || [] : []) : [today.getDay()];
+  document.querySelectorAll('#lcRecurDays input').forEach(i => { i.checked = days.includes(parseInt(i.value)); });
+  document.getElementById('lcRecurAllDay').checked = !r?.time;
+  document.getElementById('lcRecurTime').value = r?.time || '08:00';
+  lcRecurAllDayChanged(); lcRecurScheduleChanged();
+  document.getElementById('settingsModal').classList.add('recur-editing');
+  document.querySelector('#settingsModal .settings-panels').scrollTop = 0;
+  if (!r) document.getElementById('lcRecurName').focus();
+}
+function lcNewRecurring() { lcOpenRecurForm(null); }
+function lcEditRecurring(id) {
+  const r = recurringItems.find(x => x.id === id);
+  if (r) lcOpenRecurForm(r);
+}
+function lcCancelRecurEdit() {
+  lcRecurEditingId = null;
+  document.getElementById('settingsModal').classList.remove('recur-editing');
+}
+
+function lcRecurAllDayChanged() {
+  document.getElementById('lcRecurTime').style.display = document.getElementById('lcRecurAllDay').checked ? 'none' : '';
+}
+
+async function lcAddRecurring() {
+  const name      = document.getElementById('lcRecurName').value.trim();
+  const emoji     = document.getElementById('lcRecurEmoji').textContent.trim();
+  const color     = document.getElementById('lcRecurColor').value;
+  const every     = Math.max(1, parseInt(document.getElementById('lcRecurEvery').value) || 1);
+  const unit      = document.getElementById('lcRecurUnit').value;
+  const editing   = recurringItems.find(r => r.id === lcRecurEditingId);
+  // Hidden start date: keep an edited item's own, so its history doesn't move
+  const startDate = lcRecurStartMatters() || !editing
+    ? document.getElementById('lcRecurStart').value : editing.startDate;
+  const allDay    = document.getElementById('lcRecurAllDay').checked;
+  const time      = allDay ? '' : document.getElementById('lcRecurTime').value;
+  if (!name)      { alert('Enter what recurs.'); return; }
+  if (!startDate) { alert('Pick a start date.'); return; }
+  if (!allDay && !time) { alert('Enter a time, or tick All day.'); return; }
+  const item = { name, emoji, color, startDate, every, unit, time };
+  if (unit === 'week') {
+    const checked = [...document.querySelectorAll('#lcRecurDays input:checked')].map(i => parseInt(i.value));
+    // None ticked: repeat on the start date's weekday
+    const [y, m, d] = startDate.split('-').map(Number);
+    item.weekdays = checked.length ? checked : [new Date(y, m - 1, d).getDay()];
+  }
+  const editId = lcRecurEditingId;
+  if (db) {
+    // set(), not update(): a stale weekdays field must go when the unit changes
+    const write = editId
+      ? db.collection('recurringItems').doc(editId).set({ ...item, createdAt: recurringItems.find(r => r.id === editId)?.createdAt || firebase.firestore.FieldValue.serverTimestamp() })
+      : db.collection('recurringItems').add({ ...item, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+    await write.catch(_fsWriteError);
+  } else {
+    if (editId) recurringItems = recurringItems.map(r => r.id === editId ? { ...item, id: editId } : r);
+    else recurringItems.push({ ...item, id: String(Date.now()) });
+    localStorage.setItem('fh_recurring', JSON.stringify(recurringItems));
+    lcRenderRecurringList();
     injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
   }
-  document.getElementById('lcTrashLabel').value = '';
+  lcCancelRecurEdit();
 }
-async function lcDelTrash(id) {
+async function lcDelRecurring(id) {
+  if (id === lcRecurEditingId) lcCancelRecurEdit();
   if (db) {
-    await db.collection('trashPickups').doc(id).delete().catch(_fsWriteError);
+    await db.collection('recurringItems').doc(id).delete().catch(_fsWriteError);
   } else {
-    trashPickups = trashPickups.filter(t => t.id !== id);
-    localStorage.setItem('fh_trash', JSON.stringify(trashPickups));
-    lcRenderTrashList();
+    recurringItems = recurringItems.filter(r => r.id !== id);
+    localStorage.setItem('fh_recurring', JSON.stringify(recurringItems));
+    lcRenderRecurringList();
     injectLocalEvents(); renderCurrentView(); renderCalendarTabs();
   }
 }
@@ -10921,6 +11856,39 @@ function openMobileLists() {
 
 function closeMobileLists() {
   document.getElementById('mobileListsOverlay').style.display = 'none';
+  document.querySelector('#mobileListsOverlay .mobile-sheet')?.classList.remove('expanded');
+}
+
+/** The sheet's grab handle: drag down past 80px to close, drag up to expand
+ *  to near full height, tap to toggle expanded. The sheet follows the finger
+ *  downward only; an upward drag just snaps to expanded on release. */
+function setupMobileSheetDrag() {
+  const handle = document.getElementById('mobileSheetHandle');
+  const sheet  = handle?.closest('.mobile-sheet');
+  if (!sheet) return;
+  let startY = null;
+  handle.addEventListener('pointerdown', e => {
+    startY = e.clientY;
+    handle.setPointerCapture(e.pointerId);
+    sheet.classList.add('dragging');
+  });
+  handle.addEventListener('pointermove', e => {
+    if (startY === null) return;
+    sheet.style.transform = `translateY(${Math.max(0, e.clientY - startY)}px)`;
+  });
+  const end = e => {
+    if (startY === null) return;
+    const dy = e.clientY - startY;
+    startY = null;
+    sheet.classList.remove('dragging');
+    sheet.style.transform = '';
+    if (e.type === 'pointercancel') return;
+    if (dy > 80)               closeMobileLists();
+    else if (dy < -40)         sheet.classList.add('expanded');
+    else if (Math.abs(dy) < 6) sheet.classList.toggle('expanded');
+  };
+  handle.addEventListener('pointerup', end);
+  handle.addEventListener('pointercancel', end);
 }
 
 function setMobileListsSection(section) {
@@ -10948,35 +11916,64 @@ const EMOJI_PICKER_OPTIONS = [
   '🎪','🚀','🎭','🎁','🎉','🐘','🌋','🏕️',
 ];
 
-function applySafePaletteMode() {
-  document.body.classList.toggle('safe-palette-on', safePaletteMode);
-  document.querySelectorAll('input.lc-color').forEach(input => {
-    let swatches = input.nextElementSibling;
-    if (!swatches || !swatches.classList.contains('safe-swatches')) {
-      swatches = document.createElement('div');
-      swatches.className = 'safe-swatches';
-      SAFE_COLORS.forEach(color => {
-        const s = document.createElement('button');
-        s.type = 'button';
-        s.className = 'color-swatch';
-        s.style.background = color;
-        s.title = color;
-        s.onclick = () => {
-          input.value = color;
-          swatches.querySelectorAll('.color-swatch').forEach(b => b.classList.remove('swatch-selected'));
-          s.classList.add('swatch-selected');
-          input.dispatchEvent(new Event('change', { bubbles: true }));
-          input.dispatchEvent(new Event('input',  { bubbles: true }));
-        };
-        swatches.appendChild(s);
-      });
-      input.insertAdjacentElement('afterend', swatches);
-    }
-    const cur = input.value.toUpperCase();
-    swatches.querySelectorAll('.color-swatch').forEach(s => {
-      s.classList.toggle('swatch-selected', s.title.toUpperCase() === cur);
-    });
-  });
+// ── Calendar Palettes ──
+
+function activePalette() { return CAL_PALETTES[calPalette] || null; }
+
+/** A member's calendar color: their palette slot (list order) while a palette
+ *  is on, otherwise their own pick (null = no color). */
+function memberColor(m) {
+  const p = activePalette();
+  if (!p || !m) return m?.color || null;
+  return p.people[Math.max(familyMembers.indexOf(m), 0) % p.people.length];
+}
+
+/** Every non-member color source, in the order palette slots are handed out:
+ *  Google calendars first so the main ones never share a color. */
+function paletteSourceKeys() {
+  return [
+    ...calendarMeta.map(c => c.id), HOLIDAYS_ID, ...icsSubs.map(s => s.id), LC_IDS.birthdays,
+    ...schoolPeriods.map(p => 'school_' + p.id), ...recurringItems.map(r => 'rec_' + r.id),
+  ];
+}
+
+/** A calendar source's color: its palette slot while a palette is on,
+ *  otherwise `own`. Group rows with no slot of their own (the School and
+ *  Recurring tabs) take the first one. */
+function sourceColor(key, own) {
+  const p = activePalette();
+  if (!p) return own;
+  return p.events[Math.max(paletteSourceKeys().indexOf(key), 0) % p.events.length];
+}
+
+function applyCalPalette() {
+  document.body.classList.toggle('cal-palette-on', !!activePalette());
+  // Keeps the old toggle's class, which also strips Tactile decoration (KTD-4).
+  document.body.classList.toggle('safe-palette-on', calPalette === 'colorblind');
+}
+
+/** Re-stamp event colors and redraw everything that shows them. */
+function refreshCalPalette() {
+  applyCalPalette();
+  if (googleToken) loadAllCalendars();
+  else loadIcsSubs().then(() => { renderCalendarTabs(); renderCurrentView(); });
+  renderFamilyMemberList();
+  renderSettingCalList();
+  renderIcsSubList();
+  lcRenderSchoolList();
+  lcRenderRecurringList();
+  lcRenderBdayList();
+}
+
+/** Settings preview: each palette's family and event colors. */
+function renderCalPalettePreview() {
+  const el = document.getElementById('calPalettePreview');
+  if (!el) return;
+  const p = CAL_PALETTES[document.getElementById('calPaletteSelect').value];
+  el.innerHTML = p ? ['people', 'events'].map(k => `<div class="palette-preview-row">
+      <span>${k === 'people' ? 'Family' : 'Events'}</span>
+      ${p[k].map(c => `<span class="palette-dot" style="background:${c}"></span>`).join('')}
+    </div>`).join('') : '';
 }
 
 function applyAppTitle() {
@@ -11378,6 +12375,7 @@ const SETTINGS_GROUPS = [
   ]},
   { label: 'Calendar', items: [
     { tab: 'calendar', label: '📅 Calendar' },
+    { tab: 'school',   label: '🏫 School' },
     { tab: 'events',   label: '💡 Events' },
     { tab: 'mow',      label: '🌿 Mowing', desktopOnly: true },
   ]},
@@ -11411,10 +12409,12 @@ function renderSettingsNav() {
 
 // Narrow-screen drill-in: return from a panel to the nav list.
 function settingsShowNav() {
+  lcCancelRecurEdit();
   document.getElementById('settingsBody').classList.remove('show-panel');
 }
 
 function switchSettingsTab(tab) {
+  lcCancelRecurEdit(); // the item editor's footer mode belongs to the Calendar panel only
   document.querySelectorAll('.settings-nav-item').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.tab === tab);
   });
@@ -11468,7 +12468,6 @@ function openSettings() {
   document.getElementById('wxViewRadar').checked  = !!wxEnabledViews['radar'];
   document.getElementById('wxViewSnarky').checked = !!wxEnabledViews['snarky'];
   renderWeatherLocationsList();
-  renderShopCategorySettings();
   document.getElementById('settingSlideInterval').value = slideInterval;
   document.getElementById('settingSaverEnabled').checked  = !!saverEnabled;
   document.getElementById('settingSaverIdleMin').value    = saverIdleMin;
@@ -11503,17 +12502,16 @@ function openSettings() {
 
   // ── Event settings ──
   document.getElementById('eventLocation').value = eventLocation;
+  document.getElementById('eventsEnabled').checked = eventsEnabled;
   document.querySelector(`input[name="eventDistance"][value="${eventMaxDistance}"]`).checked = true;
   // Render diet checkboxes
   const dietGrid = document.getElementById('mealDietGrid');
   dietGrid.innerHTML = '';
   MEAL_DIET_OPTIONS.forEach(opt => {
     const label = document.createElement('label');
-    label.className = 'meal-diet-option';
     const cb = document.createElement('input');
     cb.type = 'checkbox'; cb.value = opt;
     cb.checked = mealDietPrefs.includes(opt);
-    cb.style.cssText = 'width:14px;height:14px;accent-color:var(--accent)';
     label.appendChild(cb);
     label.appendChild(document.createTextNode(opt));
     dietGrid.appendChild(label);
@@ -11563,7 +12561,8 @@ function openSettings() {
   });
   renderChoreRewardList();
   lcOpenSettings();
-  document.getElementById('safePaletteToggle').checked = safePaletteMode;
+  document.getElementById('calPaletteSelect').value = CAL_PALETTES[calPalette] ? calPalette : 'off';
+  renderCalPalettePreview();
   document.querySelector(`input[name="assistantWelcome"][value="${assistantWelcomeMode}"]`).checked = true;
   document.getElementById('tvModeToggle').checked = tvMode;
   // Easter egg category toggles
@@ -11578,7 +12577,6 @@ function openSettings() {
   document.getElementById('haTestResult').className   = 'ha-test';
   renderHaEntitySettings();
   document.getElementById('settingsModal').style.display = 'flex';
-  applySafePaletteMode();
   trapFocus(document.querySelector('#settingsModal .modal'), document.getElementById('settingsBtn'), closeSettings);
 }
 
@@ -11629,9 +12627,12 @@ function saveSettings() {
   localStorage.setItem('fh_wxActivity',    JSON.stringify(wxActivityEnabled));
   localStorage.setItem('fh_wxEnabledViews', JSON.stringify(wxEnabledViews));
   applyWxViewToggles();
-  safePaletteMode = document.getElementById('safePaletteToggle').checked;
-  localStorage.setItem('fh_safePalette', JSON.stringify(safePaletteMode));
-  applySafePaletteMode();
+  const newPalette = document.getElementById('calPaletteSelect').value;
+  const paletteChanged = newPalette !== calPalette;
+  if (paletteChanged) {
+    calPalette = newPalette;
+    saveFsSetting('calendarPalette', 'fh_calPalette', calPalette);
+  }
   const welcomeRadio = document.querySelector('input[name="assistantWelcome"]:checked');
   if (welcomeRadio) {
     assistantWelcomeMode = welcomeRadio.value;
@@ -11688,6 +12689,9 @@ function saveSettings() {
   eventMaxDistance = parseInt(document.querySelector(`input[name="eventDistance"]:checked`).value) || 120;
   localStorage.setItem('fh_eventLocation', eventLocation);
   localStorage.setItem('fh_eventMaxDistance', String(eventMaxDistance));
+  eventsEnabled = document.getElementById('eventsEnabled').checked;
+  localStorage.setItem('fh_eventsEnabled', JSON.stringify(eventsEnabled));
+  applyEventsAvailability();
   const hncEl = document.getElementById('newsHeadlineCount');
   if (hncEl) { newsHeadlineCount = parseInt(hncEl.value) || 5; saveNewsFeeds(); }
   if (widgetVisibility.news)  loadNewsFeeds();
@@ -11725,6 +12729,7 @@ function saveSettings() {
     else localStorage.removeItem('fh_haToken');
   }
   closeSettings();
+  if (paletteChanged) refreshCalPalette();
   if (haUrlError) showToast('⚠️ Home Assistant URL not saved: ' + haUrlError, 6000);
   startHaPolling();
   injectLocalEvents();
@@ -12668,6 +13673,41 @@ let eventsSearchKeyword = '';  // Keyword search filter
 let eventsSearchArtist = '';   // Artist/performer search filter
 let eventsSearchVenue = '';    // Venue search filter
 
+// Discover Events only shows once the Netlify function says it's set up
+// (OWM_KEY for geocoding). A fork without the key, or plain http.server with
+// no function at all, just never shows 💡 instead of erroring on open.
+// Both 💡 buttons start display:none in the HTML for the same reason.
+async function probeEventsBackend() {
+  try {
+    const r = await fetch('/.netlify/functions/events?status=1');
+    eventsBackend = r.ok ? await r.json() : { configured: false };
+  } catch {
+    eventsBackend = { configured: false };
+  }
+  applyEventsAvailability();
+}
+
+function applyEventsAvailability() {
+  const show = eventsEnabled && !!eventsBackend?.configured;
+  ['eventsDiscoverBtn', 'mobileEventsBtn'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = show ? '' : 'none';
+  });
+  const note = document.getElementById('eventsSetupNote');
+  if (note) note.textContent = eventsBackend && !eventsBackend.configured
+    ? 'Hidden: needs OWM_KEY set on Netlify (see the setup guide)'
+    : 'Turn off to hide the 💡 button on this device';
+
+  // Live Events needs TICKETMASTER_KEY; without it the tab would only ever be empty
+  const tmTab = document.querySelector('.events-source-tabs .event-tab[data-source="ticketmaster"]');
+  const tmOn = !!eventsBackend?.sources?.ticketmaster;
+  if (tmTab) tmTab.style.display = tmOn ? '' : 'none';
+  if (!tmOn && eventsSourceTab === 'ticketmaster') {
+    const first = document.querySelector('.events-source-tabs .event-tab:not([data-source="ticketmaster"])');
+    if (first) selectEventSource(first);
+  }
+}
+
 async function openEventsModal() {
   eventsModalOpen = true;
   document.getElementById('eventsModal').style.display = 'flex';
@@ -13004,20 +14044,26 @@ function renderEventCard(event) {
 
   const summary = event.description
     ? event.description.substring(0, 160) + (event.description.length > 160 ? '…' : '')
-    : 'No description available.';
+    : '';
+  const timeLabel = event.time ? ` ${formatTime12(event.time)}` : '';
 
+  // Same title / summary / footer shape as the compact card. On phones the
+  // image shrinks to a thumbnail beside the text and the footer's meta line
+  // (hidden on desktop, where the image overlay shows it) carries date and
+  // distance.
   return `
-    <div class="event-card">
+    <div class="event-card event-card-img">
       <div class="event-image" style="background-image: url('${escapeHtml(event.image)}')">${overlayHtml}</div>
       <div class="event-card-content">
-        <div class="event-card-header">
-          <h3 class="event-title">${escapeHtml(event.title)} <span class="event-type-badge">${event.type}</span></h3>
+        <h3 class="event-title">${escapeHtml(event.title)} <span class="event-type-badge">${event.type}</span></h3>
+        ${summary ? `<p class="event-description">${escapeHtml(summary)}</p>` : ''}
+        <div class="event-compact-foot">
+          <span class="event-compact-meta event-img-meta">${dateLabel}${timeLabel} · ${distLabel}</span>
           <span class="event-card-actions">
             ${addBtn}
             <a href="${escapeHtml(event.sourceUrl)}" target="_blank" rel="noopener" class="event-link">View Details${linkIcon}</a>
           </span>
         </div>
-        <p class="event-description">${escapeHtml(summary)}</p>
       </div>
     </div>
   `;

@@ -128,3 +128,22 @@ test('fetchFairport is gated to the region and windowed to the next 35 days', as
   assert.ok(near.every(e => e.date >= today && e.date <= horizon));
   assert.ok(near.every(e => e.source === 'towns'));
 });
+
+test('status probe reports which keys are configured, without a location', async () => {
+  const { handler } = require('../netlify/functions/events.js');
+  const saved = { owm: process.env.OWM_KEY, tm: process.env.TICKETMASTER_KEY };
+  try {
+    delete process.env.OWM_KEY;
+    delete process.env.TICKETMASTER_KEY;
+    let r = await handler({ queryStringParameters: { status: '1' } });
+    assert.equal(r.statusCode, 200);
+    assert.deepEqual(JSON.parse(r.body), { configured: false, sources: { ticketmaster: false } });
+
+    process.env.OWM_KEY = 'x';
+    r = await handler({ queryStringParameters: { status: '1' } });
+    assert.deepEqual(JSON.parse(r.body), { configured: true, sources: { ticketmaster: false } });
+  } finally {
+    if (saved.owm === undefined) delete process.env.OWM_KEY; else process.env.OWM_KEY = saved.owm;
+    if (saved.tm === undefined) delete process.env.TICKETMASTER_KEY; else process.env.TICKETMASTER_KEY = saved.tm;
+  }
+});

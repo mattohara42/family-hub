@@ -10,7 +10,7 @@ A living reference of every feature, its key functions, state variables, localSt
 
 - **Three files:** `family-hub.html` (structure), `family-hub.css` (all styles), `family-hub.js` (all logic)
 - **Served via:** Netlify (production) or `python3 -m http.server 8080` → `http://localhost:8080/family-hub.html` (local dev)
-- **Config block:** Top of `family-hub.js` — `FIREBASE_CONFIG`, `GOOGLE_CLIENT_ID`, pinned API constants
+- **Config block:** `config.js` sets `window.FH_CONFIG` (Firebase config + Google client ID); `netlify-build.js` rewrites it from the `GOOGLE_CLIENT_ID`/`FIREBASE_CONFIG` env vars when both are set. Top of `family-hub.js` reads it into `FIREBASE_CONFIG`/`GOOGLE_CLIENT_ID` and holds the pinned API constants
 - **State:** Mix of `let` globals + `localStorage` + IndexedDB (photos only)
 - **Shared state:** Firebase Firestore (shopping list, to-do list, budget, meal plan, family members, chores)
 - **Theming:** CSS custom properties on `:root` — `--text`, `--surface`, `--surface2`, `--accent`, `--accent2`, `--muted`, `--card-bg-photo`, `--scrim`, etc.
@@ -67,7 +67,7 @@ family-hub.css    (stylesheet)
 
 family-hub.js     (all logic)
 ├── ── CONFIGURATION BLOCK (top) ──
-│   FIREBASE_CONFIG, GOOGLE_CLIENT_ID, WEATHER_*, pinned API constants
+│   FIREBASE_CONFIG, GOOGLE_CLIENT_ID (read from config.js), WEATHER_*, pinned API constants
 ├── ── STATE VARIABLES ──
 ├── ── FIREBASE INIT ──
 ├── ── GOOGLE AUTH ──
@@ -75,14 +75,15 @@ family-hub.js     (all logic)
 ├── ── CALENDAR ──             switchCalView, render*Grid, makeDayCell, loadAllCalendars
 ├── ── CALENDAR TABS ──        renderCalendarTabs
 ├── ── CALENDAR EVENT EDITOR── openEventEditor, saveCalEvent, deleteCalEvent
-├── ── LOCAL CALENDARS ──      injectLocalEvents, lcAddBirthday/Medication/etc. (LC_IDS, LC_DEFS)
-├── ── BUDGET ──               renderBudgetCard (context-sensitive), budgetDatesInRange
+├── ── LOCAL CALENDARS ──      injectLocalEvents, lcAddBirthday/lcAddRecurring/lcNewRecurring/lcEditRecurring (＋ Add or ✎ opens `lcOpenRecurForm()`, a drill-in screen: `#settingsModal.recur-editing` hides the rest of the Calendar panel and swaps the modal footer to the item's own Cancel/Add-or-Save, so there's only one Save on screen; `lcRecurScheduleChanged()` shows weekday chips for weekly only and Starts only when it changes the schedule)/etc. (LC_IDS, LC_DEFS); recurringOccursOn/recurringSummary for the 🔁 Recurring calendar
+├── ── SCHOOL DAY CYCLE ──     schoolDayNumberFor, scdAddHoliday/scdAddSubject (Week/Day view badge only, no LC_IDS entry) — settings UI lives in its own top-level 'school' tab, not 'calendar' (see below)
+├── ── BUDGET ──               renderBudgetCard (context-sensitive), budgetDatesInRange, budgetEventsForDate (privacy-gated), toggleBudgetPrivacy
 ├── ── WEATHER ──              showWeatherLocation, loadWeatherByCity, renderWeatherData,
 │                              renderSunArc, renderWeatherTicker, prev/nextWeatherLocation,
 │                              add/removeWeatherLocation
 ├── ── PHOTOS ──               openPhotosPicker, loadBgFromDb, startSlideshow
 ├── ── SHOPPING ──             addShop, toggleShop, clearDoneShopping, clearAllShopping
-├── ── TODO ──                 addTodo, renderTodoList, clearDoneTodo, clearAllTodo
+├── ── TODO ──                 addTodo, renderTodoList, clearDoneTodo
 ├── ── SETTINGS ──             openSettings, saveSettings, switchSettingsTab
 ├── ── APPEARANCE ──           applyAppMode, setAppMode
 ├── ── YEAR STRIP ──           renderYearStrip, changeStripMonth (bottom mode)
@@ -142,7 +143,7 @@ let disabledCals = new Set(); // calendar IDs toggled off by user
 - `switchCalView(view)` — switches between month/week/day, saves to localStorage
 - `renderCurrentView()` — dispatches to the correct render function; also calls `renderBudgetCard()`
 - `renderMonthGrid()` — builds the month grid in `#calGrid`
-- `renderWeekGrid()` — builds the 7-column week grid in `#weekView`
+- `renderWeekGrid()` — builds the 7-column week grid in `#weekView` (stacked rows on a phone, see §20 View toggle). The columns share one set of rows via CSS subgrid (`.week-grid`: header, `.week-day-allday`, `.week-day-body`, `.week-tasks-strip`, `.week-budget-strip`, `.week-meals-strip`), so each band lines up across the week even when only some days have it; every child sets its own `grid-row`. All-day events go in `.week-day-allday`, timed ones in `.week-day-body`. To-dos due that day and all-day 🔁 Recurring items (trash day etc.) share `.week-tasks-strip` below the timed events; a Recurring item with a time stays with the timed events. Each column's single track is `minmax(0, 1fr)`: with a plain `auto` track a nowrap to-do line widened the track past the column and shoved the header off-centre (2026-10-22)
 - `renderDayGrid()` — builds the day timeline in `#dayView`
 - `makeDayCell(year, month, day, otherMonth, isToday)` — creates one month grid cell
 - `changeCalPeriod(delta)` — navigates forward/back by period (the instant change; `slideCalPeriod()` wraps it with the swipe transition)
@@ -159,9 +160,26 @@ let disabledCals = new Set(); // calendar IDs toggled off by user
 
 **HTML anchors:** `#calViews` (wraps the four view containers), `#calGrid`, `#weekView`, `#dayView`, `#agendaView`, `#calMonthLabel`, `#calendarTabs` (inside `#calendarCard`), `#calendarStatus`
 
-**Swipe / period slide:** `setupCalSwipe()` binds touch handlers to `#calViews`, the wrapper that holds all four view containers. A gesture locks to an axis after `CAL_SWIPE_AXIS_LOCK` px — vertical is handed straight back to the scroller, horizontal drags the wrapper at `CAL_SWIPE_DAMPING` (0.45) with a slight fade. Release past `CAL_SWIPE_THRESHOLD` (50px) or faster than `CAL_SWIPE_VELOCITY` (0.5 px/ms) calls `slideCalPeriod(delta, fromPx)`: it clones the active view into a `.cal-view-ghost` pinned over the wrapper, hands the drag offset to the ghost, re-renders the new period underneath via `changeCalPeriod()`, then runs both past each other in one transition. The two panes stay exactly `clientWidth + CAL_SLIDE_GUTTER` apart so they read as one filmstrip. `CAL_SLIDE_MS` (260) times the ghost teardown and must match `--cal-slide` in the CSS. Under `prefers-reduced-motion: reduce` (or while `calSliding` is already true) it falls through to a plain `changeCalPeriod()`. `calSwipeBlocked()` stands the gesture down inside a genuinely horizontally-scrollable ancestor — the week grid on a narrow screen owns that drag itself — which is why `#weekView` keeps `touch-action: pan-x`. `activeCalViewEl()` maps `calView` to the element that gets cloned and pushed.
+**Swipe / period slide:** `setupCalSwipe()` binds touch handlers to `#calViews`, the wrapper that holds all four view containers. A gesture locks to an axis after `CAL_SWIPE_AXIS_LOCK` px — vertical is handed straight back to the scroller, horizontal drags the wrapper at `CAL_SWIPE_DAMPING` (0.45) with a slight fade. Release past `CAL_SWIPE_THRESHOLD` (50px) or faster than `CAL_SWIPE_VELOCITY` (0.5 px/ms) calls `slideCalPeriod(delta, fromPx)`: it clones the active view into a `.cal-view-ghost` pinned over the wrapper, hands the drag offset to the ghost, re-renders the new period underneath via `changeCalPeriod()`, then runs both past each other in one transition. The two panes stay exactly `clientWidth + CAL_SLIDE_GUTTER` apart so they read as one filmstrip. `CAL_SLIDE_MS` (260) times the ghost teardown and must match `--cal-slide` in the CSS. Under `prefers-reduced-motion: reduce` (or while `calSliding` is already true) it falls through to a plain `changeCalPeriod()`. `calSwipeScroller()` finds a genuinely horizontally-scrollable ancestor. That scroller owns the drag unless it's already at the edge the swipe heads for (`calScrollerAtEdge()`, checked once at axis lock, so scrolling up to the edge never spills into a page turn mid-gesture); then the swipe pages. Nothing in `#calViews` scrolls sideways today (phone Week used to, until it was stacked; see §20 View toggle), so this is a guard for any future one. The ghost copies the active view's flex direction and the Week list's `scrollTop`, since the clone loses `#weekView`'s id rules and every scroll position. `activeCalViewEl()` maps `calView` to the element that gets cloned and pushed.
 
 **localStorage:** `fh_calView`, `fh_calIds` (array of calendar IDs), `fh_calMeta` (labels/colors)
+
+**Other render-path integrations to know about when touching `renderWeekGrid()`/`renderDayGrid()`/`renderMonthGrid()`:**
+- **School Day Cycle:** `renderWeekGrid()` appends a `.school-day-badge` (+ `.school-day-subjects` chips) into each day's header via `schoolDayNumberFor(dateKey)`/`schoolDaySubjectsForDayNumber(n)`; `renderDayGrid()` appends a `.school-day-section`. Month and Agenda don't show it — see the `SCHOOL DAY CYCLE` anchor-map entry near the top of this file for the full writeup. Inside `.school-day-section` (2026-09-24), the header and every subject sit on one `.school-day-line` — `.school-day-label` (flex-shrink:0) + a `.school-day-track` of `.school-day-item`s — instead of the old one-row-per-subject list, which was the tallest thing in Day view on a 2-3-subject day. `startMarqueeIfOverflowing(lineEl, trackEl)` measures `trackEl.scrollWidth - trackEl.clientWidth` a frame after render (needs real layout, so it's deferred past the synchronous `container.appendChild(wrap)` at the end of `renderDayGrid()`); only when that's positive does it set `--marquee-dist` and add `.school-day-scrolling`, which drives a `translateX` keyframe with `animation-delay: 1s` (family-hub.css) — a day that fits stays still, one that doesn't pauses a beat, then scrolls to reveal the rest and loops. `prefers-reduced-motion: reduce` swaps the animation for a plain scrollable overflow.
+- **Budget:** all three views read `budgetEventsForDate(dateKey)` for their bill pills (Month's `.cal-event-budget`, Week's `.week-budget-strip`, Day's `.budget-day-section`) — see §12 Budget for the privacy-toggle gate that lives inside that one function.
+- **Event pill member badges:** `.day-event-pill` is `flex-direction: column` (title above time), so `appendMemberBadges()` — which just appends siblings — would give each badge its own row below the time instead of sitting beside it. `appendPillMeta(pill, timeText, members)` (family-hub.js, next to `appendMemberBadges`) wraps time + badges in one `.evt-meta` flex row instead; called from both of `renderDayGrid()`'s pill builders (the all-day row passes `timeText: null`). Skips building the row entirely when there's neither a time nor any members, so an all-day pill with nobody assigned doesn't grow an empty row.
+
+#### Calendar Palettes (curated colors)
+
+Settings → Look & Feel → Theme → **Calendar colors** (`#calPaletteSelect`, preview in `#calPalettePreview` via `renderCalPalettePreview()`). `calPalette` is `'off'` (everyone's own picks) or a key of `CAL_PALETTES` (`soft`, `earthy`, `colorblind`). It is synced in Firestore `settings/calendarPalette` through `saveFsSetting()`, so every device shows the same colors; `fh_calPalette` only holds it when there's no Firestore.
+
+While a palette is on, nobody's hand-picked color is used. Each palette has two sets. `people` goes to family members by list position (▲▼ reorders change who gets what) and `events`, a softer set, goes to every other source in `paletteSourceKeys()` order: Google calendars, Holidays, ICS subs, Birthdays, then each School period (`school_<id>`) and Recurring item (`rec_<id>`). Both cycle when slots outnumber colors. Turning the palette off restores the stored picks, which are never overwritten.
+
+A birthday whose name matches a family member (whole name, case-insensitive) takes that member's color through `birthdayColor(b)`, palette or not; anyone else's uses the Birthdays color. The member snapshot re-renders the calendar so this holds when members load after birthdays.
+
+Two accessors carry this, and any new color read should go through them rather than `m.color`/`sub.color`/`cal.color`: **`memberColor(m)`** and **`sourceColor(key, own)`**. Event colors are stamped at cache time (`cacheCalEvents()` args in `loadAllCalendars()`, `injectIcsEvent()`, `injectLocalEvents()`), so a palette change runs `refreshCalPalette()`, which refetches and redraws the lists. Pickers step aside: `body.cal-palette-on` hides `input.lc-color`, the `.cal-color-wrap` pickers are rendered `disabled`, and a member row shows a `.palette-dot` instead.
+
+The `colorblind` palette replaced the old per-device "Colorblind-safe swatches" toggle (`fh_safePalette`, converted on load, then uploaded by `runFirestoreMigrations()` if no palette is synced yet). It still sets `body.safe-palette-on`, which keeps Tactile decoration suppressed (KTD-4).
 
 #### Event Details (read-only events)
 
@@ -197,7 +215,9 @@ render in every calendar view, the countdown picker, and conflict detection.
 - `fetchIcsSub(sub)` — direct fetch of the normalized URL, falling back to the same-origin `/.netlify/functions/ics` proxy (keeps private feed URLs in your own infra; only on a Netlify deploy).
 - `isEventEditable(ev)` — the single predicate behind every edit affordance (`!!eventId && !holiday && !readOnly`). Feed events set `readOnly: true` in `injectIcsEvent()`, so click-to-edit, drag-to-reschedule and the assistant's `findCalEvent()` all skip them while they still render normally.
 - `loadIcsSubs()` — rebuilds each sub's `calEventCache` slice from scratch (no duplicate injection); `injectIcsEvent()` keys events by **local** date (no UTC day-shift).
-- `addIcsSub()` / `removeIcsSub(id)` / `renderIcsSubList()` — Settings → Calendar UI.
+- `addIcsSub()` / `removeIcsSub(id)` / `renderIcsSubList()` — Settings → Calendar UI. Row label and color persist on `change`, not `input`: every Firestore write fires the `icsSubs` snapshot, which rebuilds the list and would steal focus mid-keystroke.
+
+**Gotcha — duplicate events:** `pushEventDeduped(arr, base)` (family-hub.js, above `loadAllCalendars()`) is the single gate every day's event array is written through — `cacheEvents()`'s two branches and both `injectIcsEvent()` branches all call it instead of `arr.push()`. Non-holiday events dedupe by `eventId` (only ever repeated by a genuine re-fetch of the same instance — an ICS feed re-injecting an occurrence, or two overlapping `loadAllCalendars()` calls racing into the same cache); holiday events dedupe by `summary` instead, because Google's public holiday calendar (`en.usa#holiday@group.v.calendar.google.com`) has a known history of listing the same holiday twice under two different event IDs post-migration, so an ID-based check wouldn't catch it. Add any new code path that writes into `calEventCache` through this helper too, not a raw `.push()`.
 
 **HTML anchors:** `#icsSubList`, `#icsUrlInput`, `#icsLabelInput`, `#icsColorInput`, `#icsSubStatus` (Settings → Calendar → 📡 ICS Subscriptions)
 
@@ -400,6 +420,8 @@ const WIDGET_ORDER = [
 - In **sidebar**: per-member sections stacked vertically; add-row below card body
 - In **bottom**: per-member sections tiled horizontally in a scrollable `.chore-members-row` flex container; add-row moves to the right side via CSS grid on `#choreCard`
 
+**Drag-and-drop reordering:** `initWidgetDragDrop()` injects a `.widget-drag-handle` (⠿) into every card's `.card-header`, dragging a card onto another swaps their position in `widgetOrder` (`fh_widget_order`). Desktop-only in effect (`.sidebar`/`#bottomStrip` are), but the handle itself isn't gated by `isMobile` — it's hidden separately inside the mobile Lists sheet (`.mobile-sheet-body .widget-drag-handle`, family-hub.css) since a card's position there is fixed by `MOBILE_SHEET_SECTIONS` (§20), not draggable.
+
 **HTML anchors:** `#bottomStrip` (inside `.cal-column`), `.sidebar`
 
 **localStorage:** `fh_widgets`, `fh_widget_placement`
@@ -414,13 +436,16 @@ const WIDGET_ORDER = [
 - `toggleShop(id)` — marks item done/undone
 - `clearDoneShopping()` — removes completed items only (confirms with nothing — immediate)
 - `clearAllShopping()` — removes all items after `confirm()` dialog
-- `renderShopList(items)` — re-renders `#shopList`
+- `renderShopList(entries)` — one flat list. Aisle categories (the add-row dropdown, grouped headers, and the Settings → Shopping category list) were removed 2026-10-20; old items may still carry a `category` field, which nothing reads. 📱 SMS (`#smsTriggerBtn`, icon only) sits in the add row after Add, not in the card header
 - `toggleSmsPopover(event)` — shows/hides SMS contact picker
-- `sendShoppingViaSms(phone)` — opens `sms:` URL with list contents
+- `buildShoppingBody()` — formats the list into the message text (pending items only, if any are pending; otherwise everything)
+- `sendToContact(phone)` — opens an `sms:` URL with `buildShoppingBody()`'s text pre-filled
 
 **SMS popover:** `.sms-popover` uses a solid opaque background (`#1e2130` dark / `#f5f6fa` light / `#0e1e48` nautical) so it's readable over background photos.
 
 **HTML anchors:** `#shopList`, `#shopInput`, `#shopEmpty`, `#smsPopover`, `#smsTriggerBtn`
+
+**Mobile (2026-09-24):** `#smsTriggerBtn` goes icon-only inside the Lists sheet — its `.sms-btn-label` span ("SMS ▾") is hidden under `.mobile-sheet-body #smsTriggerBtn .sms-btn-label` (family-hub.css), leaving just 📱. The feature itself still works there (`sendToContact()`'s `sms:` link opens the phone's own Messages app, arguably the one place it works best), it just didn't need a full text button in an already-tight header row.
 
 **SMS recipients:** derived from family members with a phone number (Settings → Family) via `getSmsContacts()` — no separate contact list. The legacy `fh_smsContacts` localStorage list is migrated into member phone numbers on load by `migrateSmsContactsToMembers()` (name-matched to existing members; unmatched nicks become new members).
 
@@ -440,7 +465,7 @@ let familyMembers  = JSON.parse(localStorage.getItem('fh_familyMembers') || '[]'
 - `addTodo()` — reads text + optional dueDate + assignedTo, writes to Firestore
 - `renderTodoList()` — re-renders `#todoList` from `todoItems`; list scrolls at `max-height: 220px`
 - `clearDoneTodo()` — removes completed items only
-- `clearAllTodo()` — removes all items after `confirm()` dialog
+- (No clear-all for To-Do: removed 2026-10-20 at the family's request; only ✕ done remains)
 - `todosDueOnDate(dateKey)` — returns todos with `dueDate === dateKey` that are not done
 
 **localStorage:** `fh_familyMembers`
@@ -449,10 +474,17 @@ let familyMembers  = JSON.parse(localStorage.getItem('fh_familyMembers') || '[]'
 
 ### 9. Settings Modal
 
-**Key functions:** `openSettings()`, `closeSettings()`, `saveSettings()`, `switchSettingsTab(tab)`
-**Tabs:** `look` · `calendar` · `weather` · `shopping` · `todo` · `meals` · `budget` · `widgets` · `chores` · `eggs` *(eggs hidden; revealed by triple-clicking the ⚙️ in the modal title)*
+**Key functions:** `openSettings()`, `closeSettings()`, `saveSettings()`, `switchSettingsTab(tab)`, `renderSettingsNav()`
+**Tabs:** driven by the `SETTINGS_GROUPS` registry (nav groups → `{tab, label, desktopOnly?}` items) — `renderSettingsNav()` builds the nav from it and filters out `desktopOnly` items when `isMobile`, so adding a tab needs no separate mobile-visibility code. Current groups:
+- **General:** `look` (🎨 Look & Feel) · `screensaver` (🖼 Images, desktopOnly) · `family` (👨‍👩‍👧 Family) · `assistant` (🤖 Assistant)
+- **Calendar:** `calendar` (📅 Calendar — two `.settings-group-head` groups: "Calendar sources" (Google Calendars, ICS subs) and "Added by the hub" (Countdowns, Birthdays, 🔁 Recurring). Recurring replaced the separate Medications and Trash & Recycling sections: one list for anything on a schedule, each item `{ name, emoji, color, startDate, every, unit: day|week|month|year, weekdays (week only), time ('' = all-day) }`, shown as the one `local_recurring` calendar. A month/year rule repeats on the start date's day of month, clamped to the last day in shorter months) · `school` (🏫 School — School Day Cycle + Hourly Class Schedule, see the `SCHOOL DAY CYCLE` anchor-map entry near the top of this file) · `events` (💡 Events) · `mow` (🌿 Mowing, desktopOnly)
+- **Widgets:** `widgets` (🧩 Widget Layout, desktopOnly) · `weather` (🌤 Weather, desktopOnly) · `feeds` (📊 Feeds, desktopOnly) · `shopping` (🛒 Shopping) · `chores` (⭐ Chores, desktopOnly) · `meals` (🍽 Meals) · `homeassistant` (🏠 Home Assistant)
+- **Advanced** *(gated)*: `eggs` (🥚 Easter Eggs) — hidden until unlocked
+
+There is no dedicated `todo` or `budget` tab — To-Do and Budget have no Settings surface of their own (To-Do's only settings touchpoint is the assignee dropdown, populated from Family; Budget is managed entirely in its sidebar card, see §12).
+
 **HTML anchor:** `#settingsModal`, `#settingsModalGear` (triple-click target in modal `<h2>`)
-**Pattern:** Each tab has a `.settings-panel[data-panel="X"]` div; `switchSettingsTab` toggles `.active`
+**Pattern:** Each tab has a `.settings-panel[data-panel="X"]` div; `switchSettingsTab` toggles `.active` on both the nav button and the matching panel — generic, keyed only by `data-panel`/`data-tab` matching `tab`
 **Easter eggs unlock:** `handleSettingsGearClick()` — triple-click on `#settingsModalGear` within 700ms adds `body.eggs-unlocked`, revealing the 🥚 tab
 
 ---
@@ -574,18 +606,25 @@ let recipeBox = lsGet('fh_recipeBox', []);
 - Day view → "Bills Today" (pill hidden; detail shown in `#budgetCard` only)
 - Card hidden entirely when no items fall in the current period
 
+**Per-device privacy toggle:** `budgetHidden` (`fh_budgetHidden`, default `false`) hides $ content — the sidebar card's bill list/totals/Add button, *and* every calendar view's bill pills (Month's `.cal-event-budget`, Week's `.week-budget-strip`, Day's `.budget-day-section`) — while leaving the sidebar card and its 👁/🙈 toggle button visible so it can be flipped back on without opening Settings. `budgetEventsForDate(dateKey)` is the single gate: it returns `[]` whenever `budgetHidden` is true, and every calendar render path reads budget-by-date through it, so gating lives in one place. `toggleBudgetPrivacy()` flips the flag, persists it to `localStorage` (not synced — per-device on purpose, same reasoning as the Home Assistant token), and calls `renderCurrentView()`, which re-renders the active calendar view and ends by calling `renderBudgetCard()` → `applyBudgetPrivacy()`, refreshing both surfaces from one call. Independent of `widgetVisibility.budget`, which controls whether the sidebar card exists on a device at all — a device can keep the card enabled and just toggle content visibility with this instead.
+
+**Mobile control (2026-09-24):** the sidebar card's 👁/🙈 button doesn't exist on mobile (sidebar is unconditionally hidden under 640px — §20), so `budgetHidden` had no mobile control at all even though it gates Month's pills and Day's "Bills Due Today" section, both of which mobile can see. `#calBudgetPrivacyBtn` puts the same toggle in the calendar header (beside the 🏠 Lists icon in `.cal-title-zone`, 2026-09-24), shown only when `isMobile && budgetItems.length` — no point surfacing it for a household that hasn't entered any bills. `applyBudgetPrivacy()` sets its icon/title identically to the sidebar button and drives its visibility; the `resize` listener calls `applyBudgetPrivacy()` on every breakpoint crossing (alongside `applyWidgetPlacement()`) so it appears/disappears correctly without a page reload.
+
 **State:**
 ```js
 let budgetItems = []; // live from Firestore onSnapshot
+let budgetHidden = lsGet('fh_budgetHidden', false); // per-device privacy toggle
 ```
 **Key functions:**
 - `budgetDatesInRange(item, startD, endD)` — returns `['YYYY-MM-DD', ...]`
-- `renderBudgetCard()` — context-sensitive; called from `renderCurrentView()`
-- `saveBudgetItems()` / Firestore listener keeps `budgetItems[]` live
+- `budgetEventsForDate(dateKey)` — budget items due on one date; gates on `budgetHidden` (see above)
+- `renderBudgetCard()` — context-sensitive; called from `renderCurrentView()`; ends with `applyBudgetPrivacy()`
+- `applyBudgetPrivacy()` / `toggleBudgetPrivacy()` — the privacy toggle
+- Firestore `onSnapshot` (collection `budget`) keeps `budgetItems[]` live
 
-**HTML anchors:** `#budgetCard`, `#budgetTotalCard`, `#budgetTotalInner`, `#budgetCardLabel`
+**HTML anchors:** `#budgetCard`, `#budgetTotalCard`, `#budgetTotalInner`, `#budgetCardLabel`, `#budgetPrivacyBtn`, `#budgetHiddenNotice`, `#budgetAddBtn`, `#calBudgetPrivacyBtn` (mobile-only privacy toggle, in the calendar header — §20)
 
-**localStorage fallback:** `fh_budgetItems` — auto-migrated to Firestore on first Firebase-enabled run
+**localStorage:** `fh_budgetItems` (fallback only, auto-migrated to Firestore on first Firebase-enabled run) · `fh_budgetHidden` (always local — per-device privacy toggle, never synced)
 
 ---
 
@@ -625,9 +664,13 @@ let assistantName = localStorage.getItem('fh_assistantName') || 'Family Assistan
 - `buildAssistantContext()` — builds the system prompt (calendar 7d, to-dos, shopping, budget, weather location) + the ACTIONS spec
 - `sendAssistantMessage()` — calls Gemini, then `extractAssistantActions()` → `await executeAssistantActions()`
 - `extractAssistantActions(raw)` — pulls `[ACTION:type:value]` tags; multi-arg values use a `|` delimiter
+- `refreshAssistantCalendar()` / `assistantEventsOn(dateStr)` — the Assistant's own calendar window. `calEventCache` only holds the period on screen (`loadAllCalendars()` resets it to one day in Day view, one month in Month view), so the Assistant fetches today + `ASSISTANT_CAL_DAYS` (30) from each Google calendar into `assistantCalCache` (10-minute TTL, reset by every `loadAllCalendars()` so its own adds/edits show up). `assistantEventsOn()` merges that with whatever else `calEventCache` holds for the date (ICS subs already span months; local calendars), minus holidays. `buildAssistantContext()` lists days 1-7 with times, days 8-30 as titles only, and a **Birthdays** section from the hub's `birthdays` list sorted by next occurrence with the age they're turning. Called before both the chat and the daily briefing build their context. `cacheCalEvents(target, calId, items, color, holiday)` (hoisted out of `loadAllCalendars()`) fills either cache
+- `geminiFetch(body)` — every Gemini call goes through it. With `mealAiKey` (`fh_mealAiKey`, per device) set it calls Gemini directly; blank (the normal production case) it posts to `/.netlify/functions/ai`, which holds `GEMINI_KEY`. No feature gates on `mealAiKey` any more. A non-JSON reply from the proxy path (no function: python http.server's 501 or a 404 page) becomes a JSON error telling you to run `netlify dev` or add a key. The function refuses any request whose `Origin` host isn't the `Host` it arrived on (403) and any model other than its `DEFAULT_MODEL` (400), and returns errors as `{ error: { message } }`
 - `executeAssistantActions(actions)` *(async)* — dispatches to per-action `assistant*()` handlers; returns confirmation strings appended to the reply
+- Confirm cards — `editEvent`/`removeEvent` don't run from `executeAssistantActions()`. `describeEventChange()` runs the same checks (signed in, event found and editable, something to change) and either returns the ⚠️ error immediately or queues `{ id, type, parts, question }` in `assistantPendingConfirms`. `renderAssistantMessages()` appends a Yes/No card per pending item (`renderAssistantConfirms()`, `.assistant-confirm`), and `resolveAssistantConfirm(id, yes)` runs `assistantEditEvent`/`assistantRemoveEvent` only on Yes, pushing the result (or "left it as it is") as a model turn. Adds stay instant. Cards are in-memory only, so a reload drops an unanswered one. The system prompt tells Gemini to phrase these as pending, not done
 - `renderAssistantMessages()` — renders chat / empty-state chips; `useQuickPrompt(text)` sends a chip
 - `initAssistantVoice()` — Web Speech mic **input**
+- `toggleGeminiRecording()` / `transcribeAssistantVoice()` / `blobToWav16k()` — Gemini voice fallback. When `SpeechRecognition` fails with `'network'` (Chromium builds without Google's speech keys, e.g. Raspberry Pi OS's), `initAssistantVoice()`'s `onerror` flips `assistantVoiceEngine` to `'gemini'` for that device (`fh_voiceEngine`). From then on `toggleAssistantMic()` records with `MediaRecorder` (tap to start, tap to stop, 20s cap `GEMINI_VOICE_MAX_MS`), re-encodes to 16 kHz mono WAV (on Gemini's documented audio list, unlike the recorder's WebM), asks Gemini via `geminiFetch()` to transcribe, and auto-sends the transcript through `sendAssistantMessage()`.
 - `speakAssistant(text)` / `toggleAssistantTTS()` / `updateAssistantTtsBtn()` — voice **output** (TTS). Reads replies aloud via `speechSynthesis` (strips markdown/emoji), gated by `assistantTTS` (`fh_assistantTTS`, default off), toggled by the header 🔇/🔊 button. Interruptible (cancels on new send / clear).
 
 **Action vocabulary** (`[ACTION:...]`): `addShopping` · `addTodo` · `completeTodo` · `checkShopping` · `addEvent:YYYY-MM-DD|HH:MM|Title|Member` (Google Calendar `primary`; `allday` for no time; `Member` optional) · `editEvent` · `removeEvent` · `setMeal:YYYY-MM-DD|mealType|Name` · `addBudget:Name|Amount|frequency`. Handlers: `assistantAddShopping/AddTodo/CompleteTodo/CheckShopping/AddEvent/EditEvent/RemoveEvent/SetMeal/AddBudget`, plus `fuzzyTextMatch()`.
@@ -635,7 +678,7 @@ let assistantName = localStorage.getItem('fh_assistantName') || 'Family Assistan
 **Member routing:** `assistantAddEvent()` assigns a family member (writes `extendedProperties.private.fhMembers`, which drives `applyMemberColors()`). The `Member` arg is resolved via `resolveFamilyMember()` (strips possessives, longest-name-first partial match); if omitted, `detectMemberInTitle()` still picks up a member named in the title (e.g. "Jake's dentist" → Jake). The system prompt instructs the model to fill `Member` for person-specific events.
 
 **HTML anchors:** `#assistantCard`, `#assistantCardTitle` (renamed by `applyAssistantName`), `#assistantMessages`, `#assistantInput`, `#assistantMicBtn`, `#assistantTtsBtn`, `.assistant-chip`
-**localStorage:** `fh_assistantTTS` (bool — read replies aloud), `fh_assistantName` (string — display name)
+**localStorage:** `fh_assistantTTS` (bool — read replies aloud), `fh_assistantName` (string — display name), `fh_voiceEngine` (`'browser'` | `'gemini'` — per-device mic engine, set automatically)
 
 **Mobile surface (added 2026-09-17):** `#assistantCard` is reparented into `#mobileSheetAssistant` under 640px via `MOBILE_SHEET_SECTIONS.assistant` (§20), with its own Lists-sheet tab (`#mobileListsAssistantTab`, hidden unless `widgetVisibility.assistant`). Its Settings tab (`SETTINGS_GROUPS`, tab `'assistant'`) is reachable on mobile too — no `desktopOnly` — so the Gemini API key can be set from a phone; in production `mealAiKey` blank routes through `/.netlify/functions/ai` anyway, so a phone-specific key isn't required for the chat itself to work. `initAssistantVoice()` needed no changes to become reachable — it already feature-detects `SpeechRecognition`/`webkitSpeechRecognition` and was already called unconditionally from the load listener. Two copy changes made the mic-blocked/mic-priming/network-error messages browser-neutral instead of hardcoding "Chrome" (now reachable from Android Chrome and iOS Safari too): `showMicDeniedHelp()` branches on `isIOSDevice()` (`/iPad|iPhone|iPod/.test(navigator.userAgent)`) for the right permission path, since iOS Safari has no in-page address-bar 🔒 icon. See the CLAUDE.md gotcha "Mobile SpeechRecognition is best-effort" — the deeper iOS behavioral quirks (interim results, no Permissions API) are unverified on a real device.
 
@@ -719,6 +762,8 @@ A handful of triggers aren't tied to any franchise (birthday, politeness, dark-m
 
 **Overview:** Discover local events (concerts, shows, family activities, library programs, sports) within a configurable radius. Calendar-aware (shows free/busy conflicts), weather-aware, and uses intelligent IndexedDB caching with background refresh.
 
+**Availability (added 2026-10-21):** both 💡 buttons (`#eventsDiscoverBtn`, `#mobileEventsBtn`) start `display:none`. On load `probeEventsBackend()` calls `/.netlify/functions/events?status=1`, which answers `{ configured: !!OWM_KEY, sources: { ticketmaster: !!TICKETMASTER_KEY } }` without geocoding; `applyEventsAvailability()` shows 💡 only when that says configured **and** the per-device Settings → Events toggle (`#eventsEnabled`, `fh_eventsEnabled`, default on) is on. No function at all (plain `http.server`, a failed fetch) counts as not configured. Without `TICKETMASTER_KEY` the 🎟️ Live Events tab is hidden and the modal opens on the next tab, since that tab could only ever be empty. `#eventsSetupNote` under the toggle says why 💡 is hidden. This exists so a fork that skips the optional event keys never sees a broken feature.
+
 **UX:** Click 💡 button on calendar header → modal opens with cached events → fresh data fetches in background → modal updates with age label ("Fresh — just now" to "⚠️ Cached — may be outdated").
 
 **Data sources (multi-API aggregation):**
@@ -730,12 +775,16 @@ A handful of triggers aren't tied to any franchise (birthday, politeness, dark-m
 6. **Fairport Festivals** — the village's published festival season (curated table in the function, no API)
 7. **Town of Pittsford** — the town's municipal calendar (concerts, movie nights, festivals), scraped from its Drupal page
 
+**Time limits (added 2026-10-20):** Netlify ends the function at 30s and the sources are awaited together, so the module shadows `fetch` with an 8s `AbortSignal.timeout` (`FETCH_TIMEOUT_MS`), wraps each source in `capped()` → `withTimeout(…, SOURCE_TIMEOUT_MS = 12000)` (a timed-out source returns nothing and shows in `warnings`), caps geocoding at 6s, and gives weather enrichment a 5s budget (`WEATHER_STEP_MS`) after which events ship without weather. `addWeatherContext(event, forecasts)` shares one OWM forecast per ~1° lat/lon cell per request instead of one call per event. On phones the six source tabs are an even 3×2 grid of buttons (icon, name and count each on their own line via `.event-tab-icon`/`.event-tab-count`) instead of a sideways-scrolling row, and 🔄 Refresh moves up beside ✕ (`.events-refresh-top` shown, `.events-refresh-row` hidden). Category sub-tabs (`.event-subtab`, e.g. Around Town's dozen) stay one swipeable row with a right-edge fade; the modal grows to 92svh and drops its bottom Close (✕ is in the title row). Image cards (`.event-card-img`) share the compact card's title / summary / `.event-compact-foot` shape; on phones the image becomes a 72px thumbnail beside the text, its date/distance overlay is hidden and `.event-img-meta` in the footer shows date, time and distance instead (hidden on desktop), and the summary clamps to two lines. Events with no description no longer print "No description available." Desktop keeps the single row. The modal uses `--surface-solid`.
+
 Sources 6 and 7 both emit `source: 'towns'` and share the single "🎪 Town Events" tab; cards are told apart by `location.address` ("Fairport Village" / "Town of Pittsford"). `sourceStatus` keeps a separate entry per source so `sourceStats` still shows which one produced what.
 
 **State:**
 ```js
 let eventLocation       = lsGet('fh_eventLocation', 'Rochester');
 let eventMaxDistance    = lsGet('fh_eventMaxDistance', 120);  // minutes driving time (converted to radius)
+let eventsEnabled       = lsGet('fh_eventsEnabled', true);   // per-device 💡 toggle
+let eventsBackend       = null;       // setup probe result; null until it answers
 let eventsData          = [];         // filtered/sorted for display
 let eventsRawData       = [];         // raw from API + calendar conflicts
 let eventsSort          = 'distance'; // or 'date'
@@ -744,6 +793,7 @@ let eventsModalOpen     = false;
 ```
 
 **Key functions:**
+- `probeEventsBackend()` / `applyEventsAvailability()` — setup probe on load; show/hide 💡 and the Live Events tab
 - `openEventsModal()` — reads cached events from IndexedDB, shows immediately; fetches fresh data in background
 - `fetchAndUpdateEvents()` — calls `/.netlify/functions/events?location=<>&radius=<>`, saves to IndexedDB, re-renders modal (caching is inline here, not a separate function)
 - `addEventToCalendar(event)` — opens event editor modal; reuses `saveCalEvent()` for Google Calendar write
@@ -766,7 +816,7 @@ let eventsModalOpen     = false;
 
 **CSS classes:** `.event-card`, `.event-type-badge`, `.event-weather`, `.event-calendar-indicator`, `.event-age-label`, `.event-distance-pill`
 
-**localStorage:** `fh_eventLocation`, `fh_eventMaxDistance`
+**localStorage:** `fh_eventLocation`, `fh_eventMaxDistance`, `fh_eventsEnabled`
 
 **IndexedDB:** Database `fh_events` (v1)
 - Object store `events` (keyPath: id) with indexes: byDate, byType, byDistance
@@ -843,7 +893,7 @@ let lastWxData    = null;  // set by renderWeatherData(); reused for the temp li
 
 ### 20. Mobile Layout (permanent Calendar + Lists sheet)
 
-**Overview (redesigned 2026-09-16, replacing the old bottom-nav/tab-registry system):** Under 640px there is no bottom nav bar. `.sidebar` is unconditionally hidden and Calendar (`.cal-column`) is the only permanent surface — mirrors "mostly on Day/Agenda, want to glance at the week, want to add fast" over the old always-visible five-tab bar. One floating button remains, `#mobileAddFab` (bottom-right, calls `openEventEditor(null)` — quick-add defaulting to today); the Lists sheet opens from the 🏠 app icon in the calendar header instead of its own FAB (moved 2026-09-17 — a dedicated `#mobileListsBtn` FAB existed briefly first). The 💡 Find Events trigger and the ⚙️ Settings gear are hidden from the calendar header/sidebar chrome on mobile and live in the sheet's footer instead.
+**Overview (redesigned 2026-09-16, replacing the old bottom-nav/tab-registry system):** Under 640px there is no bottom nav bar. `.sidebar` is unconditionally hidden and Calendar (`.cal-column`) is the only permanent surface — mirrors "mostly on Day/Agenda, want to glance at the week, want to add fast" over the old always-visible five-tab bar. One floating button remains, `#mobileAddFab` (bottom-right, calls `openNewEventFromFab()`: quick-add defaulting to the day on screen in Day view, today in Month/Agenda; hidden while the editor is open via `body.evt-editor-open`, set/cleared by `openEventEditor()`/`closeEventEditor()`, (the FAB has sat below the modal layer since 2026-10-18, `z-index: 90` under `.modal-overlay`'s 100, so this is now belt-and-braces; it was 150 before, which put it over the Settings modal's Save button)); the Lists sheet opens from the 🏠 app icon in the calendar header instead of its own FAB (moved 2026-09-17 — a dedicated `#mobileListsBtn` FAB existed briefly first). The 💡 Find Events trigger is hidden from the calendar header on mobile and lives in the sheet's footer instead. The ⚙️ Settings gear (also hidden from the sidebar chrome, which is gone on mobile) is not in the sheet — it's `#calSettingsBtn`, its own header nav item pinned to the top-right corner of row 1 (added 2026-09-24, moved out of the sheet footer so Settings doesn't require opening the Lists drawer first).
 
 **The app icon as the Lists trigger:** `.cal-app-emoji` is a real `<button onclick="openMobileLists()">` (`applyAppTitle()` in family-hub.js rebuilds it on every title/icon change, so both the static HTML and that template stay in sync). `openMobileLists()` no-ops when `!isMobile`, since `.mobile-sheet`'s CSS only exists under the 640px query — so the button is harmless if triggered on desktop. Desktop keeps the old borderless look (button chrome reset to `border:none;background:none;padding:0`); the 640px query re-adds a visible `border`/`background`/`border-radius` so it reads as an actual button rather than a decorative emoji. The icon already carried a 7-tap fireworks Easter egg (`setupEmojiFireworks()`, unconditional `addEventListener`, unrelated to the inline `onclick`) — both handlers fire on every click, harmlessly.
 
@@ -852,36 +902,54 @@ let lastWxData    = null;  // set by renderWeatherData(); reused for the temp li
 const MOBILE_SHEET_SECTIONS = { shopping: 'mobileSheetShop', todo: 'mobileSheetTodo', homeassistant: 'mobileSheetHome', assistant: 'mobileSheetAssistant' };
 // widget key → id of the section wrapper (in the sheet markup) it's reparented into
 ```
-`applyWidgetPlacement()` reparents the real card (`#shopCard`/`#todoCard`/`#haCard`/`#assistantCard`) into its section wrapper when `isMobile`, instead of `sidebar`/`bottomStrip` — no duplicated markup, so every existing render function (`addShop()`, `renderShopList()`, `sendAssistantMessage()`, etc.) keeps working unmodified regardless of which container holds the card. `setMobileListsSection(section)` toggles `.active` on the matching tab button and section wrapper; not persisted — the sheet always opens on Shopping (`mobileListsSection` starts `'shop'`). Home Assistant's tab (`#mobileListsHomeTab`) and Assistant's tab (`#mobileListsAssistantTab`) are each hidden unless their widget is on (`widgetVisibility.homeassistant` / `widgetVisibility.assistant`), same as their old nav-button gating; `applyWidgetVisibility()` also bounces the sheet to Shopping if the open section's widget gets disabled out from under it (added 2026-09-17 for Assistant, alongside the pre-existing Home Assistant case).
+`applyWidgetPlacement()` reparents the real card (`#shopCard`/`#todoCard`/`#haCard`/`#assistantCard`) into its section wrapper when `isMobile`, instead of `sidebar`/`bottomStrip` — no duplicated markup, so every existing render function (`addShop()`, `renderShopList()`, `sendAssistantMessage()`, etc.) keeps working unmodified regardless of which container holds the card. The sheet has a solid `--surface-solid` background (the translucent `--surface` let the Month grid show through). Its grab handle (`#mobileSheetHandle`, wired by `setupMobileSheetDrag()`) closes the sheet on a drag down past 80px and adds `.expanded` (92svh) on a drag up or a tap; `closeMobileLists()` clears `.expanded`. 💡 Find Events is an icon-only `.mobile-sheet-action` at the end of the tab row; the footer holds only Done. `setMobileListsSection(section)` toggles `.active` on the matching tab button and section wrapper; not persisted — the sheet always opens on Shopping (`mobileListsSection` starts `'shop'`). Home Assistant's tab (`#mobileListsHomeTab`) and Assistant's tab (`#mobileListsAssistantTab`) are each hidden unless their widget is on (`widgetVisibility.homeassistant` / `widgetVisibility.assistant`), same as their old nav-button gating; `applyWidgetVisibility()` also bounces the sheet to Shopping if the open section's widget gets disabled out from under it (added 2026-09-17 for Assistant, alongside the pre-existing Home Assistant case).
 
-Secondary widgets (Budget, Chores, Word, Joke, Quotes, Countdown, News, Stock, Year-at-a-Glance) still have no mobile surface — unchanged from before this redesign; they're reachable only via Full Settings' configuration panels, not for day-to-day use on a phone. Assistant moved out of that group (2026-09-17) since voice input is meaningfully phone-first; its Settings tab followed (see §15) so the API key can be set from a phone too.
+Secondary widgets (Chores, Word, Joke, Quotes, Countdown, News, Stock, Year-at-a-Glance) still have no mobile surface — unchanged from before this redesign; they're reachable only via Full Settings' configuration panels, not for day-to-day use on a phone. Assistant moved out of that group (2026-09-17) since voice input is meaningfully phone-first; its Settings tab followed (see §15) so the API key can be set from a phone too. Budget has no sheet section or Settings tab either, but it's no longer fully unreachable: `#calBudgetPrivacyBtn` in the calendar header exposes just its privacy toggle (see §12 "Mobile control") since the bill pills it gates render right there on Month/Day.
+
+**Sheet cards lose their own title:** `.mobile-sheet-body .card-header h2 { display: none }` hides each reparented card's `<h2>` inside the sheet, since the active tab (`🛒 Shopping`, `✅ To-Do`, …) already names the list — showing it twice was the biggest single contributor to the sheet reading as "busy" (tabs row, then a repeated title row, then the list's own input row, then the sheet's footer). The header row's action buttons (SMS ▾, refresh, clear-done/-all) stay and get `justify-content: flex-end` in this context now that they're the row's only child. A future sheet section's card needs the same shape — title in the `h2`, actions in a sibling wrapper — to pick this up automatically. Two more header-row things follow suit (2026-09-24), cut for the same "busy" reason but each still functional, not removed: the `.widget-drag-handle` (⠿) has no meaning once a card's sheet position is fixed by `MOBILE_SHEET_SECTIONS`, so it's hidden entirely (see §6); Shopping's `#smsTriggerBtn` just goes icon-only, since `sendToContact()`'s `sms:` handoff to the phone's own Messages app still works fine without a text label (see §7).
 
 **Key functions:**
 - `openMobileLists()` / `closeMobileLists()` — show/hide `#mobileListsOverlay` (inline `style.display`, not a CSS class)
 - `setMobileListsSection(section)` — switches which of Shopping/To-Do/Home/Assistant is showing inside the sheet
-- `updateIsMobile()` + resize handler — `isMobile` (<640px); breakpoint crossings re-run `applyWidgetPlacement()` (moves cards between sidebar/bottomStrip/sheet) and `resetSaverIdleTimer()`
+- `updateIsMobile()` + resize handler — `isMobile` (<640px); breakpoint crossings re-run `applyWidgetPlacement()` (moves cards between sidebar/bottomStrip/sheet), `applyBudgetPrivacy()` (shows/hides `#calBudgetPrivacyBtn` — §12), and `resetSaverIdleTimer()`
 
-**View toggle:** Week is hidden under 640px (`#viewTab_week`) — Month/Day/Agenda stay. The prev/next period arrows (`.cal-month-nav button`) are also hidden — both redundant with `setupCalSwipe()`, which already pages the period on a swipe regardless of which view is active (the swipe follows the finger and lands with a slide — see §Swipe / period slide). One exception: in Week view on a narrow screen the week grid scrolls sideways and keeps the gesture, so swiping there scrolls rather than pages — Week is desktop-only on mobile anyway. First-ever load (`fh_calView` unset) defaults to `'agenda'` on mobile, `'week'` on desktop; a saved value always wins either way. Day/Agenda rows are also tightened for mobile (`.day-hour-row` min-height, `.agenda-event`/`.agenda-day-header` padding) — the desktop values were sized for a wall panel, not a phone. `.cal-view-tab` pills carry their own `var(--surface)` background + `1px solid var(--line)` border + `var(--text)` label color when unselected — chosen over a shared dark track so an unselected segment doesn't blend into the (now edge-to-edge) page background in either theme; the `@media (hover:none)` touch-hover-reset rule was updated to match (resets `border-color`, not the no-longer-used muted text color).
+**View toggle:** the tab row is replaced under 640px by `#calViewSelect` (Month/Day/Agenda/Week). The prev/next period arrows (`.cal-month-nav button`) are also hidden — both redundant with `setupCalSwipe()`, which already pages the period on a swipe regardless of which view is active (the swipe follows the finger and lands with a slide — see §Swipe / period slide). Week on a phone stacks its days as full-width rows (the mobile block flips `.week-grid` to a vertical flex list and `.week-day-col` to a flex column, dropping the subgrid row placement), so it has no sideways scroll and a swipe pages it like every other view. The list scrolls vertically; `weekListScroll` keeps its position across re-renders of the same week and a trip to another view and back, follows today until the user scrolls (rows above today grow as calendar data arrives), and opens a different week on today if it's in it, otherwise Sunday (2026-10-22). First-ever load (`fh_calView` unset) defaults to `'agenda'` on mobile, `'week'` on desktop; a saved value always wins either way. Day/Agenda rows are also tightened for mobile (`.day-hour-row` min-height, `.agenda-event`/`.agenda-day-header` padding) — the desktop values were sized for a wall panel, not a phone. `.cal-view-tab` pills carry their own `var(--surface)` background + `1px solid var(--line)` border + `var(--text)` label color when unselected — chosen over a shared dark track so an unselected segment doesn't blend into the (now edge-to-edge) page background in either theme; the `@media (hover:none)` touch-hover-reset rule was updated to match (resets `border-color`, not the no-longer-used muted text color).
 
-**Compact date headers:** Day shows `"Wed 9/16"` (`shortWeekdayNumericDate()`), Agenda shows `"9/16 – 10/15"` (`_numericMDFmt`, en dash) — both via small `Intl.DateTimeFormat` instances near the top of the Day View section in family-hub.js, replacing verbose `{weekday:'long', month:'long', ...}` labels that used to truncate under the view toggle. Month keeps its own `"September 2026"` format, unrelated to this pair.
+**Compact date headers:** Day shows `"Wed 9/16"` (`shortWeekdayNumericDate()`), Agenda shows `"9/16 – 10/15"` (`_numericMDFmt`, en dash) — both via small `Intl.DateTimeFormat` instances near the top of the Day View section in family-hub.js, replacing verbose `{weekday:'long', month:'long', ...}` labels that used to truncate under the view toggle. Month uses its own format, unrelated to this pair: `"September 2026"` on desktop, short `"Sep 2026"` under `isMobile` (`renderMonthGrid()`, 2026-10-20), since the one-row header fits about eight characters once Refocus and the budget toggle show. The label needs `min-width: 0` inside the later mobile block to shrink at all: an unguarded 140px `min-width` further down the file beat it on source order, and the label spilled left over Refocus.
+
+**Refocus on mobile:** `#backToTodayBtn` keeps its "Refocus" text in the DOM (and `aria-label="Back to today"`) but renders as a 32px round ↺ icon under the mobile query (`font-size: 0` plus a `::before` glyph). The word alone took a third of the header width on a phone.
+
+**Day view all-day ＋ hidden on mobile:** `.day-allday-row .day-add-btn` is `display: none` under the mobile query (2026-10-21). The 44px phone time-label column can't fit "All day ＋", so the ＋ overflowed onto "No all-day events". `#mobileAddFab` already opens the editor on the viewed day, with its own All-day toggle.
 
 **Edge-to-edge:** the 640px query zeroes `body` padding down to safe-area insets only (notch/home indicator stay — that's hardware, not decoration) and strips `.cal-card`'s border/radius/shadow with `!important` — needed because the nautical/aurora/tactile theme overrides target `.card.cal-card` with more classes in the selector, which otherwise outranks a plain `.cal-card` rule regardless of source order.
 
-**Mobile type scale:** the `--text-xs/sm/base/md/lg` custom properties are overridden larger under the 640px query (e.g. `--text-xs` 0.70rem → 0.80rem) — one bump that reaches everything already using the tokens, instead of chasing individual font-size rules. `#settingsModal` gets its own larger bump on top (`.settings-panel` and its children forced to `1rem`/`line-height: var(--leading-normal)`, `!important` since most panel copy is inline-styled and nothing else beats that): `.settings-section-head` 1.05rem, `.settings-nav-item` 1.05rem, `.settings-nav-label` 0.8rem, the "⚙️ Settings" dialog title 1.4rem.
+**Mobile type scale:** the `--text-xs/sm/base/md/lg` custom properties are overridden larger under the 640px query (e.g. `--text-xs` 0.70rem → 0.80rem) — one bump that reaches everything already using the tokens, instead of chasing individual font-size rules. `#settingsModal` gets its own larger bump on top (`.settings-panel` and its children forced to `1rem`/`line-height: var(--leading-normal)`, `!important` since most panel copy is inline-styled and nothing else beats that): `.settings-section-head`/`.lc-section-title` 1.05rem, helper copy (`.settings-hint`, `.toggle-sub`, `.settings-intro`) .9rem so labels and controls lead, `.settings-nav-item` 1.05rem, `.settings-nav-label` 0.8rem, the "⚙️ Settings" dialog title 1.4rem.
 
 **Preferences filtering:** `SETTINGS_GROUPS` items (family-hub.js) can carry `desktopOnly: true` — `renderSettingsNav()` drops those under `isMobile` (and drops a group entirely if every item in it was dropped) so Preferences only lists things that do something from a phone. Marked `desktopOnly`: Images/screensaver (never runs under 640px), Mowing (purely an Assistant-feature config, and Mowing itself has no mobile surface), Widget Layout (placement is a desktop-only concept), Weather (dropped as a mobile destination — §above), Feeds and Chores (News/Stock/Chore Chart are sidebar-only widgets). Kept: Look & Feel, Family, Calendar, Events, Shopping, Home Assistant, Assistant (2026-09-17 — its card is now in the Lists sheet, so its API key needs to be settable from a phone), Meals (its output shows up in Day view's meal slots, which mobile can reach).
 
+**Within a panel (mobile pass, 2026-10-18):** a block that only means something on a wall display goes in a `.settings-desktop-only` wrapper, hidden under the mobile query (today: Look & Feel's Layout & display, i.e. orientation, TV mode, on-screen keyboard). Shared panel pieces: `.settings-hint` (helper text under a field), `.settings-intro` (the emoji callout that opens Assistant/Events), `.choice-group` (radios or checkboxes drawn as pills, checked state via `:has(input:checked)`; used by Assistant idle state, Events distance, Meals diet). `.field input` is width 100% for text boxes, so radios/checkboxes inside a `.field` are reset to `width: auto` (a full-width radio shoved its label across the row on iOS). On mobile, `.lc-add-row` forms put the first text box on its own line when more controls follow, so date/time/select inputs stop truncating; a lone box plus its Add button stays on one line.
+
 **Event editor on mobile:** `#eventEditorModal .modal` used a hardcoded `max-height: 90vh`, which is iOS Safari's *large* viewport (assumes the address bar is collapsed) — with the bar visible, the modal's own footer (Save/Delete) rendered below the fold with no way to scroll to it. The 640px override switches it to `90svh` (the guaranteed-visible small viewport) and adds safe-area-aware bottom padding; needs no `!important` since it matches the original rule's ID+class specificity and simply comes later in the file.
+
+Two more mobile-only fixes in that same override block (2026-09-24): `#eventEditorModal` (the overlay) drops to `overflow-y: hidden` on mobile: the overlay scrolls per the base `.modal-overlay` rule, and `.modal` already scrolls internally via its own `max-height`/`overflow-y: auto`, so the two nested scroll containers meant a drag near the top/bottom of the modal's content could hand the gesture to the overlay instead, moving the whole card around the viewport rather than scrolling what's inside it. Separately, the paired date/time rows (`.evt-editor-time-row`) briefly switched to `flex-direction: column` (one field per line) to dodge iOS Safari's date/time picker not always respecting the CSS box it's given (the picker has its own minimum render width, and content bled into the neighboring field instead of wrapping); that was reverted the same day in favor of trimming width back from every layer around the pair instead (`#eventEditorModal` overlay padding 10px→6px, `.modal` side padding 12px→8px, `.evt-editor-time-row` gap 6px→4px, its input padding 6px→4px, and the field's `flex-basis`/`min-width` 150px→130px), since stacking fixed the overlap but cost too much vertical space. Narrowest-tested at 320px (iPhone SE) with ~144px per field and a 4px gap; if a real device still overlaps at that width, stacking is the fallback that guarantees no overlap.
+
+**Start/End time pickers (2026-09-25):** `#evtEdStart`/`#evtEdEnd` are `<select class="evt-editor-select">`s of 96 fifteen-minute options, not `<input type=time>`: iOS and Android's native time pickers ignore `step`, so the minute wheel always offered all 60 minutes. Options are built lazily by `fillEvtEdTimeOptions()`; always set them through `setEvtEdTime(id, 'HH:MM')`, which inserts an in-order off-grid option (an existing 9:10 event, `autoAdvanceEvtEnd()`'s 23:59 clamp) instead of letting the select go blank, and removes the previous one. Values stay `HH:MM`, so `saveCalEvent()` reads `.value` unchanged. The Start date field is still a native date input.
+
+**Event editor borders (2026-09-25):** every control in `#eventEditorModal` uses one 1.5px border: text fields, selects, the This/All scope toggle, footer `.btn`s and the ✕ close button take `color-mix(in srgb, var(--accent) 30%, var(--line))`; calendar and member chips tint from their own color at the same width, and a selected chip goes full-strength (a selected member chip's `borderColor` is set inline with its fill, since its text is white). The scope toggle's old `rgba(255,255,255,.18)` border was invisible in light mode. `#eventEditorModal input[type=date]` drops native appearance because iOS sizes a native date input to its own intrinsic width and ignores `width:100%`, which pushed Start date past the card's right edge (fix unverified on a real iPhone).
 
 **Settings modal width/overflow:** `#settingsModal .modal`'s `max-width` is `min(calc(100vw - 2rem), 860px)` (was `min(92vw, 860px)` — a fixed margin rather than a percentage one, per an explicit request). The horizontal overflow itself (long calendar names, the ICS URL row) was never a `box-sizing` problem — the universal `* { box-sizing: border-box }` reset already covers that — it was flex items defaulting to `min-width: auto` instead of `0` at two levels: `.settings-content` (so the whole content pane refused to shrink below its widest descendant) and `.lc-item-label` (so a long name pushed `.lc-item` — and the delete button beside it — wider than the modal). Both now get `min-width: 0`; `.lc-item-label` also gets `overflow:hidden;text-overflow:ellipsis;white-space:nowrap` so a long name truncates instead of overflowing. `#settingCalList`'s own rows (`.cal-row`/`.cal-label-input`) were already correctly built (`.cal-label-input` already had `flex:1;min-width:0`) — they just inherited the overflow from the un-shrinkable `.settings-content` ancestor above them.
 
 **Day/Agenda typography tokens:** `--fs-title`/`--fs-item`/`--fs-meta` (family-hub.css `:root`) alias into the existing `--text-md/base/sm` ladder — a semantic layer for Day/Agenda markup, not a second competing scale. `renderDayGrid()`'s previously-inline styles (section headers, the budget Total row, to-do rows, the "+" add-a-day-event trigger, the "No all-day events" placeholder) now carry classes (`.day-section-header`, `.budget-day-total`, `.day-todo-row`/`.day-todo-text`/`.day-todo-assignee`, `.day-add-btn`, `.day-allday-empty`) built on those tokens instead of ad hoc `font-size` values. Currency (`.budget-day-amt`, `.budget-day-total-amt`) and clock-time text (`.day-time-label`, `.day-hour-label`, `.evt-time`, `.agenda-time`) get `font-variant-numeric: tabular-nums`. This pass covers Day + Agenda; the rest of the app (Budget/Countdown sidebar cards, Week view, etc.) still has its own ad hoc sizes and is a follow-up, not done here.
 
-**Agenda event fills:** the agenda renderer sets `--event-color` inline on each `.agenda-event` from `ev.color` (dynamic per event/calendar, can't be a class); the class declares `--event-color: var(--muted)` as its own fallback for events with no color. That one property drives both `border-left: 3px solid var(--event-color)` and `background: color-mix(in srgb, var(--event-color) 18%, var(--surface-solid))`, so an event reads the same color in Agenda as it does in Month and Day. Mixing against the theme's own `--surface-solid` (defined in every theme block) keeps text contrast in range without per-theme swatches — measured 7.6:1–15.8:1 over the 11 Google Calendar colors in dark/light/nautical/aurora/colorblind. The `.agenda-dot` element is gone. `.agenda-event` uses `margin-bottom` (not a parent `gap`) so adjacent fills stay visually separated, and hover/active use `filter: brightness()` instead of swapping `background`, so the tint stays visible. Superseded `agendaPastelClass()` and `--agenda-pastel-1..6`, a 6-swatch palette hashed from the event title — removed, along with its per-theme token blocks.
+**Agenda event fills:** the agenda renderer sets `--event-color` inline on each `.agenda-event` from `ev.color` (dynamic per event/calendar, can't be a class); the class declares `--event-color: var(--muted)` as its own fallback for events with no color. Since 2026-09-25 the row is a solid fill of that color with white text (`.agenda-time`/`.agenda-title` inherit it, time dimmed with `opacity: .85`), the same treatment as Month's `.cal-event` and Day's `.day-event-pill`, so the three mobile views share one look. It replaced a 32% `color-mix()` tint over `--surface-solid` with theme-colored text, which read as a different style from the other two views. Trade-off: white text on the lighter Google colors (Banana, Citron) has the same weak contrast Month and Day pills already had. `.agenda-event` uses `margin-bottom` (not a parent `gap`) so adjacent fills stay visually separated, and hover/active use `filter: brightness()` instead of swapping `background`. The older `agendaPastelClass()` / `--agenda-pastel-1..6` title-hash palette is gone; don't reintroduce a fill that ignores `ev.color`.
+
+**Month cell tap on mobile:** `onMonthDayTap(dateKey)` (family-hub.js, above `makeDayCell()`) opens that date in Day view when `isMobile`, since a phone-width cell can't show the day's events (pills collapse to a dot under 400px). Desktop keeps tap-to-create (`openEventEditor(null, dateKey)`). On mobile every cell is tappable, other-month and signed-out included; event pills still open their own event.
+
+**Month pill labels on mobile:** a phone-width cell fits about five characters, which for most titles was just a member's name. Member initials replaced that for a while and read as noise ("M J"), so under `isMobile`, `makeDayCell()` now takes the members out of the title instead: `eventMemberNames(ev)` (its `ev.members`, else every member named as a whole word in the title, via `memberNameRe()`), then `stripMemberNames(summary, names)` removes those names, any joiner that only sat between them (",", "&", "+", "and"), a trailing "with/for <name>", and dashes or colons left at either end ("Jack & Matt - Hockey" → "Hockey"; an "and" elsewhere stays; nothing left → full title). `applyMemberStripes(pill, names)` shows who as one 2px inset box-shadow stripe per member in their family color down the pill's left edge, and drops the separate member badges. Mobile pills wrap to two lines (`-webkit-line-clamp: 2`, hyphenated where the browser supports it) instead of clipping, and are no longer hidden under 400px. Golden test: `tests/member-names.test.js`. Events with no member, and holidays, keep their title. Bill pills drop the 💰 so the item's name comes first, and both pill types clip instead of ending in "..." (`text-overflow: clip`, in a 640px query placed after the base rules so it wins on source order). The `resize` listener re-renders Month when crossing the breakpoint, since the labels differ on each side.
 
 **Tactile/theming:** sheet/FAB chrome derives from tokens (`--line`, `--surface-solid/-hi`, `--accent`); Tactile mobile rules (`body.flavor-tactile .mobile-sheet`) use neutral tokens only (KTD-4-safe). Touch tap-target sizing lives inside `@media (hover: none)` per the CLAUDE.md invariant.
 
-**HTML anchors:** `.mobile-fab` / `#mobileAddFab`, `.cal-app-emoji` (Lists trigger), `#mobileListsOverlay` / `.mobile-sheet` / `#mobileListsTabs` / `#mobileListsBody` (containing `#mobileSheetShop` / `#mobileSheetTodo` / `#mobileSheetHome` / `#mobileSheetAssistant`) / `.mobile-sheet-footer`
+**HTML anchors:** `.mobile-fab` / `#mobileAddFab`, `.cal-app-emoji` (Lists trigger), `#mobileListsOverlay` / `.mobile-sheet` / `#mobileListsTabs` / `#mobileListsBody` (containing `#mobileSheetShop` / `#mobileSheetTodo` / `#mobileSheetHome` / `#mobileSheetAssistant`) / `.mobile-sheet-footer`, `#calBudgetPrivacyBtn` (calendar header — §12), `#calSettingsBtn` / `.cal-header-settings-btn` (calendar header, top-right of row 1)
 
 **localStorage:** none specific to the mobile shell — `mobileListsSection` is in-memory only, always resets to Shopping. `fh_calView` is shared with desktop (see View toggle above).
 
@@ -951,29 +1019,32 @@ const HA_TOGGLE_DOMAINS = ['light', 'switch', 'fan', 'input_boolean'];
 | `fh_haToken` | string | Home Assistant | Long-lived access token. **Per-device, never synced** — see FEATURES §21 |
 | `fh_widget_placement` | JSON object | Widgets | `{ shopping: 'sidebar'\|'bottom', … }` |
 | `fh_mealPlan` | JSON object | Meals | `{ dateKey: { breakfast, lunch, dinner } }` |
-| `fh_mealAiKey` | string | Meals | API key (Gemini or OpenAI) |
+| `fh_mealAiKey` | string | Meals | Optional per-device Gemini key override. Blank (the normal production case) routes through `/.netlify/functions/ai` and the server's `GEMINI_KEY` |
 | `fh_mealAiProvider` | string | Meals | `'gemini'` \| `'openai'` |
 | `fh_mealDietPrefs` | JSON array | Meals | Fallback only — synced via Firestore `settings/mealDietPrefs` doc otherwise. e.g. `['Vegetarian', 'Gluten-Free']` |
 | `fh_mealPantry` | string | Meals | Default pantry text |
 | `fh_mealLoadingMsgs` | JSON array | Meals | Custom loading messages |
 | `fh_mealTemplates` | JSON array | Meals | Fallback only — migrated to Firestore `mealTemplates` collection on first Firebase-enabled run |
 | `fh_budgetItems` | JSON array | Budget | Fallback only — migrated to Firestore on first Firebase-enabled run |
+| `fh_budgetHidden` | boolean | Budget | Always local — per-device privacy toggle (hides $ content in the sidebar card and all calendar views), never synced |
 | `fh_familyMembers` | JSON array | To-Do | `[{ name }]` — used to populate assignee dropdown |
 | `fh_icsSubs` | JSON array | ICS Subscriptions | Fallback only — migrated to Firestore `icsSubs` collection (deduped by URL) on first Firebase-enabled run |
 | `fh_icsCache` | JSON object | ICS Subscriptions | Always local — fetched-event cache, not shared state |
 | `fh_birthdays` | JSON array | Life Admin | Fallback only — migrated to Firestore `birthdays` collection |
-| `fh_medications` | JSON array | Life Admin | Fallback only — migrated to Firestore `medications` collection |
+| `fh_recurring` | JSON array | Recurring | Fallback only — migrated to Firestore `recurringItems` collection. Legacy `fh_medications`/`fh_trash` are folded into it on load (`lcLoadRecurring()`) |
 | `fh_school` | JSON array | Life Admin | Fallback only — migrated to Firestore `schoolPeriods` collection |
-| `fh_trash` | JSON array | Life Admin | Fallback only — migrated to Firestore `trashPickups` collection |
+| `fh_schoolDayCycle` | JSON object | School Day Cycle | `{ startDate, endDate, cycleLength }` — fallback only, synced via Firestore `settings/schoolDayCycle` doc otherwise (defaults come from `SCHOOL_CYCLE_DEFAULTS`) |
+| `fh_schoolHolidays` | JSON array | School Day Cycle | Fallback only — migrated to Firestore `schoolHolidays` collection — `[{date, label}]`, weekdays skipped when computing Day N |
+| `fh_schoolDaySubjects` | JSON array | School Day Cycle | Fallback only — migrated to Firestore `schoolDaySubjects` collection — `[{subject, dayNumbers, members}]`, per-kid subject assignments keyed to the cycle's Day N |
 | `fh_countdowns` | JSON array | Countdowns | Fallback only — migrated to Firestore `countdowns` collection |
 | `fh_newsFeeds` | JSON array | News Feed | Fallback only — migrated to Firestore `newsFeeds` collection (deduped by URL) |
 | `fh_stockTickers` | JSON array | Stock Ticker | Fallback only — synced via Firestore `settings/stockTickers` doc otherwise |
-| `fh_shopCategories` | JSON array | Shopping | Fallback only — synced via Firestore `settings/shopCategories` doc otherwise |
 | `fh_mowConfig` | JSON object | Mow Advisor | Fallback only — synced via Firestore `settings/mowConfig` doc otherwise (only user-set override keys, defaults come from `MOW_CONFIG`) |
 | `fh_wotd` | JSON object | Word of Day | `{ date, word, phonetic, partOfSpeech, definition, example }` |
 | `fh_dadjoke` | JSON object | Dad Joke | `{ date, joke }` |
 | `fh_assistantName` | string | Assistant | Display name (default `'Family Assistant'`) |
 | `fh_assistantTTS` | bool | Assistant | Read replies aloud via TTS (default off) |
+| `fh_voiceEngine` | string | Assistant | `'browser'` (default) or `'gemini'`; flips to `'gemini'` on a `SpeechRecognition` `'network'` error and stays there on that device |
 | `fh_tvMode` | bool | TV Mode | TV / Display Mode on/off (default false) |
 | `fh_osk` | bool | On-screen keyboard | Touch keyboard for keyboardless wall displays (default false; ignored on phones) |
 | `fh_motionOff` | JSON array | Motion switches | `MOTION_ANIMS` keys switched off on this device (default `[]`, all animations on); never synced |
@@ -992,6 +1063,7 @@ const HA_TOGGLE_DOMAINS = ['light', 'switch', 'fan', 'input_boolean'];
 | `fh_saverPondTap` | string | Screensaver | Pond tap behavior: `'play'` (default) or `'wake'` |
 | `fh_eventLocation` | string | Event Discovery | Default search location (default `'Rochester'`) |
 | `fh_eventMaxDistance` | number | Event Discovery | Max distance in minutes driving time (default 120) |
+| `fh_eventsEnabled` | boolean | Event Discovery | Show the 💡 button on this device (default `true`); hidden regardless when the function reports no `OWM_KEY` |
 
 **Firestore collections:**
 
@@ -1005,12 +1077,13 @@ const HA_TOGGLE_DOMAINS = ['light', 'switch', 'fan', 'input_boolean'];
 | `chores` | `createdAt` | Chore Chart |
 | `icsSubs` | `createdAt` | ICS calendar subscriptions |
 | `birthdays` | `createdAt` | Life Admin card |
-| `medications` | `createdAt` | Life Admin card |
+| `recurringItems` | `createdAt` | 🔁 Recurring (Calendar settings). `runFirestoreMigrations()` moves any legacy `medications`/`trashPickups` docs here (ids `med_<old>`/`trash_<old>`) and deletes the originals |
 | `schoolPeriods` | `createdAt` | Life Admin card |
-| `trashPickups` | `createdAt` | Life Admin card |
+| `schoolHolidays` | `date` | School Day Cycle non-school-day list |
+| `schoolDaySubjects` | `createdAt` | School Day Cycle per-kid subject assignments |
 | `countdowns` | `createdAt` | Countdown timers |
 | `mealTemplates` | `createdAt` (display date string) | Meal Plan Templates |
 | `newsFeeds` | `createdAt` | News Feed widget |
-| `settings` | — (fixed doc id per key: `shopCategories`, `stockTickers`, `weatherLocations`, `mealDietPrefs`, `mowConfig`) | Single-value config synced whole via `saveFsSetting(fsKey, lsKey, value)` |
+| `settings` | — (fixed doc id per key: `stockTickers`, `weatherLocations`, `mealDietPrefs`, `mowConfig`) | Single-value config synced whole via `saveFsSetting(fsKey, lsKey, value)` |
 
 **IndexedDB:** `fh_bgImages` (object store `images`) — stores downloaded photo blobs for background slideshow

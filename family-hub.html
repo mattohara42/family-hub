@@ -17,9 +17,9 @@
   <!-- Link previews (iMessage, Slack, etc.). These URLs must be absolute: the
        Open Graph spec requires it, and scrapers fetch the page out of context,
        so a relative path has nothing to resolve against. The origin below is
-       this project's deploy (also set as the repo's homepage) — change it if
-       you serve Family Hub somewhere else, or previews will point at a site
-       that isn't yours. Nothing at runtime reads these; they are for scrapers
+       this project's deploy (also set as the repo's homepage). On Netlify,
+       netlify-build.js swaps it for the site's own URL, so a fork's previews
+       point at the fork. Nothing at runtime reads these; they are for scrapers
        only, so localhost and LAN serving are unaffected. -->
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Family Hub" />
@@ -103,8 +103,9 @@
 
 <div id="configBanner">
   ⚠️ <strong>First-time setup required.</strong>
-  Open <code>family-hub.js</code> in a text editor and fill in your
-  <code>FIREBASE_CONFIG</code> and <code>GOOGLE_CLIENT_ID</code> near the top.
+  Set the <code>GOOGLE_CLIENT_ID</code> and <code>FIREBASE_CONFIG</code>
+  environment variables on Netlify and redeploy (or, for local dev, fill them
+  in in <code>config.js</code>).
   See <code>family-hub-setup.md</code> for step-by-step instructions.
 </div>
 
@@ -117,8 +118,9 @@
       <div class="card-header cal-card-header">
         <!-- Left: app title + Refocus -->
         <div class="cal-title-zone">
-          <div class="cal-app-title"><button type="button" class="cal-app-emoji" onclick="openMobileLists()" aria-label="Open lists and settings" title="Lists">🏠</button><span class="cal-app-title-text">Family <span>Hub</span></span></div>
-          <button id="backToTodayBtn" onclick="goToToday()" style="display:none">Refocus</button>
+          <div class="cal-app-title"><button type="button" class="cal-app-emoji" onclick="openMobileLists()" aria-label="Open lists" title="Lists">🏠</button><span class="cal-app-title-text">Family <span>Hub</span></span></div>
+          <button id="calBudgetPrivacyBtn" class="cal-event-discover-btn" onclick="toggleBudgetPrivacy()" style="display:none" title="Hide bill amounts (privacy)" aria-label="Hide bill amounts">👁</button>
+          <button id="backToTodayBtn" onclick="goToToday()" style="display:none" title="Back to today" aria-label="Back to today">Refocus</button>
         </div>
         <!-- Centre: period navigator -->
         <div class="cal-month-nav">
@@ -127,9 +129,21 @@
           <span id="calendarStatus"></span>
           <button onclick="changeCalPeriod(1)" aria-label="Next period">&#8250;</button>
         </div>
+        <!-- Top-right: Settings — its own nav item, mobile-only (desktop keeps
+             the sidebar control card's ⚙️); hidden by default so it drops out
+             of the 3-column desktop grid below (see .cal-header-settings-btn) -->
+        <!-- Mobile-only view switcher, so the header fits one row. Hidden by
+             default like ⚙️ below. -->
+        <select id="calViewSelect" class="cal-view-select" onchange="switchCalView(this.value)" aria-label="Calendar view">
+          <option value="month">Month</option>
+          <option value="day">Day</option>
+          <option value="agenda">Agenda</option>
+          <option value="week">Week</option>
+        </select>
+        <button id="calSettingsBtn" class="cal-header-settings-btn" onclick="openSettings()" title="Preferences" aria-label="Preferences">⚙️</button>
         <!-- Right: event discovery + view tabs -->
-        <div style="display:flex;align-items:center;gap:12px">
-          <button id="eventsDiscoverBtn" class="cal-event-discover-btn" onclick="openEventsModal()" title="Discover nearby events" aria-label="Discover events">💡</button>
+        <div class="cal-header-actions" style="display:flex;align-items:center;gap:12px">
+          <button id="eventsDiscoverBtn" class="cal-event-discover-btn" style="display:none" onclick="openEventsModal()" title="Discover nearby events" aria-label="Discover events">💡</button>
           <div class="cal-view-tabs">
             <button class="cal-view-tab" id="viewTab_month"  onclick="switchCalView('month')">Month</button>
             <button class="cal-view-tab" id="viewTab_week"   onclick="switchCalView('week')">Week</button>
@@ -258,11 +272,6 @@
       <div class="card-header">
         <h2>🛒 Shopping</h2>
         <div style="display:flex;gap:4px;align-items:center">
-          <div class="sms-btn-wrap">
-            <button class="btn btn-secondary btn-sm" id="smsTriggerBtn"
-                    onclick="toggleSmsPopover(event)">📱 SMS ▾</button>
-            <div class="sms-popover" id="smsPopover"></div>
-          </div>
           <button id="shopClearDoneBtn" class="btn btn-secondary btn-sm" onclick="clearDoneShopping()" title="Clear completed items" aria-label="Clear completed items" style="display:none">✕ done</button>
           <button id="shopClearAllBtn" class="btn btn-sm" onclick="clearAllShopping()" style="display:none;background:var(--surface2);color:var(--muted);padding:3px 7px" title="Clear all items" aria-label="Clear all items">✕ all</button>
         </div>
@@ -270,8 +279,12 @@
       <div class="card-body">
         <div class="list-input-row">
           <input id="shopInput" type="text" placeholder="Add an item…" aria-label="Add a shopping item" onkeydown="if(event.key==='Enter')addShop()" />
-          <select id="shopCategorySelect" class="shop-cat-select"></select>
           <button class="btn btn-primary btn-sm" onclick="addShop()">Add</button>
+          <div class="sms-btn-wrap">
+            <button class="btn btn-secondary btn-sm" id="smsTriggerBtn"
+                    onclick="toggleSmsPopover(event)" title="Send list via SMS" aria-label="Send list via SMS">📱</button>
+            <div class="sms-popover" id="smsPopover"></div>
+          </div>
         </div>
         <ul id="shopList" class="list-items"></ul>
         <div id="shopEmpty" class="list-empty" style="display:none">List is empty!</div>
@@ -284,7 +297,6 @@
         <h2>✅ To-Do</h2>
         <div style="display:flex;gap:4px">
           <button id="todoClearDoneBtn" class="btn btn-sm" onclick="clearDoneTodo()" style="display:none;background:var(--surface2);color:var(--muted);padding:3px 7px" title="Clear completed tasks" aria-label="Clear completed tasks">✕ done</button>
-          <button id="todoClearAllBtn" class="btn btn-sm" onclick="clearAllTodo()" style="display:none;background:var(--surface2);color:var(--muted);padding:3px 7px" title="Clear all tasks" aria-label="Clear all tasks">✕ all</button>
         </div>
       </div>
       <div class="card-body">
@@ -314,9 +326,14 @@
           <h2>💰 Budget</h2>
           <span id="budgetCardLabel" style="font-size:var(--text-xs);color:var(--muted);display:block;margin-top:1px"></span>
         </div>
-        <button class="btn btn-sm btn-primary" onclick="openBudgetCardAdd()" id="budgetAddBtn"
-                style="padding:4px 10px">+ Add</button>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button class="btn btn-sm" onclick="toggleBudgetPrivacy()" id="budgetPrivacyBtn"
+                  style="padding:4px 8px" title="Hide bill amounts (privacy)">👁</button>
+          <button class="btn btn-sm btn-primary" onclick="openBudgetCardAdd()" id="budgetAddBtn"
+                  style="padding:4px 10px">+ Add</button>
+        </div>
       </div>
+      <div id="budgetHiddenNotice" class="budget-hidden-notice" style="display:none">Amounts hidden — tap 👁 to show</div>
       <div id="budgetTotalCard" style="display:none">
         <div id="budgetTotalInner"></div>
       </div>
@@ -468,17 +485,18 @@
      permanent surface. The Lists sheet opens from the 🏠 app icon in the
      header (.cal-app-emoji, styled as an obvious button under 640px — see
      family-hub.css); this FAB is the only floating button left. -->
-<button class="mobile-fab mobile-fab-add" id="mobileAddFab" onclick="openEventEditor(null)"
+<button class="mobile-fab mobile-fab-add" id="mobileAddFab" onclick="openNewEventFromFab()"
         aria-label="Add event" title="Add event">＋</button>
 
 <div class="mobile-sheet-overlay" id="mobileListsOverlay" onclick="if(event.target===this)closeMobileLists()">
   <div class="mobile-sheet" role="dialog" aria-modal="true" aria-label="Shopping and To-Do lists">
-    <div class="mobile-sheet-handle"></div>
+    <div class="mobile-sheet-handle" id="mobileSheetHandle" aria-hidden="true"></div>
     <div class="mobile-sheet-tabs" id="mobileListsTabs">
       <button class="mobile-sheet-tab active" data-section="shop" onclick="setMobileListsSection('shop')">🛒 Shopping</button>
       <button class="mobile-sheet-tab" data-section="todo" onclick="setMobileListsSection('todo')">✅ To-Do</button>
       <button class="mobile-sheet-tab" id="mobileListsHomeTab" data-section="home" onclick="setMobileListsSection('home')" style="display:none">🏠 Home</button>
       <button class="mobile-sheet-tab" id="mobileListsAssistantTab" data-section="assistant" onclick="setMobileListsSection('assistant')" style="display:none">🤖 Assistant</button>
+      <button id="mobileEventsBtn" class="mobile-sheet-action" style="display:none" onclick="closeMobileLists();openEventsModal()" aria-label="Find events" title="Find events">💡</button>
     </div>
     <!-- Shopping/To-Do/Home Assistant/Assistant cards are reparented in here by
          applyWidgetPlacement() on mobile (see MOBILE_SHEET_SECTIONS in
@@ -490,8 +508,6 @@
       <div class="mobile-sheet-section" data-section="assistant" id="mobileSheetAssistant"></div>
     </div>
     <div class="mobile-sheet-footer">
-      <button onclick="closeMobileLists();openEventsModal()">💡 Find Events</button>
-      <button onclick="closeMobileLists();openSettings()">⚙️ Settings</button>
       <button class="mobile-sheet-close" onclick="closeMobileLists()">Done</button>
     </div>
   </div>
@@ -516,11 +532,11 @@
         <div class="settings-section-head">Identity</div>
         <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
           <div class="field" style="flex:1 1 140px">
-            <label>Your name <span style="font-weight:400;color:var(--muted)">(list items)</span></label>
+            <label>Your name</label>
             <input type="text" id="settingName" placeholder="e.g. Matt" />
           </div>
           <div class="field" style="flex:1 1 140px">
-            <label>App title <span style="font-weight:400;color:var(--muted)">(header)</span></label>
+            <label>App title</label>
             <input type="text" id="settingAppTitle" placeholder="e.g. Family Hub" maxlength="30" />
           </div>
           <div class="field" style="flex:0 0 auto">
@@ -532,36 +548,36 @@
         <div class="settings-section-head">Theme</div>
         <div class="field">
           <label>Appearance</label>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <div class="appearance-grid" style="display:flex;gap:8px;flex-wrap:wrap">
             <button id="modeAuto" class="btn btn-sm"
                     onclick="setAppMode('auto')" title="Follow this device's system light/dark setting"
                     style="flex:1;min-width:70px;display:flex;align-items:center;justify-content:center;gap:5px">
-              🌓 Auto
+              <span>🌓</span> Auto
             </button>
             <button id="modeLight" class="btn btn-sm"
                     onclick="setAppMode('light')"
                     style="flex:1;min-width:70px;display:flex;align-items:center;justify-content:center;gap:5px">
-              ☀️ Light
+              <span>☀️</span> Light
             </button>
             <button id="modeDark" class="btn btn-sm"
                     onclick="setAppMode('dark')"
                     style="flex:1;min-width:70px;display:flex;align-items:center;justify-content:center;gap:5px">
-              🌙 Dark
+              <span>🌙</span> Dark
             </button>
             <button id="modeNautical" class="btn btn-sm"
                     onclick="setAppMode('nautical')"
                     style="flex:1;min-width:70px;display:flex;align-items:center;justify-content:center;gap:5px">
-              ⚓ Nautical
+              <span>⚓</span> Nautical
             </button>
             <button id="modeAurora" class="btn btn-sm"
                     onclick="setAppMode('aurora')"
                     style="flex:1;min-width:70px;display:flex;align-items:center;justify-content:center;gap:5px">
-              🌌 Aurora
+              <span>🌌</span> Aurora
             </button>
             <button id="modeColorblind" class="btn btn-sm"
                     onclick="setAppMode('colorblind')"
                     style="flex:1;min-width:70px;display:flex;align-items:center;justify-content:center;gap:5px">
-              👁 Accessible
+              <span>👁</span> Accessible
             </button>
           </div>
         </div>
@@ -569,13 +585,18 @@
           <label>Flavor</label>
           <div id="flavorButtons" style="display:flex;gap:8px;flex-wrap:wrap"></div>
         </div>
-        <div class="field" style="margin-bottom:14px">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-            <input type="checkbox" id="safePaletteToggle" style="width:14px;height:14px;accent-color:var(--accent)">
-            <span>Colorblind-safe color swatches</span>
-            <span style="font-weight:400;color:var(--muted);font-size:.80rem">(replaces color pickers with a safe palette)</span>
-          </label>
+        <div class="field">
+          <label for="calPaletteSelect">Calendar colors</label>
+          <select id="calPaletteSelect" onchange="renderCalPalettePreview()">
+            <option value="off">Everyone's own picks</option>
+            <option value="soft">Soft palette</option>
+            <option value="earthy">Earthy palette</option>
+            <option value="colorblind">Colorblind-safe palette</option>
+          </select>
+          <div class="toggle-sub">A palette colors family members in list order and gives calendars, holidays and recurring items softer matching colors. Shared with every device.</div>
+          <div id="calPalettePreview"></div>
         </div>
+        <div class="settings-desktop-only">
         <div class="settings-section-head">Layout &amp; display</div>
         <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
           <div class="field" style="flex:1 1 160px;margin-bottom:0">
@@ -593,7 +614,7 @@
             </label>
             <div>
               <div class="toggle-label">📺 TV / Display mode</div>
-              <div class="toggle-sub">Hides controls, enlarges text — for Chromecast/AirPlay. <code>?tv=1</code> to activate on load, Escape to exit.</div>
+              <div class="toggle-sub">Hides controls and enlarges text for casting. Add <code>?tv=1</code> to start in it, Escape exits.</div>
             </div>
           </div>
           <div class="toggle-row" style="flex:1 1 200px">
@@ -603,10 +624,11 @@
             </label>
             <div>
               <div class="toggle-label">⌨️ On-screen keyboard</div>
-              <div class="toggle-sub">Pops up a touch keyboard when you tap the assistant box or an event field — for wall displays with no physical keyboard. Off on phones (they have their own).</div>
+              <div class="toggle-sub">A touch keyboard for wall displays with no physical one.</div>
             </div>
           </div>
         </div>
+        </div><!-- /settings-desktop-only -->
         <div class="settings-section-head">Motion <span style="font-weight:400;color:var(--muted)">(this device only)</span></div>
         <div class="toggle-sub" style="margin-bottom:8px">Animations that never stop. Each keeps the screen redrawing — switch them off on a slow wall panel.</div>
         <div id="motionToggles" style="display:flex;gap:16px;flex-wrap:wrap"></div>
@@ -732,58 +754,48 @@
 
       <!-- ── Family Members ── -->
       <div class="settings-panel" data-panel="family">
-        <p style="font-size:.82rem;color:var(--muted);margin:0 0 14px">
-          Family members are shared across Shopping (SMS), To-Do, Chores, and Calendar — set names, colors, and an optional phone number here.
+        <p class="settings-hint" style="margin:0 0 14px">
+          Shared by Shopping, To-Do, Chores and Calendar. A phone number lets you text them the shopping list.
         </p>
         <div id="familyMemberList" style="margin-bottom:10px"></div>
-        <div style="display:flex;gap:8px">
-          <input type="text" id="newFamilyMemberInput" placeholder="Name…"
-                 style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();addFamilyMember()}" />
-          <button class="btn btn-sm btn-primary" onclick="addFamilyMember()">+ Add</button>
+        <div class="lc-add-row">
+          <input type="text" id="newFamilyMemberInput" placeholder="Name" class="lc-input"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();addFamilyMember()}" />
+          <button class="btn btn-sm btn-primary" onclick="addFamilyMember()">Add</button>
         </div>
         <div id="familyMemberError" style="display:none;font-size:.8rem;color:var(--red);margin-top:8px"></div>
       </div><!-- /family -->
 
       <!-- ── Family Assistant ── -->
       <div class="settings-panel" data-panel="assistant">
-        <div style="display:flex;gap:10px;align-items:flex-start;background:var(--surface2);border-radius:var(--radius);padding:10px 12px;margin:0 0 14px">
-          <span style="font-size:1.1rem;line-height:1;flex-shrink:0">🤖</span>
-          <p style="font-size:var(--text-sm);color:var(--muted);margin:0;line-height:1.45">
-            Ask about your schedule, weather, or budget, or tell it what to do — add or remove shopping items, to-dos, and calendar events, plan a meal, log a bill, or ask when to mow the lawn. It sees your family's calendars, lists, and budget in real time to answer.
-          </p>
+        <div class="settings-intro">
+          <span>🤖</span>
+          <p>Ask about your schedule, weather or budget, or have it add events, to-dos, shopping items and bills.</p>
         </div>
         <div class="field">
-          <label>Assistant name <span style="font-weight:400;color:var(--muted)">(shown on the assistant card)</span></label>
+          <label>Name</label>
           <input type="text" id="settingAssistantName" placeholder="e.g. Family Assistant" maxlength="40" />
-        </div>
-        <div class="toggle-sub" style="margin:-8px 0 14px">
-          🎭 Some names unlock a matching personality in its replies — try naming it after a famous fictional AI or butler.
+          <p class="settings-hint">🎭 Name it after a famous fictional AI or butler and it may pick up the personality.</p>
         </div>
         <div class="field">
-          <label>Empty state</label>
-          <div style="display:flex;gap:16px;margin-top:4px">
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
-              <input type="radio" name="assistantWelcome" value="ticker" style="accent-color:var(--accent)">
-              <span>Quick-prompt ticker</span>
-            </label>
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
-              <input type="radio" name="assistantWelcome" value="static" style="accent-color:var(--accent)">
-              <span>Static message</span>
-            </label>
+          <label>When idle, show</label>
+          <div class="choice-group">
+            <label><input type="radio" name="assistantWelcome" value="ticker"><span>Suggested prompts</span></label>
+            <label><input type="radio" name="assistantWelcome" value="static"><span>Welcome message</span></label>
           </div>
         </div>
-        <div class="settings-section-head">AI Provider</div>
+        <div class="settings-section-head">AI provider</div>
         <div class="field">
-          <label>Google Gemini API Key</label>
-          <input type="password" id="settingMealAiKey" placeholder="Paste your API key…" autocomplete="off" />
-          <p style="font-size:var(--text-xs);color:var(--muted);margin-top:6px">
-            Also powers meal suggestions in ⚙️ Settings → 🍽 Meals.
-          </p>
+          <label>Gemini API key</label>
+          <input type="password" id="settingMealAiKey" placeholder="Paste your API key" autocomplete="off" />
+          <p class="settings-hint">Leave blank on the Netlify site: it uses the server key (<code>GEMINI_KEY</code>). Only needed when running locally without <code>netlify dev</code>. Stored on this device only. Also powers meal suggestions.</p>
         </div>
       </div><!-- /assistant -->
 
       <!-- ── Calendar ── -->
       <div class="settings-panel" data-panel="calendar">
+
+        <div class="settings-section-head settings-group-head">Calendar sources</div>
 
         <!-- Google Calendars (sign-in required) -->
         <div class="lc-section">
@@ -802,21 +814,27 @@
                 onkeydown="if(event.key==='Enter')addCalendar()" />
               <button class="btn btn-primary btn-sm" onclick="addCalendar()">Add</button>
             </div>
+            <!-- Only sign-out entry point on mobile: the status-pill card is desktop-sidebar-only -->
+            <button class="btn btn-sm ctrl-signout-btn" style="width:100%;margin-top:10px" onclick="signOut()">Sign out</button>
           </div>
         </div>
 
         <!-- ICS Subscriptions -->
-        <div class="lc-section">
+        <div class="lc-section" style="border-bottom:none">
           <div class="lc-section-title">📡 ICS Subscriptions</div>
           <div id="icsSubList" class="lc-list"></div>
-          <div class="lc-add-row" style="flex-wrap:wrap;gap:5px;margin-top:6px">
-            <input id="icsUrlInput" type="url" placeholder="Paste ICS URL…" class="lc-input" style="min-width:180px;flex:2" />
-            <input id="icsLabelInput" type="text" placeholder="Label" class="lc-input" style="flex:1;min-width:80px" />
-            <input id="icsColorInput" type="color" value="#61afef" class="lc-color" title="Color" />
-            <button class="btn btn-primary btn-sm" onclick="addIcsSub()">Add</button>
+          <div class="ics-add-form">
+            <input id="icsUrlInput" type="url" placeholder="Paste ICS URL…" class="lc-input" />
+            <div class="lc-add-row">
+              <input id="icsLabelInput" type="text" placeholder="Name (optional)" class="lc-input" />
+              <input id="icsColorInput" type="color" value="#61afef" class="lc-color" title="Color" />
+              <button class="btn btn-primary btn-sm" onclick="addIcsSub()">Add</button>
+            </div>
           </div>
           <div id="icsSubStatus" style="font-size:.75rem;color:var(--muted);margin-top:4px"></div>
         </div>
+
+        <div class="settings-section-head settings-group-head">Added by the hub</div>
 
         <!-- Countdowns -->
         <div class="lc-section">
@@ -825,13 +843,13 @@
           <!-- Weekdays toggle (shared by both add methods) -->
           <label style="display:flex;align-items:center;gap:6px;font-size:.8rem;color:var(--muted);margin-top:6px;cursor:pointer">
             <input type="checkbox" id="cdWeekdaysOnly" style="accent-color:var(--accent)" />
-            Count weekdays only (Mon–Fri)
+            Weekdays only (Mon–Fri)
           </label>
           <!-- Manual date entry -->
           <div class="lc-add-row" style="flex-wrap:wrap;gap:5px;margin-top:6px">
-            <input id="cdLabelInput" type="text" placeholder="Label" class="lc-input" style="flex:1;min-width:100px" />
+            <input id="cdLabelInput" type="text" placeholder="Countdown name" class="lc-input" />
             <input id="cdDateInput"  type="date"  class="lc-input lc-input-sm" />
-            <input id="cdEmojiInput" type="text"  placeholder="🎉" class="lc-input" style="width:42px;text-align:center" maxlength="8" />
+            <input id="cdEmojiInput" type="text"  placeholder="🎉" class="lc-input lc-input-emoji" maxlength="8" />
             <button type="button" class="btn btn-secondary btn-sm" onclick="openEmojiPicker('cdEmojiInput',this)" title="Pick emoji">😊</button>
             <button class="btn btn-primary btn-sm" onclick="addCountdown()">Add</button>
           </div>
@@ -856,24 +874,100 @@
           </div>
         </div>
 
-        <div class="lc-section">
-          <div class="lc-section-title">💊 Medications</div>
-          <div id="lcMedList" class="lc-list"></div>
-          <div class="lc-add-row">
-            <input id="lcMedName"   type="text" placeholder="Medication" class="lc-input" />
-            <input id="lcMedDosage" type="text" placeholder="Dosage" class="lc-input lc-input-sm" />
-            <input id="lcMedTime"   type="time" class="lc-input lc-input-sm" value="08:00" />
-            <select id="lcMedDays" class="lc-select">
-              <option value="daily">Daily</option>
-              <option value="weekdays">Weekdays</option>
-              <option value="weekends">Weekends</option>
-            </select>
-            <button class="btn btn-primary btn-sm" onclick="lcAddMedication()">Add</button>
+        <div class="lc-section lc-recur-section" style="border-bottom:none">
+          <div class="lc-section-title lc-recur-listonly">🔁 Recurring</div>
+          <p class="settings-hint lc-recur-hint lc-recur-listonly">Medications, trash and recycling, air filters, smoke alarm checks: anything that repeats.</p>
+          <div id="lcRecurList" class="lc-list lc-recur-listonly"></div>
+          <button type="button" class="btn btn-secondary btn-sm lc-recur-listonly" onclick="lcNewRecurring()">＋ Add recurring</button>
+          <!-- Drill-in screen: shown instead of the rest of this panel while
+               #settingsModal has .recur-editing; the modal footer's Cancel/Save
+               act on it then (see lcOpenRecurForm) -->
+          <div class="lc-recur-form">
+            <button type="button" class="lc-recur-back" onclick="lcCancelRecurEdit()">‹ Recurring</button>
+            <div class="lc-section-title" id="lcRecurFormTitle">New recurring item</div>
+            <div class="lc-recur-what">
+              <button type="button" id="lcRecurEmoji" class="lc-recur-emoji" data-emoji-anchor
+                      onclick="openEmojiPicker(null, this, em => { this.textContent = em; }, RECUR_EMOJI)"
+                      title="Change emoji" aria-label="Change emoji">🔁</button>
+              <input id="lcRecurName" type="text" placeholder="What repeats? (e.g. Replace air filter)" aria-label="Name" class="lc-input" />
+              <input id="lcRecurColor" type="color" value="#4caf82" class="lc-color lc-recur-color" title="Color on the calendar" aria-label="Color" />
+            </div>
+            <div class="lc-recur-grid">
+              <label class="lc-recur-label" for="lcRecurEvery">Repeats</label>
+              <div class="lc-recur-field">
+                <span class="lc-recur-text">Every</span>
+                <input id="lcRecurEvery" type="number" min="1" max="99" value="1" class="lc-input lc-input-num" oninput="lcRecurScheduleChanged()" />
+                <select id="lcRecurUnit" class="lc-select" onchange="lcRecurScheduleChanged()" aria-label="Unit">
+                  <option value="day">day(s)</option>
+                  <option value="week" selected>week(s)</option>
+                  <option value="month">month(s)</option>
+                  <option value="year">year(s)</option>
+                </select>
+              </div>
+              <span class="lc-recur-label lc-recur-days-row">On</span>
+              <div class="lc-recur-days lc-recur-days-row" id="lcRecurDays" role="group" aria-label="Days of the week">
+                <label title="Sunday"><input type="checkbox" value="0"><span>S</span></label>
+                <label title="Monday"><input type="checkbox" value="1"><span>M</span></label>
+                <label title="Tuesday"><input type="checkbox" value="2"><span>T</span></label>
+                <label title="Wednesday"><input type="checkbox" value="3"><span>W</span></label>
+                <label title="Thursday"><input type="checkbox" value="4"><span>T</span></label>
+                <label title="Friday"><input type="checkbox" value="5"><span>F</span></label>
+                <label title="Saturday"><input type="checkbox" value="6"><span>S</span></label>
+              </div>
+              <label class="lc-recur-label lc-recur-start-row" for="lcRecurStart">Starts</label>
+              <div class="lc-recur-field lc-recur-start-row">
+                <input id="lcRecurStart" type="date" class="lc-input lc-input-date" />
+              </div>
+              <span class="lc-recur-label">Time</span>
+              <div class="lc-recur-field">
+                <label class="lc-recur-allday"><input type="checkbox" id="lcRecurAllDay" checked onchange="lcRecurAllDayChanged()"> All day</label>
+                <input id="lcRecurTime" type="time" class="lc-input lc-input-sm" value="08:00" aria-label="Time" />
+              </div>
+            </div>
           </div>
         </div>
 
+      </div><!-- /calendar -->
+
+      <!-- ── School (weekly class periods + Day N cycle) ── -->
+      <div class="settings-panel" data-panel="school">
+
         <div class="lc-section">
-          <div class="lc-section-title">🏫 School Schedule</div>
+          <div class="lc-section-title">🔁 School Day Cycle</div>
+          <div class="lc-add-row" style="flex-wrap:wrap;gap:5px">
+            <label style="font-size:var(--text-xs);color:var(--muted);display:flex;flex-direction:column;gap:2px">Cycle starts (Day 1)
+              <input id="scdStartDate" type="date" class="lc-input lc-input-date" />
+            </label>
+            <label style="font-size:var(--text-xs);color:var(--muted);display:flex;flex-direction:column;gap:2px">School year ends
+              <input id="scdEndDate" type="date" class="lc-input lc-input-date" />
+            </label>
+            <label style="font-size:var(--text-xs);color:var(--muted);display:flex;flex-direction:column;gap:2px">Cycle length
+              <input id="scdCycleLength" type="number" min="2" max="10" value="4" class="lc-input lc-input-sm" style="width:60px" />
+            </label>
+            <button class="btn btn-primary btn-sm" onclick="scdSaveCycle()">Save</button>
+          </div>
+          <div id="scdCycleStatus" style="font-size:var(--text-xs);color:var(--muted);margin-top:6px"></div>
+
+          <div class="lc-section-title" style="margin-top:14px">🚫 Non-School Days</div>
+          <div id="scdHolidayList" class="lc-list"></div>
+          <div class="lc-add-row">
+            <input id="scdHolidayDate"  type="date" class="lc-input lc-input-date" />
+            <input id="scdHolidayLabel" type="text" placeholder="Label (e.g. Winter Break)" class="lc-input" />
+            <button class="btn btn-primary btn-sm" onclick="scdAddHoliday()">Add</button>
+          </div>
+
+          <div class="lc-section-title" style="margin-top:14px">📚 Class Schedule by Day</div>
+          <div id="scdSubjectList" class="lc-list"></div>
+          <div class="lc-add-row" style="flex-wrap:wrap;gap:5px">
+            <input id="scdSubjectName" type="text" placeholder="Subject (e.g. Gym)" class="lc-input" />
+            <div class="lc-day-checks" id="scdSubjectDays"></div>
+            <div class="lc-day-checks" id="scdSubjectMembers"></div>
+            <button class="btn btn-primary btn-sm" onclick="scdAddSubject()">Add</button>
+          </div>
+        </div>
+
+        <div class="lc-section" style="border-bottom:none">
+          <div class="lc-section-title">🏫 Hourly Class Schedule</div>
           <div id="lcSchoolList" class="lc-list"></div>
           <div class="lc-add-row" style="flex-wrap:wrap;gap:5px">
             <input id="lcSchoolName"  type="text" placeholder="Class / Period" class="lc-input" />
@@ -891,29 +985,7 @@
           </div>
         </div>
 
-        <div class="lc-section" style="border-bottom:none">
-          <div class="lc-section-title">🗑 Trash &amp; Recycling</div>
-          <div id="lcTrashList" class="lc-list"></div>
-          <div class="lc-add-row">
-            <input id="lcTrashLabel" type="text" placeholder="Label (e.g. Trash)" class="lc-input" />
-            <select id="lcTrashDay" class="lc-select">
-              <option value="0">Sunday</option><option value="1">Monday</option>
-              <option value="2">Tuesday</option><option value="3">Wednesday</option>
-              <option value="4">Thursday</option><option value="5">Friday</option>
-              <option value="6">Saturday</option>
-            </select>
-            <select id="lcTrashEmoji" class="lc-select">
-              <option value="🗑">🗑 Trash</option>
-              <option value="♻️">♻️ Recycling</option>
-              <option value="🌿">🌿 Compost</option>
-              <option value="📦">📦 Bulk Pickup</option>
-            </select>
-            <input id="lcTrashColor" type="color" value="#8bc34a" class="lc-color" title="Color" />
-            <button class="btn btn-primary btn-sm" onclick="lcAddTrash()">Add</button>
-          </div>
-        </div>
-
-      </div><!-- /calendar -->
+      </div><!-- /school -->
 
       <!-- ── Weather ── -->
       <div class="settings-panel" data-panel="weather">
@@ -976,20 +1048,9 @@
 
       <!-- ── Shopping ── -->
       <div class="settings-panel" data-panel="shopping">
-        <p style="font-size:.82rem;color:var(--muted);margin:0 0 14px">
-          Add phone numbers to family members in <strong style="cursor:pointer;color:var(--accent)" onclick="switchSettingsTab('family')">👨‍👩‍👧 Family</strong> to enable SMS sending.
+        <p class="settings-hint" style="margin:0 0 14px">
+          To text the list, add phone numbers in <strong style="cursor:pointer;color:var(--accent)" onclick="switchSettingsTab('family')">👨‍👩‍👧 Family</strong>.
         </p>
-        <hr style="border:none;border-top:1px solid rgba(255,255,255,.08);margin:0 0 14px"/>
-        <div class="field">
-          <label>Aisle Categories</label>
-          <p style="font-size:.78rem;color:var(--muted);margin-bottom:8px">Items are grouped by aisle in the shopping list.</p>
-          <div id="shopCategoryList" style="margin-bottom:8px"></div>
-          <div style="display:flex;gap:8px;margin-top:4px">
-            <input type="text" id="newShopCategoryInput" placeholder="New category…" style="flex:1"
-                   onkeydown="if(event.key==='Enter'){event.preventDefault();addShopCategory()}" />
-            <button class="btn btn-primary btn-sm" onclick="addShopCategory()">Add</button>
-          </div>
-        </div>
       </div><!-- /shopping -->
 
       <!-- ── Chores ── -->
@@ -1002,32 +1063,30 @@
 
       <!-- ── Meal Planning ── -->
       <div class="settings-panel" data-panel="meals">
-        <p style="font-size:.82rem;color:var(--muted);margin:0 0 14px">
-          The Gemini API key that powers meal suggestions now lives in <strong style="cursor:pointer;color:var(--accent)" onclick="switchSettingsTab('assistant')">🤖 Assistant</strong>.
+        <p class="settings-hint" style="margin:0 0 14px">
+          Meal suggestions use the Gemini key set in <strong style="cursor:pointer;color:var(--accent)" onclick="switchSettingsTab('assistant')">🤖 Assistant</strong>.
         </p>
         <div class="field">
-          <label>Dietary Preferences</label>
-          <div class="meal-diet-grid" id="mealDietGrid">
+          <label>Dietary preferences</label>
+          <div class="choice-group" id="mealDietGrid">
             <!-- rendered by JS -->
           </div>
         </div>
         <div class="field">
-          <label>Default Pantry / Freezer Staples
-            <span style="font-weight:400;color:var(--muted)"> — pre-fills the on-hand field</span>
-          </label>
+          <label>Pantry staples</label>
           <textarea id="settingMealPantry" rows="3"
             style="width:100%;background:var(--surface2);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:var(--text);padding:9px 12px;font-size:.85rem;resize:vertical"
-            placeholder="e.g. olive oil, garlic, onions, canned tomatoes, rice, chicken breasts, frozen shrimp…"></textarea>
+            placeholder="e.g. olive oil, garlic, rice, frozen shrimp"></textarea>
+          <p class="settings-hint">Pre-fills what's on hand when you ask for ideas.</p>
         </div>
         <div class="field">
-          <label>Loading Messages
-            <span style="font-weight:400;color:var(--muted)"> — shown while AI thinks</span>
-          </label>
+          <label>Loading messages</label>
+          <p class="settings-hint" style="margin:0 0 8px">Shown while the AI thinks.</p>
           <div id="loadingMsgList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>
           <div style="display:flex;gap:8px">
-            <input type="text" id="newLoadingMsgInput" placeholder="Add a new message…"
+            <input type="text" id="newLoadingMsgInput" placeholder="New message"
                    style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();addLoadingMsg()}" />
-            <button class="btn btn-sm" onclick="addLoadingMsg()" style="white-space:nowrap">+ Add</button>
+            <button class="btn btn-sm btn-primary" onclick="addLoadingMsg()">Add</button>
           </div>
           <button class="btn btn-sm" onclick="resetLoadingMsgs()"
                   style="margin-top:8px;font-size:.75rem;color:var(--muted);background:none;border:1px solid rgba(255,255,255,.15)">
@@ -1035,18 +1094,17 @@
           </button>
         </div>
         <div class="field">
-          <label>Meal Plan Templates</label>
+          <label>Meal plan templates</label>
           <div style="display:flex;gap:8px;margin-bottom:10px">
-            <input type="text" id="mealTemplateNameInput" placeholder="Template name…" style="flex:1"
+            <input type="text" id="mealTemplateNameInput" placeholder="Template name" style="flex:1"
                    onkeydown="if(event.key==='Enter'){event.preventDefault();saveMealTemplate()}" />
             <button class="btn btn-sm btn-primary" onclick="saveMealTemplate()" style="white-space:nowrap">💾 Save Week</button>
           </div>
           <div id="mealTemplateList"></div>
         </div>
         <div class="field">
-          <label>Recipe Box
-            <span style="font-weight:400;color:var(--muted)"> — dishes saved from manual meal entry</span>
-          </label>
+          <label>Recipe box</label>
+          <p class="settings-hint" style="margin:0 0 8px">Dishes you've typed in by hand.</p>
           <div id="recipeBoxList"></div>
         </div>
       </div><!-- /meals -->
@@ -1239,11 +1297,19 @@
 
       <!-- ── Events ── -->
       <div class="settings-panel" data-panel="events">
-        <div style="display:flex;gap:10px;align-items:flex-start;background:var(--surface2);border-radius:var(--radius);padding:10px 12px;margin:0 0 14px">
-          <span style="font-size:1.1rem;line-height:1;flex-shrink:0">💡</span>
-          <p style="font-size:var(--text-sm);color:var(--muted);margin:0;line-height:1.45">
-            Finds local events — concerts, shows, library programs, sports, and family activities — near your location. Click the 💡 button on the calendar to browse them; results are weather-aware and flag conflicts with what's already on your calendar.
-          </p>
+        <div class="settings-intro">
+          <span>💡</span>
+          <p>Finds concerts, library programs, sports and family activities nearby. Tap 💡 on the calendar to browse. Nothing is added to your calendar until you tap 📅 Add.</p>
+        </div>
+        <div class="toggle-row">
+          <label class="toggle-switch">
+            <input type="checkbox" id="eventsEnabled" />
+            <span class="toggle-track"></span>
+          </label>
+          <div>
+            <div class="toggle-label">Show 💡 Discover Events</div>
+            <div class="toggle-sub" id="eventsSetupNote">Turn off to hide the 💡 button on this device</div>
+          </div>
         </div>
         <div class="field">
           <label>Location</label>
@@ -1251,23 +1317,11 @@
         </div>
         <div class="field">
           <label>Max distance</label>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <label style="display:flex;align-items:center;gap:6px">
-              <input type="radio" name="eventDistance" value="30" />
-              <span>30 min</span>
-            </label>
-            <label style="display:flex;align-items:center;gap:6px">
-              <input type="radio" name="eventDistance" value="60" />
-              <span>1 hour</span>
-            </label>
-            <label style="display:flex;align-items:center;gap:6px">
-              <input type="radio" name="eventDistance" value="120" />
-              <span>2 hours</span>
-            </label>
+          <div class="choice-group">
+            <label><input type="radio" name="eventDistance" value="30" /><span>30 min</span></label>
+            <label><input type="radio" name="eventDistance" value="60" /><span>1 hour</span></label>
+            <label><input type="radio" name="eventDistance" value="120" /><span>2 hours</span></label>
           </div>
-        </div>
-        <div class="toggle-sub" style="margin-top:10px;border-top:1px solid rgba(128,128,128,.12);padding-top:12px">
-          Discovered events never appear on your calendar automatically. Use the “📅 Add” button on any event card to add it.
         </div>
       </div><!-- /events -->
 
@@ -1312,17 +1366,16 @@
           </div>
           <div class="field">
             <label>Long-lived access token</label>
-            <input id="haTokenInput" type="password" class="lc-input" autocomplete="off" placeholder="Paste from HA → profile → Security" />
+            <input id="haTokenInput" type="password" class="lc-input" autocomplete="off" placeholder="Paste token" />
           </div>
           <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
             <button class="btn btn-secondary btn-sm" onclick="testHaConnection()">Test connection</button>
             <span id="haTestResult" class="ha-test"></span>
           </div>
-          <p style="font-size:.75rem;color:var(--muted);margin-top:8px">
-            The token is stored <strong>on this device only</strong> and is never synced, so
-            enter it once per device. Home Assistant must be reachable over HTTPS — see
-            Step 6 of the setup guide. Add this page's address to
-            <code>cors_allowed_origins</code> in Home Assistant, or every request will fail.
+          <p class="settings-hint">
+            Create a token in Home Assistant under Profile → Security. It stays on this
+            device and is never synced. Home Assistant needs HTTPS and this site in
+            <code>cors_allowed_origins</code> (setup guide, step 6).
           </p>
         </div>
 
@@ -1336,11 +1389,9 @@
             <button class="btn btn-primary btn-sm" onclick="addHaEntity()">Add</button>
           </div>
           <datalist id="haEntityOptions"></datalist>
-          <p style="font-size:.75rem;color:var(--muted);margin-top:6px">
-            Only what you list here appears on the panel. Run <strong>Test connection</strong>
-            and the ID box will suggest every entity in the house; otherwise find IDs under
-            <strong>Developer&nbsp;Tools → States</strong> in Home Assistant.
-            Lights, switches and fans get a toggle, locks get lock/unlock, everything else is read-only.
+          <p class="settings-hint">
+            After <strong>Test connection</strong>, the ID box suggests every entity. Lights,
+            switches and fans get a toggle, locks get lock/unlock, the rest are read-only.
           </p>
         </div>
 
@@ -1352,8 +1403,10 @@
     </div><!-- /settings-body -->
 
     <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeSettings()">Cancel</button>
-      <button class="btn btn-primary" onclick="saveSettings()">Save</button>
+      <button class="btn btn-secondary settings-main-action" onclick="closeSettings()">Cancel</button>
+      <button class="btn btn-primary settings-main-action" onclick="saveSettings()">Save</button>
+      <button class="btn btn-secondary settings-recur-action" onclick="lcCancelRecurEdit()">Cancel</button>
+      <button class="btn btn-primary settings-recur-action" id="lcRecurSaveBtn" onclick="lcAddRecurring()">Add</button>
     </div>
   </div>
 </div>
@@ -1523,21 +1576,25 @@
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="eventsModalTitle" style="max-width:780px;width:100%;max-height:80vh;display:flex;flex-direction:column">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
       <h2 id="eventsModalTitle" style="margin:0">💡 Discover Events</h2>
-      <button onclick="closeEventsModal()" title="Close" aria-label="Close events modal" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.3rem;line-height:1">✕</button>
+      <div style="display:flex;align-items:center;gap:10px">
+        <!-- Phone-only copy of Refresh, so the source grid below gets the full width -->
+        <button class="btn btn-primary btn-sm events-refresh-top" onclick="refreshEvents()" title="Refresh" aria-label="Refresh events">🔄</button>
+        <button onclick="closeEventsModal()" title="Close" aria-label="Close events modal" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.3rem;line-height:1">✕</button>
+      </div>
     </div>
 
     <div id="eventsAgeLabel" style="font-size:.8rem;color:var(--muted);margin-bottom:8px"></div>
 
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-shrink:0">
       <div class="events-source-tabs" style="display:flex;gap:6px;overflow-x:auto;flex:1">
-        <button class="event-tab active" data-source="ticketmaster" onclick="selectEventSource(this)">🎟️ Live Events <span class="event-tab-count" id="count-ticketmaster"></span></button>
-        <button class="event-tab" data-source="osm" onclick="selectEventSource(this)">📍 Things to Do <span class="event-tab-count" id="count-osm"></span></button>
-        <button class="event-tab" data-source="libraryweb" onclick="selectEventSource(this)">📚 Library <span class="event-tab-count" id="count-libraryweb"></span></button>
-        <button class="event-tab" data-source="redwings" onclick="selectEventSource(this)">⚾ Red Wings <span class="event-tab-count" id="count-redwings"></span></button>
-        <button class="event-tab" data-source="cityspark" onclick="selectEventSource(this)">🎡 Around Town <span class="event-tab-count" id="count-cityspark"></span></button>
-        <button class="event-tab" data-source="towns" onclick="selectEventSource(this)">🎪 Town Events <span class="event-tab-count" id="count-towns"></span></button>
+        <button class="event-tab active" data-source="ticketmaster" onclick="selectEventSource(this)"><span class="event-tab-icon">🎟️</span> Live Events <span class="event-tab-count" id="count-ticketmaster"></span></button>
+        <button class="event-tab" data-source="osm" onclick="selectEventSource(this)"><span class="event-tab-icon">📍</span> Things to Do <span class="event-tab-count" id="count-osm"></span></button>
+        <button class="event-tab" data-source="libraryweb" onclick="selectEventSource(this)"><span class="event-tab-icon">📚</span> Library <span class="event-tab-count" id="count-libraryweb"></span></button>
+        <button class="event-tab" data-source="redwings" onclick="selectEventSource(this)"><span class="event-tab-icon">⚾</span> Red Wings <span class="event-tab-count" id="count-redwings"></span></button>
+        <button class="event-tab" data-source="cityspark" onclick="selectEventSource(this)"><span class="event-tab-icon">🎡</span> Around Town <span class="event-tab-count" id="count-cityspark"></span></button>
+        <button class="event-tab" data-source="towns" onclick="selectEventSource(this)"><span class="event-tab-icon">🎪</span> Town Events <span class="event-tab-count" id="count-towns"></span></button>
       </div>
-      <button class="btn btn-primary btn-sm" onclick="refreshEvents()" title="Refresh" style="flex-shrink:0">🔄</button>
+      <button class="btn btn-primary btn-sm events-refresh-row" onclick="refreshEvents()" title="Refresh" style="flex-shrink:0">🔄</button>
     </div>
 
     <div id="eventsSubTabs" class="events-sub-tabs" style="display:none;gap:6px;flex-wrap:wrap;margin-bottom:12px;flex-shrink:0"></div>
@@ -1578,31 +1635,30 @@
       </div>
     </div>
 
-    <div class="field">
-      <label>Start date</label>
-      <input type="date" id="evtEdDate" />
-    </div>
-
     <div class="evt-editor-allday-row">
       <input type="checkbox" id="evtEdAllDay" onchange="toggleEvtEdAllDay()" />
       <label for="evtEdAllDay" style="cursor:pointer;font-size:.9rem">All-day event</label>
     </div>
 
-    <div id="evtEdEndDateSection" style="display:none">
+    <div class="evt-editor-time-row">
       <div class="field">
+        <label>Start date</label>
+        <input type="date" id="evtEdDate" />
+      </div>
+      <div class="field" id="evtEdEndDateSection" style="display:none">
         <label>End date</label>
         <input type="date" id="evtEdEndDate" />
       </div>
     </div>
 
-    <div id="evtEdTimeSection">
+    <div class="evt-editor-time-row" id="evtEdTimeSection">
       <div class="field">
         <label>Start time</label>
-        <input type="time" id="evtEdStart" onchange="autoAdvanceEvtEnd()" />
+        <select id="evtEdStart" class="evt-editor-select" onchange="autoAdvanceEvtEnd()"></select>
       </div>
       <div class="field">
         <label>End time</label>
-        <input type="time" id="evtEdEnd" />
+        <select id="evtEdEnd" class="evt-editor-select"></select>
       </div>
     </div>
 
@@ -1653,10 +1709,10 @@
     </div>
 
     <div class="evt-editor-footer">
-      <button id="evtEdDeleteBtn" class="btn-danger" onclick="deleteCalEvent()" style="display:none">🗑 Delete event</button>
+      <button id="evtEdDeleteBtn" class="btn btn-secondary" onclick="deleteCalEvent()" style="display:none">Delete</button>
       <div style="display:flex;gap:8px;margin-left:auto">
         <button class="btn btn-secondary" onclick="closeEventEditor()">Cancel</button>
-        <button class="btn" onclick="saveCalEvent()">Save</button>
+        <button class="btn btn-primary" onclick="saveCalEvent()">Save</button>
       </div>
     </div>
 
@@ -1712,6 +1768,7 @@
   </div>
 </div>
 
+<script src="config.js"></script>
 <script src="family-hub.js"></script>
   <!-- Google Sign-In loaded after family-hub.js so onGsiLoad() is defined -->
   <script src="https://accounts.google.com/gsi/client" async defer onload="onGsiLoad()"></script>

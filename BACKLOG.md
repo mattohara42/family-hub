@@ -175,8 +175,8 @@ Allow a to-do item to have child items (sub-tasks). Collapsible in the list view
 
 ## Shopping List
 
-### ~~Shopping list categories~~ ✅ Done
-Items are tagged with a category (Produce, Dairy, Frozen, etc.) when added and grouped by aisle in the list view. Categories are collapsible and manageable in Settings → Shopping.
+### ~~Shopping list categories~~ Removed (2026-10-20)
+Shipped once (items tagged Produce, Dairy, Frozen, etc. and grouped by aisle), then removed in #77: the list is one flat list again. Old items may still carry a `category` field, which nothing reads.
 
 ### 📱 SMS delivery silently does nothing on a Raspberry Pi wall panel
 **Priority: Medium** — a live defect on the Pi, not just a missing feature.
@@ -219,7 +219,7 @@ Show live commute time from home to a configured destination (e.g. work). Update
 ### ~~Home Assistant integration~~ ✅ Done (v1)
 Sidebar card showing and controlling an allowlist of HA entities. Lights, switches and fans toggle, locks lock/unlock, everything else is read-only. Off by default. See FEATURES.md §21, `family-hub-setup.md` Step 6, and `docs/plans/2026-09-07-001-feat-home-assistant-integration-plan.md`.
 
-Home Assistant runs in Docker on the same Pi as the kiosk browser, reached over Tailscale Serve HTTPS. The HTTPS requirement is not optional: the hub is served over HTTPS and browsers refuse to let it call a plain `http://` LAN address.
+Home Assistant runs on its own always-on machine (not the wall-panel Pi, which is a 1 GB Pi 3 with no room for it), reached over Tailscale Serve HTTPS. The HTTPS requirement is not optional: the hub is served over HTTPS and browsers refuse to let it call a plain `http://` LAN address.
 
 *Deliberately not in v1: thermostat setpoint control, scenes and scripts, HA automations triggered from the hub, media players, camera streams, and the HA WebSocket API (polling is 120s, which is fine for a wall panel and wrong for anything that needs to feel instant).*
 

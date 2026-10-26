@@ -1,8 +1,8 @@
 # Family Hub — Setup Guide
 
-*Last updated: 2026-06-14*
+*Last updated: 2026-10-21*
 
-Family Hub is a web dashboard made of three files — `family-hub.html`, `family-hub.css`, and `family-hub.js` — that run together in your browser. No installation is required, but a handful of free cloud accounts are needed to unlock the full feature set. This guide walks through every account, every step, and every value you need to configure.
+Family Hub is a web dashboard made of three files (`family-hub.html`, `family-hub.css` and `family-hub.js`), plus a small `config.js` that holds your Google and Firebase IDs. They run together in your browser. No installation is required, but a handful of free cloud accounts are needed to unlock the full feature set. This guide walks through every account, every step, and every value you need to configure.
 
 ---
 
@@ -12,7 +12,6 @@ Family Hub is a web dashboard made of three files — `family-hub.html`, `family
 |---|---|---|
 | Google Cloud Console | Calendar sync, Google sign-in, background photos | Free |
 | Firebase | Shared real-time Shopping, To-Do, Budget, Meal Plans, Family Members & Chore Chart | Free tier |
-| OpenWeatherMap | Weather widget | Free tier |
 | Google AI Studio | Meal Planning AI suggestions | Free tier (or pay-as-you-go) |
 
 ---
@@ -23,16 +22,15 @@ Google OAuth and the Photos Picker **will not work** when you open the HTML file
 
 ### Option A — Netlify (recommended, accessible from any device)
 
-Family Hub is deployed as a static site on Netlify at **https://familial.netlify.app**. If you're using that instance, skip to Step 1 below. To deploy your own:
+The original Family Hub runs at **https://familial.netlify.app**, but that site is tied to its owner's Google and Firebase projects and only lets their family's accounts in. To run Family Hub for your own family, deploy your own copy:
 
-1. Push the three files to a GitHub repository
+1. **Fork** [mattohara42/family-hub](https://github.com/mattohara42/family-hub) on GitHub. Forking (rather than copying the files) lets you pull in future updates later.
 2. Go to [app.netlify.com](https://app.netlify.com) → **Add new site → Import an existing project**
-3. Connect GitHub → select the repo → set **Publish directory** to `.`, leave **Build command** blank
-4. Click **Deploy site** — note the assigned URL (e.g. `https://family-hub-xyz.netlify.app`)
-5. Add your API keys as Netlify environment variables (see Step 4b below) and redeploy
-6. Complete Steps 1 and 2 below, then add the Netlify domain to:
-   - **Google Cloud Console → OAuth Client → Authorized JavaScript Origins**
-   - **Firebase Console → Authentication → Settings → Authorized Domains**
+3. Connect GitHub → select your fork. `netlify.toml` already sets the publish directory, build command and functions folder, so keep the defaults.
+4. Click **Deploy site** and note the assigned URL (e.g. `https://family-hub-xyz.netlify.app`). Until you finish Steps 1 and 2, this first deploy still carries the original owner's IDs and sign-in won't work for you. That's expected.
+5. Complete Steps 1, 2 and 4 below. You never edit a file: everything goes into Netlify environment variables (summarised in [Netlify environment variables](#netlify-environment-variables)), and then you redeploy.
+
+You don't need to change the code at all. On every deploy, the build step (`netlify-build.js`) writes `config.js` from your `GOOGLE_CLIENT_ID` and `FIREBASE_CONFIG` variables. Your fork never diverges from the original, so updates merge cleanly.
 
 ### Option B — Local server (for development or offline use)
 
@@ -46,6 +44,8 @@ Family Hub is deployed as a static site on Netlify at **https://familial.netlify
 5. Open your browser to: `http://localhost:8080/family-hub.html`
 
 Leave that Terminal window open whenever you use Family Hub locally.
+
+Locally there's no build step, so the app reads `config.js` exactly as committed. To point a local copy at your own projects, edit the values in `config.js` directly, and don't commit that change if you deploy through Netlify env vars.
 
 > **On Windows:** Python 3 may need to be installed from [python.org](https://www.python.org). The command is the same.
 
@@ -82,6 +82,10 @@ Click each one → **Enable**.
 4. On the **Scopes** screen, click **Add or Remove Scopes** and add:
    - `https://www.googleapis.com/auth/calendar.events`
    - `https://www.googleapis.com/auth/calendar.readonly`
+   - `https://www.googleapis.com/auth/photospicker.mediaitems.readonly` (background photos)
+   - `https://www.googleapis.com/auth/userinfo.profile` and `https://www.googleapis.com/auth/userinfo.email` (your name and email, used for sign-in)
+
+   These five are exactly what the app requests (`GOOGLE_SCOPES` in `family-hub.js`). The Photos Picker scope only appears in the list once you've enabled the Photos Picker API in 1b.
    Then click **Update** and **Save and Continue**
 5. On the **Test users** screen, click **Add users** and add the Google accounts for every family member who will use the app
 6. Click **Save and Continue** → **Back to Dashboard**
@@ -92,20 +96,16 @@ Click each one → **Enable**.
 2. Application type: **Web application**
 3. Name: `Family Hub`
 4. Under **Authorized JavaScript origins**, click **Add URI** and add:
-   - `http://localhost:8080`
    - Your Netlify URL, e.g. `https://family-hub-xyz.netlify.app` (if using Netlify)
+   - `http://localhost:8080` (only if you'll also run it locally)
 5. Click **Create**
 6. Copy the **Client ID** — it looks like `123480809-abcdefg.apps.googleusercontent.com`
 
 ### 1e. Put the Client ID in the app
 
-Open `family-hub.js` in a text editor. Near the very top, find:
+**On Netlify:** go to your site → **Project configuration → Environment variables → Add a variable** and add `GOOGLE_CLIENT_ID` with the Client ID as its value. It's a public identifier, so it doesn't need to be marked secret.
 
-```js
-const GOOGLE_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com";
-```
-
-Replace it with your actual Client ID.
+**Running locally:** paste it into `googleClientId` in `config.js` instead.
 
 > **Don't want to set up Google OAuth?** You can skip Step 1 entirely and still
 > see your calendars: in ⚙️ **Settings → 📅 Calendar → 📡 ICS Subscriptions**,
@@ -119,7 +119,9 @@ Replace it with your actual Client ID.
 
 ## Step 2 — Firebase (Shared Real-Time Data)
 
-The following features sync in real time across all family members' devices via Firebase Firestore: Shopping List, To-Do List, Budget, Meal Plans, Family Members, and the Chore Chart. This step is optional — all features work locally without Firebase, but data won't be shared between devices.
+The following features sync in real time across all family members' devices via Firebase Firestore: Shopping List, To-Do List, Budget, Meal Plans, Family Members, and the Chore Chart.
+
+Use the **same Google account** for this step as for Step 1 (Firebase can even reuse the Google Cloud project from Step 1).
 
 ### 2a. Create a Firebase project
 
@@ -131,7 +133,7 @@ The following features sync in real time across all family members' devices via 
 ### 2b. Create a Firestore database
 
 1. In the left sidebar, click **Firestore Database → Create database**
-2. Select **Start in test mode** (allows open read/write — fine for family use on a private network)
+2. Select **Start in production mode**. You'll replace its locked-down default rules in Step 2e.
 3. Choose a region close to you → **Enable**
 
 ### 2c. Get your Firebase config
@@ -153,7 +155,22 @@ The following features sync in real time across all family members' devices via 
 
 ### 2d. Put the Firebase config in the app
 
-Open `family-hub.js` and find the `FIREBASE_CONFIG` constant near the very top. Replace the placeholder values with your actual config values.
+**On Netlify:** add an environment variable named `FIREBASE_CONFIG` and paste the whole snippet from 2c as its value, `const firebaseConfig =` and all. Strict JSON works too. If the value can't be read, the deploy fails with a message saying why, rather than publishing a broken site.
+
+Set **both** `GOOGLE_CLIENT_ID` and `FIREBASE_CONFIG`. If only one is set the deploy fails on purpose, because half a config would sign you in to one project and read data from another.
+
+**Running locally:** copy the values into the `firebase` block in `config.js` instead.
+
+### 2e. Turn on Google sign-in and lock the database to your family
+
+The app signs everyone into Firebase with the same Google account they use for the calendar. Firestore only answers people on your list.
+
+1. In the Firebase Console, go to **Authentication → Get started → Sign-in method**, enable **Google**, and save.
+2. Go to **Authentication → Settings → Authorized domains** and add your Netlify domain (e.g. `family-hub-xyz.netlify.app`). `localhost` is there by default.
+3. Open `firestore.rules` from your fork and replace the email list in `isAllowed()` with the Google accounts of everyone in your family.
+4. Go to **Firestore Database → Rules**, paste the whole file in, and click **Publish**.
+
+The email list only lives in the Firebase Console, not on Netlify, so editing `firestore.rules` in your fork is just for your own records. If someone can sign in but their lists stay empty and adding items does nothing, their email is missing from these rules or Google sign-in isn't enabled.
 
 ---
 
@@ -201,24 +218,29 @@ The API key is stored as a server-side secret in Netlify — you never paste it 
 3. Click **Environment variables → Add a variable**
 4. Add:
    - Key: `GEMINI_KEY` — Value: your Gemini API key — check **Secret**
-   - *(`OWM_KEY` is only needed if you use the optional Event Discovery feature — the weather widget itself is keyless.)*
+   - *(`OWM_KEY` is only needed if you use the optional Event Discovery feature — the weather widget itself is keyless. Without it the 💡 Discover Events button simply doesn't appear. With it but no `TICKETMASTER_KEY`, everything except the Live Events tab works.)*
 5. Click **Save**, then trigger a new deploy (Deploys → **Trigger deploy → Deploy site**)
 
-After deploying, leave the AI key field in `family-hub.js` blank — the app will automatically call the Netlify proxy function instead. (Weather needs no key at all.)
+After deploying, leave the **Gemini API key** field in ⚙️ Settings → 🤖 Assistant blank on every device, the wall panel included. The Assistant, meal planning and the daily briefing all go through the Netlify function, which holds the key. (Weather needs no key at all.)
+
+The function only answers requests from your Family Hub site itself, so the URL can't casually be reused by another site to spend your Gemini quota.
 
 **If running locally:**
 
-1. Open Family Hub → click ⚙️ **Settings → 🍽 Meals**
-2. Select **Google Gemini** as the provider
-3. Paste your API key
-4. Click **Save**
+With `netlify dev` (port 8888), the function runs locally and reads `GEMINI_KEY` from your Netlify site, so nothing else is needed. With plain `python3 -m http.server`, there's no function, so paste your key into ⚙️ **Settings → 🤖 Assistant → Gemini API key** and click **Save**. That key is stored on that device only.
 
-### 4c. Optional: Use OpenAI instead (local only)
+---
 
-If you have an OpenAI API key with credits:
-1. In **Settings → 🍽 Meals**, select **OpenAI**
-2. Paste your OpenAI API key (from [platform.openai.com/api-keys](https://platform.openai.com/api-keys))
-3. Click **Save**
+## Netlify environment variables
+
+All of these go in your Netlify site under **Project configuration → Environment variables**. Redeploy after changing any of them (**Deploys → Trigger deploy → Deploy site**).
+
+| Variable | Needed for | Step |
+|---|---|---|
+| `GOOGLE_CLIENT_ID` | Google sign-in, calendar, photos | 1e |
+| `FIREBASE_CONFIG` | Shared lists, budget, meals, chores | 2d |
+| `GEMINI_KEY` (secret) | Assistant, meal AI, daily briefing | 4b |
+| `OWM_KEY`, `TICKETMASTER_KEY` (secret) | Discover Events only, optional | |
 
 ---
 
@@ -226,13 +248,13 @@ If you have an OpenAI API key with credits:
 
 Once all the above is done, open the app (your Netlify URL or `http://localhost:8080/family-hub.html`) and verify:
 
-- [ ] ⚙️ Settings → **Look & Feel**: Set your name and choose an appearance (Light, Dark, or Nautical)
+- [ ] ⚙️ Settings → **Look & Feel**: Set your name and choose a theme and flavor (see Appearance Themes below)
 - [ ] Click **Sign in with Google** → sign in with your Google account
 - [ ] Calendars appear in the **Calendars** sidebar card — toggle each on/off with the checkboxes
-- [ ] ⚙️ Settings → **🌤 Weather**: API key saved and at least one location added
-- [ ] ⚙️ Settings → **🍽 Meals**: Gemini key saved; click a day in Week or Day view → plan a meal → try ✨ Suggest
-- [ ] ⚙️ Settings → **💰 Budget**: Add a recurring bill (e.g. Internet, $79.99, Monthly, day 1)
-- [ ] Shopping List and To-Do List add items and persist on reload
+- [ ] ⚙️ Settings → **🌤 Weather**: at least one location added (no key needed)
+- [ ] AI works: `GEMINI_KEY` set on Netlify (Step 4b); click a day in Week or Day view → plan a meal → try ✨ Suggest
+- [ ] **💰 Budget** sidebar card → **+ Add**: Add a recurring bill (e.g. Internet, $79.99, Monthly, day 1)
+- [ ] Shopping List and To-Do List add items and persist on reload (if not, re-check Step 2e)
 
 ---
 
@@ -241,8 +263,15 @@ Once all the above is done, open the app (your Netlify URL or `http://localhost:
 Adds a 🏠 Home widget that shows and controls lights, switches, locks and sensors.
 Skip this entirely if you don't run Home Assistant — every other feature works without it.
 
-This guide covers the setup we chose: **Home Assistant in Docker on the same Raspberry Pi
-that runs the wall panel**, reached over **Tailscale HTTPS**.
+This guide covers the setup we chose: **Home Assistant on its own always-on machine**,
+reached over **Tailscale HTTPS**. The wall panel stays a plain browser pointed at the
+Netlify URL and runs nothing else.
+
+> **Why not on the wall panel itself?** An earlier version of this guide put Home Assistant
+> in Docker on the same Raspberry Pi as the panel. That needs a Pi with 4 GB of RAM or more,
+> and it ties the two together: a browser crash or panel reboot takes the lights down with it,
+> and a hung Home Assistant update takes the calendar down. Our panel is a 1 GB Raspberry Pi 3,
+> which has no room for Home Assistant at all, so Home Assistant lives on separate hardware.
 
 ### Why not just use `http://homeassistant.local:8123`?
 
@@ -252,51 +281,86 @@ therefore needs a real HTTPS URL, which is what Tailscale gives you for free.
 
 ### What you need
 
-- A Raspberry Pi 4 or 5 with **4 GB RAM or more** (2 GB will thrash once Chromium and Home Assistant are both running)
-- Raspberry Pi OS 64-bit
-- Strongly recommended: boot from a **USB SSD rather than an SD card**. Home Assistant writes to its database constantly, and SD cards die from it.
+- **An always-on machine for Home Assistant.** Any of these work:
+  - **Home Assistant Green**, the official plug-in appliance. Least setup.
+  - **A Raspberry Pi 4 or 5** (a second one, not the panel), ideally booting from a USB SSD
+    rather than an SD card. Home Assistant writes to its database constantly, and SD cards die from it.
+  - **A Mac mini, mini PC or other computer that stays on**, running Home Assistant OS in a
+    virtual machine. Avoid Docker Desktop on a Mac: it can't pass USB radios through to
+    containers, and auto-discovery of devices on your network is unreliable there.
 - A free Tailscale account
 
-> **Note on the shared Pi.** The official "Home Assistant OS" image is an appliance and
-> cannot run a desktop browser, so it can't share the Pi with your wall panel. That's why
-> this guide uses Home Assistant in Docker on top of Raspberry Pi OS. The trade: no add-on
-> store and no built-in backups. Tailscale gets installed natively instead (simpler anyway),
-> and backups are a manual tar (step 6h).
+Whichever machine you pick, install **Home Assistant OS** (not the Docker "Container" version).
+It includes the add-on store and built-in backups, both of which the steps below rely on.
 
-### 6a. Install Docker
+### 6a. Install Home Assistant
 
-```bash
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-sudo usermod -aG docker $USER
-```
+Follow Home Assistant's own installation page for your hardware:
+[home-assistant.io/installation](https://www.home-assistant.io/installation/). Their steps
+change with each release, so this guide doesn't copy them.
 
-Log out and back in so the group change takes effect, then confirm with `docker ps`.
+#### Our setup: a Mac mini (Apple Silicon)
 
-### 6b. Start Home Assistant
+We run Home Assistant OS in a **VirtualBox** virtual machine on an M4 Mac mini. VirtualBox is
+the route Home Assistant documents for Macs, so follow their
+[macOS page](https://www.home-assistant.io/installation/macos) for the click-by-click steps.
+In outline:
 
-```bash
-mkdir -p ~/homeassistant
-docker run -d \
-  --name homeassistant \
-  --restart=unless-stopped \
-  --privileged \
-  --network=host \
-  -e TZ=America/Detroit \
-  -v ~/homeassistant:/config \
-  -v /run/dbus:/run/dbus:ro \
-  ghcr.io/home-assistant/home-assistant:stable
-```
+1. Install VirtualBox, then download the **Apple Silicon** `.vdi.zip` image from that page and unzip it.
+2. Create a new Linux VM (Oracle Linux, ARM 64-bit) with **Use EFI** checked. Give it
+   **4 GB of memory and 2 CPUs**. A 16 GB Mac has room for that and Home Assistant
+   won't need more for a house like ours.
+3. Under **Storage**, remove the empty placeholder disk and attach the `.vdi` file.
+4. Under **Network**, set **Attached to** to **Bridged Adapter** on the Mac's wired or wifi
+   connection. This gives Home Assistant its own address on your home network, which is what
+   lets it auto-discover devices. The default NAT mode hides it from them.
 
-First start takes a few minutes. On the Pi itself, open `http://localhost:8123` and complete
-the onboarding wizard (create your admin account, set your location). Home Assistant will
-auto-discover a lot of your house on its own, WiZ bulbs and Nest thermostats included.
+A Mac only works as a Home Assistant host if it really stays on, so also do this:
 
-To update later: `docker pull ghcr.io/home-assistant/home-assistant:stable && docker restart homeassistant`.
+- **System Settings → Energy**: turn on **Prevent automatic sleeping when the display is off**
+  and **Start up automatically after a power failure**.
+- **System Settings → Users & Groups**: set **Automatically log in as** to your user. macOS
+  hides this option while **FileVault** is on, and with FileVault on, a Mac that restarts after
+  a power cut waits at the unlock screen with Home Assistant stopped. Decide which matters more
+  to you on this machine.
+- **Start the VM at login** so it comes back by itself. Save this as
+  `~/Library/LaunchAgents/io.home-assistant.vm.plist`:
 
-### 6c. Turn down the disk writes
+  ```xml
+  <?xml version="1.0" encoding="UTF-8"?>
+  <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+  <plist version="1.0">
+  <dict>
+    <key>Label</key><string>io.home-assistant.vm</string>
+    <key>ProgramArguments</key>
+    <array>
+      <string>/usr/local/bin/VBoxManage</string>
+      <string>startvm</string>
+      <string>Home Assistant</string>
+      <string>--type</string>
+      <string>headless</string>
+    </array>
+    <key>RunAtLoad</key><true/>
+  </dict>
+  </plist>
+  ```
 
-Edit `~/homeassistant/configuration.yaml` and add:
+  Then run `launchctl load ~/Library/LaunchAgents/io.home-assistant.vm.plist` once. The VM
+  name must match what you called it in VirtualBox. `headless` runs it with no window.
+
+macOS updates restart the Mac now and then. With the settings above, Home Assistant comes back
+on its own a minute or two later.
+
+When it's running, open `http://homeassistant.local:8123` from a computer on your home network
+and complete the onboarding wizard (create your admin account, set your location). Home
+Assistant will auto-discover a lot of your house on its own, WiZ bulbs and Nest thermostats included.
+
+Install the **File editor** add-on (**Settings → Add-ons → Add-on store**). The YAML edits
+below are made with it.
+
+### 6b. Turn down the disk writes (SD cards only)
+
+If Home Assistant is running from an SD card, add this to `configuration.yaml`:
 
 ```yaml
 recorder:
@@ -305,47 +369,48 @@ recorder:
 ```
 
 This keeps three days of history and batches writes every 30 seconds instead of every second.
-If you're on an SD card, this is the single biggest thing you can do to keep it alive. Skip it
-only if you're booting from an SSD and actually want long history.
+On an SD card it's the single biggest thing you can do to keep it alive. Skip it on an SSD,
+on Home Assistant Green, or in a virtual machine.
 
-### 6d. Install Tailscale and get an HTTPS URL
+### 6c. Get an HTTPS URL with Tailscale
 
-On the Pi:
+1. In the [Tailscale admin console](https://login.tailscale.com/admin/dns), turn on
+   **DNS → MagicDNS** and **DNS → HTTPS Certificates**.
+2. In Home Assistant, install the **Tailscale** add-on from the add-on store, start it, and
+   follow the login link in its log to add the machine to your tailnet.
+3. In the add-on's **Configuration** tab, turn on the option that shares Home Assistant on
+   your tailnet over HTTPS (Tailscale Serve). The option has been renamed between add-on
+   versions, so check the add-on's **Documentation** tab for its current name.
+
+Your Home Assistant URL is then something like `https://homeassistant.tail1234.ts.net/`.
+That's the base URL Family Hub will use. Test it in a browser on any device that's signed
+into your tailnet.
+
+> ⚠️ **Do not use Tailscale Funnel.** Funnel publishes the URL to the open internet.
+> Serve keeps it private to your own devices, which is the whole point.
+
+**Every device that shows the widget needs Tailscale too**, including the wall panel. On the
+panel's Raspberry Pi:
 
 ```bash
 curl -fsSL https://tailscale.com/install.sh | sh
 sudo tailscale up
 ```
 
-Follow the login link it prints. Then in the [Tailscale admin console](https://login.tailscale.com/admin/dns):
+Follow the login link it prints. The panel only needs to join the tailnet, so there's no
+`serve` step on it.
 
-1. **DNS → MagicDNS**: enabled
-2. **DNS → HTTPS Certificates**: enabled
+**Phones are optional.** We control lights from our phones with the WiZ and Google Home apps,
+so in our setup only the panel and the Home Assistant machine are on the tailnet. If you do
+want the widget on a phone, install the Tailscale app, sign into the same tailnet, and allow
+the VPN configuration it asks for. Phones allow one VPN at a time, so a work or privacy VPN
+disconnects Tailscale while it's on. A guest phone on your wifi will *not* be able to use the
+widget. That's intentional.
 
-Back on the Pi:
-
-```bash
-sudo tailscale serve --bg 8123
-sudo tailscale serve status
-```
-
-`serve status` prints your HTTPS URL, something like `https://familypi.tail1234.ts.net/`.
-That's the base URL Family Hub will use. Test it in a browser on any device that's signed
-into your tailnet.
-
-> On older Tailscale versions the command is `sudo tailscale serve https / http://localhost:8123`.
-> If `--bg` isn't recognised, use that form.
-
-> ⚠️ **Do not use `tailscale funnel`.** Funnel publishes the URL to the open internet.
-> `serve` keeps it private to your own devices, which is the whole point.
-
-Install Tailscale on any phone that should control the house, and sign into the same tailnet.
-A guest phone on your wifi will *not* be able to use the widget. That's intentional.
-
-### 6e. Let Family Hub talk to Home Assistant (CORS)
+### 6d. Let Family Hub talk to Home Assistant (CORS)
 
 Home Assistant rejects browser requests from other websites unless you name them. Add this to
-`~/homeassistant/configuration.yaml`:
+`configuration.yaml`:
 
 ```yaml
 http:
@@ -361,13 +426,15 @@ http:
 Use your real Netlify URL, with **no trailing slash and no path**. Keep the `localhost:8080`
 line only if you also run Family Hub locally for development.
 
-`trusted_proxies` is required whenever `use_x_forwarded_for` is on. Home Assistant refuses to
+`trusted_proxies` is required whenever `use_x_forwarded_for` is on, because the Tailscale
+add-on forwards requests to Home Assistant from the same machine. Home Assistant refuses to
 start without it, and without both, every request looks like it came from `127.0.0.1` and the
-brute-force protection misbehaves.
+brute-force protection misbehaves. If the Tailscale add-on's documentation lists different
+proxy addresses, use those.
 
-Restart to apply: `docker restart homeassistant`.
+Restart to apply: **Settings → System → ⏻ (top right) → Restart Home Assistant**.
 
-### 6f. Create a panel account and a token
+### 6e. Create a panel account and a token
 
 Don't use your own admin account for this. A wall display hanging in the kitchen shouldn't be
 holding admin credentials.
@@ -382,14 +449,14 @@ holding admin credentials.
 
 If you ever lose a device, revoke just that device's token from this same screen.
 
-### 6g. Connect Family Hub
+### 6f. Connect Family Hub
 
-On the wall panel (and again on each phone, since the token is stored per device):
+On the wall panel (and again on any phone you've put on the tailnet, since the token is stored per device):
 
 1. ⚙️ Settings → **🧩 Widget Layout** → enable **Home Assistant**
 2. ⚙️ Settings → **🏠 Home Assistant**
 3. **Base URL**: your `https://….ts.net` address
-4. **Token**: the long-lived token from step 6f
+4. **Token**: the long-lived token from step 6e
 5. Click **Test connection**. On success it also loads the list of every entity in your house.
 6. Add the entities you want on the panel: `light.kitchen`, `lock.front_door`, and so on.
    You can find any entity ID in Home Assistant under **Developer Tools → States**.
@@ -402,28 +469,23 @@ toggle, locks get lock/unlock, everything else displays read-only.
 > pasting it once per device, and it means a lost phone costs you one revocable token
 > instead of access to your house.
 
-### 6h. Backups
+### 6g. Backups
 
-Home Assistant in Docker has no built-in backup, so take one before any risky change:
-
-```bash
-docker stop homeassistant
-tar czf ~/ha-backup-$(date +%F).tar.gz -C ~ homeassistant
-docker start homeassistant
-```
-
-Copy the tarball somewhere off the Pi. If the SD card dies, this file is your house.
+Home Assistant OS has built-in backups under **Settings → System → Backups**. Turn on
+automatic backups there, and take a manual one before any risky change. Keep a copy off the
+machine (download it, or add a backup location such as a network share), because a backup
+that only lives on a dead disk doesn't help.
 
 ### Home Assistant troubleshooting
 
 | Problem | Fix |
 |---|---|
-| Widget says it can't reach Home Assistant | Two causes look identical to the browser. Check `tailscale status` on both the Pi and the device, then check that `cors_allowed_origins` lists this exact origin (scheme + host, no trailing slash) and that you restarted HA after editing it. |
-| "Home Assistant rejected the token" | The token was revoked, or copied short. Generate a new one (step 6f); it's only displayed once. |
+| Widget says it can't reach Home Assistant | Two causes look identical to the browser. Check that both the Home Assistant machine and this device show as connected in the [Tailscale admin console](https://login.tailscale.com/admin/machines), then check that `cors_allowed_origins` lists this exact origin (scheme + host, no trailing slash) and that you restarted Home Assistant after editing it. |
+| "Home Assistant rejected the token" | The token was revoked, or copied short. Generate a new one (step 6e); it's only displayed once. |
 | "Entity not found" | The entity ID changed or has a typo. Look it up in **Developer Tools → States** and re-add it. |
 | Works on the panel but not on a phone | The phone isn't signed into the tailnet, or the token wasn't entered on that device. Both are per-device. |
-| Home Assistant won't start after editing YAML | Check `docker logs homeassistant`. Almost always indentation, or `use_x_forwarded_for` without `trusted_proxies`. |
-| Panel gets sluggish after a few weeks | The recorder database is growing. Confirm step 6c is in place, and consider moving off the SD card. |
+| Home Assistant won't start after editing YAML | Check **Settings → System → Logs**. Almost always indentation, or `use_x_forwarded_for` without `trusted_proxies`. |
+| Home Assistant gets slow after a few weeks | The recorder database is growing. On an SD card, confirm step 6b is in place, and consider moving to an SSD. |
 | Toggle flips back after a second | The device didn't actually change state. Some Z-Wave and Zigbee devices take several seconds; the widget re-checks twice before giving up. If it never takes, try the same control inside Home Assistant to see whether the problem is the hub or the device. |
 
 ---
@@ -436,15 +498,15 @@ Everything below was run over SSH from the Mac.
 **Hardware:** Raspberry Pi 3B+ (1 GB), Samsung EVO Select microSD, uPerfect 21.5" touchscreen
 (HDMI for picture, USB cable for touch), official 5V 2.5A Pi power supply.
 
-> **This Pi is too small for Home Assistant.** Step 6 assumes Home Assistant shares the panel's
-> Pi, which needs a Pi 4/5 with 4 GB+. On this 1 GB Pi, run Home Assistant somewhere else.
+> This Pi only runs the browser. Home Assistant lives on separate hardware (Step 6); a 1 GB
+> Pi has no room for it.
 
 ### Quick reference
 
 | What | How |
 |---|---|
 | SSH in | `ssh familyhub@family-hub.local` (user is **`familyhub`**, not `matt`) |
-| VNC in | **RealVNC Viewer** (not macOS Screen Sharing) → `family-hub.local` at home, `family-hub` over Tailscale → log in as `familyhub` + the Pi password |
+| VNC in | **RealVNC Viewer** (see Wall Panel — Remote Access) → `family-hub.local` at home, `family-hub` over Tailscale → log in as `familyhub` + the Pi password |
 | Reload the hub page | `ssh familyhub@family-hub.local sudo systemctl restart lightdm` (restarts the panel's whole session, ~1 min) |
 | Reboot | `ssh familyhub@family-hub.local sudo reboot` |
 | Kiosk launch line | `~/.config/labwc/autostart` |
@@ -630,8 +692,8 @@ sudo raspi-config nonint do_vnc 0   # 0 = enabled; starts now and on every boot
 **To connect:**
 
 1. On the Mac, install **RealVNC Viewer** (free, realvnc.com → Download → Viewer). The Mac's
-   built-in Screen Sharing app **won't work**: wayvnc only offers encrypted logins (TLS and
-   RSA-AES), and Screen Sharing doesn't speak either.
+   built-in Screen Sharing is unreliable with wayvnc, which only offers encrypted logins
+   (TLS and RSA-AES); see **Wall Panel — Remote Access** below.
 2. In the address box type `family-hub.local` (at home) or `family-hub` (from anywhere, with
    Tailscale running on the Mac; see step 9).
 3. Log in as **`familyhub`** with the **Pi's password** (the one set in Imager). VNC uses the
@@ -644,7 +706,7 @@ terminal or the desktop behind the kiosk, SSH is quicker than VNC.
 
 ### 9. Tailscale (reach the panel from outside the house)
 
-Same install as step 6d, minus `tailscale serve` (nothing on this Pi needs publishing):
+Same install as step 6c, minus `tailscale serve` (nothing on this Pi needs publishing):
 
 ```bash
 curl -fsSL https://tailscale.com/install.sh | sudo sh
@@ -656,7 +718,7 @@ family tailnet, and click **Connect**. (The Pi only shows up under Machines *aft
 is approved; it won't be waiting there beforehand.) Check from the Pi with `tailscale status`,
 which also prints its tailnet IP and `family-hub.<tailnet>.ts.net` name. After that, `ssh familyhub@family-hub` and VNC to
 `family-hub` work from anywhere the Mac has Tailscale on. It also puts the panel inside the
-tailnet, which the Home Assistant widget needs (see step 6d: HA is only reachable over Tailscale).
+tailnet, which the Home Assistant widget needs (see step 6c: HA is only reachable over Tailscale).
 
 > In the [Tailscale admin console](https://login.tailscale.com/admin/machines), open the
 > `family-hub` machine's **⋯** menu → **Disable key expiry**. Otherwise the panel quietly drops
@@ -688,21 +750,58 @@ crashing, the hub reloading on its own), check with `free -m` and `vmstat 5`: st
 
 ---
 
+## Wall Panel — Remote Access
+
+You can see and control the panel's screen from another computer (we use the Mac mini), which
+saves walking to the kitchen to fix a frozen page or change a setting.
+
+### On the Pi (one time)
+
+1. Run `sudo raspi-config`
+2. **Interface Options → VNC → Enable.** This turns on whichever VNC server your Raspberry Pi
+   OS version uses: WayVNC on recent versions, RealVNC on older ones.
+3. **Interface Options → SSH → Enable.** Useful for quick fixes that don't need the screen.
+
+### From the Mac
+
+- **See the screen:** install **RealVNC Viewer** (free) and connect to the Pi. macOS's built-in
+  Screen Sharing (Finder → **Go → Connect to Server** → `vnc://<pi-address>`) may also work, but
+  it doesn't always get along with WayVNC. If it refuses to connect, use RealVNC Viewer.
+- **Command line:** `ssh <username>@<pi-address>` in Terminal. `sudo reboot` restarts the
+  panel without touching it.
+
+For `<pi-address>`, use the Pi's Tailscale name from the
+[Tailscale admin console](https://login.tailscale.com/admin/machines) if it's on your tailnet
+(step 6c). That works from anywhere. At home, the Pi's local IP address or
+`<hostname>.local` works too.
+
+> **Disconnect when you're done.** A Raspberry Pi 3 has 1 GB of RAM and is already busy running
+> the hub. VNC adds load, so expect a laggy picture, and don't leave a session open.
+
+---
+
 ## Feature Configuration Reference
 
 ### Appearance Themes
 
-Three themes are available in ⚙️ **Settings → Look & Feel**:
+Six themes are available in ⚙️ **Settings → 🎨 Look & Feel → Appearance**:
 
 | Theme | Description |
 |---|---|
+| 🌓 Auto | Follows the device's light/dark setting and switches with it (default) |
 | ☀️ Light | Light grey background, dark text |
-| 🌙 Dark | Deep charcoal background, blue accents (default) |
+| 🌙 Dark | Deep charcoal background, blue accents |
 | ⚓ Nautical | Navy blue hull with diagonal white stripes, beige-gold accents, animated anchor and wave decorations |
+| 🌌 Aurora | Light violet background with soft aurora glows, using a colorblind-safe orange/sky-blue palette |
+| 👁 Accessible | High-contrast dark theme with a colorblind-safe (Okabe-Ito) palette |
+
+Separately, **Flavor** changes the material rather than the colors: **◻ Basic** (default) is flat
+glass, and **✦ Tactile** adds a serif display font, softer shadows and surface grain. Any flavor
+works with any theme. Tactile's decoration is turned off under the Accessible theme.
 
 ### Widget Placement
 
-Every widget can be shown in the **right sidebar** or the **bottom strip** below the calendar. Configure this in ⚙️ **Settings → Widgets**. Each widget has a radio button for Sidebar or Bottom placement, plus a checkbox to show/hide it entirely.
+Every widget can be shown in the **right sidebar** or the **bottom strip** below the calendar. Configure this in ⚙️ **Settings → 🧩 Widget Layout**. Each widget has a radio button for Sidebar or Bottom placement, plus a checkbox to show/hide it entirely.
 
 ### Multi-Location Weather
 
@@ -731,6 +830,28 @@ After signing in:
 - In ⚙️ **Settings → 📅 Calendar**, you can assign custom labels and colors to each calendar
 - Toggle the **National Holidays** overlay on/off in calendar settings
 
+### Recurring Items
+
+Anything on a schedule that isn't in Google Calendar: medications, trash and recycling night, air filters, smoke alarm checks. They all show as one 🔁 Recurring calendar you can toggle like any other, and each item keeps its own color.
+
+1. ⚙️ **Settings → 📅 Calendar → 🔁 Recurring** → **＋ Add recurring**
+2. Tap the emoji to change it, type what repeats, and tap the color dot to pick its color
+3. **Repeats**: every N days, weeks, months or years. For weekly items, tap the days it falls on (e.g. every 2 weeks on Tue for biweekly recycling)
+4. **Starts** appears only when it changes the schedule: for monthly and yearly items it sets the day of the month, and for every-2+ items it sets which weeks or days count. Otherwise the item starts today
+5. **Time**: leave **All day** ticked, or untick it to set a time (useful for medications)
+6. Tap **Add**. To change an item later, tap ✎ beside it, edit, and tap **Save**. **Cancel** or **‹ Recurring** goes back without saving
+
+Recurring items are shared through Firestore, so they show on every device. If you used the older separate Medications or Trash & Recycling lists, those were moved into Recurring automatically.
+
+### School Day Cycle
+
+Tracks a school's internal rotating day (e.g. a 4-day A/B/C/D schedule), shown as a small "Day N" badge in Week and Day calendar views only.
+
+1. ⚙️ **Settings → 🏫 School → 🔁 School Day Cycle** → set the date Day 1 starts, the last day of the school year, and the cycle length (defaults to 4), then **Save**
+2. Add any non-school days (holidays, breaks) so they're skipped rather than counted — the cycle only advances on weekdays that aren't marked off
+3. Optionally add **Class Schedule by Day** entries: a subject, which day number(s) it falls on, and which family members have it — e.g. "Gym, Day 1 & 3, Kate" — these show as small chips under the Day N badge
+4. The same panel also holds **🏫 Hourly Class Schedule**, a separate, older feature for weekly recurring class periods with specific times (e.g. "Math, 9:00–9:50, Mon/Wed/Fri") — unrelated to the day-rotation cycle, just grouped in the same Settings tab
+
 ### Shopping List — Clear Options
 
 The Shopping card header has two clear buttons:
@@ -749,10 +870,11 @@ Same two clear buttons as Shopping. To-Do items can also be assigned to a family
 
 ### Budget
 
-1. ⚙️ **Settings → 💰 Budget** → click **+ Add Budget Item**
+1. In the **💰 Budget** sidebar card, click **+ Add**
 2. Fill in name, amount, frequency, and which day it falls on
-3. A **Budget Total** pill appears in the right sidebar showing the total for the current calendar period (month or week)
-4. The pill is hidden when no bills fall in the current period
+3. A **Budget Total** pill appears in the card showing the total for the current calendar period (month or week), and matching bills show up in Month/Week/Day calendar views too
+4. The card is hidden when no bills exist at all; the total pill is hidden when none fall in the current period
+5. Click the **👁** button in the card header to hide all dollar amounts (card, total pill, and every calendar view's bill pills) without removing anything — tap **🙈** to show them again. This is a per-device setting (not synced), meant for a public wall display: leave amounts visible on your phone/laptop and hide them just on the kiosk.
 
 ### Chore Chart
 
@@ -816,13 +938,14 @@ Family Hub can be shared in two ways:
 - Chore Chart (chores, completion status, rewards) ✅
 
 **What is local per-device:**
-- Settings (name, weather key, API keys)
+- Settings (name, API keys)
 - Appearance theme
 - Weather locations
 - Calendar view preferences
 - Background photos
 - Word of the Day / Dad Joke cache
 - Widget placement preferences
+- Budget privacy toggle (👁/🙈 — deliberately per-device so a wall display can hide amounts while other devices keep them visible)
 
 ---
 
@@ -832,14 +955,13 @@ Family Hub can be shared in two ways:
 |---|---|
 | Google sign-in does nothing | Must be served over HTTP/HTTPS — not `file://`. Use the Netlify URL or `http://localhost:8080`. Also ensure the origin is in Authorized JavaScript Origins in Google Cloud Console. |
 | "This app isn't verified" warning | Click **Advanced → Go to Family Hub (unsafe)** — this is normal for personal apps in test mode |
-| Weather shows nothing after saving key | New OWM keys take up to 2 hours to activate |
-| Weather only shows 1–2 forecast days | The free OWM tier returns up to 5 days of 3-hour slots — fewer may appear depending on time of day |
+| Weather shows nothing | Check that a location is added in ⚙️ Settings → 🌤 Weather. The widget needs no key, so a blank widget usually means no location or a failed network request to Open-Meteo |
 | Meal AI says "rate limited" | You've hit the free daily limit — it resets at midnight Pacific Time |
 | Meal AI says "API not enabled" | Go to [aistudio.google.com/apikey](https://aistudio.google.com/apikey) and create a fresh key in a new project |
 | Photos don't appear as background | Re-open the Photos Picker and re-import — Picker sessions expire |
 | Calendar shows no events | Check that your Google account is a Test User in Cloud Console |
 | Calendars card shows nothing | The card shows a placeholder until you sign in — click **Sign in with Google** |
-| Lists don't sync | Verify Firebase config values are correct and Firestore is in test mode |
-| Weather or AI not working on Netlify | Go to **Project Configuration → Environment variables** and confirm `OWM_KEY` and `GEMINI_KEY` are set, then trigger a new deploy |
+| Lists don't sync | Check `FIREBASE_CONFIG` is set on Netlify and you redeployed, Google sign-in is enabled in Firebase Authentication, and the signed-in email is in your published Firestore rules (Step 2e) |
+| AI or Event Discovery not working on Netlify | Go to **Project Configuration → Environment variables** and confirm `GEMINI_KEY` (AI) and `OWM_KEY` (Event Discovery only) are set, then trigger a new deploy |
 | AI key not found on Netlify | Keys must be added before deploying — Netlify functions read env vars at runtime, but a fresh deploy is required after adding them |
 | Word of the Day shows "Loading…" | The dictionary API may be temporarily unavailable — click the ↺ refresh button |
