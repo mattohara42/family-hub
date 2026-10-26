@@ -764,6 +764,26 @@ tailnet, which the Home Assistant widget needs (see step 6c: HA is only reachabl
    ~7% paused), and the frosted-glass blur doubled the worst stutter of a calendar swipe
    (~1.1 s → ~0.5 s without it).
 
+### 10b. Voice for the Assistant (needs a USB microphone)
+
+The Pi 3B+ has **no microphone**, and neither does the uPerfect screen (`arecord -l` lists no
+capture devices). Until one is plugged in, the Assistant's 🎙 shows Chrome's "allow the
+microphone" steps, which can't be followed in a kiosk with no address bar. Typing still works.
+
+1. Plug in any USB microphone (a cheap USB mic, a webcam with a mic, or a USB speakerphone).
+   Check it shows up with `arecord -l`.
+2. Pre-allow the hub to use it, since there's no address bar to click "Allow" in:
+
+   ```bash
+   sudo mkdir -p /etc/chromium/policies/managed
+   echo '{"AudioCaptureAllowedUrls": ["https://familial.netlify.app"]}' | sudo tee /etc/chromium/policies/managed/family-hub.json
+   sudo systemctl restart lightdm
+   ```
+
+   Check it took at `chrome://policy`... which you also can't open in the kiosk, so instead just
+   tap 🎙 and speak. Chromium on the Pi can't reach Google's speech service, so the hub
+   switches itself to recording + Gemini transcription after the first try.
+
 ### 11. Memory headroom (measured)
 
 1 GB is tight but it holds. Four minutes after a session restart, signed in, with the month
