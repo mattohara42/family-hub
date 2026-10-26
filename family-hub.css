@@ -6236,6 +6236,33 @@ body.no-anim-wxTicker .wx-ticker,
 body.no-anim-wxTicker .wx-snarky,
 body.no-anim-asstTicker .assistant-ticker { overflow-x: auto; }
 
+/* ── Wall display (Settings → Look → 🖼 Wall display; family-hub.js § Wall display) ── */
+/* A wall panel is read from across the room. Zooming the whole page made
+   event titles huge before chips and sidebar text were legible, so this
+   flattens the scale instead: the root grows 25% (every literal rem size and
+   rem spacing with it, as the zoom did) and the token ladder is re-set so the
+   small steps gain the most. Values are px at the 20px root, then desktop. */
+html.wall-display {
+  font-size: 20px;
+  --text-xs:   0.78rem;  /* 15.6 (11.2) chips, badges, meta */
+  --text-sm:   0.82rem;  /* 16.4 (12.5) */
+  --text-base: 0.86rem;  /* 17.2 (14.1) body, list rows */
+  --text-md:   0.92rem;  /* 18.4 (16)   event titles, day numbers */
+  --text-lg:   1.05rem;  /* 21   (18.4) */
+}
+/* Events lose a weight step: at this size semibold read as a black slab. */
+html.wall-display :is(.week-event, .day-event-pill, .agenda-event, .cal-event) {
+  font-weight: var(--weight-medium);
+}
+html.wall-display .week-event { padding: 6px 9px 6px 10px; }
+html.wall-display .week-day-num { width: 32px; height: 32px; }
+html.wall-display .school-day-subject-chip { padding: 2px 7px; border-radius: 10px; }
+/* Wider sidebar for the larger text (300px fits desktop sizes). Desktop
+   widths only, so it never fights the tablet/phone layouts. */
+@media (min-width: 1200px) {
+  html.wall-display .layout { grid-template-columns: 1fr 380px; }
+}
+
 /* ── Phone overrides (generic) ──
    Kept at the very end of the file on purpose. A media query adds no
    specificity, so an override at equal specificity only wins if it comes
