@@ -753,9 +753,11 @@ tailnet, which the Home Assistant widget needs (see step 6c: HA is only reachabl
 1. **Sign in with Google** on the panel (the Logitech keyboard is easiest for the password).
 2. **Settings → Look & Feel:** leave the hub's own **⌨️ On-screen keyboard** toggle **off**. The
    Pi's squeekboard already pops up for every field; with both on you'd get two keyboards.
-3. **Settings → Look & Feel → Motion:** switch off the animations you can live without. They're
-   per device, so phones keep theirs. On this Pi the weather animations alone kept a CPU core
-   busy (idle CPU ~33% with them running, ~7% paused).
+3. **Settings → Look & Feel → Motion & effects:** switch off the animations you can live
+   without, and switch off **🧊 Frosted glass**. They're per device, so phones keep theirs. On
+   this Pi the weather animations alone kept a CPU core busy (idle CPU ~33% with them running,
+   ~7% paused), and the frosted-glass blur doubled the worst stutter of a calendar swipe
+   (~1.1 s → ~0.5 s without it).
 
 ### 11. Memory headroom (measured)
 

@@ -12143,7 +12143,7 @@ function highlightFlavorButtons() {
 }
 
 // ── Motion ─────────────────────────────────────────────────────
-// Per-device switches for the endless animations. Each one keeps the browser
+// Per-device switches for the endless animations (plus the frosted-glass blur). Each one keeps the browser
 // repainting forever; on the Pi 3 wall panel the weather set alone pinned a
 // core (~33% → 7% idle CPU with them paused). Stored per device in
 // fh_motionOff (a phone and the panel want different answers) and applied as
@@ -12157,6 +12157,9 @@ const MOTION_ANIMS = [
   { key: 'themeBg',     label: '🌊 Theme background',  sub: 'Nautical waves, Aurora shimmer' },
   { key: 'statusPulse', label: '🔴 Status warning',    sub: 'Red pulse when something needs fixing' },
   { key: 'choreBadge',  label: '⭐ Chore reward',       sub: 'Pulsing Redeem button' },
+  // Not an animation, but the same per-device switch: backdrop blur is redrawn on every
+  // frame of a swipe, and turning it off halved the panel's longest frames (1.1s → 0.5s).
+  { key: 'glass',       label: '🧊 Frosted glass',     sub: 'Blur behind cards. Off makes swipes and view changes about twice as quick on a Pi' },
 ];
 
 function applyMotion() {

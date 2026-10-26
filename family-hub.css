@@ -6224,6 +6224,13 @@ body.no-anim-themeBg.nautical-mode::after,
 body.no-anim-themeBg.aurora-mode::before,
 body.no-anim-statusPulse .status-fix,
 body.no-anim-choreBadge .chore-redeem-btn { animation: none; }
+/* Frosted glass off: blur is set on many selectors at many specificities, so a
+   blanket !important is the one rule that reliably wins. Shadows stay (focus
+   rings and badge rings use them, and they cost little). */
+body.no-anim-glass *, body.no-anim-glass *::before, body.no-anim-glass *::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
 /* A stopped ticker would hide its tail, so let it scroll by hand instead. */
 body.no-anim-wxTicker .wx-ticker,
 body.no-anim-wxTicker .wx-snarky,
