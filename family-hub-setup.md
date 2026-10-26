@@ -780,9 +780,8 @@ microphone" steps, which can't be followed in a kiosk with no address bar. Typin
    sudo systemctl restart lightdm
    ```
 
-   Check it took at `chrome://policy`... which you also can't open in the kiosk, so instead just
-   tap 🎙 and speak. Chromium on the Pi can't reach Google's speech service, so the hub
-   switches itself to recording + Gemini transcription after the first try.
+3. Tap 🎙 and speak. Chromium on the Pi can't reach Google's speech service, so the first try
+   fails and the hub switches this device to recording + Gemini transcription from then on.
 
 ### 11. Memory headroom (measured)
 
