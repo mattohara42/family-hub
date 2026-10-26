@@ -517,7 +517,11 @@ In **Raspberry Pi Imager**: Raspberry Pi 3 → **Raspberry Pi OS (64-bit)** (the
 build was Debian 13 "Trixie"). In **Edit settings**:
 
 - Hostname `family-hub`, username `familyhub`, any password (only `sudo` asks for it)
-- Wi-Fi, locale, timezone
+- Wi-Fi, timezone, and **locale `en_US`**. Imager defaults to `en_GB`, and Chromium inherits
+  it: the hub then shows 24-hour times and day-first dates ("Sunday 1 November · 13:00").
+  To fix it after the fact: `sudo raspi-config nonint do_change_locale en_US.UTF-8`, then set
+  Chromium's language list with Chromium stopped (step 5's Preferences edit, with
+  `d.setdefault('intl', {})['selected_languages'] = 'en-US,en'`), then restart the session.
 - **Services → Enable SSH → public-key authentication only**, with the Mac's
   `~/.ssh/id_ed25519.pub` pasted in
 
@@ -616,7 +620,7 @@ cat > ~/.config/labwc/autostart <<'EOF'
 # Family Hub kiosk. labwc-pi runs with -m, so this adds to /etc/xdg/labwc/autostart.
 # lwrespawn relaunches Chromium if it crashes or gets OOM-killed.
 # Maximized --app window, not --kiosk: labwc hides the on-screen keyboard under full-screen windows.
-/usr/bin/lwrespawn chromium --app=https://familial.netlify.app/family-hub.html --start-maximized --force-device-scale-factor=1.25 --no-first-run --hide-crash-restore-bubble --noerrdialogs --password-store=basic --disk-cache-dir=/tmp/chromium-cache --check-for-update-interval=31536000 --disable-features=Translate --overscroll-history-navigation=0 --disable-pinch --enable-wayland-ime --wayland-text-input-version=3 &
+/usr/bin/lwrespawn chromium --app=https://familial.netlify.app/family-hub.html --start-maximized --no-first-run --hide-crash-restore-bubble --noerrdialogs --password-store=basic --disk-cache-dir=/tmp/chromium-cache --check-for-update-interval=31536000 --disable-features=Translate --overscroll-history-navigation=0 --disable-pinch --enable-wayland-ime --wayland-text-input-version=3 &
 EOF
 ```
 
@@ -633,27 +637,29 @@ What the less obvious flags are for:
 | `--overscroll-history-navigation=0` | A sideways swipe on the calendar must page the month, not navigate Back |
 | `--disable-pinch` | No accidental zooming on the wall |
 | `--app=…` | A window with no tabs or address bar, like `--kiosk` but not full screen |
-| `--force-device-scale-factor=1.25` | Draws the hub 25% larger. At 1:1 a 21.5" 1080p panel read from across the kitchen is too small. The hub sees a 1536×864 window, still well inside the desktop layout. Raise it (1.33, 1.5) if it's still small; past ~1.5 the week view gets cramped |
 | `--enable-wayland-ime --wayland-text-input-version=3` | Lets the on-screen keyboard (squeekboard) pop up when a text field is tapped. Squeekboard itself ships with the OS and starts automatically when a touchscreen is plugged in. It takes the bottom half of the screen (its size setting has no effect in landscape) and the hub shrinks to the top half while it's up |
 | `--hide-crash-restore-bubble` | No "Restore pages?" bubble after a power cut |
 
 ### 6. Mouse cursor, fonts and screen blanking
 
-**Fonts:** the hub asks for the Mac/Windows system font, which the Pi doesn't have, so text
-falls back to DejaVu Sans, which looks blocky at small sizes. Point the generic `sans-serif` and
-`system-ui` at Inter (installed in step 4):
+**Fonts:** the hub asks for the Mac/Windows system font, which the Pi doesn't have, so it falls
+back to Chromium's own default sans-serif: "Arial", which the Pi maps to Liberation Sans. Make
+Chromium's default Inter instead (installed in step 4). A fontconfig alias does **not** work
+here: Chromium never asks fontconfig for the generic `sans-serif`. With Chromium **not** running:
 
 ```bash
-mkdir -p ~/.config/fontconfig && cat > ~/.config/fontconfig/fonts.conf <<'EOF'
-<?xml version="1.0"?>
-<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
-<fontconfig>
-  <alias><family>sans-serif</family><prefer><family>Inter</family></prefer></alias>
-  <alias><family>system-ui</family><prefer><family>Inter</family></prefer></alias>
-</fontconfig>
-EOF
-fc-cache -f && fc-match sans-serif   # should print Inter
+python3 -c "
+import json, pathlib
+p = pathlib.Path.home()/'.config/chromium/Default/Preferences'
+d = json.loads(p.read_text())
+fonts = d.setdefault('webkit', {}).setdefault('webprefs', {}).setdefault('fonts', {})
+for k in ('standard', 'sansserif'): fonts.setdefault(k, {})['Zyyy'] = 'Inter'
+p.write_text(json.dumps(d))"
 ```
+
+**Size:** don't zoom Chromium (`--force-device-scale-factor`). It was tried at 1.25 and made
+event titles huge before the small text was readable. Turn on the hub's own **🖼 Wall display**
+setting instead (step 10).
 
 
 **Cursor:** a touch panel shouldn't show a pointer, and labwc has no "hide cursor" setting, so
@@ -753,11 +759,33 @@ tailnet, which the Home Assistant widget needs (see step 6c: HA is only reachabl
 1. **Sign in with Google** on the panel (the Logitech keyboard is easiest for the password).
 2. **Settings → Look & Feel:** leave the hub's own **⌨️ On-screen keyboard** toggle **off**. The
    Pi's squeekboard already pops up for every field; with both on you'd get two keyboards.
-3. **Settings → Look & Feel → Motion & effects:** switch off the animations you can live
+3. **Settings → Look & Feel → 🖼 Wall display: on.** A flatter type scale for reading from
+   across the room (small text grows the most, event titles a little), a wider sidebar, and
+   event fills deepened a notch so event text is always white. Per device.
+4. **Settings → Look & Feel → Motion & effects:** switch off the animations you can live
    without, and switch off **🧊 Frosted glass**. They're per device, so phones keep theirs. On
    this Pi the weather animations alone kept a CPU core busy (idle CPU ~33% with them running,
    ~7% paused), and the frosted-glass blur doubled the worst stutter of a calendar swipe
    (~1.1 s → ~0.5 s without it).
+
+### 10b. Voice for the Assistant (needs a USB microphone)
+
+The Pi 3B+ has **no microphone**, and neither does the uPerfect screen (`arecord -l` lists no
+capture devices). Until one is plugged in, the Assistant's 🎙 shows Chrome's "allow the
+microphone" steps, which can't be followed in a kiosk with no address bar. Typing still works.
+
+1. Plug in any USB microphone (a cheap USB mic, a webcam with a mic, or a USB speakerphone).
+   Check it shows up with `arecord -l`.
+2. Pre-allow the hub to use it, since there's no address bar to click "Allow" in:
+
+   ```bash
+   sudo mkdir -p /etc/chromium/policies/managed
+   echo '{"AudioCaptureAllowedUrls": ["https://familial.netlify.app"]}' | sudo tee /etc/chromium/policies/managed/family-hub.json
+   sudo systemctl restart lightdm
+   ```
+
+3. Tap 🎙 and speak. Chromium on the Pi can't reach Google's speech service, so the first try
+   fails and the hub switches this device to recording + Gemini transcription from then on.
 
 ### 11. Memory headroom (measured)
 

@@ -330,6 +330,7 @@ function lockPortraitOrientation() {
 })();
 let layoutMode      = localStorage.getItem('fh_layoutMode') || 'auto'; // 'auto' | 'portrait' | 'landscape'
 let tvMode          = lsGet('fh_tvMode', false);
+let wallDisplay     = lsGet('fh_wallDisplay', false); // per-device: wall-panel type scale + deeper event fills
 // SMS recipients are derived from family members with a phone number
 function getSmsContacts() {
   return familyMembers.filter(m => m.phone).map(m => ({ nick: m.name, phone: m.phone }));
@@ -1150,6 +1151,7 @@ window.addEventListener('load', () => {
   applyAppMode(appMode);
   applyFlavor(appFlavor);
   applyMotion();
+  applyWallDisplay();
   renderFlavorButtons();
   applyAppTitle();
   applyAssistantName();
@@ -2681,8 +2683,9 @@ function renderAgendaView() {
     evts.forEach(ev => {
       const row = document.createElement('div');
       row.className = 'agenda-event agenda-clickable';
-      if (ev.color) row.style.setProperty('--event-color', ev.color);
-      row.style.color = readableTextOn(ev.color);
+      const fill = eventFill(ev.color);
+      if (fill) row.style.setProperty('--event-color', fill);
+      row.style.color = readableTextOn(fill);
       row.onclick = () => onCalEventClick(ev);
 
       const info = document.createElement('div');
@@ -3700,21 +3703,40 @@ let evtEditing = null; // { ev, calId } when editing; null when creating
  *  Banana/Citron. Unparseable or missing colors get white, matching the
  *  var(--muted) fallback fill. */
 function readableTextOn(color) {
+  const rgb = parseHexColor(color);
+  return rgb && relLuminance(rgb) > 0.30 ? '#1f2328' : '#fff';
+}
+
+function parseHexColor(color) {
   const hex = String(color || '').trim().replace(/^#/, '');
   const full = hex.length === 3 ? hex.split('').map(c => c + c).join('') : hex;
-  if (!/^[0-9a-f]{6}$/i.test(full)) return '#fff';
-  const [r, g, b] = [0, 2, 4].map(i => {
-    const c = parseInt(full.slice(i, i + 2), 16) / 255;
+  return /^[0-9a-f]{6}$/i.test(full) ? [0, 2, 4].map(i => parseInt(full.slice(i, i + 2), 16)) : null;
+}
+
+function relLuminance(rgb) {
+  const [r, g, b] = rgb.map(v => {
+    const c = v / 255;
     return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
   });
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.30 ? '#1f2328' : '#fff';
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** Wall display only: darken a fill (same hue) until white text clears the
+ *  3:1 bar readableTextOn uses, so every event reads as white-on-color from
+ *  across the room instead of some flipping to near-black. Elsewhere, as is. */
+function eventFill(color) {
+  let rgb = wallDisplay && parseHexColor(color);
+  if (!rgb) return color;
+  while (relLuminance(rgb) > 0.30) rgb = rgb.map(v => Math.round(v * 0.92));
+  return '#' + rgb.map(v => v.toString(16).padStart(2, '0')).join('');
 }
 
 /** The shared event fill for Month pills/bars and Day pills: the event's own
  *  calendar color (neutral if it has none) with text that reads on it. */
 function paintEventFill(el, color) {
-  el.style.background = color || 'var(--muted)';
-  el.style.color = readableTextOn(color);
+  const fill = eventFill(color);
+  el.style.background = fill || 'var(--muted)';
+  el.style.color = readableTextOn(fill);
 }
 
 // Emoji (with any variation selector / ZWJ sequence). Phone Month cells are a
@@ -12048,6 +12070,16 @@ window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', ()
   if (appMode === 'auto') applyAppMode('auto');
 });
 
+// ── Wall display ──
+// Per-device (fh_wallDisplay) look for a wall panel read from across the room:
+// a flatter type scale on <html> (family-hub.css § Wall display) that grows
+// small text a lot and event titles a little, plus eventFill()'s deeper fills.
+// Replaces zooming the whole page, which made events huge before chips and
+// sidebar text were readable.
+function applyWallDisplay() {
+  document.documentElement.classList.toggle('wall-display', wallDisplay);
+}
+
 function applyTvMode(on) {
   if (on !== undefined) tvMode = on;
   if (tvMode) {
@@ -12568,6 +12600,7 @@ function openSettings() {
   renderCalPalettePreview();
   document.querySelector(`input[name="assistantWelcome"][value="${assistantWelcomeMode}"]`).checked = true;
   document.getElementById('tvModeToggle').checked = tvMode;
+  document.getElementById('wallDisplayToggle').checked = wallDisplay;
   // Easter egg category toggles
   Object.keys(EGG_CATEGORY_DEFAULTS).forEach(cat => {
     const el = document.getElementById('egg_cat_' + cat);
@@ -12704,6 +12737,12 @@ function saveSettings() {
   if (lmSaveEl) { layoutMode = lmSaveEl.value; localStorage.setItem('fh_layoutMode', layoutMode); applyLayoutMode(); }
   saveChoreRewards();
   applyTvMode(document.getElementById('tvModeToggle').checked);
+  if (wallDisplay !== document.getElementById('wallDisplayToggle').checked) {
+    wallDisplay = !wallDisplay;
+    localStorage.setItem('fh_wallDisplay', JSON.stringify(wallDisplay));
+    applyWallDisplay();
+    renderCurrentView();   // event fills are painted inline, so repaint them
+  }
   // Easter egg categories
   Object.keys(EGG_CATEGORY_DEFAULTS).forEach(cat => {
     const el = document.getElementById('egg_cat_' + cat);
