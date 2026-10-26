@@ -550,6 +550,7 @@ ssh -t familyhub@family-hub.local 'echo "familyhub ALL=(ALL) NOPASSWD: ALL" | su
 ```bash
 sudo apt-get update && sudo apt-get -y full-upgrade
 sudo apt-get install -y fonts-noto-color-emoji   # the hub's icons are emoji; without this they're empty boxes
+sudo apt-get install -y fonts-inter              # a clean UI font; see step 6
 sudo reboot
 ```
 
@@ -577,17 +578,22 @@ sudo sed -i -E 's@^(/usr/bin/lwrespawn /usr/bin/(pcmanfm-pi|wf-panel-pi) &)@# Fa
 That file belongs to the `rpd-wayland-core` package. apt keeps local edits to it, but if an
 upgrade ever asks whether to replace it, answer **keep your version**.
 
-**b. Strip the window border and maximize.** Add a window rule inside `~/.config/labwc/rc.xml`
-(the Pi already put a `<touch …/>` line there; keep it):
+**b. Real touch, no window border.** Edit `~/.config/labwc/rc.xml`. The Pi already put a
+`<touch …/>` line there: keep its `deviceName`, but change `mouseEmulation` to **`"no"`**, and
+add the window rule:
 
 ```xml
 <openbox_config xmlns="http://openbox.org/3.4/rc">
-	<touch deviceName="…" mapToOutput="HDMI-A-1" mouseEmulation="yes"/>
+	<touch deviceName="…" mapToOutput="HDMI-A-1" mouseEmulation="no"/>
 	<windowRules>
 		<windowRule identifier="chrom*" serverDecoration="yes"><action name="SetDecorations" decorations="none"/><action name="Maximize"/></windowRule>
 	</windowRules>
 </openbox_config>
 ```
+
+`mouseEmulation="no"` matters: with the Pi's default `"yes"`, every touch reaches Chromium as a
+mouse drag, so swiping the calendar **selects text** instead of paging (the hub's swipe listens
+for real touch events).
 
 Then tell Chromium to use "system" window borders (so labwc's "none" applies, instead of
 Chromium drawing its own title bar). Run this once, with Chromium **not** running:
@@ -610,7 +616,7 @@ cat > ~/.config/labwc/autostart <<'EOF'
 # Family Hub kiosk. labwc-pi runs with -m, so this adds to /etc/xdg/labwc/autostart.
 # lwrespawn relaunches Chromium if it crashes or gets OOM-killed.
 # Maximized --app window, not --kiosk: labwc hides the on-screen keyboard under full-screen windows.
-/usr/bin/lwrespawn chromium --app=https://familial.netlify.app/family-hub.html --start-maximized --no-first-run --hide-crash-restore-bubble --noerrdialogs --password-store=basic --disk-cache-dir=/tmp/chromium-cache --check-for-update-interval=31536000 --disable-features=Translate --overscroll-history-navigation=0 --disable-pinch --enable-wayland-ime --wayland-text-input-version=3 &
+/usr/bin/lwrespawn chromium --app=https://familial.netlify.app/family-hub.html --start-maximized --force-device-scale-factor=1.25 --no-first-run --hide-crash-restore-bubble --noerrdialogs --password-store=basic --disk-cache-dir=/tmp/chromium-cache --check-for-update-interval=31536000 --disable-features=Translate --overscroll-history-navigation=0 --disable-pinch --enable-wayland-ime --wayland-text-input-version=3 &
 EOF
 ```
 
@@ -627,10 +633,28 @@ What the less obvious flags are for:
 | `--overscroll-history-navigation=0` | A sideways swipe on the calendar must page the month, not navigate Back |
 | `--disable-pinch` | No accidental zooming on the wall |
 | `--app=…` | A window with no tabs or address bar, like `--kiosk` but not full screen |
+| `--force-device-scale-factor=1.25` | Draws the hub 25% larger. At 1:1 a 21.5" 1080p panel read from across the kitchen is too small. The hub sees a 1536×864 window, still well inside the desktop layout. Raise it (1.33, 1.5) if it's still small; past ~1.5 the week view gets cramped |
 | `--enable-wayland-ime --wayland-text-input-version=3` | Lets the on-screen keyboard (squeekboard) pop up when a text field is tapped. Squeekboard itself ships with the OS and starts automatically when a touchscreen is plugged in. It takes the bottom half of the screen (its size setting has no effect in landscape) and the hub shrinks to the top half while it's up |
 | `--hide-crash-restore-bubble` | No "Restore pages?" bubble after a power cut |
 
-### 6. Mouse cursor and screen blanking
+### 6. Mouse cursor, fonts and screen blanking
+
+**Fonts:** the hub asks for the Mac/Windows system font, which the Pi doesn't have, so text
+falls back to DejaVu Sans, which looks blocky at small sizes. Point the generic `sans-serif` and
+`system-ui` at Inter (installed in step 4):
+
+```bash
+mkdir -p ~/.config/fontconfig && cat > ~/.config/fontconfig/fonts.conf <<'EOF'
+<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+  <alias><family>sans-serif</family><prefer><family>Inter</family></prefer></alias>
+  <alias><family>system-ui</family><prefer><family>Inter</family></prefer></alias>
+</fontconfig>
+EOF
+fc-cache -f && fc-match sans-serif   # should print Inter
+```
+
 
 **Cursor:** a touch panel shouldn't show a pointer, and labwc has no "hide cursor" setting, so
 we install a cursor theme where every cursor is a transparent pixel:
