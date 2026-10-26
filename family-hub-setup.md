@@ -517,7 +517,11 @@ In **Raspberry Pi Imager**: Raspberry Pi 3 → **Raspberry Pi OS (64-bit)** (the
 build was Debian 13 "Trixie"). In **Edit settings**:
 
 - Hostname `family-hub`, username `familyhub`, any password (only `sudo` asks for it)
-- Wi-Fi, locale, timezone
+- Wi-Fi, timezone, and **locale `en_US`**. Imager defaults to `en_GB`, and Chromium inherits
+  it: the hub then shows 24-hour times and day-first dates ("Sunday 1 November · 13:00").
+  To fix it after the fact: `sudo raspi-config nonint do_change_locale en_US.UTF-8`, then set
+  Chromium's language list with Chromium stopped (step 5's Preferences edit, with
+  `d.setdefault('intl', {})['selected_languages'] = 'en-US,en'`), then restart the session.
 - **Services → Enable SSH → public-key authentication only**, with the Mac's
   `~/.ssh/id_ed25519.pub` pasted in
 
