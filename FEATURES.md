@@ -373,6 +373,8 @@ Activated via Settings → Look & Feel → 📺 TV / Display Mode toggle, or by 
 - **Key function:** `applyTvMode(on?)` — toggles the class, saves to `fh_tvMode`
 - **HTML:** `#tvModeToggle` in Settings → Look & Feel
 
+**Motion switches (per device):** Settings → Look & Feel → Motion lists every *endless* animation with its own on/off toggle, so a slow wall panel can stop the ones that keep the browser repainting (on the Pi 3B+ panel: ~33% idle CPU with them running, ~7% paused). `MOTION_ANIMS` (in `// ── Motion ──`, family-hub.js) is the list — `wxIcon`, `sunGlow`, `moonGlow`, `wxTicker` (forecast ticker + snarky line), `asstTicker`, `themeBg` (Nautical wave / Aurora shimmer), `statusPulse` (`.status-fix`), `choreBadge` (`.chore-redeem-btn`). Off keys live in `motionOff` / `fh_motionOff` — localStorage only, deliberately not Firestore-synced, since the panel and a phone want different answers. `applyMotion()` (load listener + `saveSettings()`) toggles `body.no-anim-<key>`; `renderMotionToggles()` (from `openSettings()`) builds the rows into `#motionToggles` as `#motion-<key>` checkboxes. CSS lives in `/* ── Motion switches ── */` at the end of family-hub.css: each `body.no-anim-<key> <selector>` outranks the animation's own rule on specificity, and a stopped ticker gets `overflow-x: auto` so its tail stays reachable by swipe. Transient animations (spinners, mic, assistant thinking, Easter eggs) are intentionally not listed. **Adding a new endless animation?** Add it to `MOTION_ANIMS` and the CSS block, or the panel can't turn it off.
+
 ---
 
 ### 6. Widget Placement System
@@ -1045,6 +1047,7 @@ const HA_TOGGLE_DOMAINS = ['light', 'switch', 'fan', 'input_boolean'];
 | `fh_voiceEngine` | string | Assistant | `'browser'` (default) or `'gemini'`; flips to `'gemini'` on a `SpeechRecognition` `'network'` error and stays there on that device |
 | `fh_tvMode` | bool | TV Mode | TV / Display Mode on/off (default false) |
 | `fh_osk` | bool | On-screen keyboard | Touch keyboard for keyboardless wall displays (default false; ignored on phones) |
+| `fh_motionOff` | JSON array | Motion switches | `MOTION_ANIMS` keys switched off on this device (default `[]`, all animations on); never synced |
 | `fh_eggCategories` | JSON object | Easter Eggs | `{ phrases, calendar, ui, weather }` — all true by default |
 | `fh_eggFranchises` | JSON object | Easter Eggs | `{ [franchiseId]: bool }` — per-franchise on/off pick within the `phrases` category, all true by default |
 | `fh_saver` | bool | Screensaver | Idle photo screensaver on/off (default false) |

@@ -384,6 +384,7 @@ let assistantSending     = false; // a sendAssistantMessage() round-trip is in f
 let assistantTTS         = lsGet('fh_assistantTTS', false); // read replies aloud
 let assistantWelcomeMode = localStorage.getItem('fh_assistantWelcome') || 'ticker'; // 'static' | 'ticker'
 let oskEnabled           = lsGet('fh_osk', false); // on-screen keyboard for keyboardless wall displays
+let motionOff            = lsGet('fh_motionOff', []); // MOTION_ANIMS keys switched off on this device
 // Starter prompts shown as clickable chips in the empty chat state.
 // ⚠️ Keep this current: when a new assistant capability ships (see ASSISTANT_BACKLOG.md),
 // add a representative prompt here so users discover it.
@@ -1148,6 +1149,7 @@ window.addEventListener('load', () => {
   }
   applyAppMode(appMode);
   applyFlavor(appFlavor);
+  applyMotion();
   renderFlavorButtons();
   applyAppTitle();
   applyAssistantName();
@@ -12140,6 +12142,41 @@ function highlightFlavorButtons() {
   });
 }
 
+// ── Motion ─────────────────────────────────────────────────────
+// Per-device switches for the endless animations. Each one keeps the browser
+// repainting forever; on the Pi 3 wall panel the weather set alone pinned a
+// core (~33% → 7% idle CPU with them paused). Stored per device in
+// fh_motionOff (a phone and the panel want different answers) and applied as
+// body.no-anim-<key> classes that family-hub.css § Motion switches keys on.
+const MOTION_ANIMS = [
+  { key: 'wxIcon',      label: '🌤 Weather icon',      sub: 'Drifting cloud, turning sun, bobbing rain' },
+  { key: 'sunGlow',     label: '☀️ Sun glow',          sub: 'Pulse on the daylight arc' },
+  { key: 'moonGlow',    label: '🌕 Full-moon glow',    sub: 'Only on full-moon nights' },
+  { key: 'wxTicker',    label: '📜 Weather tickers',   sub: 'Scrolling forecast lines (swipe them by hand when off)' },
+  { key: 'asstTicker',  label: '🤖 Assistant prompts', sub: 'Scrolling suggestion chips' },
+  { key: 'themeBg',     label: '🌊 Theme background',  sub: 'Nautical waves, Aurora shimmer' },
+  { key: 'statusPulse', label: '🔴 Status warning',    sub: 'Red pulse when something needs fixing' },
+  { key: 'choreBadge',  label: '⭐ Chore reward',       sub: 'Pulsing Redeem button' },
+];
+
+function applyMotion() {
+  MOTION_ANIMS.forEach(a => document.body.classList.toggle('no-anim-' + a.key, motionOff.includes(a.key)));
+}
+
+function renderMotionToggles() {
+  document.getElementById('motionToggles').innerHTML = MOTION_ANIMS.map(a => `
+    <div class="toggle-row" style="flex:1 1 200px">
+      <label class="toggle-switch">
+        <input type="checkbox" id="motion-${a.key}"${motionOff.includes(a.key) ? '' : ' checked'} />
+        <span class="toggle-track"></span>
+      </label>
+      <div>
+        <div class="toggle-label">${a.label}</div>
+        <div class="toggle-sub">${a.sub}</div>
+      </div>
+    </div>`).join('');
+}
+
 // ── On-Screen Keyboard ─────────────────────────────────────────
 // A lightweight touch keyboard for keyboardless wall displays. Opt-in via
 // Settings → Look (fh_osk); never on phones (they have a native keyboard).
@@ -12422,6 +12459,7 @@ function openSettings() {
   document.getElementById('appIconPickerBtn').textContent = appTitleEmoji;
   document.getElementById('sunArcToggle').checked        = sunArcEnabled;
   document.getElementById('oskToggle').checked           = oskEnabled;
+  renderMotionToggles();
   document.getElementById('wxTickerToggle').checked     = wxTickerEnabled;
   document.getElementById('wxActivityToggle').checked   = wxActivityEnabled;
   document.getElementById('wxView5day').checked   = !!wxEnabledViews['5day'];
@@ -12572,7 +12610,10 @@ function saveSettings() {
   oskEnabled        = document.getElementById('oskToggle').checked;
   localStorage.setItem('fh_osk', JSON.stringify(oskEnabled));
   if (!oskEnabled) hideOnScreenKeyboard();
-  wxTickerEnabled   = document.getElementById('wxTickerToggle').checked;
+  motionOff = MOTION_ANIMS.filter(a => !document.getElementById('motion-' + a.key).checked).map(a => a.key);
+  localStorage.setItem('fh_motionOff', JSON.stringify(motionOff));
+  applyMotion();
+  wxTickerEnabled   =document.getElementById('wxTickerToggle').checked;
   wxActivityEnabled = document.getElementById('wxActivityToggle').checked;
   wxEnabledViews = {
     '5day':   document.getElementById('wxView5day').checked,

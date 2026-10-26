@@ -490,6 +490,266 @@ that only lives on a dead disk doesn't help.
 
 ---
 
+## Wall Panel: Building the Pi
+
+How the kitchen wall panel was built, step by step, so it can be rebuilt from a blank SD card.
+Everything below was run over SSH from the Mac.
+
+**Hardware:** Raspberry Pi 3B+ (1 GB), Samsung EVO Select microSD, uPerfect 21.5" touchscreen
+(HDMI for picture, USB cable for touch), official 5V 2.5A Pi power supply.
+
+> This Pi only runs the browser. Home Assistant lives on separate hardware (Step 6); a 1 GB
+> Pi has no room for it.
+
+### Quick reference
+
+| What | How |
+|---|---|
+| SSH in | `ssh familyhub@family-hub.local` (user is **`familyhub`**, not `matt`) |
+| VNC in | **RealVNC Viewer** (see Wall Panel — Remote Access) → `family-hub.local` at home, `family-hub` over Tailscale → log in as `familyhub` + the Pi password |
+| Reload the hub page | `ssh familyhub@family-hub.local sudo systemctl restart lightdm` (restarts the panel's whole session, ~1 min) |
+| Reboot | `ssh familyhub@family-hub.local sudo reboot` |
+| Kiosk launch line | `~/.config/labwc/autostart` |
+
+### 1. Flash the card
+
+In **Raspberry Pi Imager**: Raspberry Pi 3 → **Raspberry Pi OS (64-bit)** (the desktop one; this
+build was Debian 13 "Trixie"). In **Edit settings**:
+
+- Hostname `family-hub`, username `familyhub`, any password (only `sudo` asks for it)
+- Wi-Fi, locale, timezone
+- **Services → Enable SSH → public-key authentication only**, with the Mac's
+  `~/.ssh/id_ed25519.pub` pasted in
+
+> Double-check the username field before writing. The first attempt assumed `matt` and the
+> card said `familyhub`; with key-only SSH the only symptom is `Permission denied (publickey)`.
+
+### 2. Power-on order
+
+Card in → HDMI and the touch USB cable to the screen → turn the **screen on first** → Pi power
+**last** (the Pi has no switch and checks for a display as it boots). Never power the Pi from the
+monitor's USB port. First boot grows the filesystem and reboots once; allow 2–3 minutes.
+
+After a reflash the Pi has a new host key, so clear the old one on the Mac first:
+
+```bash
+ssh-keygen -R family-hub.local
+```
+
+### 3. Passwordless sudo
+
+Imager's user needs a password for `sudo`, which blocks scripted setup. Run once from a Mac
+terminal (it asks for the Pi password):
+
+```bash
+ssh -t familyhub@family-hub.local 'echo "familyhub ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/011_familyhub-nopasswd && sudo chmod 440 /etc/sudoers.d/011_familyhub-nopasswd'
+```
+
+### 4. Update the OS
+
+```bash
+sudo apt-get update && sudo apt-get -y full-upgrade
+sudo apt-get install -y fonts-noto-color-emoji   # the hub's icons are emoji; without this they're empty boxes
+sudo reboot
+```
+
+Over Wi-Fi on a 3B+ this takes a while. Run it inside `sudo systemd-run --unit=upgrade sh -c '…'`
+if you don't want a dropped SSH session to kill it halfway; follow it with `journalctl -fu upgrade`.
+
+### 5. Chromium kiosk
+
+The desktop already logs in automatically (`lightdm` → `familyhub` → the `labwc` session).
+
+> **Why not `chromium --kiosk`?** It was the first attempt, and the on-screen keyboard never
+> appeared. labwc deliberately hides keyboards and panels (the "top" layer) underneath any
+> full-screen window, and `--kiosk` is full screen. So instead Chromium runs as a normal
+> **maximized window with no border**, which looks identical but lets the keyboard show.
+
+**a. Drop the desktop and taskbar.** Nothing should sit behind the hub. It also saves about
+40 MB of RAM. (Auto-hiding the taskbar instead does *not* work: it pushed the hub window 34 px
+off the top of the screen.) The Pi starts labwc with `-m`, which runs the system autostart *and*
+ours, so comment the two lines out of the system file:
+
+```bash
+sudo sed -i -E 's@^(/usr/bin/lwrespawn /usr/bin/(pcmanfm-pi|wf-panel-pi) &)@# Family Hub kiosk: no desktop/taskbar behind Chromium. \1@' /etc/xdg/labwc/autostart
+```
+
+That file belongs to the `rpd-wayland-core` package. apt keeps local edits to it, but if an
+upgrade ever asks whether to replace it, answer **keep your version**.
+
+**b. Strip the window border and maximize.** Add a window rule inside `~/.config/labwc/rc.xml`
+(the Pi already put a `<touch …/>` line there; keep it):
+
+```xml
+<openbox_config xmlns="http://openbox.org/3.4/rc">
+	<touch deviceName="…" mapToOutput="HDMI-A-1" mouseEmulation="yes"/>
+	<windowRules>
+		<windowRule identifier="chrom*" serverDecoration="yes"><action name="SetDecorations" decorations="none"/><action name="Maximize"/></windowRule>
+	</windowRules>
+</openbox_config>
+```
+
+Then tell Chromium to use "system" window borders (so labwc's "none" applies, instead of
+Chromium drawing its own title bar). Run this once, with Chromium **not** running:
+
+```bash
+python3 -c "
+import json, pathlib
+p = pathlib.Path.home()/'.config/chromium/Default/Preferences'
+d = json.loads(p.read_text()); d.setdefault('browser', {})['custom_chrome_frame'] = False
+p.write_text(json.dumps(d))"
+```
+
+(On a brand-new card the Preferences file doesn't exist until Chromium has run once. Boot, let
+it open, `sudo systemctl stop lightdm`, run the above, `sudo systemctl start lightdm`.)
+
+**c. The launch line.** Create `~/.config/labwc/autostart`:
+
+```bash
+cat > ~/.config/labwc/autostart <<'EOF'
+# Family Hub kiosk. labwc-pi runs with -m, so this adds to /etc/xdg/labwc/autostart.
+# lwrespawn relaunches Chromium if it crashes or gets OOM-killed.
+# Maximized --app window, not --kiosk: labwc hides the on-screen keyboard under full-screen windows.
+/usr/bin/lwrespawn chromium --app=https://familial.netlify.app/family-hub.html --start-maximized --no-first-run --hide-crash-restore-bubble --noerrdialogs --password-store=basic --disk-cache-dir=/tmp/chromium-cache --check-for-update-interval=31536000 --disable-features=Translate --overscroll-history-navigation=0 --disable-pinch --enable-wayland-ime --wayland-text-input-version=3 &
+EOF
+```
+
+To restart the hub after changing any of this, restart the whole session:
+`sudo systemctl restart lightdm`. (Avoid `pkill -f chromium` over SSH: the pattern also matches
+your own SSH command and kills it.)
+
+What the less obvious flags are for:
+
+| Flag | Why |
+|---|---|
+| `--password-store=basic` | Without it, an auto-logged-in session pops a "unlock your keyring" dialog over the kiosk |
+| `--disk-cache-dir=/tmp/…` | HTTP cache goes to RAM (`/tmp` is tmpfs). The profile (Google sign-in, `fh_*` settings) stays on the card on purpose |
+| `--overscroll-history-navigation=0` | A sideways swipe on the calendar must page the month, not navigate Back |
+| `--disable-pinch` | No accidental zooming on the wall |
+| `--app=…` | A window with no tabs or address bar, like `--kiosk` but not full screen |
+| `--enable-wayland-ime --wayland-text-input-version=3` | Lets the on-screen keyboard (squeekboard) pop up when a text field is tapped. Squeekboard itself ships with the OS and starts automatically when a touchscreen is plugged in. It takes the bottom half of the screen (its size setting has no effect in landscape) and the hub shrinks to the top half while it's up |
+| `--hide-crash-restore-bubble` | No "Restore pages?" bubble after a power cut |
+
+### 6. Mouse cursor and screen blanking
+
+**Cursor:** a touch panel shouldn't show a pointer, and labwc has no "hide cursor" setting, so
+we install a cursor theme where every cursor is a transparent pixel:
+
+```bash
+python3 - <<'EOF'
+# Writes a transparent Xcursor theme ("blank") so no pointer shows on the touch panel.
+import os, struct
+src = '/usr/share/icons/PiXtrix/cursors'
+dst = os.path.expanduser('~/.icons/blank/cursors')
+os.makedirs(dst, exist_ok=True)
+# Xcursor file: header, one TOC entry, one 1x1 fully transparent 24px-nominal image
+img = struct.pack('<9I', 36, 0xfffd0002, 24, 1, 1, 1, 0, 0, 0) + struct.pack('<I', 0)
+data = b'Xcur' + struct.pack('<3I', 16, 0x10000, 1) + struct.pack('<3I', 0xfffd0002, 24, 28) + img
+with open(os.path.join(dst, 'default'), 'wb') as f:
+    f.write(data)
+for name in os.listdir(src):
+    p = os.path.join(dst, name)
+    if name != 'default' and not os.path.lexists(p):
+        os.symlink('default', p)
+with open(os.path.join(dst, '..', 'index.theme'), 'w') as f:
+    f.write('[Icon Theme]\nName=blank\n')
+EOF
+echo XCURSOR_THEME=blank >> ~/.config/labwc/environment
+```
+
+To get the pointer back (say, while debugging over VNC), delete that last line from
+`~/.config/labwc/environment` and reboot.
+
+**Blanking:** the OS screen blanking stays **off**. The hub has its own screensaver, and the OS
+blanking would turn the screen black over it.
+
+```bash
+sudo raspi-config nonint do_blanking 1   # 1 = disabled
+```
+
+### 7. Fewer SD card writes
+
+A fresh Trixie install already avoids the worst of it: swap is compressed RAM (`zram`), `/tmp`
+is a RAM disk, root is mounted `noatime`, and there's no `rsyslog`. The remaining steady writer
+was the systemd journal, so keep it in RAM (logs are lost on reboot, which is fine for a panel):
+
+```bash
+sudo mkdir -p /etc/systemd/journald.conf.d
+printf '[Journal]\nStorage=volatile\nRuntimeMaxUse=32M\n' | sudo tee /etc/systemd/journald.conf.d/10-family-hub.conf
+sudo systemctl restart systemd-journald
+```
+
+Chromium's HTTP cache is also in RAM (flag above). Its profile is deliberately left on the card.
+
+### 8. VNC (see and drive the panel from the Mac)
+
+The Pi ships `wayvnc`, a VNC server for the labwc desktop. Turn it on:
+
+```bash
+sudo raspi-config nonint do_vnc 0   # 0 = enabled; starts now and on every boot
+```
+
+**To connect:**
+
+1. On the Mac, install **RealVNC Viewer** (free, realvnc.com → Download → Viewer). The Mac's
+   built-in Screen Sharing is unreliable with wayvnc, which only offers encrypted logins
+   (TLS and RSA-AES); see **Wall Panel — Remote Access** below.
+2. In the address box type `family-hub.local` (at home) or `family-hub` (from anywhere, with
+   Tailscale running on the Mac; see step 9).
+3. Log in as **`familyhub`** with the **Pi's password** (the one set in Imager). VNC uses the
+   Pi's own login, so there's no separate VNC password to forget.
+4. The first time, the viewer asks you to trust the Pi's identity. Accept it.
+
+You'll see the hub as it is on the wall. The panel's pointer is invisible by design (step 6);
+RealVNC Viewer draws your own Mac pointer instead, so clicking still works. To get to a
+terminal or the desktop behind the kiosk, SSH is quicker than VNC.
+
+### 9. Tailscale (reach the panel from outside the house)
+
+Same install as step 6c, minus `tailscale serve` (nothing on this Pi needs publishing):
+
+```bash
+curl -fsSL https://tailscale.com/install.sh | sudo sh
+sudo tailscale up --hostname=family-hub
+```
+
+`tailscale up` prints a `login.tailscale.com/a/…` link. Open it on the Mac, sign into the
+family tailnet, and click **Connect**. (The Pi only shows up under Machines *after* that link
+is approved; it won't be waiting there beforehand.) Check from the Pi with `tailscale status`,
+which also prints its tailnet IP and `family-hub.<tailnet>.ts.net` name. After that, `ssh familyhub@family-hub` and VNC to
+`family-hub` work from anywhere the Mac has Tailscale on. It also puts the panel inside the
+tailnet, which the Home Assistant widget needs (see step 6c: HA is only reachable over Tailscale).
+
+> In the [Tailscale admin console](https://login.tailscale.com/admin/machines), open the
+> `family-hub` machine's **⋯** menu → **Disable key expiry**. Otherwise the panel quietly drops
+> off the tailnet after 180 days, and the HA widget with it.
+
+### 10. In the hub itself (on the panel)
+
+1. **Sign in with Google** on the panel (the Logitech keyboard is easiest for the password).
+2. **Settings → Look & Feel:** leave the hub's own **⌨️ On-screen keyboard** toggle **off**. The
+   Pi's squeekboard already pops up for every field; with both on you'd get two keyboards.
+3. **Settings → Look & Feel → Motion:** switch off the animations you can live without. They're
+   per device, so phones keep theirs. On this Pi the weather animations alone kept a CPU core
+   busy (idle CPU ~33% with them running, ~7% paused).
+
+### 11. Memory headroom (measured)
+
+1 GB is tight but it holds. Four minutes after a session restart, signed in, with the month
+view, weather and sidebar loaded (desktop and taskbar removed per step 5a):
+
+| | |
+|---|---|
+| Available RAM | ~330 MB of 905 MB |
+| Swapped out | ~185 MB, compressed by zram into ~37 MB of RAM (no SD writes) |
+| Idle CPU | ~68% idle with all animations running |
+
+Removing the desktop and taskbar bought back ~100 MB. If it ever gets tight (Chromium tabs
+crashing, the hub reloading on its own), check with `free -m` and `vmstat 5`: steady non-zero
+`si`/`so` columns mean it's thrashing. The real fix at that point is a Pi 4/5 with 2 GB+.
+
+---
+
 ## Wall Panel — Remote Access
 
 You can see and control the panel's screen from another computer (we use the Mac mini), which
