@@ -684,7 +684,7 @@ function renderBudgetCard() {
 
   // ── Compute range & label from the active calendar view ──
   let start, end, periodLabel, summaryTitle;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateKey(new Date());
 
   if (calView === 'week') {
     const ws = getWeekStart(calViewDate);
@@ -901,7 +901,7 @@ function openBudgetCardAdd() {
   document.getElementById('biAmount').value     = '';
   document.getElementById('biFreq').value       = 'monthly';
   document.getElementById('biDayOfMonth').value = new Date().getDate();
-  document.getElementById('biStartDate').value  = new Date().toISOString().slice(0, 10);
+  document.getElementById('biStartDate').value  = localDateKey(new Date());
   updateBudgetFormFields();
   form.style.display = '';
   document.getElementById('biName').focus();
@@ -4319,7 +4319,7 @@ async function rescheduleEvent(ev, newDateKey) {
   if (!googleToken || !ev.eventId) return;
   const oldDateKey = ev.startDate || ev.startDT?.slice(0, 10);
   if (!oldDateKey || oldDateKey === newDateKey) return;
-  if (newDateKey === new Date().toISOString().slice(0, 10) && eggCategories.ui) {
+  if (newDateKey === localDateKey(new Date()) && eggCategories.ui) {
     showToast('⚡ Back to the future!', 2500);
   }
 
@@ -6439,7 +6439,7 @@ function makeTodoItem(item, onToggle, onDelete) {
   wrap.appendChild(label);
 
   // Badges row (due date + assignee)
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateKey(new Date());
   const hasBadge = item.dueDate || item.assignedTo;
   if (hasBadge) {
     const badges = document.createElement('div');
@@ -6844,7 +6844,7 @@ function clearDoneLocal(col) {
 function renderChoreCard() {
   const body = document.getElementById('choreCardBody');
   if (!body) return;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateKey(new Date());
 
   if (!familyMembers.length) {
     body.innerHTML = '<div class="list-empty" style="display:block">Add family members in Settings to get started.</div>';
@@ -6943,7 +6943,7 @@ function renderChoreCard() {
 }
 
 async function toggleChore(choreId, memberId, pts, wasDone) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateKey(new Date());
   const newDoneDate = wasDone ? null : today;
   const pointsDelta = wasDone ? -(pts) : pts;
 
@@ -7924,7 +7924,7 @@ const WOTD_FALLBACKS = {
 };
 
 async function loadWotd(force = false) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateKey(new Date());
   const cached = lsGet('fh_wotd', null);
   if (!force && cached && cached.date === today && cached.definition) {
     renderWotd(cached);
@@ -7988,7 +7988,7 @@ function refreshWotd() {
 // ── Dad Joke of the Day ───────────────────────────────────────────────────────
 
 async function loadDadJoke(force = false) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateKey(new Date());
   const cached = lsGet('fh_dadjoke', null);
   if (!force && cached && cached.date === today) {
     renderDadJoke(cached.joke);
@@ -8129,7 +8129,7 @@ const QUOTES = [
 ];
 
 function loadQuote(force = false) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateKey(new Date());
   if (!force) {
     const cached = lsGet('fh_quote', null);
     if (cached && cached.date === today) { renderQuote(cached); return; }
@@ -9823,7 +9823,7 @@ async function assistantAddBudget(name, amountStr, freqRaw) {
   const item = { name, amount, frequency: freq, color: BUDGET_COLOR };
   if (freq === 'monthly')  item.dayOfMonth = today.getDate();
   if (freq === 'weekly')   item.dayOfWeek  = today.getDay();
-  if (freq === 'biweekly') item.startDate  = today.toISOString().slice(0, 10);
+  if (freq === 'biweekly') item.startDate  = localDateKey(today);
   if (freq === 'yearly')   { item.month = today.getMonth(); item.dayOfMonth = today.getDate(); }
   if (db) {
     item.createdAt = firebase.firestore.FieldValue.serverTimestamp();
@@ -10181,7 +10181,7 @@ const EASTER_EGG_FRANCHISES = [
     },
     t => {
       if (!/^(what'?s for dinner|what are we (having|eating) (for )?dinner)[.!?]?$/.test(t)) return null;
-      const dinner = (mealPlan[new Date().toISOString().slice(0, 10)] || {}).dinner;
+      const dinner = (mealPlan[localDateKey(new Date())] || {}).dinner;
       if (!dinner) return `In a hole in the ground there lived a hobbit. And that hobbit had absolutely no idea what was for dinner either. Perhaps you'd like to plan something?`;
       return null; // let Gemini handle it — there's an actual meal planned
     },
@@ -10237,7 +10237,7 @@ const EASTER_EGG_FRANCHISES = [
   { id: 'fewgoodmen', label: '⚖️ A Few Good Men', triggers: [
     t => {
       if (!/you can'?t handle the truth/.test(t)) return null;
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localDateKey(new Date());
       const overdue = todoItems.filter(i => !i.done && i.date && i.date < today);
       const uncheckedShop = shopItemsCache.filter(i => !i.done);
       const unplanned = !((mealPlan[today] || {}).breakfast || (mealPlan[today] || {}).lunch || (mealPlan[today] || {}).dinner);
@@ -10264,7 +10264,7 @@ const EASTER_EGG_FRANCHISES = [
   { id: 'apollo13', label: '🌕 Apollo 13', triggers: [
     t => {
       if (!/houston,? we (have|'?ve got) a problem/.test(t)) return null;
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localDateKey(new Date());
       const overdue = todoItems.filter(i => !i.done && i.date && i.date < today);
       const uncheckedShop = shopItemsCache.filter(i => !i.done);
       const unplanned = !((mealPlan[today] || {}).breakfast || (mealPlan[today] || {}).lunch || (mealPlan[today] || {}).dinner);
@@ -10526,7 +10526,7 @@ function checkAssistantEasterEgg(text) {
 
 /** Build a brief plain-text summary of today for easter egg responses. */
 function buildDailyBriefingSummary() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateKey(new Date());
   const lines = [];
   const pending = todoItems.filter(i => !i.done);
   if (pending.length) lines.push(`📋 ${pending.length} to-do item${pending.length === 1 ? '' : 's'} pending`);
