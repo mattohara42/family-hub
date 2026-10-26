@@ -5745,3 +5745,22 @@ body.flavor-tactile #saverClockTime { font-family: var(--font-display); }
 .osk-key.osk-active { background: var(--accent, #6c8ef5); color: #fff; }
 .osk-key.osk-enter { background: var(--accent, #6c8ef5); color: #fff; }
 .osk-key.osk-hide  { flex: 0 0 56px; }
+
+/* ── Motion switches (Settings → Look → Motion; family-hub.js § Motion) ── */
+/* body.no-anim-<key> outranks each animation's own rule on specificity, so
+   source order doesn't matter. Endless animations only — one-shot and
+   while-busy ones (spinners, mic, assistant thinking) stay. */
+body.no-anim-wxIcon .wx-icon,
+body.no-anim-sunGlow .wx-sun-glow,
+body.no-anim-moonGlow .wx-full-moon,
+body.no-anim-wxTicker .wx-ticker-track,
+body.no-anim-wxTicker .wx-snarky-track,
+body.no-anim-asstTicker .assistant-ticker-track,
+body.no-anim-themeBg.nautical-mode::after,
+body.no-anim-themeBg.aurora-mode::before,
+body.no-anim-statusPulse .status-fix,
+body.no-anim-choreBadge .chore-redeem-btn { animation: none; }
+/* A stopped ticker would hide its tail, so let it scroll by hand instead. */
+body.no-anim-wxTicker .wx-ticker,
+body.no-anim-wxTicker .wx-snarky,
+body.no-anim-asstTicker .assistant-ticker { overflow-x: auto; }
