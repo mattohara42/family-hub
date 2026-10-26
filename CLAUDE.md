@@ -64,6 +64,7 @@ Shared state (shopping, todo, budget) lives in Firebase Firestore. Photos are bl
 | Calendar palette ignores a new color read | While a curated palette is on (`calPalette`, FEATURES.md §Calendar Palettes), every color comes from `memberColor(m)` or `sourceColor(key, own)`. A new render path that reads `m.color`/`sub.color`/`cal.color` directly will show the hand-picked color and clash. New color sources also need a key in `paletteSourceKeys()` |
 | SMS popover clipping | `backdrop-filter` on `.card` traps `position: fixed`; append popover to `<body>` then position via `getBoundingClientRect()` |
 | Sidebar card compression | `.sidebar > *` must have `flex-shrink: 0` |
+| Day stepping by `86400000` ms breaks on DST | A fall-back day is 25 hours, so `new Date(midnight.getTime() + 86400000)` lands at 23:00 the same date: Week view showed Nov 1 twice and dropped Saturday (2026-10-26). Step calendar days with `addDays(date, n)` (`setDate`-based). Dividing a difference by `86400000` is fine if it's `Math.round`ed or UTC-based |
 | `budgetDatesInRange()` returns strings | Returns `YYYY-MM-DD` strings, not Date objects — don't call Date methods on them |
 | Budget pill hidden by default | `#budgetTotalCard` starts `display:none`; `renderBudgetCard()` shows it when items exist |
 | Budget uses Firestore | Collection `budget` ordered by `createdAt`; `onSnapshot` keeps `budgetItems[]` live |

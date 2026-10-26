@@ -688,7 +688,7 @@ function renderBudgetCard() {
 
   if (calView === 'week') {
     const ws = getWeekStart(calViewDate);
-    const we = new Date(ws.getTime() + 6 * 86400000);
+    const we = addDays(ws, 6);
     start = ws; end = we;
     const sameMonth = ws.getMonth() === we.getMonth();
     periodLabel = sameMonth
@@ -723,7 +723,7 @@ function renderBudgetCard() {
   if (totalCard && totalInner) {
     // Week range anchored to calViewDate
     const ws = getWeekStart(calViewDate);
-    const we = new Date(ws.getTime() + 6 * 86400000);
+    const we = addDays(ws, 6);
     const weekItems = [];
     budgetItems.forEach(item => budgetDatesInRange(item, ws, we).forEach(d => weekItems.push(item)));
     const weekTotal = weekItems.reduce((s, item) => s + item.amount, 0);
@@ -1486,15 +1486,23 @@ function getWeekStart(date) {
   return d;
 }
 
+// Step by calendar days, not 86400000 ms: a DST day is 23 or 25 hours, so
+// ms math from local midnight lands on the wrong date (Nov 1 + 24h = Nov 1).
+function addDays(date, n) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + n);
+  return d;
+}
+
 function changeCalPeriod(delta) {
   if (calView === 'month') {
     calViewDate = new Date(calViewDate.getFullYear(), calViewDate.getMonth() + delta, 1);
   } else if (calView === 'week') {
-    calViewDate = new Date(calViewDate.getTime() + delta * 7 * 86400000);
+    calViewDate = addDays(calViewDate, delta * 7);
   } else if (calView === 'agenda') {
-    calViewDate = new Date(calViewDate.getTime() + delta * 30 * 86400000);
+    calViewDate = addDays(calViewDate, delta * 30);
   } else {
-    calViewDate = new Date(calViewDate.getTime() + delta * 86400000);
+    calViewDate = addDays(calViewDate, delta);
   }
   renderCurrentView();
   renderYearStrip();
@@ -1569,7 +1577,7 @@ function checkCalendarEasterEggs() {
   if (existing) existing.remove();
   const todayInView = (() => {
     if (calView === 'month')  return calViewDate.getFullYear() === now.getFullYear() && calViewDate.getMonth() === now.getMonth();
-    if (calView === 'week')   return getWeekStart(calViewDate) <= now && now <= new Date(getWeekStart(calViewDate).getTime() + 6*86400000);
+    if (calView === 'week')   return getWeekStart(calViewDate) <= now && now <= addDays(getWeekStart(calViewDate), 6);
     if (calView === 'day')    return calViewDate.toDateString() === now.toDateString();
     return true; // agenda
   })();
@@ -1624,7 +1632,7 @@ function renderWeekGrid() {
   container.innerHTML = '';
   const today     = new Date();
   const weekStart = getWeekStart(calViewDate);
-  const weekEnd   = new Date(weekStart.getTime() + 6 * 86400000);
+  const weekEnd   = addDays(weekStart, 6);
 
   // Nav label
   const sameMonth = weekStart.getMonth() === weekEnd.getMonth();
@@ -1644,7 +1652,7 @@ function renderWeekGrid() {
   grid.className = 'week-grid';
 
   for (let i = 0; i < 7; i++) {
-    const day    = new Date(weekStart.getTime() + i * 86400000);
+    const day    = addDays(weekStart, i);
     const isToday = day.toDateString() === today.toDateString();
     const dateKey = `${day.getFullYear()}-${String(day.getMonth()+1).padStart(2,'0')}-${String(day.getDate()).padStart(2,'0')}`;
 
@@ -2292,7 +2300,7 @@ function renderMonthGrid() {
   // Determine which column indices (0=Sun … 6=Sat) belong to the current week
   const todayInThisMonth = today.getFullYear() === year && today.getMonth() === month;
   const currentWeekStart = todayInThisMonth ? getWeekStart(today) : null;
-  const currentWeekEnd   = currentWeekStart ? new Date(currentWeekStart.getTime() + 6 * 86400000) : null;
+  const currentWeekEnd   = currentWeekStart ? addDays(currentWeekStart, 6) : null;
   const inCurrentWeek = d => currentWeekStart && d >= currentWeekStart && d <= currentWeekEnd;
 
   // Prev-month filler
@@ -2574,7 +2582,7 @@ async function loadAllCalendars() {
   let timeMin, timeMax;
   if (calView === 'week') {
     const ws = getWeekStart(calViewDate);
-    const we = new Date(ws.getTime() + 6 * 86400000);
+    const we = addDays(ws, 6);
     we.setHours(23, 59, 59);
     timeMin = ws.toISOString(); timeMax = we.toISOString();
   } else if (calView === 'day') {
@@ -2583,7 +2591,7 @@ async function loadAllCalendars() {
     timeMax = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59).toISOString();
   } else if (calView === 'agenda') {
     const start = new Date(calViewDate); start.setHours(0, 0, 0, 0);
-    const end   = new Date(start.getTime() + 30 * 86400000); end.setHours(23, 59, 59);
+    const end   = addDays(start, 30); end.setHours(23, 59, 59);
     timeMin = start.toISOString(); timeMax = end.toISOString();
   } else {
     const year = calViewDate.getFullYear(), month = calViewDate.getMonth();
@@ -8413,7 +8421,7 @@ function exportWeekMealsToShopping() {
   let mealCount = 0;
 
   for (let i = 0; i < 7; i++) {
-    const d = new Date(weekStart.getTime() + i * 86400000);
+    const d = addDays(weekStart, i);
     const dk = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     ['breakfast','lunch','dinner'].forEach(type => {
       const meal = (mealPlan[dk] || {})[type];
@@ -8467,8 +8475,7 @@ async function saveMealTemplate() {
   const weekStart = calView === 'week' ? getWeekStart(calViewDate) : getWeekStart(new Date());
   const week = [];
   for (let i = 0; i < 7; i++) {
-    const d = new Date(weekStart.getTime() + i * 86400000);
-    const dk = d.toISOString().slice(0, 10);
+    const dk = localDateKey(addDays(weekStart, i));
     const dm = mealPlan[dk] || {};
     week.push({
       breakfast: dm.breakfast || null,
@@ -8501,14 +8508,14 @@ async function applyMealTemplate(id) {
 
   const weekStart = getWeekStart(new Date());
   const targetDates = Array.from({length: 7}, (_, i) =>
-    new Date(weekStart.getTime() + i * 86400000).toISOString().slice(0, 10));
+    localDateKey(addDays(weekStart, i)));
 
   const hasExisting = targetDates.some(dk => {
     const dm = mealPlan[dk] || {};
     return dm.breakfast || dm.lunch || dm.dinner;
   });
   const weekLabel = `${weekStart.toLocaleDateString([],{month:'short',day:'numeric'})} – ${
-    new Date(weekStart.getTime()+6*86400000).toLocaleDateString([],{month:'short',day:'numeric'})}`;
+    addDays(weekStart, 6).toLocaleDateString([],{month:'short',day:'numeric'})}`;
 
   if (hasExisting && !confirm(`Apply "${tmpl.name}" to this week (${weekLabel})?\nExisting meals will be replaced.`)) return;
 
@@ -11248,7 +11255,7 @@ function lcGetRange() {
   const d = calViewDate;
   if (calView === 'week') {
     const ws = getWeekStart(d);
-    return { start: ws, end: new Date(ws.getTime() + 6*86400000) };
+    return { start: ws, end: addDays(ws, 6) };
   }
   if (calView === 'day') {
     const s = new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -11256,7 +11263,7 @@ function lcGetRange() {
   }
   if (calView === 'agenda') {
     const s = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    return { start: s, end: new Date(s.getTime() + 30*86400000) };
+    return { start: s, end: addDays(s, 30) };
   }
   // month
   return {
