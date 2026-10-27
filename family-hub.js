@@ -13331,11 +13331,12 @@ function resetSaverIdleTimer() {
   _saverIdleTimer = setTimeout(startScreensaver, Math.max(1, saverIdleMin) * 60000);
 }
 
-function startScreensaver() {
+function startScreensaver(manual = false) {
   // Tab hidden, or photo mode with an empty pool — re-arm and try again next
   // idle period. Pond mode needs no photos, so it isn't gated on the pool.
+  // A manual start (startScreensaverNow) runs even with the idle saver off.
   const pond = saverMode === 'pond';
-  if (!saverEnabled || saverActive || document.hidden || (!pond && !bgPhotos.length)) { resetSaverIdleTimer(); return; }
+  if ((!saverEnabled && !manual) || saverActive || document.hidden || (!pond && !bgPhotos.length)) { resetSaverIdleTimer(); return; }
   if (isMobile) return;  // guard the direct path too (timer armed pre-resize)
   saverActive = true;
   document.getElementById('saverClock').style.transform = '';
@@ -13351,6 +13352,19 @@ function startScreensaver() {
     _saverIdx = Math.floor(Math.random() * bgPhotos.length) - 1; // random starting photo
     if (!_saverNightOn) advanceSaverPhoto();
   }
+}
+
+/** 💤 beside ⚙️ in the control card: start the screensaver now, in whichever
+    mode Settings has, whether or not the idle screensaver is switched on. */
+let _saverManualAt = 0;
+function startScreensaverNow() {
+  if (saverActive || isMobile) return;
+  if (saverMode !== 'pond' && !bgPhotos.length) {
+    showToast('No screensaver photos yet. Add some, or switch the screensaver to Pond in Preferences.', 4000);
+    return;
+  }
+  _saverManualAt = Date.now();
+  startScreensaver(true);
 }
 
 function stopScreensaver() {
@@ -13547,7 +13561,12 @@ function updateSaverOverlay() {
 let _saverLastMove = 0;
 function saverActivity(e) {
   markActivity();   // also feeds the kiosk auto-update idle check
-  if (saverActive) { stopScreensaver(); return; }
+  if (saverActive) {
+    // The tap/click that started it on demand (and the hand settling after
+    // it) mustn't wake it straight back up
+    if (Date.now() - _saverManualAt < 1500) return;
+    stopScreensaver(); return;
+  }
   if (e && e.type === 'pointermove') {
     const now = Date.now();
     if (now - _saverLastMove < 1000) return; // throttle re-arms to 1/s

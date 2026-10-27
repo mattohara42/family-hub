@@ -3461,11 +3461,11 @@ body.light-mode .lc-select  { border-color: rgba(0,0,0,.15); }
 .panel-empty .panel-empty-icon { font-size: 2.2rem; margin-bottom: 10px; }
 .panel-empty p { margin-top: 6px; font-size: var(--text-base); }
 
-#settingsBtn {
+#settingsBtn, #saverNowBtn {
   background: none; border: none; color: var(--muted); cursor: pointer;
   font-size: 1rem; padding: 2px 4px; line-height: 1;
 }
-#settingsBtn:hover { color: var(--text); }
+#settingsBtn:hover, #saverNowBtn:hover { color: var(--text); }
 
 /* Spinner */
 .spinner {
