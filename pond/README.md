@@ -81,6 +81,7 @@ Deferred: feeding mechanic, more discoveries, settings UI, optional weather/seas
 
 - `vendor/Tone.js` is the Tone.js v15.1.22 UMD build, vendored so the toy works with no CDN dependency (kiosk-friendly).
 - Sibling projects: The Grid Sings, Chord Garden.
+- Built to run as an always-on screensaver on modest hardware (a Raspberry Pi 3B+ wall panel). It draws at 30fps, paints everything that doesn't move (shore, rocks, ice) once into offscreen layers, avoids canvas blur filters, and caps render resolution at 1.5× on high-DPI screens. Under a 6× CPU throttle at 1080p that took a frame from ~1.3s to ~0.12s. Keep new per-frame drawing cheap: no `ctx.filter`, no fresh gradients for things that never change, and scale per-frame steps by `fk` (or `dt`) so motion speed doesn't depend on frame rate.
 
 ## License
 
