@@ -973,13 +973,13 @@ const kingfisher={
    a birthday, with a "Happy birthday, NAME!" card. These have no natural
    condition (wants:false) — only the birthday, or the hidden summon.     ---- */
 
-// Jack — a mother duck with three ducklings trailing across the water.
+// Jack — a mother duck and a green-headed drake, three ducklings trailing behind.
 const duckfamily={
-  id:'duckfamily', name:'Duck family', sub:'', active:false, x:0,y:0,tx:0,dir:-1,state:'in',timer:0,wake:0,babies:[],
+  id:'duckfamily', name:'Duck family', sub:'', active:false, x:0,y:0,tx:0,dir:-1,state:'in',timer:0,wake:0,babies:[],drake:{x:0,y:0},
   wants(){ return false; },
   start(){ this.active=true; const fromRight=Math.random()<0.6; this.dir=fromRight?-1:1;
     this.x=fromRight?W+40:-40; this.y=rand(0.4,0.7)*H; this.tx=fromRight?rand(0.35,0.5)*W:rand(0.5,0.65)*W;
-    this.state='in'; this.timer=rand(22,44); this.wake=0; this.babies=[]; for(let i=0;i<3;i++) this.babies.push({x:this.x,y:this.y});
+    this.state='in'; this.timer=rand(22,44); this.wake=0; this.drake={x:this.x,y:this.y-50}; this.babies=[]; for(let i=0;i<3;i++) this.babies.push({x:this.x,y:this.y});
   },
   update(dt,t){
     this.wake-=dt;
@@ -990,6 +990,10 @@ const duckfamily={
     let px=this.x, py=this.y;
     for(const b of this.babies){ const tx=px-this.dir*26, ty=py+Math.sin(t*3+px*0.05)*3;
       b.x+=(tx-b.x)*Math.min(1,dt*3); b.y+=(ty-b.y)*Math.min(1,dt*3); px=b.x; py=b.y; }
+    // the drake keeps pace just beyond the hen (higher on screen = further off)
+    const d=this.drake, dk=Math.min(1,dt*1.6);
+    d.x+=(this.x+this.dir*22-d.x)*dk; d.y+=(this.y-50+Math.sin(t*1.3)*2-d.y)*dk;
+    this.drawDrake();
     for(const b of this.babies) this.drawDuckling(b.x,b.y);
     this.drawMama();
   },
@@ -1005,19 +1009,29 @@ const duckfamily={
     ctx.beginPath(); ctx.moveTo(-18,-2); ctx.quadraticCurveTo(-26,-6,-22,-9); ctx.stroke();    // tail
     ctx.fillStyle='#6f5c3f'; ctx.beginPath(); ctx.ellipse(15,-9,5,7,0.2,0,TAU); ctx.fill();     // head
     ctx.fillStyle='#5c5230'; ctx.beginPath(); ctx.ellipse(21,-9,4,2.2,0.1,0,TAU); ctx.fill();   // bill
-    ctx.fillStyle='#20180f'; ctx.beginPath(); ctx.arc(16,-10,1,0,TAU); ctx.fill(); ctx.restore(); }
+    ctx.fillStyle='#20180f'; ctx.beginPath(); ctx.arc(16,-10,1,0,TAU); ctx.fill(); ctx.restore(); },
+  drawDrake(){ ctx.save(); ctx.translate(this.drake.x,this.drake.y); ctx.scale(this.dir*2.0,2.0);
+    ctx.fillStyle='#a8a59c'; ctx.beginPath(); ctx.ellipse(0,0,20,9,0,0,TAU); ctx.fill();      // grey body
+    ctx.fillStyle='#6e4330'; ctx.beginPath(); ctx.ellipse(11,-1,8,7,0,0,TAU); ctx.fill();      // chestnut breast
+    ctx.fillStyle='#3a6a86'; ctx.beginPath(); ctx.ellipse(-3,-1,6,3,0,0,TAU); ctx.fill();      // wing speculum
+    ctx.strokeStyle='#1e1e1e'; ctx.lineWidth=2.5; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(-18,-2); ctx.quadraticCurveTo(-24,-8,-19,-10); ctx.stroke();   // curled tail
+    ctx.fillStyle='#f2efe6'; ctx.beginPath(); ctx.ellipse(14,-5,4.5,1.4,0.2,0,TAU); ctx.fill(); // white collar
+    ctx.fillStyle='#2f6b45'; ctx.beginPath(); ctx.ellipse(15,-10,5,6.5,0.2,0,TAU); ctx.fill();  // green head
+    ctx.fillStyle='#c9b13a'; ctx.beginPath(); ctx.ellipse(21,-10,4,2.2,0.1,0,TAU); ctx.fill();  // yellow bill
+    ctx.fillStyle='#10140f'; ctx.beginPath(); ctx.arc(16,-11,1,0,TAU); ctx.fill(); ctx.restore(); }
 };
 
-// Frankie — a mother rabbit with three kits nibbling along the shore.
-function drawBunny(x,y,sc,bob,ear){
+// Frankie — a mother and father rabbit with three kits on a patch of grass by the shore.
+function drawBunny(x,y,sc,bob,ear,coat='#b79573'){
   ctx.save(); ctx.translate(x,y); ctx.scale(sc,sc);
-  ctx.fillStyle='#b79573'; ctx.beginPath(); ctx.ellipse(0,0,12,8,0,0,TAU); ctx.fill();
+  ctx.fillStyle=coat; ctx.beginPath(); ctx.ellipse(0,0,12,8,0,0,TAU); ctx.fill();
   ctx.fillStyle='#e8e2d6'; ctx.beginPath(); ctx.arc(-11,-1,3.5,0,TAU); ctx.fill();
-  ctx.fillStyle='#b79573'; ctx.beginPath(); ctx.ellipse(10,-4+bob,6,5.5,0,0,TAU); ctx.fill();
+  ctx.fillStyle=coat; ctx.beginPath(); ctx.ellipse(10,-4+bob,6,5.5,0,0,TAU); ctx.fill();
   const ew=Math.sin(ear*1.3)*0.15;
   ctx.save(); ctx.translate(10,-8+bob);
   for(const s of [-1,1]){ ctx.save(); ctx.rotate(s*0.25+ew*s);
-    ctx.fillStyle='#b79573'; ctx.beginPath(); ctx.ellipse(0,-8,2.4,8,0,0,TAU); ctx.fill();
+    ctx.fillStyle=coat; ctx.beginPath(); ctx.ellipse(0,-8,2.4,8,0,0,TAU); ctx.fill();
     ctx.fillStyle='#d8b6a0'; ctx.beginPath(); ctx.ellipse(0,-8,1.1,6,0,0,TAU); ctx.fill(); ctx.restore(); }
   ctx.restore();
   ctx.fillStyle='#2a2018'; ctx.beginPath(); ctx.arc(13,-5+bob,1,0,TAU); ctx.fill();
@@ -1025,19 +1039,45 @@ function drawBunny(x,y,sc,bob,ear){
   ctx.restore();
 }
 const bunnyfamily={
-  id:'bunnyfamily', name:'Bunny family', sub:'', active:false, life:0, mama:{x:0,y:0}, babies:[], hopTimer:0, ear:0,
+  id:'bunnyfamily', name:'Bunny family', sub:'', active:false, life:0, mama:{x:0,y:0}, dad:{x:0,y:0}, babies:[], hopTimer:0, ear:0,
+  patch:null,
   wants(){ return false; },
-  placeGroup(){ const yf=rand(0.22,0.82), bx=groundRightAt(yf)+16, by=yf*H-4;
-    this.mama={x:bx,y:by}; this.babies=[
-      {x:bx+18,y:by+13},{x:bx+34,y:by+4},{x:bx+30,y:by+22}]; },
-  start(){ this.active=true; this.life=rand(30,55); this.hopTimer=rand(5,9); this.ear=0; this.placeGroup(); },
+  // a grassy patch on the bank, chosen once per visit (land doesn't move)
+  makePatch(){ const yf=rand(0.25,0.8), g=groundRightAt(yf), rim=[], blades=[];
+    for(let i=0;i<16;i++) rim.push(rand(0.84,1.06));                   // a bumpy turf edge, not a disc
+    for(let i=0;i<30;i++){ const a=rand(Math.PI*1.05,Math.PI*1.95);   // tufts round the top rim
+      blades.push({a, h:rand(4,9), lean:rand(-0.4,0.4), tone:Math.random()<0.5}); }
+    this.patch={x:Math.max(g*0.5,62), y:yf*H, rx:72, ry:24, rim, blades}; },   // dad stays on-screen
+  // shuffle the family around on the patch (they hop a little, never off it)
+  placeGroup(){ const p=this.patch, j=()=>rand(-5,5);
+    this.dad ={x:p.x-40+j(), y:p.y-8+j()*0.5};
+    this.mama={x:p.x-8+j(),  y:p.y+j()*0.5};
+    this.babies=[{x:p.x+18+j(),y:p.y+11+j()*0.4},{x:p.x+34+j(),y:p.y-5+j()*0.4},{x:p.x+42+j(),y:p.y+12+j()*0.4}]; },
+  start(){ this.active=true; this.life=rand(30,55); this.hopTimer=rand(5,9); this.ear=0; this.makePatch(); this.placeGroup(); },
+  drawPatch(){ const p=this.patch, n=p.rim.length;
+    // rounded blob through the jittered rim points (same trick as the rocks)
+    const blob=(sx,sy,dx,dy)=>{ const pts=p.rim.map((r,i)=>{ const a=i/n*TAU; return [dx+Math.cos(a)*p.rx*sx*r, dy+Math.sin(a)*p.ry*sy*r]; });
+      ctx.beginPath(); ctx.moveTo((pts[n-1][0]+pts[0][0])/2,(pts[n-1][1]+pts[0][1])/2);
+      for(let i=0;i<n;i++){ const c=pts[i], nx=pts[(i+1)%n]; ctx.quadraticCurveTo(c[0],c[1],(c[0]+nx[0])/2,(c[1]+nx[1])/2); }
+      ctx.fill(); };
+    ctx.save(); ctx.translate(p.x,p.y);
+    ctx.fillStyle='rgba(12,22,14,0.22)'; blob(1.04,1.1,0,2);                    // damp earth at the edge
+    ctx.fillStyle='#4f7a3c'; blob(1,1,0,0);
+    ctx.fillStyle='#679449'; blob(0.8,0.66,-4,-3);
+    ctx.lineWidth=1.4; ctx.lineCap='round';
+    for(const b of p.blades){ const bx=Math.cos(b.a)*p.rx*0.92, by=Math.sin(b.a)*p.ry*0.92;
+      ctx.strokeStyle=b.tone?'#7fae58':'#5a8a40';
+      ctx.beginPath(); ctx.moveTo(bx,by); ctx.lineTo(bx+b.lean*b.h, by-b.h); ctx.stroke(); }
+    ctx.restore(); },
   update(dt,t){
     this.life-=dt; if(this.life<0){ this.active=false; return; }
     this.hopTimer-=dt; this.ear+=dt;
     if(this.hopTimer<0){ this.hopTimer=rand(5,10); this.placeGroup(); if(frogSynth) frogSynth.triggerAttackRelease('D2',0.14,undefined,0.1); }
     const bob=(Math.sin(t*4)>0.6)?1.2:0;
-    for(const b of this.babies) drawBunny(b.x,b.y,0.72,bob,this.ear);
+    this.drawPatch();
+    drawBunny(this.dad.x,this.dad.y,1.12,bob,this.ear+1.7,'#9a8772');   // dad: a touch bigger and greyer
     drawBunny(this.mama.x,this.mama.y,1,bob,this.ear);
+    for(const b of this.babies) drawBunny(b.x,b.y,0.72,bob,this.ear);
   }
 };
 
