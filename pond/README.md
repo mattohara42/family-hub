@@ -59,6 +59,8 @@ Weather is off until it knows where the pond is. It looks, in order:
 
 If none resolve — or there's no network — the pond simply runs on the day/night cycle alone. Conditions come from [Open-Meteo](https://open-meteo.com/) (free, no API key), refreshed every 10 minutes.
 
+A host page that already has the weather can hand it over instead: call `setPondWeather({cloud, precip, snow, wind, temp})` on the pond's window (cloud %, precip mm, snow cm, wind km/h, temp °C) and the pond stops fetching its own. Add `?wx=hub` to the URL to skip its first fetch as well. Family Hub does this when the pond runs as its screensaver.
+
 ## Status
 
 **v1.0.0** — the first tagged release, covering everything below. The pond is complete and playable; the deferred items are polish, not missing pieces.
