@@ -1171,7 +1171,7 @@ function updateDiscoveries(dt,t){
     if(!d.active){ bdTimer-=dt; if(bdTimer<0){ bdTimer=rand(6,14); d.start(); showCard('Happy birthday, '+bd.name+'!', d.name); markSeen(d.id); } }
   }
   discoScan-=dt;                                          // once in a while, if a condition is met, one may appear
-  if(discoScan<0){ discoScan=rand(12,26);
+  if(discoScan<0 && !bd){ discoScan=rand(12,26);          // …but not on a birthday: the birthday animal has the pond to itself
     for(const d of DISCOVERIES){ if(!d.active && d.wants() && Math.random()<0.5){ activateDisc(d,false); break; } }
   }
   for(const d of DISCOVERIES) if(d.active) d.update(dt,t);
