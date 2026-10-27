@@ -39,8 +39,17 @@
 const cv = document.getElementById('c');
 const ctx = cv.getContext('2d');
 let W=0, H=0, DPR=1;
+// offscreen caches: anything that doesn't move is painted once and stamped
+// back with a single drawImage each frame (see the drawing helpers)
+let rockLayers=[], shoreLayer=null, iceLayer=null, blobSprite=null;
+function offscreen(w,h){
+  const c=document.createElement('canvas');
+  c.width=Math.ceil(w*DPR); c.height=Math.ceil(h*DPR);
+  const x=c.getContext('2d'); x.setTransform(DPR,0,0,DPR,0,0);
+  return [c,x];
+}
 function resize(){
-  DPR = Math.min(window.devicePixelRatio||1, 2);
+  DPR = Math.min(window.devicePixelRatio||1, 1.5);   // softer on retina, far cheaper to fill
   W = window.innerWidth; H = window.innerHeight;
   cv.width = W*DPR; cv.height = H*DPR;
   ctx.setTransform(DPR,0,0,DPR,0,0);
@@ -80,10 +89,11 @@ const TRILL=['D6','E6','F#6','A6','B6'];
 async function initAudio(){
   if(audioReady) return;
   audioReady=true;
+  Tone.setContext(new Tone.Context({latencyHint:'balanced'}));   // bigger buffer, fewer dropouts on a slow CPU
   await Tone.start();
 
   const limiter=new Tone.Limiter(-3).toDestination();
-  const verb=new Tone.Reverb({decay:6, wet:0.4}).connect(limiter);
+  const verb=new Tone.Reverb({decay:4, wet:0.4}).connect(limiter);
   const bus=new Tone.Gain(0.9).connect(verb);
 
   fishSynth=new Tone.PolySynth(Tone.FMSynth,{
@@ -301,9 +311,15 @@ const stars=[]; for(let i=0;i<44;i++) stars.push({x:rand(0,1),y:rand(0,1),r:rand
      1) ?lat=..&lon=..  in the URL  (easiest for a kiosk / wall panel)
      2) FIXED_LOCATION  below       (bake in the backyard pond once)
      3) browser geolocation         (prompts once; needs https)
-   If none resolve, weather simply stays off.                               */
+   If none resolve, weather simply stays off.
+
+   A host page can supply the conditions instead (Family Hub, which already
+   has them): it calls setPondWeather({cloud, precip, snow, wind, temp}) in
+   the units below, and from then on the pond stops fetching its own.
+   ?wx=hub in the URL skips the first fetch too, for a host that will push.  */
 const FIXED_LOCATION = { lat: 43.08, lon: -77.52 }; // Pittsford, NY (ZIP 14534)
-const weather = { lat:null, lon:null, cloud:0, precip:0, snow:0, wind:0, temp:null, loaded:false };
+const weather = { lat:null, lon:null, cloud:0, precip:0, snow:0, wind:0, temp:null, loaded:false,
+  external: new URLSearchParams(location.search).get('wx')==='hub' };
 
 function resolveLocation(cb){
   const q = new URLSearchParams(location.search);
@@ -319,7 +335,7 @@ function resolveLocation(cb){
   } else cb(null, null);
 }
 async function fetchWeather(){
-  if(weather.lat == null) return;
+  if(weather.lat == null || weather.external) return;
   try{
     const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + weather.lat +
       '&longitude=' + weather.lon +
@@ -327,6 +343,7 @@ async function fetchWeather(){
     const r = await fetch(url);
     if(!r.ok) return;
     const c = (await r.json()).current || {};
+    if(weather.external) return;               // the host took over mid-fetch
     weather.cloud  = +c.cloud_cover    || 0;   // %
     weather.precip = +c.precipitation  || 0;   // mm
     weather.snow   = +c.snowfall       || 0;   // cm
@@ -337,6 +354,13 @@ async function fetchWeather(){
 }
 resolveLocation((lat, lon) => { weather.lat = lat; weather.lon = lon; fetchWeather(); });
 setInterval(fetchWeather, 10*60*1000); // conditions drift slowly; refresh every 10 min
+// host-supplied conditions: cloud %, precip mm, snow cm, wind km/h, temp °C
+window.setPondWeather = w => {
+  weather.external = true;
+  for(const k of ['cloud','precip','snow','wind']) weather[k] = +w[k] || 0;
+  weather.temp = Number.isFinite(+w.temp) && w.temp!=null ? +w.temp : null;
+  weather.loaded = true;
+};
 
 // drifting snow flecks — only drawn when it's actually snowing outside
 const flakes=[]; for(let i=0;i<80;i++) flakes.push({x:rand(0,1),y:rand(0,1),r:rand(1,2.4),sp:rand(0.02,0.06),sw:rand(0,TAU),sa:rand(0.4,0.9)});
@@ -438,7 +462,7 @@ const ROCK_SPEC=[['L',72],['L',58],['L',46],['M',34],['M',28],['M',22],['P',13],
         ox=rand(-18, depth);               // into the pond, slight off-edge bleed
         oy=sy!==0 ? sy*rand(-20, along) : rand(-along, along);
       }
-      rocks.push({ cx:c.cx, cy:c.cy, ox, oy,
+      rocks.push({ cl:ROCK_CLUSTERS.indexOf(c), cx:c.cx, cy:c.cy, ox, oy,
         r:sz*R*rand(0.92,1.14), ry:rand(0.66,0.82), rot:rand(0,TAU),
         verts, tone:ROCK_TONES[Math.floor(rand(0,ROCK_TONES.length))] });
     }
@@ -448,6 +472,18 @@ const ROCK_SPEC=[['L',72],['L',58],['L',46],['M',34],['M',28],['M',22],['P',13],
 function layoutRocks(){
   for(const rk of rocks){ rk.x=rk.cx*W+rk.ox; rk.y=rk.cy*H+rk.oy; }
   for(const s of shadeSpots){ s.x=0.18*W; s.y=s.cy*H; }   // shade sits in the open water just off the shore
+  // rocks never move: paint each cluster once into its own small layer
+  rockLayers=ROCK_CLUSTERS.map((_,ci)=>{
+    const rs=rocks.filter(r=>r.cl===ci);
+    let x0=Infinity, y0=Infinity, x1=-Infinity, y1=-Infinity;
+    for(const r of rs){ const e=r.r*1.5+2;   // bounds the rotated body + contact shadow
+      x0=Math.min(x0,r.x-e); y0=Math.min(y0,r.y-e); x1=Math.max(x1,r.x+e); y1=Math.max(y1,r.y+e); }
+    x0=Math.floor(x0); y0=Math.floor(y0);
+    const w=Math.ceil(x1-x0), h=Math.ceil(y1-y0), [c,x]=offscreen(w,h);
+    x.translate(-x0,-y0); rs.forEach(r=>drawRock(r,x));
+    return {c,x:x0,y:y0,w,h};
+  });
+  shoreLayer=null; iceLayer=null;   // sized to the viewport: rebuild on next frame
 }
 layoutRocks();
 
@@ -503,8 +539,8 @@ function drawPlant(pl,t){
   for(const lf of pl.leaves){
     const sway=Math.sin(t*lf.speed+lf.phase)*(0.09+windx*0.004);
     ctx.save(); ctx.rotate(lf.ang+sway);
-    const grd=ctx.createLinearGradient(0,0,0,-lf.len);
-    grd.addColorStop(0,lo); grd.addColorStop(1,hi); ctx.fillStyle=grd;
+    if(lf.gk!==lo+hi){ lf.gk=lo+hi; lf.g=ctx.createLinearGradient(0,0,0,-lf.len); lf.g.addColorStop(0,lo); lf.g.addColorStop(1,hi); }
+    ctx.fillStyle=lf.g;
     const bend=lf.bend+sway*1.6, tipx=Math.sin(bend)*lf.len*0.28, tipy=-lf.len;
     ctx.beginPath(); ctx.moveTo(0,0);
     ctx.quadraticCurveTo(-lf.wid+tipx*0.3, tipy*0.5, tipx, tipy);
@@ -546,7 +582,7 @@ const fireflies={
     this.age+=dt; this.life-=dt; if(this.life<0){ this.active=false; return; }
     const fade=Math.min(1, this.age/3, this.life/3);
     for(const f of this.pool){
-      f.a += Math.sin(t*0.6+f.ph)*0.03 + rand(-0.05,0.05);
+      f.a += (Math.sin(t*0.6+f.ph)*0.03 + rand(-0.05,0.05))*fk;
       f.x += Math.cos(f.a)*f.sp*dt; f.y += Math.sin(f.a)*f.sp*dt;
       if(f.x<20){f.x=20;f.a=Math.PI-f.a;} if(f.x>W-20){f.x=W-20;f.a=Math.PI-f.a;}
       if(f.y<18){f.y=18;f.a=-f.a;} if(f.y>H*0.92){f.y=H*0.92;f.a=-f.a;}
@@ -760,7 +796,7 @@ const koi={
     this.life-=dt; if(this.life<0){ this.active=false; return; }
     this.wig+=dt*4; this.hue=(t*36)%360;
     const sp=26;
-    this.h += Math.sin(t*0.4+this.wig*0.1)*0.02 + rand(-0.02,0.02);
+    this.h += (Math.sin(t*0.4+this.wig*0.1)*0.02 + rand(-0.02,0.02))*fk;
     this.x+=Math.cos(this.h)*sp*dt; this.y+=Math.sin(this.h)*sp*dt;
     const m=W*0.18; if(this.x<m||this.x>W-40||this.y<40||this.y>H-40){ this.h=Math.atan2(H/2-this.y,W/2-this.x)+rand(-0.5,0.5); }
     this.leapT-=dt; if(this.leap>0) this.leap-=dt*1.2;
@@ -773,14 +809,14 @@ const koi={
     grd.addColorStop(0,`hsl(${this.hue%360},70%,70%)`);
     grd.addColorStop(0.5,`hsl(${(this.hue+70)%360},75%,72%)`);
     grd.addColorStop(1,`hsl(${(this.hue+150)%360},70%,66%)`);
-    ctx.globalAlpha=0.92; ctx.filter='blur(0.5px)'; ctx.fillStyle=grd;
+    ctx.globalAlpha=0.92; ctx.fillStyle=grd;
     ctx.beginPath();                                                   // tail
     ctx.moveTo(-s*0.7,0); ctx.quadraticCurveTo(-s*1.4,tw*s*0.8-s*0.4,-s*1.6,tw*s);
     ctx.quadraticCurveTo(-s*1.4,tw*s*0.8+s*0.4,-s*0.7,0); ctx.fill();
     ctx.beginPath(); ctx.ellipse(0,0,s,s*0.42,0,0,TAU); ctx.fill();    // body
     ctx.fillStyle='rgba(255,255,255,0.55)';                            // pale koi patch
     ctx.beginPath(); ctx.ellipse(s*0.2,-s*0.05,s*0.34,s*0.2,0,0,TAU); ctx.fill();
-    ctx.restore(); ctx.filter='none'; ctx.globalAlpha=1;
+    ctx.restore(); ctx.globalAlpha=1;
   }
 };
 
@@ -1175,7 +1211,7 @@ cv.addEventListener('pointercancel',()=>clearTimeout(holdTimer));
 cv.addEventListener('pointermove', (e)=>{ if(e.clientX > groundRightAt(e.clientY/H)+44) clearTimeout(holdTimer); });
 
 /* ---------- drawing helpers ---------- */
-function drawRock(rk){
+function drawRock(rk,ctx){
   ctx.save(); ctx.translate(rk.x,rk.y); ctx.rotate(rk.rot);
   // contact shadow where the rock meets the water
   ctx.fillStyle='rgba(3,10,14,0.28)';
@@ -1215,7 +1251,7 @@ function drawPad(p,t){
   ctx.restore();
   if(p.flower){
     const f=p.flower;
-    f.anim += ((f.open?1:0)-f.anim)*0.08;
+    f.anim += ((f.open?1:0)-f.anim)*Math.min(1,0.08*fk);
     const o=f.anim, cx=p.x, cy=p.y+bob;
     ctx.save(); ctx.translate(cx,cy);
     for(let ring=0; ring<2; ring++){
@@ -1334,12 +1370,12 @@ function drawFish(f,dt,t){
     }
   }
   const sp=f.speed*(1+f.dart*9)*(1-iceNow*0.72)*(inShade?0.4:1);   // sluggish under ice; loiter in shade
-  f.h += Math.sin(t*0.35+f.wig*0.11)*0.01 + rand(-0.02,0.02);
+  f.h += (Math.sin(t*0.35+f.wig*0.11)*0.01 + rand(-0.02,0.02))*fk;
   f.x += Math.cos(f.h)*sp*dt; f.y += Math.sin(f.h)*sp*dt;
   const m=60, lm=W*0.15;   // stay off the left shore
   if(f.x<lm||f.x>W-m||f.y<m||f.y>H-m){ f.h=Math.atan2(H/2-f.y,W/2-f.x)+rand(-0.5,0.5); }
   ctx.save(); ctx.translate(f.x,f.y); ctx.rotate(f.h);
-  ctx.globalAlpha=0.85*(1-iceNow*0.3); ctx.filter='blur(0.6px)';   // dimmer, seen through the ice
+  ctx.globalAlpha=0.85*(1-iceNow*0.3);   // dimmer, seen through the ice
   const s=f.size, tw=Math.sin(f.wig)*0.5;
   ctx.fillStyle=f.c1;
   ctx.beginPath();                                                    // tail
@@ -1348,13 +1384,104 @@ function drawFish(f,dt,t){
   ctx.beginPath(); ctx.ellipse(0,0,s,s*0.42,0,0,TAU); ctx.fill();     // body
   ctx.fillStyle=f.c2;
   ctx.beginPath(); ctx.ellipse(s*0.25,-s*0.05,s*0.4,s*0.25,0,0,TAU); ctx.fill(); // patch
-  ctx.restore(); ctx.filter='none'; ctx.globalAlpha=1;
+  ctx.restore(); ctx.globalAlpha=1;
+}
+
+/* the shade the rocks throw on the water and the stony left shore, painted
+   once per light level (day 0..1) into a layer just wide enough to hold them */
+function buildShore(day){
+  const w=Math.ceil(Math.max(W*0.2, 0.18*W+132)), [c,ctx]=offscreen(w,H);
+  // shade (deeper by day) — the fish rest here when it's hot
+  {
+    const dayShade=0.10+0.16*day;
+    for(const s of shadeSpots){
+      const rg=ctx.createRadialGradient(s.x,s.y,0,s.x,s.y,s.r);
+      rg.addColorStop(0,`rgba(4,14,18,${dayShade})`); rg.addColorStop(1,'rgba(4,14,18,0)');
+      ctx.fillStyle=rg; ctx.beginPath(); ctx.ellipse(s.x,s.y,s.r,s.r*0.78,0,0,TAU); ctx.fill();
+    }
+  }
+
+  // left shore: a packed bed of small stones under the big rocks (no open water to their left)
+  {
+    const steps=26;
+    ctx.save();
+    // clip to the shore band so the stones stay on the bank
+    ctx.beginPath(); ctx.moveTo(0,0);
+    for(let i=0;i<=steps;i++){ const yf=i/steps; ctx.lineTo(groundRightAt(yf), yf*H); }
+    ctx.lineTo(0,H); ctx.closePath(); ctx.clip();
+    // dark stony base so no gaps show through the gravel
+    const bg=ctx.createLinearGradient(0,0,0,H);
+    bg.addColorStop(0,`rgb(${(26+day*18)|0},${(34+day*20)|0},${(38+day*20)|0})`);
+    bg.addColorStop(1,`rgb(${(18+day*12)|0},${(24+day*14)|0},${(27+day*14)|0})`);
+    ctx.fillStyle=bg; ctx.fillRect(0,0,W*0.2,H);
+    // the small stones
+    for(const s of gravel){
+      const gx=s.tf*groundRightAt(s.fy), gy=s.fy*H, n=s.verts.length, pts=[];
+      ctx.save(); ctx.translate(gx,gy); ctx.rotate(s.rot);
+      for(let i=0;i<n;i++){ const a=i/n*TAU, rr=s.verts[i]; pts.push([Math.cos(a)*s.r*rr, Math.sin(a)*s.r*rr*s.ry]); }
+      ctx.beginPath();
+      let mx=(pts[n-1][0]+pts[0][0])/2, my=(pts[n-1][1]+pts[0][1])/2; ctx.moveTo(mx,my);
+      for(let i=0;i<n;i++){ const c=pts[i], nx=pts[(i+1)%n]; ctx.quadraticCurveTo(c[0],c[1],(c[0]+nx[0])/2,(c[1]+nx[1])/2); }
+      ctx.closePath();
+      const grd=ctx.createLinearGradient(0,-s.r*s.ry,0,s.r*s.ry);
+      grd.addColorStop(0,s.tone.hi); grd.addColorStop(1,s.tone.lo);
+      ctx.fillStyle=grd; ctx.fill();
+      ctx.strokeStyle='rgba(150,175,188,0.10)'; ctx.lineWidth=0.6; ctx.stroke();
+      ctx.restore();
+    }
+    ctx.restore();
+    // damp waterline where the stony shore meets the pond
+    ctx.strokeStyle='rgba(16,26,26,0.4)'; ctx.lineWidth=2;
+    ctx.beginPath();
+    for(let i=0;i<=steps;i++){ const yf=i/steps, X=groundRightAt(yf), Y=yf*H; i?ctx.lineTo(X,Y):ctx.moveTo(X,Y); }
+    ctx.stroke();
+  }
+  return {c,w,day};
+}
+/* the winter ice sheet at a given thickness (0..1). The frosted blotches
+   are frozen where the light blobs were when it was built: ice doesn't drift */
+function buildIce(ice){
+  const [c,ctx]=offscreen(W,H);
+  ctx.globalAlpha=Math.min(0.55, ice*0.6);
+  const ig=ctx.createLinearGradient(0,0,W,H);
+  ig.addColorStop(0,'#cdd9e0'); ig.addColorStop(0.5,'#dce7ed'); ig.addColorStop(1,'#c6d3db');
+  ctx.fillStyle=ig; ctx.fillRect(0,0,W,H);
+  // frosted blotches
+  ctx.globalAlpha=Math.min(0.45, ice*0.5);
+  for(const bl of blobs){ const bx=bl.x*W, by=bl.y*H;
+    const rg=ctx.createRadialGradient(bx,by,0,bx,by,bl.r*0.85);
+    rg.addColorStop(0,'rgba(255,255,255,0.55)'); rg.addColorStop(1,'rgba(255,255,255,0)');
+    ctx.fillStyle=rg; ctx.fillRect(bx-bl.r,by-bl.r,bl.r*2,bl.r*2);
+  }
+  // cracks
+  ctx.globalAlpha=Math.min(0.6, ice*0.7); ctx.strokeStyle='rgba(242,249,253,0.8)'; ctx.lineWidth=1.2; ctx.lineJoin='round';
+  for(const cr of iceCracks){ ctx.beginPath();
+    cr.forEach((p,k)=>{ const X=((p[0]%1)+1)%1*W, Y=((p[1]%1)+1)%1*H; k?ctx.lineTo(X,Y):ctx.moveTo(X,Y); });
+    ctx.stroke();
+  }
+  return {c,ice};
+}
+// soft caustic light blob, tinted to the sky; drawn scaled with globalAlpha
+function blobSpriteFor(rgb){
+  const key=`${rgb[0]|0},${rgb[1]|0},${rgb[2]|0}`;
+  if(!blobSprite||blobSprite.key!==key){
+    const c=document.createElement('canvas'); c.width=c.height=256;
+    const x=c.getContext('2d'), rg=x.createRadialGradient(128,128,0,128,128,128);
+    rg.addColorStop(0,`rgba(${key},1)`); rg.addColorStop(1,`rgba(${key},0)`);
+    x.fillStyle=rg; x.fillRect(0,0,256,256);
+    blobSprite={c,key};
+  }
+  return blobSprite.c;
 }
 
 /* ---------- main loop ---------- */
 let last=performance.now(), idleT=rand(4,9), frogIdleT=rand(18,36);
+let fk=1;                 // this frame's length in 60fps frames, for per-frame steps
+const FRAME_MS=1000/30;   // a calm pond doesn't need 60fps; halves the work
 function frame(now){
+  if(now-last < FRAME_MS-4){ requestAnimationFrame(frame); return; }
   const dt=Math.min((now-last)/1000, 0.05); last=now;
+  fk=dt*60;
   const t=now/1000;
 
   // water — colour driven by the real local time of day (moonlit-range cycle)
@@ -1397,11 +1524,10 @@ function frame(now){
   for(const b of blobs){
     b.x=(b.x + FLOW.x*0.02*dt + 1)%1; b.y=(b.y + FLOW.y*0.02*dt + 1)%1;
     const bx=(b.x + Math.sin(t*b.s+b.p)*0.06)*W, by=(b.y + Math.cos(t*b.s*1.3+b.p)*0.06)*H;
-    const rg=ctx.createRadialGradient(bx,by,0,bx,by,b.r);
-    rg.addColorStop(0,`rgba(${sky.blob[0]|0},${sky.blob[1]|0},${sky.blob[2]|0},${sky.blobA})`);
-    rg.addColorStop(1,`rgba(${sky.blob[0]|0},${sky.blob[1]|0},${sky.blob[2]|0},0)`);
-    ctx.fillStyle=rg; ctx.fillRect(bx-b.r,by-b.r,b.r*2,b.r*2);
+    ctx.globalAlpha=sky.blobA;
+    ctx.drawImage(blobSpriteFor(sky.blob),bx-b.r,by-b.r,b.r*2,b.r*2);
   }
+  ctx.globalAlpha=1;
   // low-sun warm rake across the water at dawn (from the east) & dusk (west)
   if(sky.glowA>0.001){
     const morning=H24<13, gx0=morning?0:W, gx1=morning?W:0;
@@ -1460,51 +1586,10 @@ function frame(now){
   pumpAcc+=dt;
   if(pumpAcc>0.85){ pumpAcc=0; ripples.push({x:OUTLET.x*W+rand(-8,8), y:OUTLET.y*H+rand(-8,8), r:1.5, max:rand(8,14), a:0.15}); }
 
-  // shade the rocks throw on the water (deeper by day) — the fish rest here when it's hot
-  {
-    const dayShade=0.10+0.16*(1-(sky.night||0));
-    for(const s of shadeSpots){
-      const rg=ctx.createRadialGradient(s.x,s.y,0,s.x,s.y,s.r);
-      rg.addColorStop(0,`rgba(4,14,18,${dayShade})`); rg.addColorStop(1,'rgba(4,14,18,0)');
-      ctx.fillStyle=rg; ctx.beginPath(); ctx.ellipse(s.x,s.y,s.r,s.r*0.78,0,0,TAU); ctx.fill();
-    }
-  }
-
-  // left shore: a packed bed of small stones under the big rocks (no open water to their left)
-  {
-    const day=1-(sky.night||0), steps=26;
-    ctx.save();
-    // clip to the shore band so the stones stay on the bank
-    ctx.beginPath(); ctx.moveTo(0,0);
-    for(let i=0;i<=steps;i++){ const yf=i/steps; ctx.lineTo(groundRightAt(yf), yf*H); }
-    ctx.lineTo(0,H); ctx.closePath(); ctx.clip();
-    // dark stony base so no gaps show through the gravel
-    const bg=ctx.createLinearGradient(0,0,0,H);
-    bg.addColorStop(0,`rgb(${(26+day*18)|0},${(34+day*20)|0},${(38+day*20)|0})`);
-    bg.addColorStop(1,`rgb(${(18+day*12)|0},${(24+day*14)|0},${(27+day*14)|0})`);
-    ctx.fillStyle=bg; ctx.fillRect(0,0,W*0.2,H);
-    // the small stones
-    for(const s of gravel){
-      const gx=s.tf*groundRightAt(s.fy), gy=s.fy*H, n=s.verts.length, pts=[];
-      ctx.save(); ctx.translate(gx,gy); ctx.rotate(s.rot);
-      for(let i=0;i<n;i++){ const a=i/n*TAU, rr=s.verts[i]; pts.push([Math.cos(a)*s.r*rr, Math.sin(a)*s.r*rr*s.ry]); }
-      ctx.beginPath();
-      let mx=(pts[n-1][0]+pts[0][0])/2, my=(pts[n-1][1]+pts[0][1])/2; ctx.moveTo(mx,my);
-      for(let i=0;i<n;i++){ const c=pts[i], nx=pts[(i+1)%n]; ctx.quadraticCurveTo(c[0],c[1],(c[0]+nx[0])/2,(c[1]+nx[1])/2); }
-      ctx.closePath();
-      const grd=ctx.createLinearGradient(0,-s.r*s.ry,0,s.r*s.ry);
-      grd.addColorStop(0,s.tone.hi); grd.addColorStop(1,s.tone.lo);
-      ctx.fillStyle=grd; ctx.fill();
-      ctx.strokeStyle='rgba(150,175,188,0.10)'; ctx.lineWidth=0.6; ctx.stroke();
-      ctx.restore();
-    }
-    ctx.restore();
-    // damp waterline where the stony shore meets the pond
-    ctx.strokeStyle='rgba(16,26,26,0.4)'; ctx.lineWidth=2;
-    ctx.beginPath();
-    for(let i=0;i<=steps;i++){ const yf=i/steps, X=groundRightAt(yf), Y=yf*H; i?ctx.lineTo(X,Y):ctx.moveTo(X,Y); }
-    ctx.stroke();
-  }
+  // shade the rocks throw on the water + the stony left shore (cached)
+  const lightLvl=Math.round((1-(sky.night||0))*40)/40;
+  if(!shoreLayer||shoreLayer.day!==lightLvl) shoreLayer=buildShore(lightLvl);
+  ctx.drawImage(shoreLayer.c,0,0,shoreLayer.w,H);
 
   fish.forEach(f=>drawFish(f,dt,t));
 
@@ -1514,7 +1599,7 @@ function frame(now){
     for(let i=0;i<shown;i++){ const b=babies[i];
       b.wig+=dt*(9+b.dart*16); if(b.dart>0) b.dart-=dt*0.9;
       const bsp=b.sp*(1+b.dart*8);
-      b.h += Math.sin(t*0.5+b.wig*0.1)*0.02 + rand(-0.03,0.03);
+      b.h += (Math.sin(t*0.5+b.wig*0.1)*0.02 + rand(-0.03,0.03))*fk;
       b.x += Math.cos(b.h)*bsp*dt; b.y += Math.sin(b.h)*bsp*dt;
       const bm=40, blm=W*0.15; if(b.x<blm||b.x>W-bm||b.y<bm||b.y>H-bm){ b.h=Math.atan2(H/2-b.y,W/2-b.x)+rand(-0.5,0.5); }
       const s=b.size, tw=Math.sin(b.wig)*0.5;
@@ -1540,25 +1625,9 @@ function frame(now){
   // winter ice — a translucent sheet at the surface. Fish are drawn *under* it
   // (above), so they show through faintly; pads, frogs and flies sit on top.
   if(iceNow>0.02){
-    ctx.save();
-    ctx.globalAlpha=Math.min(0.55, iceNow*0.6);
-    const ig=ctx.createLinearGradient(0,0,W,H);
-    ig.addColorStop(0,'#cdd9e0'); ig.addColorStop(0.5,'#dce7ed'); ig.addColorStop(1,'#c6d3db');
-    ctx.fillStyle=ig; ctx.fillRect(0,0,W,H);
-    // frosted blotches
-    ctx.globalAlpha=Math.min(0.45, iceNow*0.5);
-    for(const bl of blobs){ const bx=bl.x*W, by=bl.y*H;
-      const rg=ctx.createRadialGradient(bx,by,0,bx,by,bl.r*0.85);
-      rg.addColorStop(0,'rgba(255,255,255,0.55)'); rg.addColorStop(1,'rgba(255,255,255,0)');
-      ctx.fillStyle=rg; ctx.fillRect(bx-bl.r,by-bl.r,bl.r*2,bl.r*2);
-    }
-    // cracks
-    ctx.globalAlpha=Math.min(0.6, iceNow*0.7); ctx.strokeStyle='rgba(242,249,253,0.8)'; ctx.lineWidth=1.2; ctx.lineJoin='round';
-    for(const cr of iceCracks){ ctx.beginPath();
-      cr.forEach((p,k)=>{ const X=((p[0]%1)+1)%1*W, Y=((p[1]%1)+1)%1*H; k?ctx.lineTo(X,Y):ctx.moveTo(X,Y); });
-      ctx.stroke();
-    }
-    ctx.restore(); ctx.globalAlpha=1;
+    const lvl=Math.round(iceNow*50)/50;
+    if(!iceLayer||iceLayer.ice!==lvl) iceLayer=buildIce(lvl);
+    ctx.drawImage(iceLayer.c,0,0,W,H);
   }
 
   pads.forEach(p=>drawPad(p,t));
@@ -1567,7 +1636,7 @@ function frame(now){
   if(hum) drawHum(hum,dt,t);
 
   // rocks last (over the fish, so a fish can slip in behind a rock)
-  rocks.forEach(drawRock);
+  for(const L of rockLayers) ctx.drawImage(L.c,L.x,L.y,L.w,L.h);
   // tall water plants rise up among the rocks to break up the frame
   plants.forEach(pl=>drawPlant(pl,t));
 
@@ -1577,7 +1646,7 @@ function frame(now){
   // note glyphs
   ctx.font='20px Georgia, serif';
   for(let i=notes.length-1;i>=0;i--){ const n=notes[i];
-    n.y+=n.vy; n.a-=0.012;
+    n.y+=n.vy*fk; n.a-=0.012*fk;
     if(n.a<=0){ notes.splice(i,1); continue; }
     ctx.globalAlpha=n.a; ctx.fillStyle=n.color; ctx.fillText(n.g,n.x,n.y);
   }
@@ -1591,7 +1660,7 @@ function frame(now){
     const lc=season.leaf;
     for(let i=0;i<shown;i++){ const fp=foliage[i];
       fp.y += fp.vy*dt*8 + FLOW.y*0.02*dt; fp.sw += dt*fp.sws; fp.rot += fp.rs*dt;
-      fp.x += Math.sin(fp.sw)*0.0008 + (wind/9000) + FLOW.x*0.03*dt;
+      fp.x += (Math.sin(fp.sw)*0.0008 + (wind/9000))*fk + FLOW.x*0.03*dt;
       if(fp.y>1.05){ fp.y=-0.05; fp.x=rand(0,1); }
       if(fp.x>1) fp.x-=1; if(fp.x<0) fp.x+=1;
       ctx.save(); ctx.translate(fp.x*W, fp.y*H); ctx.rotate(fp.rot);
@@ -1617,7 +1686,7 @@ function frame(now){
     ctx.fillStyle='#eef4f6';
     for(let i=0;i<shown;i++){ const fl=flakes[i];
       fl.y += fl.sp*dt*20; fl.sw += dt;
-      fl.x += Math.sin(fl.sw)*0.0006 + (wind/8000);
+      fl.x += (Math.sin(fl.sw)*0.0006 + (wind/8000))*fk;
       if(fl.y>1){ fl.y-=1; fl.x=rand(0,1); }
       if(fl.x>1) fl.x-=1; if(fl.x<0) fl.x+=1;
       ctx.globalAlpha=fl.sa;
