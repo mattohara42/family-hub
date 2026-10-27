@@ -43,7 +43,7 @@ Audio starts on the first tap (browser autoplay rules); until then the pond is s
 
 ## Birthdays
 
-On a family birthday, that person's favourite animal comes to the pond all day, with a "Happy birthday, NAME!" card — a private little surprise. The list lives in the `BIRTHDAYS` array near the discoveries in `index.html` (name, month, day, and which animal). Current visitors: a bunny family, a duck family, a breaching narwhal, the blue heron, and a flamingo. Because it reads the real device clock, no setup is needed — it just happens on the day.
+On a family birthday, that person's favourite animal comes to the pond all day, with a "Happy birthday, NAME!" card — a private little surprise. The list lives in the `BIRTHDAYS` array near the discoveries in `index.html` (name, month, day, and which animal). Current visitors: a bunny family (mum, dad and three kits on a patch of grass by the shore), a duck family (hen, green-headed drake and three ducklings), a breaching narwhal, the blue heron, and a flamingo. Because it reads the real device clock, no setup is needed — it just happens on the day.
 
 ## Seeing the discoveries on demand (hidden)
 
