@@ -1043,16 +1043,18 @@ const bunnyfamily={
   patch:null,
   wants(){ return false; },
   // a grassy patch on the bank, chosen once per visit (land doesn't move)
-  makePatch(){ const yf=rand(0.25,0.8), g=groundRightAt(yf), rim=[], blades=[];
-    for(let i=0;i<16;i++) rim.push(rand(0.84,1.06));                   // a bumpy turf edge, not a disc
-    for(let i=0;i<30;i++){ const a=rand(Math.PI*1.05,Math.PI*1.95);   // tufts round the top rim
-      blades.push({a, h:rand(4,9), lean:rand(-0.4,0.4), tone:Math.random()<0.5}); }
-    this.patch={x:Math.max(g*0.5,62), y:yf*H, rx:72, ry:24, rim, blades}; },   // dad stays on-screen
+  // tall and narrow: the bank is thin, so the family lines up along it
+  // rather than jutting out across the water
+  makePatch(){ const yf=rand(0.32,0.68), g=groundRightAt(yf), rim=[], blades=[];
+    for(let i=0;i<18;i++) rim.push(rand(0.86,1.05));                   // a bumpy turf edge, not a disc
+    for(let i=0;i<44;i++){ const a=rand(Math.PI*1.02,Math.PI*1.98);   // tufts round the top rim
+      blades.push({a, h:rand(6,13), lean:rand(-0.4,0.4), tone:Math.random()<0.5}); }
+    this.patch={x:Math.max(g*0.5,84), y:yf*H, rx:84, ry:112, rim, blades}; },
   // shuffle the family around on the patch (they hop a little, never off it)
-  placeGroup(){ const p=this.patch, j=()=>rand(-5,5);
-    this.dad ={x:p.x-40+j(), y:p.y-8+j()*0.5};
-    this.mama={x:p.x-8+j(),  y:p.y+j()*0.5};
-    this.babies=[{x:p.x+18+j(),y:p.y+11+j()*0.4},{x:p.x+34+j(),y:p.y-5+j()*0.4},{x:p.x+42+j(),y:p.y+12+j()*0.4}]; },
+  placeGroup(){ const p=this.patch, j=()=>rand(-7,7);
+    this.dad ={x:p.x-14+j(), y:p.y-62+j()*0.5};
+    this.mama={x:p.x+4+j(),  y:p.y-2+j()*0.5};
+    this.babies=[{x:p.x-26+j(),y:p.y+48+j()*0.4},{x:p.x+30+j(),y:p.y+54+j()*0.4},{x:p.x+2+j(),y:p.y+92+j()*0.4}]; },
   start(){ this.active=true; this.life=rand(30,55); this.hopTimer=rand(5,9); this.ear=0; this.makePatch(); this.placeGroup(); },
   drawPatch(){ const p=this.patch, n=p.rim.length;
     // rounded blob through the jittered rim points (same trick as the rocks)
@@ -1075,9 +1077,10 @@ const bunnyfamily={
     if(this.hopTimer<0){ this.hopTimer=rand(5,10); this.placeGroup(); if(frogSynth) frogSynth.triggerAttackRelease('D2',0.14,undefined,0.1); }
     const bob=(Math.sin(t*4)>0.6)?1.2:0;
     this.drawPatch();
-    drawBunny(this.dad.x,this.dad.y,1.12,bob,this.ear+1.7,'#9a8772');   // dad: a touch bigger and greyer
-    drawBunny(this.mama.x,this.mama.y,1,bob,this.ear);
-    for(const b of this.babies) drawBunny(b.x,b.y,0.72,bob,this.ear);
+    // sized against the lily pads: an adult is about a pad long
+    drawBunny(this.dad.x,this.dad.y,2.45,bob,this.ear+1.7,'#9a8772');   // dad: a touch bigger and greyer
+    drawBunny(this.mama.x,this.mama.y,2.2,bob,this.ear);
+    for(const b of this.babies) drawBunny(b.x,b.y,1.5,bob,this.ear);
   }
 };
 
