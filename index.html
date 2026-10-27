@@ -311,9 +311,15 @@ const stars=[]; for(let i=0;i<44;i++) stars.push({x:rand(0,1),y:rand(0,1),r:rand
      1) ?lat=..&lon=..  in the URL  (easiest for a kiosk / wall panel)
      2) FIXED_LOCATION  below       (bake in the backyard pond once)
      3) browser geolocation         (prompts once; needs https)
-   If none resolve, weather simply stays off.                               */
+   If none resolve, weather simply stays off.
+
+   A host page can supply the conditions instead (Family Hub, which already
+   has them): it calls setPondWeather({cloud, precip, snow, wind, temp}) in
+   the units below, and from then on the pond stops fetching its own.
+   ?wx=hub in the URL skips the first fetch too, for a host that will push.  */
 const FIXED_LOCATION = { lat: 43.08, lon: -77.52 }; // Pittsford, NY (ZIP 14534)
-const weather = { lat:null, lon:null, cloud:0, precip:0, snow:0, wind:0, temp:null, loaded:false };
+const weather = { lat:null, lon:null, cloud:0, precip:0, snow:0, wind:0, temp:null, loaded:false,
+  external: new URLSearchParams(location.search).get('wx')==='hub' };
 
 function resolveLocation(cb){
   const q = new URLSearchParams(location.search);
@@ -329,7 +335,7 @@ function resolveLocation(cb){
   } else cb(null, null);
 }
 async function fetchWeather(){
-  if(weather.lat == null) return;
+  if(weather.lat == null || weather.external) return;
   try{
     const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + weather.lat +
       '&longitude=' + weather.lon +
@@ -337,6 +343,7 @@ async function fetchWeather(){
     const r = await fetch(url);
     if(!r.ok) return;
     const c = (await r.json()).current || {};
+    if(weather.external) return;               // the host took over mid-fetch
     weather.cloud  = +c.cloud_cover    || 0;   // %
     weather.precip = +c.precipitation  || 0;   // mm
     weather.snow   = +c.snowfall       || 0;   // cm
@@ -347,6 +354,13 @@ async function fetchWeather(){
 }
 resolveLocation((lat, lon) => { weather.lat = lat; weather.lon = lon; fetchWeather(); });
 setInterval(fetchWeather, 10*60*1000); // conditions drift slowly; refresh every 10 min
+// host-supplied conditions: cloud %, precip mm, snow cm, wind km/h, temp °C
+window.setPondWeather = w => {
+  weather.external = true;
+  for(const k of ['cloud','precip','snow','wind']) weather[k] = +w[k] || 0;
+  weather.temp = Number.isFinite(+w.temp) && w.temp!=null ? +w.temp : null;
+  weather.loaded = true;
+};
 
 // drifting snow flecks — only drawn when it's actually snowing outside
 const flakes=[]; for(let i=0;i<80;i++) flakes.push({x:rand(0,1),y:rand(0,1),r:rand(1,2.4),sp:rand(0.02,0.06),sw:rand(0,TAU),sa:rand(0.4,0.9)});
