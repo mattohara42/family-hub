@@ -56,9 +56,23 @@ computed from PAD_SPOTS fractions (frogs sit ~10px above pad center).
 
 ## Gotchas
 
-- Headless software raster runs ~11fps at 1280×800; the 0.05s dt cap means
-  pond-time runs ~2× slower than wall-clock, so long idle timers (hummingbird
-  spawn 20–40s) take up to ~80s real. Use a small viewport (640×400) to get
-  fps up and timers near real-time.
+- Drawing is capped at 30fps (`FRAME_MS`). Headless software raster can still
+  fall below that at large viewports, and the 0.05s dt cap then makes
+  pond-time run slower than wall-clock, so long idle timers (hummingbird
+  spawn 20–40s) take longer real time. Use a small viewport (640×400) to keep
+  timers near real-time.
+- `initAudio()` swaps in a fresh `Tone.Context` (`latencyHint:'balanced'`) on
+  the first tap, so read `Tone.getContext()` after that click, not before.
+  Wrapping `Tone.PolySynth.prototype` works either side of it.
+
+## Measuring performance (proxy for the Pi 3B+ panel)
+
+Headless numbers are only meaningful relative to each other. Compare `main`
+against the branch (`git worktree add <scratch>/main-wt main`) at 1920×1080
+with `Emulation.setCPUThrottlingRate {rate:6}` over CDP, block the network
+(`page.route(/^https?:/, r=>r.abort())`) so live weather can't change the
+scene, and pin `Math.random` + `Date` in an init script for matching
+screenshots. Time the mean `requestAnimationFrame` interval over ~40 frames;
+once it's under 33ms you're measuring the cap, not the draw cost.
 - Idle events fire constantly (fish every 4–9s, croaks, dragonfly dips) —
   splice `__triggers` before each step or taps drown in ambient noise.
