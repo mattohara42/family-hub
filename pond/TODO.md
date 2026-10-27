@@ -26,18 +26,6 @@ Any deletion is reversible: `git push origin <sha>:refs/heads/<branch>`.
 Enabling **Settings → General → "Automatically delete head branches"** stops
 these accumulating.
 
-## Birthday family polish
-
-- **Bunnies on land.** The bunny family (Frankie's birthday, May 10) currently
-  sits on the stony shore. Give them a proper patch of land / grass to sit on
-  instead of the rocks. See the `bunnyfamily` discovery in `index.html`
-  (`placeGroup` positions them along `groundRightAt(...)`, the stone waterline).
-- **Add a dad bunny.** Make the bunny family mama **+ dad** + 3 kits (currently
-  mama + 3 kits). `bunnyfamily.placeGroup` / the `drawBunny` calls.
-- **Add a daddy duck.** Give Jack's duck family (June 5) a **drake** (green head)
-  alongside the hen and the 3 ducklings. See the `duckfamily` discovery — add a
-  second adult next to `drawMama` (a green-headed drake).
-
 ## Notes
 
 - **Matt's birthday message already exists.** On June 8 the narwhal breaches and
