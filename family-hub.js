@@ -4861,7 +4861,7 @@ async function loadWeatherByCity(city) {
     const fParams = new URLSearchParams({
       latitude:  lat,
       longitude: lon,
-      current:   'temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m',
+      current:   'temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,cloud_cover,precipitation,snowfall',
       hourly:    'temperature_2m,weather_code,precipitation_probability,visibility',
       daily:     'temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max,sunrise,sunset',
       temperature_unit:   'fahrenheit',
@@ -4986,6 +4986,9 @@ async function loadWeatherByCity(city) {
       windSpeed:     cur.wind_speed_10m != null ? Math.round(cur.wind_speed_10m) : null,
       windDeg,
       windDir,
+      cloud:         cur.cloud_cover ?? null,     // %, for the pond screensaver
+      precipIn:      cur.precipitation ?? null,   // inches (precipitation_unit)
+      snowIn:        cur.snowfall ?? null,        // inches
       visibility,
       days,
       hours,
@@ -5029,6 +5032,8 @@ let lastWxData = null; // most recent weather payload — reused by the screensa
 
 function renderWeatherData(data) {
   lastWxData = data;
+  const pond = document.getElementById('saverPond');
+  if (pond) applySaverPondWeather(pond);
   // Animated icon
   const iconEl = document.getElementById('wIcon');
   const wrapEl = document.getElementById('wIconWrap');
@@ -13385,6 +13390,7 @@ function startSaverPond() {
     q.set('lat', lastWxData.lat);
     q.set('lon', lastWxData.lon);
   }
+  if (pondWeather(lastWxData)) q.set('wx', 'hub');   // we'll push it; skip the pond's own fetch
   const frame = document.createElement('iframe');
   frame.id = 'saverPond';
   frame.title = 'Pond Chimes';
@@ -13393,6 +13399,7 @@ function startSaverPond() {
   frame.src = 'pond/index.html' + (q.toString() ? '?' + q : '');
   frame.addEventListener('load', () => {
     applySaverPondSound(frame);
+    applySaverPondWeather(frame);
     wireSaverPondWake(frame);
     // The pond's standalone title card ("tap the pond to wake it") is wrong
     // here — the hub has its own clock, and in 'play' mode tapping doesn't
@@ -13426,6 +13433,29 @@ function applySaverPondSound(frame) {
     if (saverPondSound) w.initAudio?.();
     if (w.Tone) w.Tone.getDestination().mute = !saverPondSound;
   } catch { /* pond not ready or autoplay blocked — silent pond, not a broken one */ }
+}
+
+/** The hub's current conditions in the pond's units (cloud %, precip mm, snow
+    cm, wind km/h, temp °C), or null when there's nothing usable. Weather cached
+    before cloud_cover was fetched has no `cloud`, so the pond keeps fetching its
+    own until the next refresh rather than showing a falsely clear sky. */
+function pondWeather(d) {
+  if (d?.cloud == null) return null;
+  return {
+    cloud:  d.cloud,
+    precip: (d.precipIn ?? 0) * 25.4,
+    snow:   (d.snowIn ?? 0) * 2.54,
+    wind:   (d.windSpeed ?? 0) * 1.609,
+    temp:   Number.isFinite(d.temp) ? (d.temp - 32) * 5 / 9 : null,
+  };
+}
+
+/** Hand the hub's weather to the pond so it doesn't fetch its own (and can't
+    disagree with the weather card). Same-origin, like applySaverPondSound. */
+function applySaverPondWeather(frame) {
+  const wx = pondWeather(lastWxData);
+  if (!wx) return;
+  try { frame.contentWindow?.setPondWeather?.(wx); } catch { /* pond not ready: it fetches its own */ }
 }
 
 /** Pointer events inside the iframe never reach the hub's window listeners, so
