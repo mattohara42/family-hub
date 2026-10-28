@@ -2,7 +2,7 @@
 
 *Expansion ideas for the Family Assistant widget. Constraints: Gemini API (via the Meals API key), three-file no-build architecture, CDN only. The `[ACTION:type:value]` tag system is the primary extension mechanism — the model appends tags to its reply; `extractAssistantActions()` parses them and `executeAssistantActions()` runs them.*
 
-Last updated: 2026-07-06
+Last updated: 2026-10-28
 
 ---
 
@@ -71,6 +71,20 @@ Grew the `[ACTION:...]` vocabulary from 2 to **7 actions**. Multi-arg actions us
 **Verified:** default off; toggle flips icon + persists; text cleaning correct (`**Great**, … ✓ … 🛒` → `Great, … …`); off-state is a true no-op; no new console errors.
 
 **Note:** uses the browser's default system voice (no voice picker). A future tweak could add voice/rate selection.
+
+---
+
+## Open: Spoken replies are slow on the wall panel  (found 2026-10-28)
+
+On the Pi 3B+ panel, replies are read by Piper (voice `en_US-ryan-low`) through speech-dispatcher, set up in `family-hub-setup.md` step 10c. It sounds good, but there's a long pause before Ryan starts and another between sentences (e.g. between each of three listed events).
+
+**Why (partly unverified):** Piper on a Pi 3 makes speech at roughly real time (real-time factor ~0.9 for "low" voices) and spends ~2.6 s loading the voice on every run. The speech-dispatcher config writes the whole chunk to a file before playing it, because streaming lost the start of every reply. The gaps *between* sentences suggest speech-dispatcher's generic module splits a reply at punctuation and runs Piper once per piece, paying the load each time. That split is the likely cause but hasn't been confirmed.
+
+**Options, cheapest first:**
+- **Fewer, longer chunks:** raise `GenericMaxChunkLength` and trim `GenericDelimiters` in `/etc/speech-dispatcher/modules/piper.conf` so a reply is one Piper run. Removes the gaps between sentences but makes the first wait longer.
+- **Keep Piper loaded:** run Piper as a long-lived process (e.g. its HTTP server) so each sentence skips the ~2.6 s load, with speech-dispatcher's command calling it.
+- **Pi 4/5:** several times faster, which fixes both waits and would allow a "medium" voice.
+- **Cloud voice (Gemini TTS):** speed independent of the Pi, but needs hub code, an allowed model in `netlify/functions/ai.js`, and plays through Chromium's own audio, which was unreliable on this Pi (see the Pond Chimes item in `SCREENSAVER_BACKLOG.md`).
 
 ---
 
