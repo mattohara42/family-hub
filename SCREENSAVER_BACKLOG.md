@@ -2,7 +2,7 @@
 
 *Idle-triggered full-screen photo screensaver for the wall-mounted display, with photos pulled from a variety of services. Constraints: three-file no-build architecture, CDN scripts only, CSP in `family-hub.html` must be extended per photo source (`img-src` currently includes `'self'`).*
 
-Last updated: 2026-08-25
+Last updated: 2026-10-28
 
 ---
 
@@ -52,7 +52,11 @@ with keyless ambient fallbacks (Bing image of the day, NASA APOD) as the only ot
 Keys: `fh_saverMode`, `fh_saverPondSound`, `fh_saverPondTap`. Full map in FEATURES.md §19.
 
 **Still open:**
-- **Verify autoplay on the real panel.** The pond's audio starts from the parent on mount; a same-origin iframe should inherit the top document's user activation, and it did in headless Chromium — but headless has a permissive autoplay policy, so this needs one confirmation on the wall display. Fallback if it's refused: the pond stays silent until someone taps it (its own standalone behavior).
+- **Pond is silent on the wall panel (investigated 2026-10-28, unresolved).** Fixed along the way, all Pi-side (`family-hub-setup.md` step 10c): sound was going to the USB mic instead of HDMI; Chromium now runs with `--autoplay-policy=no-user-gesture-required`; the uPerfect monitor mutes on silence, so an inaudible hum now keeps it awake. With those in place the Assistant's voice plays fine, but the pond was still silent at the last test. What's known:
+  - The hub side works: in desktop Chromium the pond's Tone context runs unmuted and taps produce sound (peak ~0.1 of full scale). On the Pi, `wpctl status` showed a live Chromium stream going to HDMI at volume 1.0 while the pond was silent.
+  - Chromium's own audio on the Pi 3 was unreliable: a 1-second Web Audio beep was inaudible while a 10-second one played, and in a ping test (`~/pingtest.html` on the Pi) quiet pings came out in bursts with gaps (3, pause, 3, pause, 2) while loud ones were all heard. The same pings played through `pw-play` were all heard.
+  - Those tests ran *before* the permanent hum (a weaker temporary hum didn't help the pond). The monitor muting on quiet signals could explain the gaps too, so **the first thing to try is the pond again with the hum service running.** If it's still silent, next suspects are Chromium dropouts on the Pi 3's CPU (try a bigger PipeWire buffer: `pulse.min.quantum = 1024/48000` in `~/.config/pipewire/pipewire-pulse.conf.d/`), then making the pond louder from the parent.
+- **Hub bug: a tap can't restart blocked pond audio.** `applySaverPondSound()` calls the pond's `initAudio()` on mount, which sets the pond's `audioReady = true` before `Tone.start()` is known to have succeeded. If the browser blocks autoplay, every later tap in the pond skips `initAudio()`, so the pond stays silent until the screensaver closes. Hidden on the panel by the autoplay flag, but real on any other browser. Fix from the hub side without touching `pond/`: in `wireSaverPondWake()`, add a `pointerdown` listener on the iframe document that calls `w.Tone.getContext().resume()`.
 - **Upstream embed API.** Mute currently works by reaching into the pond's `Tone` instance. A small PR to pond-chimes adding `?mute=1` / a `postMessage` control surface would make that a supported seam rather than a same-origin trick.
 - **Quiet hours for sound specifically** — right now the only options are night-window teardown or the sound toggle.
 

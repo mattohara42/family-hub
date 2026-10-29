@@ -2,7 +2,7 @@
 
 *Expansion ideas for the Family Assistant widget. Constraints: Gemini API (via the Meals API key), three-file no-build architecture, CDN only. The `[ACTION:type:value]` tag system is the primary extension mechanism — the model appends tags to its reply; `extractAssistantActions()` parses them and `executeAssistantActions()` runs them.*
 
-Last updated: 2026-07-06
+Last updated: 2026-10-28
 
 ---
 
@@ -71,6 +71,18 @@ Grew the `[ACTION:...]` vocabulary from 2 to **7 actions**. Multi-arg actions us
 **Verified:** default off; toggle flips icon + persists; text cleaning correct (`**Great**, … ✓ … 🛒` → `Great, … …`); off-state is a true no-op; no new console errors.
 
 **Note:** uses the browser's default system voice (no voice picker). A future tweak could add voice/rate selection.
+
+---
+
+## ✅ DONE: Spoken replies on the wall panel  (2026-10-29)
+
+**Shipped:** replies are spoken by Gemini text-to-speech (`gemini-3.8-flash-lite-tts`), with a voice per persona (Charon by default, Algenib in a butler style for Alfred, Iapetus for Jarvis) and the panel's local Piper voice ("Ryan", `family-hub-setup.md` step 10c) as the fallback. Details in FEATURES.md (Assistant voice output).
+
+**Why:** on the Pi 3B+ panel, Piper took ~22 s to start a 12.6 s reply, because it loads the voice (~2.6 to 4.7 s) and then makes speech at roughly real time before any of it plays. Gemini Flash-Lite started after ~6 s, the larger Flash model after ~8.7 s, and both sounded far better. Measured with a temporary "voice test" command (#112, closed).
+
+**Fixed along the way:** speech-dispatcher's generic module cut each reply at punctuation and reloaded Piper for every piece, so Ryan paused for seconds between sentences. `GenericMaxChunkLength 5000` + `GenericDelimiters "|"` in `piper.conf` make it one Piper run per reply.
+
+**Possible next steps:** stream Gemini's audio so it starts sooner (the Netlify proxy buffers whole responses today), and ask for raw PCM instead of WAV to save the ~1.4 s the Pi 3 spends unpacking it.
 
 ---
 

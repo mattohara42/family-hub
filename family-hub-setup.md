@@ -510,6 +510,8 @@ Everything below was run over SSH from the Mac.
 | Reload the hub page | `ssh familyhub@family-hub.local sudo systemctl restart lightdm` (restarts the panel's whole session, ~1 min) |
 | Reboot | `ssh familyhub@family-hub.local sudo reboot` |
 | Kiosk launch line | `~/.config/labwc/autostart` |
+| Restart speech-dispatcher (after a voice change) | `pkill -x speech-dispatch` (step 10c). Never `pkill -f speech-dispatcher`: it also kills the hub |
+| Test the speakers | `spd-say "hello"`. Not `speaker-test`, which says "Device or resource busy" while the keep-awake hum runs (step 10c) |
 
 ### 1. Flash the card
 
@@ -620,7 +622,7 @@ cat > ~/.config/labwc/autostart <<'EOF'
 # Family Hub kiosk. labwc-pi runs with -m, so this adds to /etc/xdg/labwc/autostart.
 # lwrespawn relaunches Chromium if it crashes or gets OOM-killed.
 # Maximized --app window, not --kiosk: labwc hides the on-screen keyboard under full-screen windows.
-/usr/bin/lwrespawn chromium --app=https://familial.netlify.app/family-hub.html --start-maximized --no-first-run --hide-crash-restore-bubble --noerrdialogs --password-store=basic --disk-cache-dir=/tmp/chromium-cache --check-for-update-interval=31536000 --disable-features=Translate --overscroll-history-navigation=0 --disable-pinch --enable-wayland-ime --wayland-text-input-version=3 &
+/usr/bin/lwrespawn chromium --app=https://familial.netlify.app/family-hub.html --start-maximized --no-first-run --hide-crash-restore-bubble --noerrdialogs --password-store=basic --disk-cache-dir=/tmp/chromium-cache --check-for-update-interval=31536000 --disable-features=Translate --overscroll-history-navigation=0 --disable-pinch --enable-wayland-ime --wayland-text-input-version=3 --autoplay-policy=no-user-gesture-required --enable-speech-dispatcher &
 EOF
 ```
 
@@ -639,6 +641,8 @@ What the less obvious flags are for:
 | `--app=…` | A window with no tabs or address bar, like `--kiosk` but not full screen |
 | `--enable-wayland-ime --wayland-text-input-version=3` | Lets the on-screen keyboard (squeekboard) pop up when a text field is tapped. Squeekboard itself ships with the OS and starts automatically when a touchscreen is plugged in. It takes the bottom half of the screen (its size setting has no effect in landscape) and the hub shrinks to the top half while it's up |
 | `--hide-crash-restore-bubble` | No "Restore pages?" bubble after a power cut |
+| `--autoplay-policy=no-user-gesture-required` | Lets the hub play sound before anyone has touched the page. After a reboot nobody has, so the Pond Chimes screensaver started silent. See step 10c |
+| `--enable-speech-dispatcher` | Lets the Assistant's spoken replies reach the Pi's text-to-speech (speech-dispatcher). Because the launch line now contains `speech-dispatcher`, `pkill -f speech-dispatcher` kills the hub too. See step 10c |
 
 ### 6. Mouse cursor, fonts and screen blanking
 
@@ -757,12 +761,26 @@ tailnet, which the Home Assistant widget needs (see step 6c: HA is only reachabl
 ### 10. In the hub itself (on the panel)
 
 1. **Sign in with Google** on the panel (the Logitech keyboard is easiest for the password).
-2. **Settings → Look & Feel:** leave the hub's own **⌨️ On-screen keyboard** toggle **off**. The
+2. **Let it sign itself back in after a reboot.** On load the hub asks Google for a token
+   quietly, but Google does that through a small pop-up window, and Chromium blocks pop-ups a
+   page opens before anyone has tapped it. Without this, every reboot meant tapping Sign in and
+   picking the account again. The same file pre-allows the microphone for step 10b:
+
+   ```bash
+   sudo mkdir -p /etc/chromium/policies/managed
+   echo '{"AudioCaptureAllowedUrls": ["https://familial.netlify.app"], "PopupsAllowedForUrls": ["https://familial.netlify.app"]}' | sudo tee /etc/chromium/policies/managed/family-hub.json
+   sudo reboot
+   ```
+
+   Confirmed 2026-10-29: after a reboot the hub came back signed in by itself. The hub's hourly
+   quiet token refresh goes through the same pop-up, so this should keep that working too (not
+   yet confirmed on the panel).
+3. **Settings → Look & Feel:** leave the hub's own **⌨️ On-screen keyboard** toggle **off**. The
    Pi's squeekboard already pops up for every field; with both on you'd get two keyboards.
-3. **Settings → Look & Feel → 🖼 Wall display: on.** A flatter type scale for reading from
+4. **Settings → Look & Feel → 🖼 Wall display: on.** A flatter type scale for reading from
    across the room (small text grows the most, event titles a little), a wider sidebar, and
    event fills deepened a notch so event text is always white. Per device.
-4. **Settings → Look & Feel → Motion & effects:** switch off the animations you can live
+5. **Settings → Look & Feel → Motion & effects:** switch off the animations you can live
    without, and switch off **🧊 Frosted glass**. They're per device, so phones keep theirs. On
    this Pi the weather animations alone kept a CPU core busy (idle CPU ~33% with them running,
    ~7% paused), and the frosted-glass blur doubled the worst stutter of a calendar swipe
@@ -776,16 +794,172 @@ microphone" steps, which can't be followed in a kiosk with no address bar. Typin
 
 1. Plug in any USB microphone (a cheap USB mic, a webcam with a mic, or a USB speakerphone).
    Check it shows up with `arecord -l`.
-2. Pre-allow the hub to use it, since there's no address bar to click "Allow" in:
-
-   ```bash
-   sudo mkdir -p /etc/chromium/policies/managed
-   echo '{"AudioCaptureAllowedUrls": ["https://familial.netlify.app"]}' | sudo tee /etc/chromium/policies/managed/family-hub.json
-   sudo systemctl restart lightdm
-   ```
+2. The hub needs to be pre-allowed to use it, since there's no address bar to click "Allow"
+   in. The policy file from step 10 (item 2) already does that (`AudioCaptureAllowedUrls`). If you
+   skipped it, create it now with that same command.
 
 3. Tap 🎙 and speak. Chromium on the Pi can't reach Google's speech service, so the first try
    fails and the hub switches this device to recording + Gemini transcription from then on.
+
+### 10c. Sound: monitor speakers and spoken Assistant replies
+
+The uPerfect screen's speakers play over HDMI. Getting sound out of them took four separate
+fixes (2026-10-28), and with any one missing the panel stayed silent. Do them in order.
+
+**a. Send sound to the monitor, not the USB microphone.** The USB mic from step 10b (a
+LavMicro-U) also registers as a speaker, and PipeWire made it the default output, so all sound
+went to the mic's headphone socket. Find the HDMI output's number under **Audio → Sinks**:
+
+```bash
+wpctl status | grep -A4 'Sinks:'
+wpctl set-default <number of "Built-in Audio Digital Stereo (HDMI)">
+wpctl set-volume <same number> 1.0
+```
+
+The `*` should now sit on the HDMI line. The choice survives reboots, but the numbers change
+every time PipeWire restarts, so always read them fresh from `wpctl status`.
+
+**b. Keep the monitor's audio awake.** The uPerfect mutes its speakers whenever the HDMI
+signal is silent and takes a second or two to unmute. Every sound that followed a pause lost its
+start, and short sounds vanished entirely (a 1-second beep was silent while a 10-second one
+played). The fix is to never let it hear silence: a user service loops a 25 Hz hum, far too
+quiet and too low for the monitor's speakers to reproduce.
+
+```bash
+mkdir -p ~/.local/share ~/.config/systemd/user
+python3 -c "
+import wave, math, struct
+w = wave.open('$HOME/.local/share/hum.wav', 'w'); w.setnchannels(2); w.setsampwidth(2); w.setframerate(48000)
+w.writeframes(b''.join(struct.pack('<hh', v, v) for v in (int(100 * math.sin(2 * math.pi * 25 * i / 48000)) for i in range(48000 * 60))))"
+
+cat > ~/.config/systemd/user/hdmi-keepalive.service <<'EOF'
+[Unit]
+Description=Keep the monitor's audio awake with an inaudible hum
+After=pipewire.service wireplumber.service
+
+[Service]
+ExecStart=/bin/sh -c 'while true; do pw-play %h/.local/share/hum.wav; done'
+Restart=always
+
+[Install]
+WantedBy=default.target
+EOF
+
+systemctl --user daemon-reload
+systemctl --user enable --now hdmi-keepalive
+systemctl --user is-active hdmi-keepalive   # → active
+```
+
+A WirePlumber rule that stops PipeWire suspending the HDMI output when idle went in during the
+same session. It wasn't enough on its own (the hum is what fixed the clipping), and nobody has
+tested the hum without it, so keep both:
+
+```bash
+mkdir -p ~/.config/wireplumber/wireplumber.conf.d
+cat > ~/.config/wireplumber/wireplumber.conf.d/51-hdmi-no-suspend.conf <<'EOF'
+monitor.alsa.rules = [
+  {
+    matches = [ { node.name = "~alsa_output.*hdmi.*" } ]
+    actions = { update-props = { session.suspend-timeout-seconds = 0 } }
+  }
+]
+EOF
+systemctl --user restart wireplumber
+```
+
+> Side effect: with the hum running, PipeWire holds the HDMI device open permanently. Anything
+> that opens the sound hardware directly fails with **"Device or resource busy"**: `speaker-test`,
+> and `aplay` to the default device. That's expected. Test with `pw-play` or `spd-say`, which go
+> through PipeWire. To turn the hum off: `systemctl --user disable --now hdmi-keepalive`.
+
+**c. Chromium flags.** `--autoplay-policy=no-user-gesture-required` and
+`--enable-speech-dispatcher` are already in the launch line in step 5c. To add them to a card
+set up before 2026-10-28:
+
+```bash
+sed -i 's|chromium --app=|chromium --enable-speech-dispatcher --autoplay-policy=no-user-gesture-required --app=|' ~/.config/labwc/autostart
+sudo systemctl restart lightdm
+```
+
+**d. A backup voice for the Assistant (Piper, voice "Ryan").** The Assistant's replies are
+spoken by Gemini (Charon by default, Algenib for Alfred, Iapetus for Jarvis; see FEATURES.md),
+which needs nothing on the Pi beyond steps a to c. On this Pi 3, Gemini starts talking about 3.5
+times sooner than Piper and sounds better (2026-10-29). This step sets up the voice the hub falls
+back to when Gemini fails, runs out of quota or takes over 20 s, so the panel never goes silent.
+
+Chromium on Linux doesn't speak by itself. It hands the text to speech-dispatcher, which plays
+the audio on its own rather than through Chromium. The stock engine (espeak-ng) sounds very
+robotic, so speech-dispatcher runs [Piper](https://github.com/rhasspy/piper) instead, an offline
+neural voice.
+
+```bash
+sudo apt install -y speech-dispatcher espeak-ng
+
+mkdir -p ~/piper && cd ~/piper
+curl -L -o piper.tar.gz https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_aarch64.tar.gz
+tar xzf piper.tar.gz
+curl -L -o en_US-ryan-low.onnx      https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/low/en_US-ryan-low.onnx
+curl -L -o en_US-ryan-low.onnx.json https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/low/en_US-ryan-low.onnx.json
+
+sudo tee /etc/speech-dispatcher/modules/piper.conf >/dev/null <<'EOF'
+GenericExecuteSynth "printf %s \'$DATA\' | /home/familyhub/piper/piper/piper --model /home/familyhub/piper/en_US-ryan-low.onnx --output_file /tmp/sd-piper.wav 2>/dev/null && pw-play /tmp/sd-piper.wav"
+GenericLanguage "en" "en" "utf-8"
+AddVoice "en" "MALE1" "ryan"
+DefaultVoice "ryan"
+GenericMaxChunkLength 5000
+GenericDelimiters "|"
+EOF
+
+printf '\nAddModule "piper" "sd_generic" "piper.conf"\nDefaultModule piper\n' | sudo tee -a /etc/speech-dispatcher/speechd.conf >/dev/null
+
+pkill -x speech-dispatch; sleep 1
+spd-say -O                     # → only "piper"
+spd-say "Hello from the family hub."
+sudo systemctl restart lightdm
+```
+
+Then on the panel, turn on **🔊** in the Assistant card. Reading replies aloud is per device and
+**off by default**.
+
+Things that matter here, each learned the hard way:
+
+- **Only Piper may be loaded.** If speech-dispatcher offers espeak-ng too, Chromium picks an
+  espeak voice by itself. Keep `AddModule "piper"` as the only uncommented `AddModule` line in
+  `/etc/speech-dispatcher/speechd.conf`. If *no* `AddModule` line is left, speech-dispatcher
+  loads espeak-ng automatically, so `spd-say -O` listing only `espeak-ng` means the Piper line
+  is missing.
+- **Restarting speech-dispatcher:** `pkill -x speech-dispatch`. Linux cuts process names to 15
+  characters, so plain `pkill speech-dispatcher` matches nothing and the old settings stay live.
+  **Never `pkill -f speech-dispatcher`:** it matches Chromium's `--enable-speech-dispatcher` flag
+  and kills the hub (`lwrespawn` brings it back after a moment).
+- **After restarting speech-dispatcher, restart the hub too** (`sudo systemctl restart lightdm`,
+  or just `sudo reboot`). Chromium doesn't reconnect to a speech-dispatcher that went away, so
+  the Assistant goes silent until it's restarted.
+- **Test in the hub, not with `spd-say`.** During setup, `spd-say` cut sentences short or played
+  nothing while the hub spoke fine, and `spd-say -w` sometimes never returned (Ctrl+C gets the
+  prompt back). It's fine for a first "does Piper load" check (`spd-say -O`), but judge the
+  voice by asking the Assistant something.
+- **Piper writes a file, then plays it.** Streaming (`--output_raw` piped to a player) lost the
+  first few seconds of every reply: the Pi 3 needs ~2.6 s to load the voice, and the stream
+  starved meanwhile. Piping into `aplay` also failed outright once the hum was running (see the
+  busy note above). `pw-play` of a finished file is the only version that played every word.
+- **One Piper run per reply** (`GenericMaxChunkLength 5000` and `GenericDelimiters "|"`). By
+  default speech-dispatcher cuts a reply at every `.`, `,`, `!` and so on, and runs Piper once
+  per piece. Each run reloads the voice, so Ryan paused for seconds between sentences. `|` is
+  just a character the Assistant never says, so nothing gets cut. Confirmed 2026-10-29: no
+  pauses between sentences after a reboot.
+- **Speed is the limit on a Pi 3B+.** One sentence of ~4.4 s audio took ~7 s to make with the
+  "low" voices (real-time factor ~0.9) and ~10 s with "medium" (~1.5), voice load included.
+  Because the whole reply is made before any of it plays, there's a long pause before Ryan
+  starts: roughly the voice load plus the length of the reply (~22 s for a 12.6 s reply). That's
+  why Gemini is the main voice and Piper only the backup.
+- **Other voices:** download a different voice's two files and change the model path in
+  `piper.conf`. `en_US-lessac-low` (female) and `en_GB-alan-low` (British male) were tried and
+  work. Piper has no Australian English voices. Medium/high quality voices sound better but are
+  too slow here.
+
+Files left from testing that are safe to delete: `~/pingtest.html`, and in `~/piper` the
+`lessac`/`alan` voice files and `piper.tar.gz`.
 
 ### 11. Memory headroom (measured)
 
