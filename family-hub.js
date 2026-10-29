@@ -10583,7 +10583,7 @@ async function sendAssistantMessage() {
 }
 
 async function _sendAssistantMessage(input, text) {
-  if ('speechSynthesis' in window) speechSynthesis.cancel();  // stop reading any prior reply
+  stopAssistantSpeech();  // stop reading any prior reply
   input.value = '';
 
   // Add user turn and show it immediately
@@ -10660,7 +10660,7 @@ function saveAssistantHistory() {
 
 /** Clear conversation history and reset to welcome state. */
 function clearAssistantChat() {
-  if ('speechSynthesis' in window) speechSynthesis.cancel();
+  stopAssistantSpeech();
   assistantHistory = [];
   localStorage.removeItem(ASSISTANT_HISTORY_KEY);
   renderAssistantMessages();
@@ -10791,31 +10791,184 @@ function dismissBriefing() {
 function toggleAssistantTTS() {
   assistantTTS = !assistantTTS;
   localStorage.setItem('fh_assistantTTS', JSON.stringify(assistantTTS));
-  if (!assistantTTS && 'speechSynthesis' in window) speechSynthesis.cancel();
+  if (!assistantTTS) stopAssistantSpeech();
   updateAssistantTtsBtn();
 }
 
 function updateAssistantTtsBtn() {
   const btn = document.getElementById('assistantTtsBtn');
   if (!btn) return;
-  const supported = 'speechSynthesis' in window;
+  const supported = 'AudioContext' in window || 'speechSynthesis' in window;
   btn.style.display = supported ? '' : 'none';
   btn.textContent = assistantTTS ? '🔊' : '🔇';
   btn.title = assistantTTS ? 'Reading replies aloud (click to mute)' : 'Read replies aloud';
   btn.style.color = assistantTTS ? 'var(--accent)' : 'var(--muted)';
 }
 
+// Replies are spoken by Gemini text-to-speech, which on the Pi 3 wall panel
+// starts ~3.5x sooner than the local Piper voice and sounds far better
+// (measured 2026-10-29). The device voice (speechSynthesis) is the fallback.
+// Named personas get their own voice; anything else uses the default.
+const GEMINI_TTS_MODEL        = 'gemini-3.8-flash-lite-tts'; // keep in step with TTS_MODELS in netlify/functions/ai.js
+const GEMINI_INTERACTIONS_URL = 'https://generativelanguage.googleapis.com/v1beta/interactions';
+const ASSISTANT_VOICES = {
+  default: { voice: 'Charon' },
+  alfred:  { voice: 'Algenib', style: 'dry, formal and unhurried, like an old-fashioned butler' },
+  jarvis:  { voice: 'Iapetus', style: 'crisp, calm and precise, with quiet dry wit' },
+};
+const GEMINI_TTS_TIMEOUT_MS = 20000;
+
+/** Rewrite clock times the way people say them. Piper (the panel's fallback
+    voice) reads "1:00 PM" digit by digit as "one zero zero". */
+function speakableTimes(s) {
+  const say = (h, m, ampm) => {
+    h = +h;
+    let suffix = '';
+    if (ampm) suffix = /^a/i.test(ampm) ? ' A M' : ' P M';
+    else if (h > 12 || h === 0) { suffix = h >= 12 ? ' P M' : ' A M'; h = h % 12 || 12; } // 24-hour
+    const mins = m === '00' ? (suffix ? '' : " o'clock") : ' ' + (m[0] === '0' ? 'oh ' + m[1] : m);
+    return h + mins + suffix;
+  };
+  return s
+    .replace(/(\d)\s*[–—]\s*(\d)/g, '$1 to $2')                                  // 1:00–2:00
+    .replace(/\b(\d{1,2}):(\d{2})\s*([AaPp])\.?\s?[Mm]\b(?:\.(?=\s+[a-z]))?/g, (_, h, m, ap) => say(h, m, ap))
+    .replace(/\b(\d{1,2}):(\d{2})\b/g, (_, h, m) => say(h, m, ''))
+    .replace(/\b(\d{1,2})\s*([AaPp])\.?\s?[Mm]\b(?:\.(?=\s+[a-z]))?/g, (_, h, ap) => say(h, '00', ap)); // "p.m. tonight": no stray full stop
+}
+
+/** Line under the chat while a reply is spoken. Gemini takes a few seconds
+    to prepare a reply, so without it the pause reads as nothing happening. */
+function setAssistantVoiceStatus(text) {
+  const el = document.getElementById('assistantVoiceStatus');
+  if (!el) return;
+  el.textContent = text;
+  el.style.display = text ? '' : 'none';
+}
+
+let assistantSpeech   = null;   // { abort, source } for the reply being spoken
+let assistantAudioCtx = null;
+
+/** Stop whatever is being read aloud, Gemini or device voice. */
+function stopAssistantSpeech() {
+  if (assistantSpeech) {
+    assistantSpeech.abort.abort();
+    try { assistantSpeech.source?.stop(); } catch {}
+    assistantSpeech = null;
+  }
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+  setAssistantVoiceStatus('');
+}
+
 /** Speak an assistant reply, stripping markdown/emoji. Interruptible. */
-function speakAssistant(text) {
-  if (!assistantTTS || !('speechSynthesis' in window) || !text) return;
+async function speakAssistant(text) {
+  if (!assistantTTS || !text) return;
   const clean = text
     .replace(/\*\*(.+?)\*\*/g, '$1')                       // bold markers
     .replace(/[⌀-➿☀-⛿️\u{1F000}-\u{1FAFF}]/gu, '') // emoji/symbols
     .replace(/\s{2,}/g, ' ')
     .trim();
   if (!clean) return;
-  speechSynthesis.cancel();                                // interrupt any prior speech
-  const u = new SpeechSynthesisUtterance(clean);
+  stopAssistantSpeech();
+  const me = { abort: new AbortController(), source: null };
+  assistantSpeech = me;
+  setAssistantVoiceStatus('🔊 Preparing voice…');
+  const timer = setTimeout(() => me.abort.abort(), GEMINI_TTS_TIMEOUT_MS);
+  try {
+    const ctx = await readyAssistantAudio();
+    const voice = ASSISTANT_VOICES[assistantName.trim().toLowerCase()] || ASSISTANT_VOICES.default;
+    const buf = await fetchGeminiSpeech(clean, voice, ctx, me.abort.signal);
+    clearTimeout(timer);
+    if (assistantSpeech !== me) return;                    // stopped or replaced meanwhile
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(ctx.destination);
+    src.onended = () => {
+      if (assistantSpeech !== me) return;
+      assistantSpeech = null;
+      setAssistantVoiceStatus('');
+    };
+    me.source = src;
+    setAssistantVoiceStatus('🔊 Reading aloud…');
+    src.start();
+  } catch (e) {
+    clearTimeout(timer);
+    if (assistantSpeech !== me) return;                    // stopped on purpose, not a failure
+    assistantSpeech = null;
+    setAssistantVoiceStatus('');
+    console.warn('Gemini voice failed, using the device voice:', e.message);
+    speakWithDeviceVoice(clean);
+  }
+}
+
+/** One shared AudioContext, resumed. Rejects if the browser won't let it play
+    (autoplay rules), so the caller can fall back instead of waiting forever. */
+async function readyAssistantAudio() {
+  if (!assistantAudioCtx || assistantAudioCtx.state === 'closed') assistantAudioCtx = new AudioContext();
+  const ctx = assistantAudioCtx;
+  if (ctx.state !== 'running') await Promise.race([ctx.resume(), new Promise(r => setTimeout(r, 1000))]);
+  if (ctx.state !== 'running') throw new Error('audio is blocked until someone taps the page');
+  return ctx;
+}
+
+/** Ask Gemini to speak `text`; resolves to a decoded AudioBuffer. */
+async function fetchGeminiSpeech(text, { voice, style }, ctx, signal) {
+  const content = { type: 'text', text };
+  if (style) content.annotations = [{ type: 'speech_metadata', style }];
+  const interaction = {
+    model: GEMINI_TTS_MODEL,
+    input: [{ type: 'user_input', content: [content] }],
+    response_format: { type: 'audio' },
+    generation_config: { speech_config: [{ voice }] },
+  };
+  const r = mealAiKey
+    ? await fetch(GEMINI_INTERACTIONS_URL, {
+        method: 'POST', signal,
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': mealAiKey },
+        body: JSON.stringify(interaction),
+      })
+    : await fetch('/.netlify/functions/ai', {
+        method: 'POST', signal,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tts: true, ...interaction }),
+      });
+  const data = await r.json().catch(() => null);
+  if (!r.ok || !data) throw new Error(data?.error?.message || `HTTP ${r.status}`);
+  const audio = findSpeechAudio(data);
+  if (!audio) throw new Error('no audio in the reply');
+  const bin = atob(audio);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const isWav = bin.startsWith('RIFF');
+  return isWav ? ctx.decodeAudioData(bytes.buffer) : pcm16ToBuffer(ctx, bytes, 24000);
+}
+
+/** The base64 audio in a speech reply, wherever the API put it. */
+function findSpeechAudio(node) {
+  if (!node || typeof node !== 'object') return null;
+  const kind = String(node.mime_type || node.mimeType || node.type || '');
+  if (typeof node.data === 'string' && node.data.length > 1000 && kind.includes('audio')) return node.data;
+  if (node.inlineData?.data) return node.inlineData.data;
+  for (const child of Object.values(node)) {
+    const found = findSpeechAudio(child);
+    if (found) return found;
+  }
+  return null;
+}
+
+/** Headerless 16-bit little-endian mono PCM → AudioBuffer. */
+function pcm16ToBuffer(ctx, bytes, rate) {
+  const samples = new Int16Array(bytes.buffer, bytes.byteOffset, bytes.byteLength >> 1);
+  const buf = ctx.createBuffer(1, samples.length, rate);
+  const out = buf.getChannelData(0);
+  for (let i = 0; i < samples.length; i++) out[i] = samples[i] / 32768;
+  return buf;
+}
+
+/** Fallback: the device's own voice (Piper on the wall panel). No status line:
+    on the Pi, Chromium reports "start" at once and never reports "end". */
+function speakWithDeviceVoice(text) {
+  if (!('speechSynthesis' in window)) return;
+  const u = new SpeechSynthesisUtterance(speakableTimes(text));
   u.lang = 'en-US';
   u.rate = 1.0;
   speechSynthesis.speak(u);

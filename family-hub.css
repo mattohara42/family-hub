@@ -4295,6 +4295,15 @@ body.nautical-mode .assistant-chip:hover { background: var(--accent2); border-co
   0%, 100% { opacity: 0.3; }
   50%       { opacity: 0.9; }
 }
+.assistant-voice-status {
+  padding: 4px 12px 0;
+  font-size: var(--text-sm);
+  color: var(--muted);
+  animation: assistantPulse 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .assistant-voice-status { animation: none; }
+}
 .assistant-input-row {
   display: flex;
   align-items: center;
