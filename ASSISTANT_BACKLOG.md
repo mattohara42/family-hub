@@ -74,18 +74,15 @@ Grew the `[ACTION:...]` vocabulary from 2 to **7 actions**. Multi-arg actions us
 
 ---
 
-## Open: Spoken replies are slow on the wall panel  (found 2026-10-28)
+## ✅ DONE: Spoken replies on the wall panel  (2026-10-29)
 
-On the Pi 3B+ panel, replies are read by Piper (voice `en_US-ryan-low`) through speech-dispatcher, set up in `family-hub-setup.md` step 10c. It sounds good, but there's a long pause before Ryan starts.
+**Shipped:** replies are spoken by Gemini text-to-speech (`gemini-3.8-flash-lite-tts`), with a voice per persona (Charon by default, Algenib in a butler style for Alfred, Iapetus for Jarvis) and the panel's local Piper voice ("Ryan", `family-hub-setup.md` step 10c) as the fallback. Details in FEATURES.md (Assistant voice output).
 
-**Fixed 2026-10-29: pauses between sentences.** speech-dispatcher's generic module was cutting each reply at punctuation and running Piper once per piece, reloading the voice each time. `GenericMaxChunkLength 5000` + `GenericDelimiters "|"` in `piper.conf` make it one Piper run per reply, and the gaps went away.
+**Why:** on the Pi 3B+ panel, Piper took ~22 s to start a 12.6 s reply, because it loads the voice (~2.6 to 4.7 s) and then makes speech at roughly real time before any of it plays. Gemini Flash-Lite started after ~6 s, the larger Flash model after ~8.7 s, and both sounded far better. Measured with a temporary "voice test" command (#112, closed).
 
-**Still open: the pause before Ryan starts.** Piper on a Pi 3 makes speech at roughly real time (real-time factor ~0.9 for "low" voices) and spends ~2.6 to 4.7 s loading the voice on every run (slower when the Pi is swapping). The whole reply is written to a file before it plays, because streaming lost the start of every reply. So the wait is roughly the voice load plus the length of the reply.
+**Fixed along the way:** speech-dispatcher's generic module cut each reply at punctuation and reloaded Piper for every piece, so Ryan paused for seconds between sentences. `GenericMaxChunkLength 5000` + `GenericDelimiters "|"` in `piper.conf` make it one Piper run per reply.
 
-**Options:**
-- **Keep Piper loaded:** run Piper as a long-lived process (e.g. its HTTP server) so each reply skips the voice load, with speech-dispatcher's command calling it. Saves a few seconds, but keeps Piper in memory full time on a 1 GB Pi that's already swapping.
-- **Pi 4/5:** several times faster and more memory, which shrinks the wait and would allow a "medium" voice.
-- **Cloud voice (Gemini TTS):** speed independent of the Pi, but needs hub code, an allowed model in `netlify/functions/ai.js`, and plays through Chromium's own audio, which was unreliable on this Pi (see the Pond Chimes item in `SCREENSAVER_BACKLOG.md`).
+**Possible next steps:** stream Gemini's audio so it starts sooner (the Netlify proxy buffers whole responses today), and ask for raw PCM instead of WAV to save the ~1.4 s the Pi 3 spends unpacking it.
 
 ---
 

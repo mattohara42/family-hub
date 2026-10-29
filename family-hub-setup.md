@@ -881,10 +881,16 @@ sed -i 's|chromium --app=|chromium --enable-speech-dispatcher --autoplay-policy=
 sudo systemctl restart lightdm
 ```
 
-**d. A real voice for the Assistant (Piper, voice "Ryan").** Chromium on Linux doesn't speak
-by itself. It hands the text to speech-dispatcher, which plays the audio on its own rather than
-through Chromium. The stock engine (espeak-ng) sounds very robotic, so speech-dispatcher runs
-[Piper](https://github.com/rhasspy/piper) instead, an offline neural voice.
+**d. A backup voice for the Assistant (Piper, voice "Ryan").** The Assistant's replies are
+spoken by Gemini (Charon by default, Algenib for Alfred, Iapetus for Jarvis; see FEATURES.md),
+which needs nothing on the Pi beyond steps a to c. On this Pi 3, Gemini starts talking about 3.5
+times sooner than Piper and sounds better (2026-10-29). This step sets up the voice the hub falls
+back to when Gemini fails, runs out of quota or takes over 20 s, so the panel never goes silent.
+
+Chromium on Linux doesn't speak by itself. It hands the text to speech-dispatcher, which plays
+the audio on its own rather than through Chromium. The stock engine (espeak-ng) sounds very
+robotic, so speech-dispatcher runs [Piper](https://github.com/rhasspy/piper) instead, an offline
+neural voice.
 
 ```bash
 sudo apt install -y speech-dispatcher espeak-ng
@@ -945,8 +951,8 @@ Things that matter here, each learned the hard way:
 - **Speed is the limit on a Pi 3B+.** One sentence of ~4.4 s audio took ~7 s to make with the
   "low" voices (real-time factor ~0.9) and ~10 s with "medium" (~1.5), voice load included.
   Because the whole reply is made before any of it plays, there's a long pause before Ryan
-  starts: roughly the voice load plus the length of the reply. Open item in
-  `ASSISTANT_BACKLOG.md`. A Pi 4/5 would fix it.
+  starts: roughly the voice load plus the length of the reply (~22 s for a 12.6 s reply). That's
+  why Gemini is the main voice and Piper only the backup.
 - **Other voices:** download a different voice's two files and change the model path in
   `piper.conf`. `en_US-lessac-low` (female) and `en_GB-alan-low` (British male) were tried and
   work. Piper has no Australian English voices. Medium/high quality voices sound better but are
