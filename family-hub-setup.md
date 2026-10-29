@@ -900,6 +900,8 @@ GenericExecuteSynth "printf %s \'$DATA\' | /home/familyhub/piper/piper/piper --m
 GenericLanguage "en" "en" "utf-8"
 AddVoice "en" "MALE1" "ryan"
 DefaultVoice "ryan"
+GenericMaxChunkLength 5000
+GenericDelimiters "|"
 EOF
 
 printf '\nAddModule "piper" "sd_generic" "piper.conf"\nDefaultModule piper\n' | sudo tee -a /etc/speech-dispatcher/speechd.conf >/dev/null
@@ -935,10 +937,16 @@ Things that matter here, each learned the hard way:
   first few seconds of every reply: the Pi 3 needs ~2.6 s to load the voice, and the stream
   starved meanwhile. Piping into `aplay` also failed outright once the hum was running (see the
   busy note above). `pw-play` of a finished file is the only version that played every word.
+- **One Piper run per reply** (`GenericMaxChunkLength 5000` and `GenericDelimiters "|"`). By
+  default speech-dispatcher cuts a reply at every `.`, `,`, `!` and so on, and runs Piper once
+  per piece. Each run reloads the voice, so Ryan paused for seconds between sentences. `|` is
+  just a character the Assistant never says, so nothing gets cut. Confirmed 2026-10-29: no
+  pauses between sentences after a reboot.
 - **Speed is the limit on a Pi 3B+.** One sentence of ~4.4 s audio took ~7 s to make with the
-  "low" voices (real-time factor ~0.9) and ~10 s with "medium" (~1.5), voice load included. So
-  expect a pause before Ryan starts and between sentences. Open item in `ASSISTANT_BACKLOG.md`.
-  A Pi 4/5 would fix it.
+  "low" voices (real-time factor ~0.9) and ~10 s with "medium" (~1.5), voice load included.
+  Because the whole reply is made before any of it plays, there's a long pause before Ryan
+  starts: roughly the voice load plus the length of the reply. Open item in
+  `ASSISTANT_BACKLOG.md`. A Pi 4/5 would fix it.
 - **Other voices:** download a different voice's two files and change the model path in
   `piper.conf`. `en_US-lessac-low` (female) and `en_GB-alan-low` (British male) were tried and
   work. Piper has no Australian English voices. Medium/high quality voices sound better but are
