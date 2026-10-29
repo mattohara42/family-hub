@@ -761,12 +761,26 @@ tailnet, which the Home Assistant widget needs (see step 6c: HA is only reachabl
 ### 10. In the hub itself (on the panel)
 
 1. **Sign in with Google** on the panel (the Logitech keyboard is easiest for the password).
-2. **Settings → Look & Feel:** leave the hub's own **⌨️ On-screen keyboard** toggle **off**. The
+2. **Let it sign itself back in after a reboot.** On load the hub asks Google for a token
+   quietly, but Google does that through a small pop-up window, and Chromium blocks pop-ups a
+   page opens before anyone has tapped it. Without this, every reboot meant tapping Sign in and
+   picking the account again. The same file pre-allows the microphone for step 10b:
+
+   ```bash
+   sudo mkdir -p /etc/chromium/policies/managed
+   echo '{"AudioCaptureAllowedUrls": ["https://familial.netlify.app"], "PopupsAllowedForUrls": ["https://familial.netlify.app"]}' | sudo tee /etc/chromium/policies/managed/family-hub.json
+   sudo reboot
+   ```
+
+   Confirmed 2026-10-29: after a reboot the hub came back signed in by itself. The hub's hourly
+   quiet token refresh goes through the same pop-up, so this should keep that working too (not
+   yet confirmed on the panel).
+3. **Settings → Look & Feel:** leave the hub's own **⌨️ On-screen keyboard** toggle **off**. The
    Pi's squeekboard already pops up for every field; with both on you'd get two keyboards.
-3. **Settings → Look & Feel → 🖼 Wall display: on.** A flatter type scale for reading from
+4. **Settings → Look & Feel → 🖼 Wall display: on.** A flatter type scale for reading from
    across the room (small text grows the most, event titles a little), a wider sidebar, and
    event fills deepened a notch so event text is always white. Per device.
-4. **Settings → Look & Feel → Motion & effects:** switch off the animations you can live
+5. **Settings → Look & Feel → Motion & effects:** switch off the animations you can live
    without, and switch off **🧊 Frosted glass**. They're per device, so phones keep theirs. On
    this Pi the weather animations alone kept a CPU core busy (idle CPU ~33% with them running,
    ~7% paused), and the frosted-glass blur doubled the worst stutter of a calendar swipe
@@ -780,13 +794,9 @@ microphone" steps, which can't be followed in a kiosk with no address bar. Typin
 
 1. Plug in any USB microphone (a cheap USB mic, a webcam with a mic, or a USB speakerphone).
    Check it shows up with `arecord -l`.
-2. Pre-allow the hub to use it, since there's no address bar to click "Allow" in:
-
-   ```bash
-   sudo mkdir -p /etc/chromium/policies/managed
-   echo '{"AudioCaptureAllowedUrls": ["https://familial.netlify.app"]}' | sudo tee /etc/chromium/policies/managed/family-hub.json
-   sudo systemctl restart lightdm
-   ```
+2. The hub needs to be pre-allowed to use it, since there's no address bar to click "Allow"
+   in. The policy file from step 10 (item 2) already does that (`AudioCaptureAllowedUrls`). If you
+   skipped it, create it now with that same command.
 
 3. Tap 🎙 and speak. Chromium on the Pi can't reach Google's speech service, so the first try
    fails and the hub switches this device to recording + Gemini transcription from then on.
@@ -914,6 +924,13 @@ Things that matter here, each learned the hard way:
   characters, so plain `pkill speech-dispatcher` matches nothing and the old settings stay live.
   **Never `pkill -f speech-dispatcher`:** it matches Chromium's `--enable-speech-dispatcher` flag
   and kills the hub (`lwrespawn` brings it back after a moment).
+- **After restarting speech-dispatcher, restart the hub too** (`sudo systemctl restart lightdm`,
+  or just `sudo reboot`). Chromium doesn't reconnect to a speech-dispatcher that went away, so
+  the Assistant goes silent until it's restarted.
+- **Test in the hub, not with `spd-say`.** During setup, `spd-say` cut sentences short or played
+  nothing while the hub spoke fine, and `spd-say -w` sometimes never returned (Ctrl+C gets the
+  prompt back). It's fine for a first "does Piper load" check (`spd-say -O`), but judge the
+  voice by asking the Assistant something.
 - **Piper writes a file, then plays it.** Streaming (`--output_raw` piped to a player) lost the
   first few seconds of every reply: the Pi 3 needs ~2.6 s to load the voice, and the stream
   starved meanwhile. Piping into `aplay` also failed outright once the hum was running (see the
