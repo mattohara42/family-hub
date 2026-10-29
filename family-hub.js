@@ -10923,8 +10923,15 @@ function runLocalVoiceTest() {
     const u = new SpeechSynthesisUtterance(VOICE_TEST_TEXT);
     u.lang = 'en-US';
     const t0 = performance.now();
-    let tStart = null;
-    const done = err => resolve(`🔊 Local voice test: ${tStart ? `start event at ${fmtSecs(tStart - t0)}, ` : ''}finished at ${fmtSecs(performance.now() - t0)}${err ? ` (error: ${err})` : ''}. On the Pi the start event may fire before any sound, so compare the finish times.`);
+    let tStart = null, settled = false;
+    const done = err => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(giveUp);
+      resolve(`🔊 Local voice test: ${tStart ? `start event at ${fmtSecs(tStart - t0)}, ` : 'no start event, '}${err === 'timeout' ? 'no end event after 60 s' : `finished at ${fmtSecs(performance.now() - t0)}`}${err && err !== 'timeout' ? ` (error: ${err})` : ''}. On the Pi these events may not match the sound, so time it by ear too.`);
+    };
+    // Chromium + speech-dispatcher on the Pi never sent "end" (2026-10-29)
+    const giveUp = setTimeout(() => done('timeout'), 60000);
     u.onstart = () => { tStart = performance.now(); };
     u.onend = () => done();
     u.onerror = e => done(e.error);
