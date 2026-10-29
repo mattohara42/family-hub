@@ -10590,6 +10590,23 @@ async function _sendAssistantMessage(input, text) {
   assistantHistory.push({ role: 'user', parts: [{ text }] });
   renderAssistantMessages();
 
+  // Voice timing test — not saved, not spoken, no Gemini chat call
+  const vt = text.toLowerCase().match(/^voice test(?: (ryan|flash|alfred))?$/);
+  if (vt) {
+    const container = document.getElementById('assistantMessages');
+    const thinkEl = document.createElement('div');
+    thinkEl.className = 'assistant-msg ai assistant-thinking';
+    thinkEl.textContent = '•••';
+    container.appendChild(thinkEl);
+    let msg;
+    try { msg = await runVoiceTest(vt[1] || ''); }
+    catch (e) { msg = `⚠️ Voice test failed: ${e.message}`; }
+    thinkEl.remove();
+    assistantHistory.push({ role: 'model', parts: [{ text: msg }] });
+    renderAssistantMessages();
+    return;
+  }
+
   // Easter egg intercept — skip Gemini for known phrases
   const eggReply = checkAssistantEasterEgg(text);
   if (eggReply !== null) {
@@ -10819,6 +10836,100 @@ function speakAssistant(text) {
   u.lang = 'en-US';
   u.rate = 1.0;
   speechSynthesis.speak(u);
+}
+
+// ── Voice timing test (temporary) ──────────────────────────────
+// Type "voice test" in the Assistant to time Gemini speech on this device;
+// "voice test ryan" reads the same text with the local voice for comparison.
+// Delete this section once the wall panel's voice is chosen.
+const VOICE_TEST_TEXT = 'Good morning. You have three things today: soccer at nine, the dentist at half past one, and pizza night at six. It should be sunny this afternoon, so it is a good day to mow the lawn.';
+const VOICE_TEST_VARIANTS = {
+  '':     { model: 'gemini-3.8-flash-lite-tts', voice: 'Charon' },
+  flash:  { model: 'gemini-3.8-flash-tts',      voice: 'Charon' },
+  alfred: { model: 'gemini-3.8-flash-lite-tts', voice: 'Gacrux', style: 'dry, formal and unhurried, like an old-fashioned butler' },
+};
+const GEMINI_INTERACTIONS_URL = 'https://generativelanguage.googleapis.com/v1beta/interactions';
+
+const fmtSecs = ms => (ms / 1000).toFixed(1) + ' s';
+
+async function runVoiceTest(variant) {
+  if (variant === 'ryan') return runLocalVoiceTest();
+  const v = VOICE_TEST_VARIANTS[variant];
+  const content = { type: 'text', text: VOICE_TEST_TEXT };
+  if (v.style) content.annotations = [{ type: 'speech_metadata', style: v.style }];
+  const interaction = {
+    model: v.model,
+    input: [{ type: 'user_input', content: [content] }],
+    response_format: { type: 'audio' },
+    generation_config: { speech_config: [{ voice: v.voice }] },
+  };
+  const t0 = performance.now();
+  const r = mealAiKey
+    ? await fetch(GEMINI_INTERACTIONS_URL, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': mealAiKey },
+        body: JSON.stringify(interaction),
+      })
+    : await fetch('/.netlify/functions/ai', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tts: true, ...interaction }),
+      });
+  const data = await r.json().catch(() => null);
+  const tReady = performance.now();
+  if (!r.ok || !data) throw new Error(data?.error?.message || `HTTP ${r.status}`);
+  const audio = findVoiceTestAudio(data);
+  if (!audio) throw new Error('no audio in the reply: ' + JSON.stringify(data).slice(0, 200));
+
+  const bytes = Uint8Array.from(atob(audio), c => c.charCodeAt(0));
+  const ctx = new AudioContext();
+  await ctx.resume();
+  const isWav = String.fromCharCode(...bytes.subarray(0, 4)) === 'RIFF';
+  const buf = isWav ? await ctx.decodeAudioData(bytes.buffer) : pcm16ToBuffer(ctx, bytes, 24000);
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.connect(ctx.destination);
+  const tPlay = performance.now();
+  await new Promise(res => { src.onended = res; src.start(); });
+  const tEnd = performance.now();
+  ctx.close();
+  return `🔊 Gemini voice test (${v.model}, ${v.voice}${v.style ? ', butler style' : ''}): audio ready after ${fmtSecs(tReady - t0)}, playing at ${fmtSecs(tPlay - t0)}, finished at ${fmtSecs(tEnd - t0)} (${buf.duration.toFixed(1)} s of speech).`;
+}
+
+/** The base64 audio in a speech reply, wherever the API put it. */
+function findVoiceTestAudio(node) {
+  if (!node || typeof node !== 'object') return null;
+  const kind = String(node.mime_type || node.mimeType || node.type || '');
+  if (typeof node.data === 'string' && node.data.length > 1000 && kind.includes('audio')) return node.data;
+  if (node.inlineData?.data) return node.inlineData.data;
+  for (const child of Object.values(node)) {
+    const found = findVoiceTestAudio(child);
+    if (found) return found;
+  }
+  return null;
+}
+
+/** Headerless 16-bit little-endian mono PCM → AudioBuffer. */
+function pcm16ToBuffer(ctx, bytes, rate) {
+  const samples = new Int16Array(bytes.buffer, bytes.byteOffset, bytes.byteLength >> 1);
+  const buf = ctx.createBuffer(1, samples.length, rate);
+  const out = buf.getChannelData(0);
+  for (let i = 0; i < samples.length; i++) out[i] = samples[i] / 32768;
+  return buf;
+}
+
+function runLocalVoiceTest() {
+  return new Promise(resolve => {
+    if (!('speechSynthesis' in window)) { resolve('No local voice on this device.'); return; }
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(VOICE_TEST_TEXT);
+    u.lang = 'en-US';
+    const t0 = performance.now();
+    let tStart = null;
+    const done = err => resolve(`🔊 Local voice test: ${tStart ? `start event at ${fmtSecs(tStart - t0)}, ` : ''}finished at ${fmtSecs(performance.now() - t0)}${err ? ` (error: ${err})` : ''}. On the Pi the start event may fire before any sound, so compare the finish times.`);
+    u.onstart = () => { tStart = performance.now(); };
+    u.onend = () => done();
+    u.onerror = e => done(e.error);
+    speechSynthesis.speak(u);
+  });
 }
 
 // ── Assistant voice ────────────────────────────────────────────
