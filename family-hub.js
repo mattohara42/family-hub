@@ -10805,10 +10805,40 @@ function updateAssistantTtsBtn() {
   btn.style.color = assistantTTS ? 'var(--accent)' : 'var(--muted)';
 }
 
+/** Rewrite clock times the way people say them. Piper (the wall panel's voice)
+    reads "1:00 PM" digit by digit as "one zero zero". */
+function speakableTimes(s) {
+  const say = (h, m, ampm) => {
+    h = +h;
+    let suffix = '';
+    if (ampm) suffix = /^a/i.test(ampm) ? ' A M' : ' P M';
+    else if (h > 12 || h === 0) { suffix = h >= 12 ? ' P M' : ' A M'; h = h % 12 || 12; } // 24-hour
+    const mins = m === '00' ? (suffix ? '' : " o'clock") : ' ' + (m[0] === '0' ? 'oh ' + m[1] : m);
+    return h + mins + suffix;
+  };
+  return s
+    .replace(/(\d)\s*[–—]\s*(\d)/g, '$1 to $2')                                  // 1:00–2:00
+    .replace(/\b(\d{1,2}):(\d{2})\s*([AaPp])\.?\s?[Mm]\b(?:\.(?=\s+[a-z]))?/g, (_, h, m, ap) => say(h, m, ap))
+    .replace(/\b(\d{1,2}):(\d{2})\b/g, (_, h, m) => say(h, m, ''))
+    .replace(/\b(\d{1,2})\s*([AaPp])\.?\s?[Mm]\b(?:\.(?=\s+[a-z]))?/g, (_, h, ap) => say(h, '00', ap)); // "p.m. tonight": no stray full stop
+}
+
+/** Line under the chat while a reply is spoken. On the Pi the voice takes
+    seconds to prepare, so without it the pause reads as nothing happening. */
+function setAssistantVoiceStatus(text) {
+  const el = document.getElementById('assistantVoiceStatus');
+  if (!el) return;
+  el.textContent = text;
+  el.style.display = text ? '' : 'none';
+}
+
+let assistantUtterance = null;   // the reply being spoken; older utterances' events are ignored
+let assistantVoiceTimer = null;
+
 /** Speak an assistant reply, stripping markdown/emoji. Interruptible. */
 function speakAssistant(text) {
   if (!assistantTTS || !('speechSynthesis' in window) || !text) return;
-  const clean = text
+  const clean = speakableTimes(text)
     .replace(/\*\*(.+?)\*\*/g, '$1')                       // bold markers
     .replace(/[⌀-➿☀-⛿️\u{1F000}-\u{1FAFF}]/gu, '') // emoji/symbols
     .replace(/\s{2,}/g, ' ')
@@ -10818,6 +10848,19 @@ function speakAssistant(text) {
   const u = new SpeechSynthesisUtterance(clean);
   u.lang = 'en-US';
   u.rate = 1.0;
+  const done = () => {
+    if (assistantUtterance !== u) return;
+    assistantUtterance = null;
+    clearTimeout(assistantVoiceTimer);
+    setAssistantVoiceStatus('');
+  };
+  u.onstart = () => { if (assistantUtterance === u) setAssistantVoiceStatus('🔊 Reading aloud…'); };
+  u.onend = done;
+  u.onerror = done;
+  assistantUtterance = u;
+  setAssistantVoiceStatus('🔊 Preparing voice…');
+  clearTimeout(assistantVoiceTimer);
+  assistantVoiceTimer = setTimeout(done, 120000);          // in case no end event ever arrives
   speechSynthesis.speak(u);
 }
 
