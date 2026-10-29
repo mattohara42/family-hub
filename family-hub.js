@@ -10591,7 +10591,7 @@ async function _sendAssistantMessage(input, text) {
   renderAssistantMessages();
 
   // Voice timing test — not saved, not spoken, no Gemini chat call
-  const vt = text.toLowerCase().match(/^voice test(?: (ryan|flash|alfred))?$/);
+  const vt = text.toLowerCase().match(/^voice test(?: (ryan|flash|alfred))?(?: ([a-z]+))?$/);
   if (vt) {
     const container = document.getElementById('assistantMessages');
     const thinkEl = document.createElement('div');
@@ -10599,7 +10599,7 @@ async function _sendAssistantMessage(input, text) {
     thinkEl.textContent = '•••';
     container.appendChild(thinkEl);
     let msg;
-    try { msg = await runVoiceTest(vt[1] || ''); }
+    try { msg = await runVoiceTest(vt[1] || '', vt[2]); }
     catch (e) { msg = `⚠️ Voice test failed: ${e.message}`; }
     thinkEl.remove();
     assistantHistory.push({ role: 'model', parts: [{ text: msg }] });
@@ -10846,15 +10846,17 @@ const VOICE_TEST_TEXT = 'Good morning. You have three things today: soccer at ni
 const VOICE_TEST_VARIANTS = {
   '':     { model: 'gemini-3.8-flash-lite-tts', voice: 'Charon' },
   flash:  { model: 'gemini-3.8-flash-tts',      voice: 'Charon' },
-  alfred: { model: 'gemini-3.8-flash-lite-tts', voice: 'Gacrux', style: 'dry, formal and unhurried, like an old-fashioned butler' },
+  alfred: { model: 'gemini-3.8-flash-lite-tts', voice: 'Algenib', style: 'dry, formal and unhurried, like an old-fashioned butler' },
 };
 const GEMINI_INTERACTIONS_URL = 'https://generativelanguage.googleapis.com/v1beta/interactions';
 
 const fmtSecs = ms => (ms / 1000).toFixed(1) + ' s';
 
-async function runVoiceTest(variant) {
+// "voice test alfred algenib" auditions any prebuilt voice in that variant's style
+async function runVoiceTest(variant, voiceName) {
   if (variant === 'ryan') return runLocalVoiceTest();
-  const v = VOICE_TEST_VARIANTS[variant];
+  const v = { ...VOICE_TEST_VARIANTS[variant] };
+  if (voiceName) v.voice = voiceName[0].toUpperCase() + voiceName.slice(1);
   const content = { type: 'text', text: VOICE_TEST_TEXT };
   if (v.style) content.annotations = [{ type: 'speech_metadata', style: v.style }];
   const interaction = {
