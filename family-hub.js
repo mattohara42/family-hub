@@ -9595,7 +9595,7 @@ When the user clearly asks you to add or change something, append one tag per ac
 - Plan a meal:               [ACTION:setMeal:YYYY-MM-DD|mealType|Meal name]   (mealType is breakfast, lunch, or dinner)
 - Add a recurring bill:      [ACTION:addBudget:Name|Amount|frequency]   (frequency is monthly, weekly, biweekly, or yearly)
 
-You may include multiple tags. Only emit a tag when the user clearly requests that change — never for questions. Calendar events require Google sign-in; if it's unavailable the user will be told automatically.
+You may include multiple tags. Only emit a tag when the user clearly requests that change — never for questions. Nothing changes without a tag. Never write "✓" or "⚠️" result lines yourself: the app adds those after running your tags. Calendar events require Google sign-in; if it's unavailable the user will be told automatically.
 
 GUIDELINES:
 - Keep responses concise and friendly. 2–4 sentences is usually enough.
@@ -10632,7 +10632,13 @@ async function _sendAssistantMessage(input, text) {
 
     const data     = await resp.json();
     const rawReply = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "Sorry, I didn't get a response.";
-    const { text: cleanText, actions } = extractAssistantActions(rawReply);
+    const { text: replyText, actions } = extractAssistantActions(rawReply);
+    // A ✓/⚠️ line Gemini wrote itself is a claim, not a result: drop it, and
+    // say so when no action backs it up.
+    let cleanText = stripAppLines(replyText);
+    if (cleanText !== replyText && !actions.length) {
+      cleanText += (cleanText ? '\n' : '') + `⚠️ Nothing was actually changed. Please ask again.`;
+    }
     const askedBefore = assistantPendingConfirms.length;
     const confirms = await executeAssistantActions(actions);
 
@@ -10655,20 +10661,31 @@ async function _sendAssistantMessage(input, text) {
   }
 }
 
+// Lines the app writes into model turns (action results). Only the app may
+// write these: Gemini copied "✓ Updated …" from history once and claimed a
+// move it never tagged, so nothing ran.
+const ASSISTANT_APP_LINE = /^\s*[✓⚠]/;
+const stripAppLines = text => text.split('\n').filter(l => !ASSISTANT_APP_LINE.test(l)).join('\n').trim();
+
 /** assistantHistory as Gemini contents. History persists across days with no
  *  dates in it, so a "tomorrow" said yesterday reads like today's. User turns
  *  from an earlier day (or saved before turns carried `at`) get the day they
  *  were sent prefixed; `at` itself is stripped, since the API rejects unknown
- *  fields. */
+ *  fields. Model turns lose the app's ✓/⚠️ lines so Gemini never sees them as
+ *  its own words; a turn that was only such lines is dropped. */
 function assistantContents() {
   const today = new Date().toDateString();
   return assistantHistory.map(({ role, parts, at }) => {
-    if (role !== 'user' || (at && new Date(at).toDateString() === today)) return { role, parts };
+    if (role === 'model') {
+      const text = stripAppLines(parts[0].text);
+      return text ? { role, parts: [{ text }] } : null;
+    }
+    if (at && new Date(at).toDateString() === today) return { role, parts };
     const sent = at
       ? new Date(at).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
       : 'an earlier day';
     return { role, parts: [{ text: `(Sent on ${sent}. Relative dates in this message refer to that day, not today.) ${parts[0].text}` }] };
-  });
+  }).filter(Boolean);
 }
 
 /** Persist assistantHistory to localStorage (capped to avoid bloat). */
