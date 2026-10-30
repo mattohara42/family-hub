@@ -657,7 +657,7 @@ Gemini-powered chat (shares the Meals key `mealAiKey`) with live family-data con
 
 **Assistant rename:** Name is user-configurable. `applyAssistantName()` updates the card title, aria-labels, and the `#assistantWidgetLabel`. Named personalities: naming the assistant **Jarvis**, **HAL 9000**, or **Alfred** injects a character voice into `buildAssistantContext()`.
 
-**State:** `assistantHistory` (in-memory, not persisted), `shopItemsCache`, `ASSISTANT_QUICK_PROMPTS` (empty-state chips — keep current as capabilities grow).
+**State:** `assistantHistory` (persisted to `fh_assistantHistory`, last 40 half-turns; user turns carry `at` ms, and `assistantContents()` strips it and prefixes turns from an earlier day with the day they were sent so yesterday's "tomorrow" isn't read as today's, and drops the app's ✓/⚠️ result lines from model turns so Gemini can't learn to fake them; a ✓/⚠️ line in a fresh reply is stripped and, with no action tag behind it, replaced by a "nothing was changed" warning), `shopItemsCache`, `ASSISTANT_QUICK_PROMPTS` (empty-state chips — keep current as capabilities grow).
 ```js
 let assistantName = localStorage.getItem('fh_assistantName') || 'Family Assistant';
 ```
