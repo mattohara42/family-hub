@@ -374,7 +374,7 @@ let assistantHistory = (()=>{
     const saved = JSON.parse(localStorage.getItem(ASSISTANT_HISTORY_KEY));
     return Array.isArray(saved) ? saved : [];
   } catch { return []; }
-})();   // [{role:'user'|'model', parts:[{text}]}]
+})();   // [{role:'user'|'model', parts:[{text}], at?}] (at: ms a user turn was sent)
 let shopItemsCache    = [];   // in-memory mirror of shopping items for context
 let assistantRecognition = null;  // SpeechRecognition instance
 let assistantListening   = false; // true while mic is open
@@ -9443,7 +9443,8 @@ function buildAssistantContext() {
     const d = new Date(today);
     d.setDate(d.getDate() + i);
     const dateStr = localDateStr(d);
-    const label = i === 0 ? 'Today' : i === 1 ? 'Tomorrow'
+    const label = i === 0 ? `Today (${fmt(d, { weekday: 'long', month: 'short', day: 'numeric' })})`
+                : i === 1 ? `Tomorrow (${fmt(d, { weekday: 'long', month: 'short', day: 'numeric' })})`
                 : fmt(d, { weekday: 'long', month: 'short', day: 'numeric' });
     const evts = assistantEventsOn(dateStr)
       .sort((a, b) => {
@@ -9540,6 +9541,8 @@ function buildAssistantContext() {
   }
 
   const name = userName || 'the family';
+  const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+  const longDate = d => `${fmt(d, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} (${localDateStr(d)})`;
   const timeStr = today.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   const nameLC = assistantName.trim().toLowerCase();
   const personalityNote = nameLC === 'jarvis'
@@ -9549,7 +9552,7 @@ function buildAssistantContext() {
     : nameLC === 'alfred'
     ? `You are Alfred Pennyworth, Bruce Wayne's butler. Speak with impeccable British formality, dry wit, and quiet wisdom. Address the user as "sir," "ma'am," or "Master [name]." Be loyal, gently sardonic, and unfailingly composed. Never break character.`
     : null;
-  return `You are ${assistantName}, a helpful assistant built into a family dashboard.${personalityNote ? ' ' + personalityNote : ''} You are talking to ${name}. Today is ${fmt(today, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}. Current local time: ${timeStr}.
+  return `You are ${assistantName}, a helpful assistant built into a family dashboard.${personalityNote ? ' ' + personalityNote : ''} You are talking to ${name}. Today is ${longDate(today)}. Tomorrow is ${longDate(tomorrow)}. Current local time: ${timeStr}.
 
 CURRENT FAMILY DATA (use this to answer questions):
 
@@ -10587,7 +10590,7 @@ async function _sendAssistantMessage(input, text) {
   input.value = '';
 
   // Add user turn and show it immediately
-  assistantHistory.push({ role: 'user', parts: [{ text }] });
+  assistantHistory.push({ role: 'user', parts: [{ text }], at: Date.now() });
   renderAssistantMessages();
 
   // Easter egg intercept — skip Gemini for known phrases
@@ -10613,7 +10616,7 @@ async function _sendAssistantMessage(input, text) {
     const systemPrompt = buildAssistantContext();
     const resp = await geminiFetch({
       systemInstruction: { parts: [{ text: systemPrompt }] },
-      contents: assistantHistory,
+      contents: assistantContents(),
       generationConfig: { temperature: 0.7, maxOutputTokens: 1024 },
     });
     thinkEl.remove();
@@ -10650,6 +10653,22 @@ async function _sendAssistantMessage(input, text) {
     assistantHistory.push({ role: 'model', parts: [{ text: `⚠️ Error: ${e.message}` }] });
     renderAssistantMessages();
   }
+}
+
+/** assistantHistory as Gemini contents. History persists across days with no
+ *  dates in it, so a "tomorrow" said yesterday reads like today's. User turns
+ *  from an earlier day (or saved before turns carried `at`) get the day they
+ *  were sent prefixed; `at` itself is stripped, since the API rejects unknown
+ *  fields. */
+function assistantContents() {
+  const today = new Date().toDateString();
+  return assistantHistory.map(({ role, parts, at }) => {
+    if (role !== 'user' || (at && new Date(at).toDateString() === today)) return { role, parts };
+    const sent = at
+      ? new Date(at).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+      : 'an earlier day';
+    return { role, parts: [{ text: `(Sent on ${sent}. Relative dates in this message refer to that day, not today.) ${parts[0].text}` }] };
+  });
 }
 
 /** Persist assistantHistory to localStorage (capped to avoid bloat). */
