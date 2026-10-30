@@ -9705,6 +9705,7 @@ async function assistantAddEvent(dateStr, timeStr, title, member) {
   if (!title || !dateStr) return `⚠️ Couldn't add the event — missing a date or title`;
   if (!googleToken)       return `⚠️ Sign in with Google to let me add calendar events`;
   const allDay = !timeStr || /^all\s?day$/i.test(timeStr.trim());
+  if (!allDay) timeStr = timeStr.trim().padStart(5, '0');   // "9:30" → "09:30", or the ISO string is invalid
   let start, end;
   if (allDay) {
     start = { date: dateStr };
