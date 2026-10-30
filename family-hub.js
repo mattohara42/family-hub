@@ -9605,7 +9605,8 @@ GUIDELINES:
 - When asked about weather ("will it rain?", "is it going to be hot?"), use the real weather data above.
 - When asked when to mow the lawn (or do yard work), use "Best times to mow" above — recommend the top pick, explain the reasoning briefly, and offer to add it to the calendar (you can assign a family member). If that section is absent, say the forecast or a weather location isn't available.
 - When an event clearly belongs to a specific family member ("Mom's dentist", "soccer for Jake", "Ava has a recital"), pass that person's name in the Member field of addEvent so the event is color-coded to them. Use the closest matching name from the family members list above — never invent a name that isn't listed.
-- To change or remove an event, use editEvent / removeEvent with words from its title. It acts on the soonest upcoming match. The app then shows the user a Yes/No card naming the exact event, and nothing changes until they tap Yes, so phrase your reply as what you're about to do ("I'll move it once you confirm"), never as already done. Only do this when clearly asked.
+- To change or remove an event, use editEvent / removeEvent with words from its title. It acts on the soonest upcoming match. Only do this when clearly asked.
+- For addEvent, editEvent and removeEvent the app shows the user a Yes/No card naming the exact event and day, and nothing changes until they tap Yes. Phrase your reply as what you're about to do ("I'll add it once you confirm"), never as already done.
 - When asked about birthdays ("whose birthday is next?", "how old is Mom turning?"), use the Birthdays list above. Calendar events titled as birthdays count too.
 - When asked "what's for dinner?" or "what's the meal plan?", use the meal plan data above.
 - When asked about family members or who is assigned to something, use the family members list.
@@ -9690,10 +9691,21 @@ async function assistantCheckShopping(query) {
   return `✓ Checked off "${items[i].text}"`;
 }
 
+/** An addEvent's date/time as "Sat, Oct 31, 3:00 PM" (or "Sat, Oct 31, all day"),
+ *  or null when Gemini sent something that isn't YYYY-MM-DD / HH:MM. */
+function _addEventWhen(dateStr, timeStr) {
+  const allDay = !timeStr || /^all\s?day$/i.test(timeStr.trim());
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr || '') || (!allDay && !/^\d{1,2}:\d{2}$/.test(timeStr.trim()))) return null;
+  const d = new Date(`${dateStr}T${allDay ? '00:00' : timeStr.trim().padStart(5, '0')}:00`);
+  const day = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  return allDay ? `${day}, all day` : `${day}, ${d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+}
+
 async function assistantAddEvent(dateStr, timeStr, title, member) {
   if (!title || !dateStr) return `⚠️ Couldn't add the event — missing a date or title`;
   if (!googleToken)       return `⚠️ Sign in with Google to let me add calendar events`;
   const allDay = !timeStr || /^all\s?day$/i.test(timeStr.trim());
+  if (!allDay) timeStr = timeStr.trim().padStart(5, '0');   // "9:30" → "09:30", or the ISO string is invalid
   let start, end;
   if (allDay) {
     start = { date: dateStr };
@@ -9725,7 +9737,7 @@ async function assistantAddEvent(dateStr, timeStr, title, member) {
     });
     if (!r.ok) { const e = await r.json().catch(() => ({})); return `⚠️ Calendar error: ${e.error?.message || r.status}`; }
     await loadAllCalendars();
-    const when = allDay ? dateStr : `${dateStr} ${timeStr}`;
+    const when = _addEventWhen(dateStr, timeStr) || (allDay ? dateStr : `${dateStr} ${timeStr}`);
     const who  = assignedName ? `, assigned to ${assignedName}` : '';
     return `✓ Added "${title}" to your calendar (${when})${who}${memberNote}`;
   } catch (e) { return `⚠️ Couldn't add the event: ${e.message}`; }
@@ -9870,10 +9882,11 @@ async function assistantAddBudget(name, amountStr, freqRaw) {
 }
 
 // ── Assistant confirm cards ──
-// Event edits and removals act on Google Calendar straight away, and a voice
-// mishearing ("remove the dentist" → the wrong event) can't be undone from the
-// panel. So they wait on a Yes/No card naming the exact event first. Adds stay
-// instant: a wrong add is visible and easy to delete. Cards aren't persisted.
+// Event adds, edits and removals act on Google Calendar straight away, and a
+// voice mishearing ("remove the dentist" → the wrong event) can't be undone
+// from the panel. So they wait on a Yes/No card naming the exact event and day
+// first. Adds joined 2026-10-30 after "tomorrow" was resolved to the wrong day
+// and only the ISO date in the result hinted at it. Cards aren't persisted.
 let assistantPendingConfirms = [];   // [{ id, type, parts, question }]
 let assistantConfirmSeq      = 0;
 
@@ -9884,6 +9897,15 @@ function _evtWhen(e) {
 /** Run the same checks the action would, then phrase the Yes/No question.
  *  Returns { error } for anything that would fail anyway, else { question }. */
 function describeEventChange(type, parts) {
+  if (type === 'addEvent') {
+    const [dateStr, timeStr, title, member] = parts;
+    if (!title || !dateStr) return { error: `⚠️ Couldn't add the event — missing a date or title` };
+    if (!googleToken)       return { error: `⚠️ Sign in with Google to let me add calendar events` };
+    const when = _addEventWhen(dateStr, timeStr);
+    if (!when) return { error: `⚠️ Couldn't add "${title}" — I didn't get a clear date and time` };
+    const who = (member && resolveFamilyMember(member)) || detectMemberInTitle(title);
+    return { question: `Add "${title}" on ${when}${who ? ` for ${who}` : ''}?` };
+  }
   const [query, dateOrNew] = parts;
   if (!query)       return { error: `⚠️ Which event should I ${type === 'removeEvent' ? 'remove' : 'change'}?` };
   if (!googleToken) return { error: `⚠️ Sign in with Google to let me change calendar events` };
@@ -9924,7 +9946,9 @@ async function resolveAssistantConfirm(id, yes) {
   if (yes) {
     const [a, b, d, t] = c.parts;
     try {
-      msg = c.type === 'removeEvent' ? await assistantRemoveEvent(a, b) : await assistantEditEvent(a, b, d, t);
+      msg = c.type === 'removeEvent' ? await assistantRemoveEvent(a, b)
+          : c.type === 'addEvent'    ? await assistantAddEvent(a, b, d, t)
+          : await assistantEditEvent(a, b, d, t);
     } catch (e) { msg = `⚠️ Action failed: ${e.message}`; }
   }
   assistantHistory.push({ role: 'model', parts: [{ text: msg }] });
@@ -9943,8 +9967,7 @@ async function executeAssistantActions(actions) {
       else if (type === 'addTodo')       confirmMsgs.push(assistantAddTodo(value));
       else if (type === 'completeTodo')  confirmMsgs.push(await assistantCompleteTodo(value));
       else if (type === 'checkShopping') confirmMsgs.push(await assistantCheckShopping(value));
-      else if (type === 'addEvent')      confirmMsgs.push(await assistantAddEvent(parts[0], parts[1], parts[2], parts[3]));
-      else if (type === 'editEvent' || type === 'removeEvent') {
+      else if (type === 'addEvent' || type === 'editEvent' || type === 'removeEvent') {
         // Not run yet: these wait for an explicit Yes on a confirm card.
         const ask = describeEventChange(type, parts);
         if (ask.error) confirmMsgs.push(ask.error);
