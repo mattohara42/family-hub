@@ -567,6 +567,13 @@ if you don't want a dropped SSH session to kill it halfway; follow it with `jour
 
 The desktop already logs in automatically (`lightdm` → `familyhub` → the `labwc` session).
 
+> **No Pi keyboard.** The hub brings its own compact on-screen keyboard (turned on in step 10).
+> The Pi's squeekboard used to pop up instead, via `--enable-wayland-ime
+> --wayland-text-input-version=3` on the launch line, but it took the bottom half of the screen
+> and its size setting has no effect in landscape, so those flags were removed (2026-11-03).
+> Without them Chromium never asks squeekboard to show. If an older launch line still has them,
+> delete them, or you'll get two keyboards.
+
 > **Why not `chromium --kiosk`?** It was the first attempt, and the on-screen keyboard never
 > appeared. labwc deliberately hides keyboards and panels (the "top" layer) underneath any
 > full-screen window, and `--kiosk` is full screen. So instead Chromium runs as a normal
@@ -622,7 +629,7 @@ cat > ~/.config/labwc/autostart <<'EOF'
 # Family Hub kiosk. labwc-pi runs with -m, so this adds to /etc/xdg/labwc/autostart.
 # lwrespawn relaunches Chromium if it crashes or gets OOM-killed.
 # Maximized --app window, not --kiosk: labwc hides the on-screen keyboard under full-screen windows.
-/usr/bin/lwrespawn chromium --app=https://familial.netlify.app/family-hub.html --start-maximized --no-first-run --hide-crash-restore-bubble --noerrdialogs --password-store=basic --disk-cache-dir=/tmp/chromium-cache --check-for-update-interval=31536000 --disable-features=Translate --overscroll-history-navigation=0 --disable-pinch --enable-wayland-ime --wayland-text-input-version=3 --autoplay-policy=no-user-gesture-required --enable-speech-dispatcher &
+/usr/bin/lwrespawn chromium --app=https://familial.netlify.app/family-hub.html --start-maximized --no-first-run --hide-crash-restore-bubble --noerrdialogs --password-store=basic --disk-cache-dir=/tmp/chromium-cache --check-for-update-interval=31536000 --disable-features=Translate --overscroll-history-navigation=0 --disable-pinch --autoplay-policy=no-user-gesture-required --enable-speech-dispatcher &
 EOF
 ```
 
@@ -639,7 +646,6 @@ What the less obvious flags are for:
 | `--overscroll-history-navigation=0` | A sideways swipe on the calendar must page the month, not navigate Back |
 | `--disable-pinch` | No accidental zooming on the wall |
 | `--app=…` | A window with no tabs or address bar, like `--kiosk` but not full screen |
-| `--enable-wayland-ime --wayland-text-input-version=3` | Lets the on-screen keyboard (squeekboard) pop up when a text field is tapped. Squeekboard itself ships with the OS and starts automatically when a touchscreen is plugged in. It takes the bottom half of the screen (its size setting has no effect in landscape) and the hub shrinks to the top half while it's up |
 | `--hide-crash-restore-bubble` | No "Restore pages?" bubble after a power cut |
 | `--autoplay-policy=no-user-gesture-required` | Lets the hub play sound before anyone has touched the page. After a reboot nobody has, so the Pond Chimes screensaver started silent. See step 10c |
 | `--enable-speech-dispatcher` | Lets the Assistant's spoken replies reach the Pi's text-to-speech (speech-dispatcher). Because the launch line now contains `speech-dispatcher`, `pkill -f speech-dispatcher` kills the hub too. See step 10c |
@@ -775,8 +781,9 @@ tailnet, which the Home Assistant widget needs (see step 6c: HA is only reachabl
    Confirmed 2026-10-29: after a reboot the hub came back signed in by itself. The hub's hourly
    quiet token refresh goes through the same pop-up, so this should keep that working too (not
    yet confirmed on the panel).
-3. **Settings → Look & Feel:** leave the hub's own **⌨️ On-screen keyboard** toggle **off**. The
-   Pi's squeekboard already pops up for every field; with both on you'd get two keyboards.
+3. **Settings → Look & Feel → ⌨️ On-screen keyboard: on.** It's the panel's only keyboard (the
+   launch line in step 5c no longer starts the Pi's squeekboard). It's per device, so phones keep
+   their own keyboard.
 4. **Settings → Look & Feel → 🖼 Wall display: on.** A flatter type scale for reading from
    across the room (small text grows the most, event titles a little), a wider sidebar, and
    event fills deepened a notch so event text is always white. Per device.

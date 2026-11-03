@@ -12491,12 +12491,20 @@ function renderMotionToggles() {
 // ── On-Screen Keyboard ─────────────────────────────────────────
 // A lightweight touch keyboard for keyboardless wall displays. Opt-in via
 // Settings → Look (fh_osk); never on phones (they have a native keyboard).
-// Pops up when a [data-osk] field is focused and types into it, dispatching
-// real `input` events so field handlers (e.g. geocode) still fire.
+// Pops up when any text-like field (OSK_FIELDS) is focused and types into it,
+// dispatching real `input` events so field handlers (e.g. geocode) still fire.
+// A selector rather than a per-field attribute, so fields built at runtime
+// (Settings lists, Shopping/To-Do rows) get it too. While it's up the page
+// shrinks above it (html.osk-open), so a field near the bottom never hides
+// underneath it.
 let oskEl       = null;    // keyboard container (built once, appended to body)
 let oskTarget   = null;    // the input/textarea currently receiving keys
 let oskLayer    = 'letters'; // 'letters' | 'symbols'
 let oskShift    = false;   // one-shot shift for the next letter
+const OSK_FIELDS = 'textarea:not([readonly]):not([disabled]),'
+  + 'input:is(:not([type]),[type=text],[type=search],[type=url],[type=email],[type=tel],[type=password],[type=number])'
+  + ':not([readonly]):not([disabled])';
+const isOskField = el => !!(el && el.matches && el.matches(OSK_FIELDS));
 
 const OSK_LAYOUTS = {
   letters: [
@@ -12611,14 +12619,20 @@ function showOnScreenKeyboard(target) {
   if (!oskEnabled || isMobile) return;
   buildOnScreenKeyboard();
   oskTarget = target;
-  oskLayer = 'letters';
+  // Number and phone fields open on the digits layer.
+  oskLayer = /^(number|tel)$/.test(target.type) ? 'symbols' : 'letters';
   oskShift = false;
   renderOnScreenKeyboard();
   oskEl.classList.add('visible');
+  const root = document.documentElement;
+  root.style.setProperty('--osk-h', oskEl.offsetHeight + 'px');
+  root.classList.add('osk-open');
+  requestAnimationFrame(() => target.scrollIntoView({ block: 'nearest' }));
 }
 
 function hideOnScreenKeyboard() {
   if (oskEl) oskEl.classList.remove('visible');
+  document.documentElement.classList.remove('osk-open');
   oskTarget = null;
 }
 
@@ -12626,14 +12640,18 @@ function initOnScreenKeyboard() {
   document.addEventListener('focusin', e => {
     if (!oskEnabled || isMobile) return;
     const t = e.target;
-    if (t && t.matches && t.matches('[data-osk]')) showOnScreenKeyboard(t);
+    if (isOskField(t)) showOnScreenKeyboard(t);
+  });
+  // After ⌨✕ the field keeps focus, so tapping it again fires no focusin.
+  document.addEventListener('click', e => {
+    if (!oskEnabled || isMobile || oskEl?.classList.contains('visible')) return;
+    if (isOskField(e.target) && e.target === document.activeElement) showOnScreenKeyboard(e.target);
   });
   document.addEventListener('focusout', () => {
     if (!oskEl || !oskEl.classList.contains('visible')) return;
-    // Defer so a focus move to another [data-osk] field keeps the keyboard up.
+    // Defer so a focus move to another text field keeps the keyboard up.
     setTimeout(() => {
-      const a = document.activeElement;
-      if (!a || !a.matches || !a.matches('[data-osk]')) hideOnScreenKeyboard();
+      if (!isOskField(document.activeElement)) hideOnScreenKeyboard();
     }, 120);
   });
 }

@@ -470,7 +470,7 @@
         <div id="assistantVoiceStatus" class="assistant-voice-status" role="status" style="display:none"></div>
         <div class="assistant-input-row">
           <button class="assistant-mic" id="assistantMicBtn" onclick="toggleAssistantMic()" title="Speak" aria-label="Speak" style="display:none">🎤</button>
-          <input type="text" id="assistantInput" class="assistant-input" data-osk
+          <input type="text" id="assistantInput" class="assistant-input"
                  placeholder="Ask anything…" aria-label="Message to Family Assistant"
                  onkeydown="if(event.key==='Enter')sendAssistantMessage()" />
           <button class="assistant-send" onclick="sendAssistantMessage()" title="Send" aria-label="Send message">↑</button>
@@ -1632,17 +1632,17 @@
 
     <div class="field">
       <label>Event title</label>
-      <input type="text" id="evtEdTitle" placeholder="Event title…" data-osk />
+      <input type="text" id="evtEdTitle" placeholder="Event title…" />
     </div>
 
     <div class="field">
       <label>Description <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
-      <textarea id="evtEdDesc" rows="2" placeholder="Notes, details, etc…" style="resize:vertical" data-osk></textarea>
+      <textarea id="evtEdDesc" rows="2" placeholder="Notes, details, etc…" style="resize:vertical"></textarea>
     </div>
 
     <div class="field">
       <label>Location <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
-      <input type="text" id="evtEdLocation" placeholder="Address or place…" oninput="updateEvtEdMapLink();geocodeEvtEdLocation()" data-osk />
+      <input type="text" id="evtEdLocation" placeholder="Address or place…" oninput="updateEvtEdMapLink();geocodeEvtEdLocation()" />
       <div id="evtEdMap" style="display:none;height:150px;margin-top:8px;border-radius:8px;overflow:hidden"></div>
       <div style="margin-top:6px;display:flex;gap:14px">
         <a id="evtEdMapView" href="#" target="_blank" rel="noopener" style="display:none;font-size:.82rem;color:var(--accent)">📍 View on map</a>

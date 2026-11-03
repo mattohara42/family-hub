@@ -6231,6 +6231,10 @@ body.flavor-tactile #saverClockTime { font-family: var(--font-display); }
   touch-action: manipulation;
 }
 .osk.visible { display: flex; }
+/* While the keyboard is up the page and any open modal end above it, the
+   way the hub shrank for the Pi's own keyboard. --osk-h is measured in JS. */
+html.osk-open body { height: calc(100dvh - var(--osk-h, 0px)); }
+html.osk-open .modal-overlay { bottom: var(--osk-h, 0px); }
 .osk-row { display: flex; gap: 4px; justify-content: center; }
 .osk-key {
   flex: 1 1 0;
