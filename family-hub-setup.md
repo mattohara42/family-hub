@@ -585,6 +585,12 @@ The desktop already logs in automatically (`lightdm` → `familyhub` → the `la
 > appeared. labwc deliberately hides keyboards and panels (the "top" layer) underneath any
 > full-screen window, and `--kiosk` is full screen. So instead Chromium runs as a normal
 > **maximized window with no border**, which looks identical but lets the keyboard show.
+>
+> **Revisit on the next rebuild (untested).** With squeekboard off, that reason is gone. `--kiosk`
+> would likely make the labwc window rule (step 5b) and the `custom_chrome_frame` Preferences edit
+> unnecessary, since a full-screen window has no border, and it blocks leaving full screen. The
+> look is the same and nothing is broken today, so it was left alone (2026-11-03). Worth trying
+> when setting up a fresh card, not as a change to a working panel.
 
 **a. Drop the desktop and taskbar.** Nothing should sit behind the hub. It also saves about
 40 MB of RAM. (Auto-hiding the taskbar instead does *not* work: it pushed the hub window 34 px
