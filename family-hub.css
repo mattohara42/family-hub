@@ -31,9 +31,8 @@
   --red: #e06c75;
   --text: #e8eaf6;
   --muted: #7b7f96;
-  /* ── Tactile flavor shared tokens (consumed only under body.flavor-tactile) ── */
-  --ink: var(--text);
-  --ink-soft: var(--muted);
+  /* ── Tactile flavor shared tokens (consumed only under body.flavor-tactile) ──
+     --ink/--ink-soft are declared on body (next to its base rule), not here. */
   --line: rgba(160,168,220,0.16);
   --surface-solid: #1e2030;
   --surface-hi:    #262a40;
@@ -678,6 +677,15 @@ body {
      the page is selectable except fields you type into (rule below). */
   -webkit-user-select: none;
   user-select: none;
+}
+/* Aliases of the theme's text colors. They live on body, not :root, because
+   the themes set --text/--muted on body: a var() resolves where it's declared,
+   so on :root these froze to the dark theme's values and light mode got
+   near-white text. Each theme's own override (e.g. Tactile light's
+   --ink-soft) still wins on specificity. */
+body {
+  --ink: var(--text);
+  --ink-soft: var(--muted);
 }
 input, textarea, [contenteditable]:not([contenteditable="false"]) {
   -webkit-user-select: text;
