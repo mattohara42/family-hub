@@ -507,7 +507,7 @@ Everything below was run over SSH from the Mac.
 |---|---|
 | SSH in | `ssh familyhub@family-hub.local` (user is **`familyhub`**, not `matt`) |
 | VNC in | **RealVNC Viewer** (see Wall Panel — Remote Access) → `family-hub.local` at home, `family-hub` over Tailscale → log in as `familyhub` + the Pi password |
-| Reload the hub page | `ssh familyhub@family-hub.local sudo systemctl restart lightdm` (restarts the panel's whole session, ~1 min) |
+| Reload the hub page | From any signed-in device (a phone works): Settings → Look → Wall panel → **🔄 Update wall panel now**. Fallback when the hub itself is wedged: `ssh familyhub@family-hub.local sudo systemctl restart lightdm` (restarts the panel's whole session, ~1 min) |
 | Reboot | `ssh familyhub@family-hub.local sudo reboot` |
 | Kiosk launch line | `~/.config/labwc/autostart` |
 | Restart speech-dispatcher (after a voice change) | `pkill -x speech-dispatch` (step 10c). Never `pkill -f speech-dispatcher`: it also kills the hub |
