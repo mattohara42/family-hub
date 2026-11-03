@@ -674,6 +674,14 @@ body {
   flex-direction: column;
   padding: 10px 14px;
   box-sizing: border-box;
+  /* A finger dragged across the wall panel kept selecting text. Nothing on
+     the page is selectable except fields you type into (rule below). */
+  -webkit-user-select: none;
+  user-select: none;
+}
+input, textarea, [contenteditable]:not([contenteditable="false"]) {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 /* ── Background photo ── */
@@ -4304,6 +4312,18 @@ body.nautical-mode .assistant-chip:hover { background: var(--accent2); border-co
 @media (prefers-reduced-motion: reduce) {
   .assistant-voice-status { animation: none; }
 }
+.assistant-icon-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 1.3rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.assistant-clear-btn { font-size: 1.6rem; }
 .assistant-input-row {
   display: flex;
   align-items: center;
@@ -6178,33 +6198,39 @@ body.flavor-tactile #saverClockTime { font-family: var(--font-display); }
 }
 
 /* ── On-Screen Keyboard (keyboardless wall displays) ── */
+/* Compact: a centered panel capped at 720px wide, with keys sized off the
+   viewport height. Full-width 54px keys took over most of the wall panel. */
 .osk {
   position: fixed;
-  left: 0; right: 0; bottom: 0;
+  left: 50%; bottom: 0;
+  transform: translateX(-50%);
+  width: min(100%, 720px);
   z-index: 99999;
   display: none;
   flex-direction: column;
-  gap: 6px;
-  padding: 10px 10px calc(10px + env(safe-area-inset-bottom, 0px));
+  gap: 4px;
+  padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px));
   background: var(--surface-solid, #1b1e27);
-  border-top: 1px solid var(--line, rgba(128,128,128,.25));
+  border: 1px solid var(--line, rgba(128,128,128,.25));
+  border-bottom: none;
+  border-radius: 12px 12px 0 0;
   box-shadow: 0 -8px 30px rgba(0,0,0,.35);
   user-select: none;
   -webkit-user-select: none;
   touch-action: manipulation;
 }
 .osk.visible { display: flex; }
-.osk-row { display: flex; gap: 6px; justify-content: center; }
+.osk-row { display: flex; gap: 4px; justify-content: center; }
 .osk-key {
   flex: 1 1 0;
   min-width: 0;
-  min-height: 54px;
+  height: clamp(30px, 6vh, 44px);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.15rem;
+  font-size: 1rem;
   font-weight: 600;
-  color: var(--ink, #e8eaf0);
+  color: var(--text);
   background: var(--surface-hi, rgba(255,255,255,.06));
   border: 1px solid var(--line, rgba(128,128,128,.25));
   border-radius: 8px;
@@ -6214,10 +6240,10 @@ body.flavor-tactile #saverClockTime { font-family: var(--font-display); }
 .osk-key:active { transform: translateY(1px); background: var(--accent, #6c8ef5); color: #fff; }
 .osk-key.osk-wide  { flex: 2.4 1 0; }
 .osk-key.osk-space { flex: 5 1 0; }
-.osk-key.osk-fn    { font-size: .95rem; color: var(--muted, #9aa0ac); }
+.osk-key.osk-fn    { font-size: .85rem; color: var(--muted, #9aa0ac); }
 .osk-key.osk-active { background: var(--accent, #6c8ef5); color: #fff; }
 .osk-key.osk-enter { background: var(--accent, #6c8ef5); color: #fff; }
-.osk-key.osk-hide  { flex: 0 0 56px; }
+.osk-key.osk-hide  { flex: 0 0 48px; }
 
 /* ── Motion switches (Settings → Look → Motion; family-hub.js § Motion) ── */
 /* body.no-anim-<key> outranks each animation's own rule on specificity, so
@@ -6275,13 +6301,22 @@ html.wall-display .school-day-subject-chip { padding: 2px 7px; border-radius: 10
    lifts these to tie the Nautical/Aurora `.sidebar::-webkit-scrollbar` rules,
    and coming later wins the tie. Scrollbars hidden with scrollbar-width: none
    stay hidden, since that property overrides ::-webkit-scrollbar. */
-html.wall-display :is(*, .sidebar)::-webkit-scrollbar { width: 18px; height: 18px; }
-html.wall-display :is(*, .sidebar)::-webkit-scrollbar-track { background: color-mix(in srgb, var(--muted) 12%, transparent); border-radius: 9px; }
+html.wall-display :is(*, .sidebar)::-webkit-scrollbar { width: 36px; height: 36px; }
+html.wall-display :is(*, .sidebar)::-webkit-scrollbar-track { background: color-mix(in srgb, var(--muted) 12%, transparent); border-radius: 18px; }
 html.wall-display :is(*, .sidebar)::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--muted) 75%, transparent);
-  border: 3px solid transparent; background-clip: padding-box;
-  border-radius: 9px; min-height: 48px;
+  border: 5px solid transparent; background-clip: padding-box;
+  border-radius: 18px; min-height: 72px;
 }
+/* Assistant controls at finger size. The (hover: none) touch block already
+   grows send/mic, but a panel with a mouse attached never matches it. */
+html.wall-display .assistant-send,
+html.wall-display .assistant-mic { width: 52px; height: 52px; font-size: 1.4rem; }
+html.wall-display .assistant-input { padding: 12px 16px; font-size: var(--text-base); }
+html.wall-display .assistant-icon-btn { min-width: 48px; min-height: 48px; font-size: 1.7rem; }
+html.wall-display .assistant-clear-btn { font-size: 2rem; }
+html.wall-display .briefing-pill { padding: 10px 16px; font-size: var(--text-sm); }
+html.wall-display .assistant-confirm-actions .btn { min-width: 88px; min-height: 48px; font-size: var(--text-base); }
 
 /* ── Phone overrides (generic) ──
    Kept at the very end of the file on purpose. A media query adds no

@@ -9414,7 +9414,9 @@ async function refreshAssistantCalendar() {
       const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(id)}/events`
         + `?maxResults=250&orderBy=startTime&singleEvents=true`
         + `&timeMin=${start.toISOString()}&timeMax=${end.toISOString()}`;
-      const r    = await fetch(url, { headers: { Authorization: `Bearer ${googleToken}` } });
+      // calFetch refreshes a lapsed token first; a raw fetch 401'd silently
+      // on an all-day wall panel and left the Assistant blind for 10 minutes.
+      const r    = await calFetch(url);
       const data = await r.json();
       if (data.items) cacheCalEvents(events, id, data.items, color);
     } catch (e) { console.warn('Assistant cal error', id, e); }
@@ -9422,14 +9424,21 @@ async function refreshAssistantCalendar() {
   assistantCalCache = { fetchedAt: Date.now(), events };
 }
 
-/** Non-holiday events on a date for the Assistant: its own Google fetch where
- *  it has one, plus everything else calEventCache holds (ICS, local cals). */
-function assistantEventsOn(dateStr) {
+/** Every calendar the Assistant can see, as { date: [events] } maps: its own
+ *  Google fetch where it has one, plus everything else calEventCache holds
+ *  (ICS, local cals). Reads and edits share this, so an event it can talk
+ *  about is also one it can find to move or remove. */
+function assistantCalMaps() {
   const own = assistantCalCache.fetchedAt ? assistantCalCache.events : {};
   return [
-    ...Object.values(own).flatMap(byDate => byDate[dateStr] || []),
-    ...Object.entries(calEventCache).filter(([calId]) => !own[calId]).flatMap(([, byDate]) => byDate[dateStr] || []),
-  ].filter(e => !e.holiday);
+    ...Object.values(own),
+    ...Object.entries(calEventCache).filter(([calId]) => !own[calId]).map(([, byDate]) => byDate),
+  ];
+}
+
+/** Non-holiday events on a date for the Assistant. */
+function assistantEventsOn(dateStr) {
+  return assistantCalMaps().flatMap(byDate => byDate[dateStr] || []).filter(e => !e.holiday);
 }
 
 function buildAssistantContext() {
@@ -9744,11 +9753,13 @@ async function assistantAddEvent(dateStr, timeStr, title, member) {
 }
 
 // Find the soonest upcoming (or on `dateStr`) non-holiday event whose title
-// fuzzy-matches `query`. Returns the cached event object or null.
+// fuzzy-matches `query`. Returns the cached event object or null. Searches the
+// Assistant's 30-day window, not just calEventCache: that only holds the period
+// on screen, so in Day view nothing past today could be moved or removed.
 function findCalEvent(query, dateStr, { readOnly = false } = {}) {
   const todayKey = localDateKey(new Date());
   let best = null, bestKey = null;
-  Object.values(calEventCache).forEach(byDate => {
+  assistantCalMaps().forEach(byDate => {
     Object.entries(byDate).forEach(([date, evs]) => {
       if (date < todayKey) return;
       if (dateStr && date !== dateStr) return;
@@ -9946,6 +9957,9 @@ async function resolveAssistantConfirm(id, yes) {
   if (yes) {
     const [a, b, d, t] = c.parts;
     try {
+      // The card may have sat a while, and any calendar reload since then
+      // dropped the 30-day window, so re-read it before matching the event.
+      await refreshAssistantCalendar();
       msg = c.type === 'removeEvent' ? await assistantRemoveEvent(a, b)
           : c.type === 'addEvent'    ? await assistantAddEvent(a, b, d, t)
           : await assistantEditEvent(a, b, d, t);
@@ -10695,20 +10709,38 @@ const stripAppLines = text => text.split('\n').filter(l => !ASSISTANT_APP_LINE.t
  *  from an earlier day (or saved before turns carried `at`) get the day they
  *  were sent prefixed; `at` itself is stripped, since the API rejects unknown
  *  fields. Model turns lose the app's ✓/⚠️ lines so Gemini never sees them as
- *  its own words; a turn that was only such lines is dropped. */
+ *  its own words; a turn that was only such lines is dropped. Those results
+ *  aren't thrown away, though: they ride on the next user turn as an app note,
+ *  so Gemini knows what actually got added or changed (and what failed)
+ *  without being handed a ✓ line it could copy as its own claim. */
 function assistantContents() {
   const today = new Date().toDateString();
-  return assistantHistory.map(({ role, parts, at }) => {
+  const out = [];
+  let results = [];   // app result lines waiting for the next user turn
+  for (const { role, parts, at } of assistantHistory) {
     if (role === 'model') {
+      parts[0].text.split('\n').filter(l => ASSISTANT_APP_LINE.test(l))
+        .forEach(l => results.push(l.trim().startsWith('✓')
+          ? `Done: ${l.replace(/^\s*✓\s*/, '')}`
+          : `Failed: ${l.replace(/^\s*⚠\uFE0F?\s*/, '')}`));
       const text = stripAppLines(parts[0].text);
-      return text ? { role, parts: [{ text }] } : null;
+      if (text) out.push({ role, parts: [{ text }] });
+      continue;
     }
-    if (at && new Date(at).toDateString() === today) return { role, parts };
-    const sent = at
-      ? new Date(at).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
-      : 'an earlier day';
-    return { role, parts: [{ text: `(Sent on ${sent}. Relative dates in this message refer to that day, not today.) ${parts[0].text}` }] };
-  }).filter(Boolean);
+    let text = parts[0].text;
+    if (!(at && new Date(at).toDateString() === today)) {
+      const sent = at
+        ? new Date(at).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+        : 'an earlier day';
+      text = `(Sent on ${sent}. Relative dates in this message refer to that day, not today.) ${text}`;
+    }
+    if (results.length) {
+      text = `(App note, not from the user: since your last reply the app reported: ${results.join(' ')})\n${text}`;
+      results = [];
+    }
+    out.push({ role, parts: [{ text }] });
+  }
+  return out;
 }
 
 /** Persist assistantHistory to localStorage (capped to avoid bloat). */
