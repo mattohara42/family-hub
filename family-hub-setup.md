@@ -571,8 +571,15 @@ The desktop already logs in automatically (`lightdm` → `familyhub` → the `la
 > The Pi's squeekboard used to pop up instead, via `--enable-wayland-ime
 > --wayland-text-input-version=3` on the launch line, but it took the bottom half of the screen
 > and its size setting has no effect in landscape, so those flags were removed (2026-11-03).
-> Without them Chromium never asks squeekboard to show. If an older launch line still has them,
-> delete them, or you'll get two keyboards.
+> Removing them is not enough on its own: the Pi starts squeekboard by itself (via `sbtest`,
+> whenever a touchscreen is found) and it kept popping up. Switch it off for good:
+>
+> ```bash
+> sudo raspi-config nonint do_squeekboard S3 && sudo reboot
+> ```
+>
+> (Interactively: `sudo raspi-config` → Display Options → D6 On-screen keyboard → S3 Always Off.)
+> `pgrep -a squeekboard` should then print nothing.
 
 > **Why not `chromium --kiosk`?** It was the first attempt, and the on-screen keyboard never
 > appeared. labwc deliberately hides keyboards and panels (the "top" layer) underneath any
