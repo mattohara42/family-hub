@@ -1100,6 +1100,32 @@ window.onerror = (msg, src, line, col, err) => {
   if (typeof Sentry !== 'undefined') Sentry.captureException(err || new Error(msg));
 };
 
+// ── Remote panel reload ──
+// Settings → Look → "Update wall panel now" (usable from a phone) bumps
+// settings/panelReload; every device with Wall display on reloads right away
+// rather than waiting for the idle auto-update below. The first snapshot is
+// only a baseline, and later ones are compared to it rather than to a clock,
+// so a phone and the panel disagreeing on the time can't matter. The baseline
+// survives listener re-attach, so a request made while the panel was signed
+// out still lands once it signs back in.
+let _panelReloadSeen;   // undefined until the first snapshot
+
+function onPanelReloadSnapshot(doc) {
+  const v = doc.exists ? doc.data().value : null;
+  if (_panelReloadSeen === undefined) { _panelReloadSeen = v; return; }
+  if (v === _panelReloadSeen) return;
+  _panelReloadSeen = v;
+  if (wallDisplay) location.reload();
+}
+
+async function requestPanelReload() {
+  if (!db) { showToast('⚠️ Needs Firestore, which isn\'t set up on this device.', 4000); return; }
+  try {
+    await db.collection('settings').doc('panelReload').set({ value: Date.now() });
+    showToast('🔄 Sent. The wall panel will reload in a few seconds.', 4000);
+  } catch (e) { _fsWriteError(e); }
+}
+
 // ── Kiosk auto-update ─────────────────────────────────────────────
 // A wall display keeps this tab open for days, so it never picks up a new
 // deploy on its own. The service worker is network-first with skipWaiting +
@@ -6097,6 +6123,7 @@ function attachFirestoreListeners() {
   _fsUnsub.push(db.collection('settings').doc('calendarPalette').onSnapshot(doc => {
     if (doc.exists && doc.data().value !== calPalette) { calPalette = doc.data().value; refreshCalPalette(); }
   }, _fsError));
+  _fsUnsub.push(db.collection('settings').doc('panelReload').onSnapshot(onPanelReloadSnapshot, _fsError));
   _fsUnsub.push(db.collection('settings').doc('schoolDayCycle').onSnapshot(doc => {
     if (doc.exists) schoolDayCycle = { ...SCHOOL_CYCLE_DEFAULTS, ...doc.data().value };
     scdRenderCycleStatus(); scdRenderSubjectDayChecks(); renderCurrentView();
