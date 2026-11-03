@@ -458,8 +458,8 @@
         <div style="display:flex;align-items:center;gap:8px">
           <button id="briefingPill" onclick="toggleBriefing()" title="Daily briefing"
                   class="briefing-pill">☀️ Briefing</button>
-          <button id="assistantTtsBtn" onclick="toggleAssistantTTS()" title="Read replies aloud" aria-label="Read replies aloud" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.3rem;line-height:1">🔇</button>
-          <button onclick="clearAssistantChat()" title="Clear chat" aria-label="Clear chat" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.6rem;line-height:1">↺</button>
+          <button id="assistantTtsBtn" class="assistant-icon-btn" onclick="toggleAssistantTTS()" title="Read replies aloud" aria-label="Read replies aloud">🔇</button>
+          <button class="assistant-icon-btn assistant-clear-btn" onclick="clearAssistantChat()" title="Clear chat" aria-label="Clear chat">↺</button>
         </div>
       </div>
       <div class="card-body assistant-card-body">
