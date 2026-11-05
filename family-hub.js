@@ -331,6 +331,8 @@ function lockPortraitOrientation() {
 let layoutMode      = localStorage.getItem('fh_layoutMode') || 'auto'; // 'auto' | 'portrait' | 'landscape'
 let tvMode          = lsGet('fh_tvMode', false);
 let wallDisplay     = lsGet('fh_wallDisplay', false); // per-device: wall-panel type scale + deeper event fills
+let autoThemeBySun  = lsGet('fh_autoThemeSun', false); // per-device: Auto theme follows sunset/sunrise, not the OS setting
+let sunTimes        = lsGet('fh_sunTimes', null);      // { rise, set } in minutes after local midnight, from the home weather location
 // SMS recipients are derived from family members with a phone number
 function getSmsContacts() {
   return familyMembers.filter(m => m.phone).map(m => ({ nick: m.name, phone: m.phone }));
@@ -5226,6 +5228,7 @@ async function loadWeatherByCity(city) {
     };
 
     weatherCache[city.toLowerCase().trim()] = { ts: Date.now(), data };
+    if (city === weatherLocations[0]) rememberSunTimes(data.sunriseTs, data.sunsetTs);
     renderWeatherData(data);
 
   } catch(e) {
@@ -12572,6 +12575,7 @@ function applyAssistantName() {
 // deliberate manual palettes, not something a day/night switch should pick.
 function resolveAppMode(mode) {
   if (mode !== 'auto') return mode;
+  if (autoThemeBySun) return isNightNow() ? 'dark' : 'light';
   return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
 }
 
@@ -12601,8 +12605,34 @@ function applyFlavor(flavor) {
 // Keep 'auto' in sync with the device's day/night switch — mirrors the
 // 'auto' layout-orientation listener below.
 window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
-  if (appMode === 'auto') applyAppMode('auto');
+  if (appMode === 'auto' && !autoThemeBySun) applyAppMode('auto');
 });
+
+// ── Auto theme by sunset ──
+// For devices whose OS never switches to dark at night (the Pi wall panel),
+// Auto can follow the sun instead. Sunrise/sunset come from the first weather
+// location's forecast and are kept as minutes after local midnight, so a
+// stale value (weather widget off, offline after a reboot) is only a few
+// minutes out. With no weather at all it falls back to 7am to 7pm.
+function isNightNow() {
+  const rise = sunTimes?.rise ?? 7 * 60;
+  const set  = sunTimes?.set  ?? 19 * 60;
+  const now  = new Date();
+  const mins = now.getHours() * 60 + now.getMinutes();
+  return mins < rise || mins >= set;
+}
+
+function rememberSunTimes(riseTs, setTs) {
+  if (!riseTs || !setTs) return;
+  const minsOf = ts => { const d = new Date(ts * 1000); return d.getHours() * 60 + d.getMinutes(); };
+  sunTimes = { rise: minsOf(riseTs), set: minsOf(setTs) };
+  localStorage.setItem('fh_sunTimes', JSON.stringify(sunTimes));
+  if (appMode === 'auto' && autoThemeBySun) applyAppMode('auto');
+}
+
+setInterval(() => {
+  if (appMode === 'auto' && autoThemeBySun) applyAppMode('auto');
+}, 60 * 1000);
 
 // ── Wall display ──
 // Per-device (fh_wallDisplay) look for a wall panel read from across the room:
@@ -13153,6 +13183,7 @@ function openSettings() {
   document.querySelector(`input[name="assistantWelcome"][value="${assistantWelcomeMode}"]`).checked = true;
   document.getElementById('tvModeToggle').checked = tvMode;
   document.getElementById('wallDisplayToggle').checked = wallDisplay;
+  document.getElementById('autoThemeSunToggle').checked = autoThemeBySun;
   // Easter egg category toggles
   Object.keys(EGG_CATEGORY_DEFAULTS).forEach(cat => {
     const el = document.getElementById('egg_cat_' + cat);
@@ -13294,6 +13325,11 @@ function saveSettings() {
     localStorage.setItem('fh_wallDisplay', JSON.stringify(wallDisplay));
     applyWallDisplay();
     renderCurrentView();   // event fills are painted inline, so repaint them
+  }
+  if (autoThemeBySun !== document.getElementById('autoThemeSunToggle').checked) {
+    autoThemeBySun = !autoThemeBySun;
+    localStorage.setItem('fh_autoThemeSun', JSON.stringify(autoThemeBySun));
+    if (appMode === 'auto') applyAppMode('auto');
   }
   // Easter egg categories
   Object.keys(EGG_CATEGORY_DEFAULTS).forEach(cat => {

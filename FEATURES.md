@@ -350,6 +350,8 @@ let appFlavor = localStorage.getItem('fh_flavor') || 'basic'; // 'basic' | 'tact
 ```
 **Auto mode (added 2026-09-17):** `'auto'` is the true default — before any explicit pick, the app already follows the device's `prefers-color-scheme`, and `'🌓 Auto'` in Settings → Look & Feel lets you opt back into that after picking something else. `resolveAppMode(mode)` maps `'auto'` to `'light'`/`'dark'` off `matchMedia('(prefers-color-scheme: light)')`; `applyAppMode()` applies classes off the *resolved* value while `appMode` itself keeps the logical `'auto'`. A `change` listener on that same media query reapplies whenever `appMode === 'auto'` — same pattern as the `'auto'` layout-orientation listener a bit further down the file. Auto only ever resolves to light/dark; Nautical/Aurora/Accessible stay manual-only picks, since they're not a day/night distinction.
 
+**Auto follows sunset (per device, added 2026-11-05):** Settings → Look & Feel → Theme → 🌇 Auto follows sunset (`#autoThemeSunToggle`, `autoThemeBySun`, `fh_autoThemeSun`, default off, never synced). Added because the Pi wall panel's OS never switches to dark, so plain Auto stayed light all night. When on, `resolveAppMode('auto')` returns dark between sunset and sunrise via `isNightNow()` and ignores `prefers-color-scheme`. `loadWeatherByCity()` calls `rememberSunTimes()` for the first weather location only, storing `{ rise, set }` as minutes after local midnight in `sunTimes`/`fh_sunTimes` so a stale value is only minutes off; with no weather ever loaded it falls back to 7:00 to 19:00. A one-minute `setInterval` reapplies Auto so the switch lands without a reload.
+
 **Key functions:**
 - `resolveAppMode(mode)` — `'auto'` → live `'light'`/`'dark'`; anything else passes through unchanged
 - `applyAppMode(mode)` — removes all mode classes, adds the one for `resolveAppMode(mode)`
@@ -1059,6 +1061,8 @@ const HA_TOGGLE_DOMAINS = ['light', 'switch', 'fan', 'input_boolean'];
 | `fh_tvMode` | bool | TV Mode | TV / Display Mode on/off (default false) |
 | `fh_osk` | bool | On-screen keyboard | Touch keyboard for keyboardless wall displays (default false; ignored on phones) |
 | `fh_wallDisplay` | bool | Wall display | Per-device wall-panel look: flatter type scale on `<html>`, 380px sidebar, deeper event fills (default false; never synced) |
+| `fh_autoThemeSun` | bool | Auto follows sunset | Per-device: Auto theme goes dark sunset to sunrise instead of following the OS (default false; never synced) |
+| `fh_sunTimes` | object | Auto follows sunset | `{ rise, set }` minutes after local midnight, from the first weather location; fallback 7:00/19:00 |
 | `fh_motionOff` | JSON array | Motion switches | `MOTION_ANIMS` keys switched off on this device (default `[]`, all animations on); never synced |
 | `fh_eggCategories` | JSON object | Easter Eggs | `{ phrases, calendar, ui, weather }` — all true by default |
 | `fh_eggFranchises` | JSON object | Easter Eggs | `{ [franchiseId]: bool }` — per-franchise on/off pick within the `phrases` category, all true by default |
