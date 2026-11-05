@@ -993,7 +993,11 @@ body.konami-mode {
 
 /* ── Main layout ── */
 .layout {
-  --sidebar-w: 300px;     /* also the width of the Day/Agenda beside column */
+  /* Also the width of the Day/Agenda beside column. 300px up to a 1500px-wide
+     screen, then a fifth of the width (384px at 1920), capped at 420px: a
+     fixed 300px left sidebar text cramped on big screens while the calendar,
+     which needs it least in Day/Agenda, took all the extra width. */
+  --sidebar-w: clamp(300px, 20vw, 420px);
   display: grid;
   grid-template-columns: 1fr var(--sidebar-w);
   gap: 14px;
@@ -1043,7 +1047,7 @@ body.konami-mode {
 }
 .cal-main-row > .cal-card { min-width: 0; }
 .beside-strip {
-  flex: 0 0 var(--sidebar-w, 300px);
+  flex: 0 0 var(--sidebar-w);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -6397,7 +6401,8 @@ html.wall-display .school-day-subject-chip { padding: 2px 7px; border-radius: 10
 /* Wider sidebar for the larger text (300px fits desktop sizes). Desktop
    widths only, so it never fights the tablet/phone layouts. */
 @media (min-width: 1200px) {
-  html.wall-display .layout { --sidebar-w: 380px; }
+  /* 380px up to ~1730px wide, 422px at 1920, capped at 480px */
+  html.wall-display .layout { --sidebar-w: clamp(380px, 22vw, 480px); }
 }
 /* Finger-sized scrollbars (Chromium's default is a few px wide). The :is()
    lifts these to tie the Nautical/Aurora `.sidebar::-webkit-scrollbar` rules,
