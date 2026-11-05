@@ -1748,8 +1748,10 @@ function renderWeekGrid() {
         pill.appendChild(t);
       }
       const s = document.createElement('span');
-      s.textContent = (ev.holiday ? '🎉 ' : '') + ev.summary + (ev.recurringEventId ? ' ↻' : '');
+      const wm = nflMatchup(ev);
+      s.textContent = wm ? nflShortLabel(wm) : (ev.holiday ? '🎉 ' : '') + ev.summary + (ev.recurringEventId ? ' ↻' : '');
       pill.appendChild(s);
+      if (wm) prependMatchupBadges(s, wm);
       appendMemberBadges(pill, ev.members);
       pill.onclick = e => { e.stopPropagation(); onCalEventClick(ev); };
       if (isEventEditable(ev)) {
@@ -1948,7 +1950,9 @@ function renderDayGrid() {
       const p = document.createElement('div');
       p.className = 'day-event-pill';
       paintEventFill(p, ev.color);
-      p.innerHTML = `<span class="evt-title">${(ev.holiday ? '🎉 ' : '') + esc(ev.summary) + (ev.recurringEventId ? ' ↻' : '')}</span>`;
+      const am = nflMatchup(ev);
+      p.innerHTML = `<span class="evt-title">${am ? esc(nflShortLabel(am)) : (ev.holiday ? '🎉 ' : '') + esc(ev.summary) + (ev.recurringEventId ? ' ↻' : '')}</span>`;
+      if (am) prependMatchupBadges(p.firstChild, am);
       appendPillMeta(p, null, ev.members);
       p.style.cursor = 'pointer';
       p.onclick = () => onCalEventClick(ev);
@@ -2081,7 +2085,9 @@ function renderDayGrid() {
       const pill = document.createElement('div');
       pill.className = 'day-event-pill';
       paintEventFill(pill, ev.color);
-      pill.innerHTML = `<span class="evt-title">${esc(ev.summary) + (ev.recurringEventId ? ' ↻' : '')}</span>`;
+      const tm = nflMatchup(ev);
+      pill.innerHTML = `<span class="evt-title">${tm ? esc(nflShortLabel(tm)) : esc(ev.summary) + (ev.recurringEventId ? ' ↻' : '')}</span>`;
+      if (tm) prependMatchupBadges(pill.firstChild, tm);
       appendPillMeta(pill, `${startStr}${endStr ? ' – ' + endStr : ''}`, ev.members);
       pill.style.cursor = 'pointer';
       pill.onclick = () => onCalEventClick(ev);
@@ -2442,7 +2448,12 @@ function makeDayCell(year, month, day, otherMonth, isToday) {
     // names come out of the title ("Hockey practice") and each member becomes
     // a stripe in their color on the pill's left edge instead.
     const who = isMobile && !ev.holiday ? eventMemberNames(ev) : [];
-    if (who.length) {
+    const mm = nflMatchup(ev);
+    if (mm) {
+      // Mobile cells fit a few characters: "BUF @ MIN", no logos.
+      pillText.textContent = nflShortLabel(mm, isMobile);
+      if (!isMobile) prependMatchupBadges(pillText, mm);
+    } else if (who.length) {
       pillText.textContent = stripEmoji(stripMemberNames(ev.summary, who));
       applyMemberStripes(pill, who);
     } else {
@@ -2738,8 +2749,10 @@ function renderAgendaView() {
       title.style.display = 'flex';
       title.style.alignItems = 'center';
       const titleText = document.createElement('span');
-      titleText.textContent = (ev.holiday ? '🎉 ' : '') + ev.summary + (ev.recurringEventId ? ' ↻' : '');
+      const gm = nflMatchup(ev);
+      titleText.textContent = gm ? nflShortLabel(gm) : (ev.holiday ? '🎉 ' : '') + ev.summary + (ev.recurringEventId ? ' ↻' : '');
       title.appendChild(titleText);
+      if (gm) prependMatchupBadges(titleText, gm);
       appendMemberBadges(title, ev.members);
 
       info.appendChild(timeEl);
@@ -4089,6 +4102,177 @@ function _evtDetailsWhen(ev) {
     : `${when} – ${end.toLocaleDateString([], dayFmt)} ${end.toLocaleTimeString([], timeFmt)}`;
 }
 
+// ── NFL Matchups ───────────────────────────────────────────────
+// A title naming two NFL teams ("Buffalo Bills at Minnesota Vikings",
+// "Bills vs. Jets") becomes a matchup: pills get both teams' logos and a short
+// "Bills @ Vikings" label, and the read-only details view becomes a game-day
+// card. Logos are ESPN's CDN images (unofficial URL, checked 2026-11-05); if
+// one fails to load, an original helmet drawn in the team's colors stands in.
+// colors: [primary, secondary], brand data rather than theme tokens.
+const NFL_TEAMS = [
+  ['ari', 'Arizona',       'Cardinals',  '#97233F', '#000000'],
+  ['atl', 'Atlanta',       'Falcons',    '#A71930', '#000000'],
+  ['bal', 'Baltimore',     'Ravens',     '#241773', '#9E7C0C'],
+  ['buf', 'Buffalo',       'Bills',      '#00338D', '#C60C30'],
+  ['car', 'Carolina',      'Panthers',   '#0085CA', '#101820'],
+  ['chi', 'Chicago',       'Bears',      '#0B162A', '#C83803'],
+  ['cin', 'Cincinnati',    'Bengals',    '#FB4F14', '#000000'],
+  ['cle', 'Cleveland',     'Browns',     '#311D00', '#FF3C00'],
+  ['dal', 'Dallas',        'Cowboys',    '#003594', '#869397'],
+  ['den', 'Denver',        'Broncos',    '#FB4F14', '#002244'],
+  ['det', 'Detroit',       'Lions',      '#0076B6', '#B0B7BC'],
+  ['gb',  'Green Bay',     'Packers',    '#203731', '#FFB612'],
+  ['hou', 'Houston',       'Texans',     '#03202F', '#A71930'],
+  ['ind', 'Indianapolis',  'Colts',      '#002C5F', '#A2AAAD'],
+  ['jax', 'Jacksonville',  'Jaguars',    '#006778', '#D7A22A'],
+  ['kc',  'Kansas City',   'Chiefs',     '#E31837', '#FFB81C'],
+  ['lv',  'Las Vegas',     'Raiders',    '#000000', '#A5ACAF'],
+  ['lac', 'Los Angeles',   'Chargers',   '#0080C6', '#FFC20E'],
+  ['lar', 'Los Angeles',   'Rams',       '#003594', '#FFA300'],
+  ['mia', 'Miami',         'Dolphins',   '#008E97', '#FC4C02'],
+  ['min', 'Minnesota',     'Vikings',    '#4F2683', '#FFC62F'],
+  ['ne',  'New England',   'Patriots',   '#002244', '#C60C30'],
+  ['no',  'New Orleans',   'Saints',     '#D3BC8D', '#101820'],
+  ['nyg', 'New York',      'Giants',     '#0B2265', '#A71930'],
+  ['nyj', 'New York',      'Jets',       '#125740', '#FFFFFF'],
+  ['phi', 'Philadelphia',  'Eagles',     '#004C54', '#A5ACAF'],
+  ['pit', 'Pittsburgh',    'Steelers',   '#FFB612', '#101820'],
+  ['sf',  'San Francisco', '49ers',      '#AA0000', '#B3995D'],
+  ['sea', 'Seattle',       'Seahawks',   '#002244', '#69BE28'],
+  ['tb',  'Tampa Bay',     'Buccaneers', '#D50A0A', '#34302B'],
+  ['ten', 'Tennessee',     'Titans',     '#0C2340', '#4B92DB'],
+  ['wsh', 'Washington',    'Commanders', '#5A1414', '#FFB612'],
+].map(([code, city, name, primary, secondary]) => ({ code, city, name, primary, secondary }));
+
+/** The one NFL team a side of the title names, by nickname. */
+function nflTeamIn(side) {
+  const hits = NFL_TEAMS.filter(t => new RegExp(`\\b${t.name}\\b`, 'i').test(side));
+  return hits.length === 1 ? hits[0] : null;
+}
+
+const _nflMatchupCache = new Map();
+/** { away, home, sep } when the title is "<team> at|@|vs <team>", else null.
+    "at"/"@" puts the home team second; "vs" keeps the feed's order. */
+function nflMatchup(ev) {
+  const title = ev?.summary || '';
+  if (_nflMatchupCache.has(title)) return _nflMatchupCache.get(title);
+  let m = null;
+  const parts = title.split(/\s+(at|@|vs\.?|v\.?|versus)\s+/i);
+  if (parts.length === 3) {
+    const away = nflTeamIn(parts[0]), home = nflTeamIn(parts[2]);
+    if (away && home && away !== home) m = { away, home, sep: /^(at|@)$/i.test(parts[1]) ? '@' : 'vs' };
+  }
+  _nflMatchupCache.set(title, m);
+  return m;
+}
+
+const nflShortLabel = (m, abbr = false) =>
+  abbr ? `${m.away.code.toUpperCase()} ${m.sep} ${m.home.code.toUpperCase()}`
+       : `${m.away.name} ${m.sep} ${m.home.name}`;
+
+/** Original helmet silhouette in the team's colors; flip faces it left. */
+function nflHelmetSvg(t, flip = false) {
+  return `<svg class="nfl-helmet" viewBox="0 0 100 80" aria-hidden="true">
+    <g${flip ? ' transform="translate(100 0) scale(-1 1)"' : ''}>
+      <path d="M14 56 C6 28 28 6 56 6 C80 6 94 22 94 42 L94 48 L74 50 L70 62 L38 66 C26 66 18 63 14 56 Z" fill="${t.primary}" stroke="rgba(0,0,0,.35)" stroke-width="2"/>
+      <path d="M36 8 C60 3 84 14 92 36" fill="none" stroke="${t.secondary}" stroke-width="7" stroke-linecap="round"/>
+      <circle cx="48" cy="42" r="6" fill="rgba(0,0,0,.45)"/>
+      <path d="M72 44 H98 M74 55 H98 M84 40 V62 M97 40 V62 M70 62 L84 62" fill="none" stroke="#9aa3ad" stroke-width="4" stroke-linecap="round"/>
+    </g></svg>`;
+}
+
+const _nflLogoFailed = new Set();   // codes whose logo didn't load: draw the helmet from then on
+/** The team's logo, or its helmet once the logo has failed. */
+function nflTeamMark(t, flip = false) {
+  const wrap = document.createElement('span');
+  wrap.className = 'nfl-mark';
+  wrap.title = `${t.city} ${t.name}`;
+  const helmet = () => { wrap.innerHTML = nflHelmetSvg(t, flip); };
+  if (_nflLogoFailed.has(t.code)) { helmet(); return wrap; }
+  const img = document.createElement('img');
+  img.alt = '';
+  img.loading = 'lazy';
+  img.src = `https://a.espncdn.com/i/teamlogos/nfl/500/${t.code}.png`;
+  img.onerror = () => { _nflLogoFailed.add(t.code); helmet(); };
+  wrap.appendChild(img);
+  return wrap;
+}
+
+/** Put both teams' marks at the front of a pill. */
+function prependMatchupBadges(el, m) {
+  const b = document.createElement('span');
+  b.className = 'nfl-badges';
+  b.append(nflTeamMark(m.away), nflTeamMark(m.home, true));
+  el.prepend(b);
+}
+
+/** "Tonight · 8:15 PM", "Tomorrow · 1:00 PM", "Sunday · 4:25 PM",
+    "In 12 days", "Live now", or "Final". */
+function nflKickoffLabel(ev) {
+  if (!ev.startDT) return '';
+  const now = new Date(), start = new Date(ev.startDT);
+  const end = ev.endDT ? new Date(ev.endDT) : new Date(start.getTime() + 3.5 * 3600000);
+  if (now >= end) return 'Final';
+  if (now >= start) return '🔴 Live now';
+  const time = start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const days = Math.round((new Date(localDateKey(start) + 'T12:00:00') - new Date(localDateKey(now) + 'T12:00:00')) / 86400000);
+  if (days === 0) return `${start.getHours() >= 17 ? 'Tonight' : 'Today'} · ${time}`;
+  if (days === 1) return `Tomorrow · ${time}`;
+  if (days < 7)  return `${start.toLocaleDateString([], { weekday: 'long' })} · ${time}`;
+  return `In ${days} days`;
+}
+
+/** Networks from a feed line like "Watch the game on ESPN / ABC / NFL NETWORK". */
+function nflTvChannels(desc) {
+  const line = (desc || '').match(/watch(?: the game)? on[:\s]+([^\n]+)/i);
+  return line ? line[1].split(/\s*[\/,|]\s*/).map(s => s.trim()).filter(Boolean) : [];
+}
+
+/** Fill the details view's game-day card; returns whether the feed's own
+    description is still worth showing (no TV line found in it). */
+function renderMatchupCard(ev, m) {
+  const card = document.getElementById('evtDetailsMatchup');
+  card.innerHTML = '';
+  card.style.setProperty('--away', m.away.primary);
+  card.style.setProperty('--home', m.home.primary);
+
+  const banner = document.createElement('div');
+  banner.className = 'nfl-banner';
+  const side = (t, flip) => {
+    const d = document.createElement('div');
+    d.className = 'nfl-side';
+    const city = document.createElement('div'); city.className = 'nfl-city'; city.textContent = t.city;
+    const name = document.createElement('div'); name.className = 'nfl-name'; name.textContent = t.name;
+    d.append(nflTeamMark(t, flip), city, name);
+    return d;
+  };
+  const sep = document.createElement('div');
+  sep.className = 'nfl-sep';
+  sep.textContent = m.sep === '@' ? 'AT' : 'VS';
+  banner.append(side(m.away, false), sep, side(m.home, true));
+
+  const kick = document.createElement('div');
+  kick.className = 'nfl-kickoff';
+  kick.textContent = nflKickoffLabel(ev);
+
+  card.append(banner, kick);
+
+  const tv = nflTvChannels(ev.description);
+  if (tv.length) {
+    const row = document.createElement('div');
+    row.className = 'nfl-tv';
+    row.textContent = '📺';
+    tv.forEach(ch => {
+      const chip = document.createElement('span');
+      chip.className = 'nfl-tv-chip';
+      chip.textContent = ch;
+      row.appendChild(chip);
+    });
+    card.appendChild(row);
+  }
+  return !tv.length;
+}
+
 /** Read-only detail view for an event we can't write back to (an ICS feed,
  *  holidays, a local calendar). Shows what the pill has no room for — the
  *  broadcast network or streaming service a feed puts in DESCRIPTION, the
@@ -4099,6 +4283,11 @@ function openEventDetails(ev) {
 
   document.getElementById('evtDetailsTitle').textContent =
     (ev.holiday ? '🎉 ' : '') + (ev.summary || '(No title)');
+  const matchup = nflMatchup(ev);
+  const modalEl = document.querySelector('#eventDetailsModal .modal');
+  modalEl.classList.toggle('is-matchup', !!matchup);
+  const showDesc = matchup ? renderMatchupCard(ev, matchup) : true;
+  if (!matchup) document.getElementById('evtDetailsMatchup').innerHTML = '';
   document.getElementById('evtDetailsWhen').textContent = _evtDetailsWhen(ev);
 
   const srcEl = document.getElementById('evtDetailsSource');
@@ -4111,7 +4300,7 @@ function openEventDetails(ev) {
 
   // textContent, not innerHTML: a feed's description is someone else's text.
   const descEl = document.getElementById('evtDetailsDesc');
-  if (ev.description) { descEl.textContent = ev.description; descEl.style.display = ''; }
+  if (ev.description && showDesc) { descEl.textContent = ev.description; descEl.style.display = ''; }
   else descEl.style.display = 'none';
 
   // Only ever link http(s) — a feed could carry any scheme, javascript: included.
