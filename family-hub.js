@@ -304,6 +304,7 @@ window.addEventListener('resize', () => {
     if (calView === 'month') renderMonthGrid(); // pill labels differ under isMobile
     resetSaverIdleTimer();  // screensaver is desktop-only; re-arm/disarm on crossing
   }
+  syncBesidePlacement();    // the beside column needs a desktop-width layout
 });
 
 // Optional: Lock orientation to portrait on mobile (if browser supports it)
@@ -401,20 +402,26 @@ const ASSISTANT_QUICK_PROMPTS = [
   "When should I mow the lawn?",
 ];
 // ── Widget visibility & placement ────────────────────────────────────────────
-const WIDGET_DEFAULTS = { shopping: true, todo: true, budget: true, chores: true, wotd: true, quote: true, dadjoke: true, yearstrip: false, assistant: true, countdown: true, news: false, stock: false, homeassistant: false };
+const WIDGET_DEFAULTS = { weather: true, shopping: true, todo: true, budget: true, chores: true, wotd: true, quote: true, dadjoke: true, yearstrip: false, assistant: true, countdown: true, news: false, stock: false, homeassistant: false };
 let widgetVisibility = { ...WIDGET_DEFAULTS, ...lsGet('fh_widgets', {}) };
 
-// Placement: 'sidebar' (right column) or 'bottom' (full-width strip below layout)
+// Placement: 'sidebar' (right column), 'bottom' (full-width strip below the
+// calendar) or 'beside' (#besideStrip, a column next to the events that only
+// exists in Day and Agenda; in Month/Week a 'beside' card falls back to the
+// sidebar, since those grids need the full width). See besideColumnActive().
 const WIDGET_PLACEMENT_DEFAULTS = {
-  shopping: 'sidebar', todo: 'sidebar', budget: 'sidebar', chores: 'sidebar',
+  weather: 'sidebar', shopping: 'sidebar', todo: 'sidebar', budget: 'sidebar', chores: 'sidebar',
   wotd: 'sidebar', quote: 'sidebar', dadjoke: 'sidebar',
   yearstrip: 'bottom', assistant: 'sidebar', countdown: 'sidebar',
   news: 'sidebar', stock: 'sidebar', homeassistant: 'sidebar',
 };
 let widgetPlacement = { ...WIDGET_PLACEMENT_DEFAULTS, ...lsGet('fh_widget_placement', {}) };
+// Which side of the events the 'beside' column sits on (per device).
+let besideSide = lsGet('fh_besideSide', 'left');   // 'left' | 'right'
 
 // Canonical sidebar order for re-insertion
 const WIDGET_ORDER = [
+  { key: 'weather',   id: 'weatherCard'    },
   { key: 'shopping',  id: 'shopCard'       },
   { key: 'todo',      id: 'todoCard'       },
   { key: 'budget',    id: 'budgetCard'     },
@@ -448,16 +455,49 @@ let widgetOrder = lsGet('fh_widget_order', null);
 function resolvedWidgetOrder() {
   const base = WIDGET_ORDER.map(w => w.key);
   if (!widgetOrder) return [...base];
-  const saved   = widgetOrder.filter(k => base.includes(k));
-  const newKeys = base.filter(k => !saved.includes(k));
-  return [...saved, ...newKeys];
+  const order = widgetOrder.filter(k => base.includes(k));
+  // A widget added after the order was saved goes in at its canonical spot
+  // (before the next canonical widget already in the saved order), not at the
+  // end: Weather joined as the first widget and would otherwise drop to the
+  // bottom of every sidebar that had ever been dragged.
+  base.filter(k => !order.includes(k)).forEach(k => {
+    const next = base.slice(base.indexOf(k) + 1).find(x => order.includes(x));
+    order.splice(next ? order.indexOf(next) : order.length, 0, k);
+  });
+  return order;
+}
+
+/** True when 'beside' widgets get their own column: Day/Agenda on a desktop
+ *  layout wide enough for three columns. Portrait and tablet widths stack the
+ *  sidebar under the calendar, and a third column would squeeze the events. */
+function besideColumnActive() {
+  if (isMobile || (calView !== 'day' && calView !== 'agenda')) return false;
+  if (window.innerWidth <= 860) return false;
+  const b = document.body.classList;
+  return !(b.contains('portrait-mode') || (b.contains('auto-portrait') && !b.contains('force-landscape')));
+}
+
+// besideColumnActive() as of the last applyWidgetPlacement(); null until the
+// first one runs at load, so earlier callers of syncBesidePlacement() no-op.
+let _besideApplied = null;
+
+/** Re-place widgets only when the beside column turns on or off. Moving cards
+ *  resets their scroll and the radar map's size, so view switches within a
+ *  group (Day <-> Agenda, Month <-> Week) leave everything where it is. */
+function syncBesidePlacement() {
+  if (_besideApplied === null || besideColumnActive() === _besideApplied) return;
+  applyWidgetPlacement();
 }
 
 /** Move widget cards between sidebar and #bottomStrip, then enforce visibility */
 function applyWidgetPlacement() {
   const sidebar     = document.querySelector('.sidebar');
   const bottomStrip = document.getElementById('bottomStrip');
-  if (!sidebar || !bottomStrip) return;
+  const besideStrip = document.getElementById('besideStrip');
+  if (!sidebar || !bottomStrip || !besideStrip) return;
+  const besideOn = besideColumnActive();
+  _besideApplied = besideOn;
+  document.getElementById('calMainRow')?.classList.toggle('beside-right', besideSide === 'right');
 
   // Distribute each widget card to the right container in user-defined order.
   // Placement ('sidebar'/'bottom') is a desktop-layout concept — the sidebar
@@ -471,17 +511,20 @@ function applyWidgetPlacement() {
     const card = document.getElementById(entry.id);
     if (!card) return;
     const sheetSection = isMobile && document.getElementById(MOBILE_SHEET_SECTIONS[key]);
-    const dest = sheetSection || ((!isMobile && widgetPlacement[key] === 'bottom') ? bottomStrip : sidebar);
+    const placement = widgetPlacement[key];
+    const dest = sheetSection
+      || (!isMobile && placement === 'bottom' ? bottomStrip
+        : besideOn && placement === 'beside' ? besideStrip
+        : sidebar);
     dest.appendChild(card);
   });
 
-  // Enforce show/hide
+  // Enforce show/hide (also shows/hides the bottom and beside containers)
   applyWidgetVisibility();
 
-  // Show/hide the bottom strip container itself
-  const hasBottom = bottomStrip.children.length > 0 &&
-    [...bottomStrip.children].some(c => c.style.display !== 'none');
-  bottomStrip.style.display = hasBottom ? '' : 'none';
+  // The radar map measures its container once; a card that changed column
+  // changed width, so let Leaflet re-measure after layout.
+  if (_radarMap) requestAnimationFrame(() => _radarMap.invalidateSize());
 }
 
 // ── Widget drag-and-drop ──
@@ -554,6 +597,7 @@ function applyWidgetVisibility() {
 
   // All other widget cards
   const MAP = {
+    weather:  'weatherCard',
     shopping: 'shopCard',
     todo:     'todoCard',
     budget:   'budgetCard',
@@ -584,12 +628,13 @@ function applyWidgetVisibility() {
   if (mobileListsSection === 'home' && !widgetVisibility.homeassistant) setMobileListsSection('shop');
   if (mobileListsSection === 'assistant' && !widgetVisibility.assistant) setMobileListsSection('shop');
 
-  // Re-evaluate bottom strip container visibility
-  const bottomStrip = document.getElementById('bottomStrip');
-  if (bottomStrip) {
-    const hasVisible = [...bottomStrip.children].some(c => c.style.display !== 'none');
-    bottomStrip.style.display = hasVisible ? '' : 'none';
-  }
+  // Hide the bottom strip / beside column when they hold no visible card
+  ['bottomStrip', 'besideStrip'].forEach(id => {
+    const strip = document.getElementById(id);
+    if (!strip) return;
+    const hasVisible = [...strip.children].some(c => c.style.display !== 'none');
+    strip.style.display = hasVisible ? '' : 'none';
+  });
 }
 
 // ── Budget ───────────────────────────────────────────────────────────────────
@@ -1568,6 +1613,7 @@ function switchCalView(view) {
   });
   const sel = document.getElementById('calViewSelect');   // mobile's one-row header
   if (sel) sel.value = view;
+  syncBesidePlacement();   // Day/Agenda have the beside column, Month/Week don't
   renderCurrentView();
   if (googleToken) loadAllCalendars();
 }
@@ -12806,6 +12852,7 @@ function applyLayoutMode(mode) {
       document.body.classList.add('auto-portrait');
     }
   }
+  syncBesidePlacement();   // portrait has no room for the beside column
 }
 
 // Keep auto-portrait in sync with device orientation changes
@@ -13303,6 +13350,7 @@ function openSettings() {
     const radio = document.querySelector(`input[name="placement_${key}"][value="${placement}"]`);
     if (radio) radio.checked = true;
   });
+  document.getElementById('besideSideSelect').value = besideSide;
   renderChoreRewardList();
   lcOpenSettings();
   document.getElementById('calPaletteSelect').value = CAL_PALETTES[calPalette] ? calPalette : 'off';
@@ -13429,6 +13477,8 @@ function saveSettings() {
   });
   localStorage.setItem('fh_widgets',          JSON.stringify(widgetVisibility));
   localStorage.setItem('fh_widget_placement', JSON.stringify(widgetPlacement));
+  besideSide = document.getElementById('besideSideSelect').value === 'right' ? 'right' : 'left';
+  localStorage.setItem('fh_besideSide', JSON.stringify(besideSide));
   applyWidgetPlacement();
   // ── Event settings ──
   eventLocation = document.getElementById('eventLocation').value.trim() || 'Portland';
