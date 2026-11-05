@@ -11029,6 +11029,127 @@ function clearAssistantChat() {
 }
 
 // ── Daily Briefing ─────────────────────────────────────────────
+
+// Fun national days the briefing can mention. Kept by hand because there's no
+// authoritative source or free API (they're mostly invented by brands and
+// promoted by one commercial site), and an AI asked from memory makes them up.
+// Fixed dates are 'MM-DD'; FUN_DAYS_FLOATING covers "nth weekday of a month".
+const FUN_DAYS = {
+  '01-04': 'National Spaghetti Day',
+  '01-08': 'National Bubble Bath Day',
+  '01-18': 'Winnie the Pooh Day',
+  '01-19': 'National Popcorn Day',
+  '01-21': 'National Hugging Day',
+  '01-23': 'National Pie Day',
+  '01-24': 'National Peanut Butter Day',
+  '01-29': 'National Puzzle Day',
+  '02-02': 'Groundhog Day',
+  '02-09': 'National Pizza Day',
+  '02-11': 'National Make a Friend Day',
+  '02-20': 'National Love Your Pet Day',
+  '02-27': 'International Polar Bear Day',
+  '03-01': 'National Pig Day',
+  '03-02': 'Read Across America Day',
+  '03-14': 'Pi Day',
+  '03-20': 'International Day of Happiness',
+  '04-02': 'National Peanut Butter and Jelly Day',
+  '04-11': 'National Pet Day',
+  '04-12': 'National Grilled Cheese Day',
+  '04-13': 'National Scrabble Day',
+  '04-22': 'Earth Day',
+  '04-23': 'National Picnic Day',
+  '04-26': 'National Pretzel Day',
+  '04-28': 'National Superhero Day',
+  '05-04': 'Star Wars Day',
+  '05-23': 'World Turtle Day',
+  '05-28': 'National Hamburger Day',
+  '06-01': 'National Dinosaur Day',
+  '06-04': 'National Cheese Day',
+  '06-08': 'World Oceans Day',
+  '06-21': 'National Selfie Day',
+  '07-07': 'World Chocolate Day',
+  '07-13': 'National French Fry Day',
+  '07-14': 'National Mac and Cheese Day',
+  '07-17': 'World Emoji Day',
+  '07-20': 'National Moon Day',
+  '08-02': 'National Ice Cream Sandwich Day',
+  '08-03': 'National Watermelon Day',
+  '08-04': 'National Chocolate Chip Cookie Day',
+  '08-08': 'International Cat Day',
+  '08-10': "National S'mores Day",
+  '08-13': "International Left-Handers Day",
+  '08-20': 'National Lemonade Day',
+  '08-24': 'National Waffle Day',
+  '08-26': 'National Dog Day',
+  '09-05': 'National Cheese Pizza Day',
+  '09-09': 'National Teddy Bear Day',
+  '09-19': 'Talk Like a Pirate Day',
+  '09-22': 'Hobbit Day',
+  '10-04': 'National Taco Day',
+  '10-14': 'National Dessert Day',
+  '10-16': 'World Food Day',
+  '10-26': 'National Pumpkin Day',
+  '10-28': 'National Chocolate Day',
+  '10-29': 'National Cat Day',
+  '10-30': 'National Candy Corn Day',
+  '11-03': 'National Sandwich Day',
+  '11-04': 'National Candy Day',
+  '11-06': 'National Nacho Day',
+  '11-13': 'World Kindness Day',
+  '11-14': 'National Pickle Day',
+  '11-21': 'World Hello Day',
+  '12-04': 'National Cookie Day',
+  '12-08': 'National Brownie Day',
+  '12-13': 'National Hot Cocoa Day',
+  '12-15': 'National Cupcake Day',
+  '12-21': 'National Crossword Puzzle Day',
+  '12-26': 'National Candy Cane Day',
+};
+// weekday: 0 = Sunday … 6 = Saturday; nth: 1 = first, 3 = third
+const FUN_DAYS_FLOATING = [
+  { month: 6, weekday: 5, nth: 1, name: 'National Donut Day' },
+  { month: 7, weekday: 0, nth: 3, name: 'National Ice Cream Day' },
+];
+
+function funDaysFor(date) {
+  const mmdd = `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  const days = FUN_DAYS[mmdd] ? [FUN_DAYS[mmdd]] : [];
+  const nth = Math.ceil(date.getDate() / 7);
+  FUN_DAYS_FLOATING.forEach(f => {
+    if (f.month === date.getMonth() + 1 && f.weekday === date.getDay() && f.nth === nth) days.push(f.name);
+  });
+  return days;
+}
+
+// "On this day" candidates for the briefing, from Wikipedia's keyless feed.
+// Most entries are wars, crimes and disasters, so a keyword filter drops the
+// obvious ones and the prompt tells Gemini to pick something kid-friendly from
+// what's left. The feed is ~400KB, so the filtered list is cached per day
+// (fh_onThisDay) and the three briefings of a day share one fetch.
+const ON_THIS_DAY_AVOID = /\b(wars?|battles?|kill\w*|dead|deaths?|died|murder\w*|assassinat\w*|bomb\w*|attack\w*|shoot\w*|shot|massacre\w*|earthquakes?|tsunamis?|hurricanes?|cyclones?|typhoons?|tornado\w*|flood\w*|famine|crash\w*|explo(?:sion|ded|des)|disasters?|terror\w*|genocide|execut\w*|invad\w*|invasion|sieges?|troops|arm(?:y|ies)|military|rebel\w*|riots?|coups?|hostages?|sank|sinking|fires?|burn\w*|plagues?|epidemic|pandemic|slave\w*|nazis?|holocaust|weapons?|nuclear|guilty|prison\w*|arrest\w*|captur\w*|victims?|wounded|injur\w*|casualt\w*|collaps\w*|abuse|serial|rampage|gunm[ae]n|hijack\w*|insurgen\w*|surrender\w*|defeat\w*|occup\w*|revolt\w*|uprising|lynch\w*|kidnap\w*|armed|insurrection|deposed)\b/i;
+
+async function fetchOnThisDay(date) {
+  const key = localDateKey(date);
+  const cached = lsGet('fh_onThisDay', null);
+  if (cached?.date === key) return cached.events;
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  try {
+    const r = await fetch(`https://en.wikipedia.org/api/rest_v1/feed/onthisday/events/${mm}/${dd}`,
+                          { signal: AbortSignal.timeout(8000) });
+    if (!r.ok) return [];
+    const data = await r.json();
+    const events = (data.events || [])
+      .filter(e => e.text && e.year && !ON_THIS_DAY_AVOID.test(e.text))
+      .slice(0, 25)
+      .map(e => `${e.year}: ${e.text}`);
+    localStorage.setItem('fh_onThisDay', JSON.stringify({ date: key, events }));
+    return events;
+  } catch {
+    return [];   // the briefing simply leaves the history tidbit out
+  }
+}
+
 const BRIEFING_DATE_KEY   = 'fh_briefingDate';
 const BRIEFING_TEXT_KEY   = 'fh_briefingText';
 const BRIEFING_BUCKET_KEY = 'fh_briefingBucket'; // 'morning'|'afternoon'|'evening'
@@ -11101,14 +11222,20 @@ async function loadDailyBriefing({ speak = false } = {}) {
     await refreshMowReco();        // include a fresh mow recommendation in context
     await refreshAssistantCalendar();   // its own 30-day window, not just the view's
     const context = buildAssistantContext();
-    const prompt = `${context}
+    const funDays = funDaysFor(_now);
+    const history = await fetchOnThisDay(_now);
+    const extras = [
+      funDays.length ? `Fun day: today is ${funDays.join(' and ')}.` : '',
+      history.length ? `On this day in history (pick at most one):\n${history.join('\n')}` : '',
+    ].filter(Boolean).join('\n\n');
+    const prompt = `${context}${extras ? `\n\n${extras}` : ''}
 
 ---
-Write a warm, concise daily briefing (3–5 sentences max). Your response MUST begin with exactly "${greeting}, ${userName === 'Someone' ? 'there' : userName}!" — do not alter this opening phrase. Then cover:
+Write a warm, concise daily briefing (4–6 sentences max). Your response MUST begin with exactly "${greeting}, ${userName === 'Someone' ? 'there' : userName}!" — do not alter this opening phrase. Then cover:
 1. Any calendar events or tasks due today
 2. Today's weather highlights (if available)
 3. Any bills due soon or a notable meal planned
-4. One encouraging closing line
+${funDays.length ? '4. Mention the fun day above in a playful way\n' : ''}${history.length ? `${funDays.length ? 5 : 4}. One "on this day" tidbit a young child would enjoy, chosen from the list above and retold in one simple sentence with its year. Prefer inventions, space, science, animals, sports, art or exploration. Never pick anything about war, violence, crime, disasters, death or politics; if nothing on the list fits, leave the tidbit out.\n` : ''}${4 + (funDays.length ? 1 : 0) + (history.length ? 1 : 0)}. One encouraging closing line
 
 Be specific and personal. Use the family data above, including the correct pronouns for each family member. Do NOT use bullet points or headers — write in flowing prose. Do not include action tags.`;
 
