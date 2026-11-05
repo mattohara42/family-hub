@@ -523,8 +523,10 @@ function applyWidgetPlacement() {
   applyWidgetVisibility();
 
   // The radar map measures its container once; a card that changed column
-  // changed width, so let Leaflet re-measure after layout.
-  if (_radarMap) requestAnimationFrame(() => _radarMap.invalidateSize());
+  // changed width, so let Leaflet re-measure after layout. Read _radarMap when
+  // the frame runs, not now: a weather reload can destroyRadarMap() (null it)
+  // in between, which crashed the wall panel on load.
+  requestAnimationFrame(() => _radarMap?.invalidateSize());
 }
 
 // ── Widget drag-and-drop ──
