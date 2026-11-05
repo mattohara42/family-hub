@@ -993,8 +993,9 @@ body.konami-mode {
 
 /* ── Main layout ── */
 .layout {
+  --sidebar-w: 300px;     /* also the width of the Day/Agenda beside column */
   display: grid;
-  grid-template-columns: 1fr 300px;
+  grid-template-columns: 1fr var(--sidebar-w);
   gap: 14px;
   align-items: stretch;   /* both columns fill the grid row height */
   flex: 1;                /* grow to fill remaining body height */
@@ -1031,11 +1032,34 @@ body.konami-mode {
   flex: 1;
 }
 
+/* ── Beside column (Day/Agenda widgets; applyWidgetPlacement in family-hub.js) ──
+   Shares the calendar's row inside .cal-column. Same rules as .sidebar: it
+   scrolls, and its cards keep flex-shrink: 0 so they don't compress. */
+.cal-main-row {
+  flex: 1;
+  display: flex;
+  gap: 14px;
+  min-height: 0;
+}
+.cal-main-row > .cal-card { min-width: 0; }
+.beside-strip {
+  flex: 0 0 var(--sidebar-w, 300px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  min-height: 0;
+  min-width: 0;
+}
+.beside-strip > * { flex-shrink: 0; }
+.cal-main-row.beside-right > .beside-strip { order: 1; }
+
 /* ── Responsive ── */
 
 /* Narrow desktop: sidebar shrinks to 260px */
 @media (max-width: 1100px) {
-  .layout { grid-template-columns: 1fr 260px; }
+  .layout { --sidebar-w: 260px; }
 }
 
 /* Tablet: sidebar drops below calendar, so yearStrip goes full width */
@@ -4565,7 +4589,7 @@ body.nautical-mode .assistant-msg.ai {
 /* Column header row */
 .widget-placement-header {
   display: grid;
-  grid-template-columns: 18px 1fr 70px 70px;
+  grid-template-columns: 18px 1fr 70px 70px 70px;
   gap: 8px;
   padding: 4px 12px 6px;
   font-size: var(--text-xs);
@@ -4577,10 +4601,15 @@ body.nautical-mode .assistant-msg.ai {
 .widget-placement-col-label {
   text-align: center;
 }
+.widget-placement-hint {
+  margin: 2px 0 8px;
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
 
 .widget-toggle-row {
   display: grid;
-  grid-template-columns: 18px 1fr 70px 70px;
+  grid-template-columns: 18px 1fr 70px 70px 70px;
   align-items: center;
   gap: 8px;
   padding: 9px 12px;
@@ -6368,7 +6397,7 @@ html.wall-display .school-day-subject-chip { padding: 2px 7px; border-radius: 10
 /* Wider sidebar for the larger text (300px fits desktop sizes). Desktop
    widths only, so it never fights the tablet/phone layouts. */
 @media (min-width: 1200px) {
-  html.wall-display .layout { grid-template-columns: 1fr 380px; }
+  html.wall-display .layout { --sidebar-w: 380px; }
 }
 /* Finger-sized scrollbars (Chromium's default is a few px wide). The :is()
    lifts these to tie the Nautical/Aurora `.sidebar::-webkit-scrollbar` rules,

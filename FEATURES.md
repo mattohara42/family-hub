@@ -33,14 +33,15 @@ family-hub.html   (HTML only — no inline CSS or JS)
 │   ├── #bgPhoto, #configBanner
 │   ├── .layout
 │   │   ├── .cal-column
-│   │   │   ├── .cal-card  (#calViews → #calGrid / #weekView / #dayView / #agendaView)
+│   │   │   ├── #calMainRow  (.cal-main-row: one flex row)
+│   │   │   │   ├── #besideStrip  (widgets placed "beside"; Day/Agenda only, §6)
+│   │   │   │   └── .cal-card  (#calViews → #calGrid / #weekView / #dayView / #agendaView)
 │   │   │   ├── #yearStrip  (bottom-mode year widget — stays here always)
 │   │   │   └── #bottomStrip  (widgets placed at "bottom")
 │   │   └── .sidebar
 │   │       ├── #controlCard  (collapsible: status pill, sign-in/out, ⚙️, per-cal toggles)
 │   │       ├── #budgetTotalCard  (context-sensitive bill total pill)
-│   │       ├── Weather card  (#weatherCard, includes #wxSunArc)
-│   │       └── Widget cards (shopping, todo, budget, yearCard, wotd, dadjoke, quote)
+│   │       └── Widget cards (weather incl. #wxSunArc, shopping, todo, budget, yearCard, wotd, dadjoke, quote, …)
 │   └── Modals  (#settingsModal, #budgetModal, #mealModal, #eventEditorModal)
 └── <script src="family-hub.js">
 
@@ -48,7 +49,7 @@ family-hub.css    (stylesheet)
 ├── :root                  CSS variables (dark defaults)
 ├── body.nautical-mode     Nautical theme overrides + decorative elements
 ├── body.light-mode        Light theme overrides
-├── Layout                 (.layout, .cal-column, .sidebar, #bottomStrip)
+├── Layout                 (.layout + --sidebar-w, .cal-column, .sidebar, #bottomStrip, .cal-main-row/.beside-strip)
 ├── Calendar               (.cal-grid, .week-*, .day-*, .cal-event-*, .cal-dow)
 ├── Calendar card header   (.cal-card-header 3-zone grid)
 ├── Sidebar cards          (.card, #controlCard, #budgetTotalCard)
@@ -385,21 +386,27 @@ Activated via Settings → Look & Feel → 📺 TV / Display Mode toggle, or by 
 
 ### 6. Widget Placement System
 
-Every sidebar widget can be assigned to **Sidebar** or **Bottom** via ⚙️ Settings → Widgets.
+Every widget can be assigned to **Bottom**, **Beside** or **Sidebar** via ⚙️ Settings → Widget Layout.
+
+**Beside (added 2026-11-05).** Day and Agenda are single-column lists and left most of a wide screen empty, while Month and Week need every pixel for their seven columns. So views are grouped by shape: a `'beside'` widget sits in `#besideStrip`, a column next to the events inside `#calMainRow`, only in Day/Agenda. In Month/Week it falls back to the sidebar. `besideColumnActive()` is the gate: Day/Agenda, not mobile, wider than 860px, and not in portrait layout (`portrait-mode`, or `auto-portrait` without `force-landscape`), since those stack the sidebar under the calendar and a third column would squeeze the events. `syncBesidePlacement()` re-runs `applyWidgetPlacement()` only when that gate flips (from `switchCalView()`, the resize listener and `applyLayoutMode()`), so Day ↔ Agenda or Month ↔ Week doesn't move any card (moving resets a card's scroll and the radar map's size). The column's side is per-device `besideSide` (`fh_besideSide`, `'left'` default), applied as `.beside-right` on `#calMainRow`. Its width is `--sidebar-w`, the same custom property that sizes the sidebar column on `.layout` (300px, 260px under 1100px, 380px under Wall display at 1200px+).
+
+**Weather is a regular widget** since the same change (`weather` key, `#weatherCard`, first in `WIDGET_ORDER`), so it can be hidden, moved Beside/Bottom, and dragged. `resolvedWidgetOrder()` inserts a widget missing from a saved `fh_widget_order` at its canonical position (before the next canonical key already saved) rather than at the end, so existing sidebars kept Weather near the top.
 
 **State:**
 ```js
-const WIDGET_DEFAULTS = { shopping: true, todo: true, budget: true, chores: true, wotd: true, quote: true, dadjoke: true, yearstrip: false, assistant: true, countdown: true, news: false, stock: false };
+const WIDGET_DEFAULTS = { weather: true, shopping: true, todo: true, budget: true, chores: true, wotd: true, quote: true, dadjoke: true, yearstrip: false, assistant: true, countdown: true, news: false, stock: false, homeassistant: false };
 let widgetVisibility = { ...WIDGET_DEFAULTS, ...lsGet('fh_widgets', {}) };
 
-const WIDGET_PLACEMENT_DEFAULTS = {
-  shopping: 'sidebar', todo: 'sidebar', budget: 'sidebar', chores: 'sidebar',
+const WIDGET_PLACEMENT_DEFAULTS = {          // 'sidebar' | 'bottom' | 'beside'
+  weather: 'sidebar', shopping: 'sidebar', todo: 'sidebar', budget: 'sidebar', chores: 'sidebar',
   wotd: 'sidebar', quote: 'sidebar', dadjoke: 'sidebar', yearstrip: 'bottom',
-  assistant: 'sidebar', countdown: 'sidebar', news: 'sidebar', stock: 'sidebar',
+  assistant: 'sidebar', countdown: 'sidebar', news: 'sidebar', stock: 'sidebar', homeassistant: 'sidebar',
 };
 let widgetPlacement = { ...WIDGET_PLACEMENT_DEFAULTS, ...lsGet('fh_widget_placement', {}) };
+let besideSide = lsGet('fh_besideSide', 'left');
 
 const WIDGET_ORDER = [
+  { key: 'weather',   id: 'weatherCard'   },
   { key: 'shopping',  id: 'shopCard'      },
   { key: 'todo',      id: 'todoCard'      },
   { key: 'budget',    id: 'budgetCard'    },
@@ -412,11 +419,12 @@ const WIDGET_ORDER = [
   { key: 'countdown', id: 'countdownCard' },
   { key: 'news',      id: 'newsCard'      },
   { key: 'stock',     id: 'stockCard'     },
+  { key: 'homeassistant', id: 'haCard'    },
 ];
 ```
 **Key functions:**
-- `applyWidgetPlacement()` — moves each card DOM node to `.sidebar`, `#bottomStrip`, or (under 640px, for shopping/todo/homeassistant only) its section wrapper in the mobile Lists sheet, in canonical order, then calls `applyWidgetVisibility()`. **Placement is desktop-only** otherwise: `.sidebar` itself is hidden on mobile (see §20); crossing the breakpoint re-distributes (resize handler).
-- `applyWidgetVisibility()` — shows/hides each card; handles yearstrip special case (sidebar→`#yearCard`, bottom→`#yearStrip`). On mobile, if Home Assistant's widget was just disabled (locally or via settings sync) while its Lists-sheet section was open, it bounces the sheet to Shopping (see §20).
+- `applyWidgetPlacement()` — moves each card DOM node to `.sidebar`, `#bottomStrip`, `#besideStrip` (only while `besideColumnActive()`), or (under 640px, for shopping/todo/homeassistant only) its section wrapper in the mobile Lists sheet, in canonical order, then calls `applyWidgetVisibility()`. **Placement is desktop-only** otherwise: `.sidebar` itself is hidden on mobile (see §20); crossing the breakpoint re-distributes (resize handler).
+- `applyWidgetVisibility()` — shows/hides each card, and hides `#bottomStrip`/`#besideStrip` when they hold no visible card; handles yearstrip special case (sidebar→`#yearCard`, bottom→`#yearStrip`). On mobile, if Home Assistant's widget was just disabled (locally or via settings sync) while its Lists-sheet section was open, it bounces the sheet to Shopping (see §20).
 
 **Special case — Year at a Glance:**
 - In **sidebar**: `#yearCard` (shows 2 months with ‹/› navigation)
@@ -428,9 +436,13 @@ const WIDGET_ORDER = [
 
 **Drag-and-drop reordering:** `initWidgetDragDrop()` injects a `.widget-drag-handle` (⠿) into every card's `.card-header`, dragging a card onto another swaps their position in `widgetOrder` (`fh_widget_order`). Desktop-only in effect (`.sidebar`/`#bottomStrip` are), but the handle itself isn't gated by `isMobile` — it's hidden separately inside the mobile Lists sheet (`.mobile-sheet-body .widget-drag-handle`, family-hub.css) since a card's position there is fixed by `MOBILE_SHEET_SECTIONS` (§20), not draggable.
 
-**HTML anchors:** `#bottomStrip` (inside `.cal-column`), `.sidebar`
+- `besideColumnActive()` / `syncBesidePlacement()` — see **Beside** above.
 
-**localStorage:** `fh_widgets`, `fh_widget_placement`
+**Special case — Year at a Glance / Chore Chart Beside:** both only special-case `'bottom'`, so Beside behaves like Sidebar (`#yearCard`, stacked chore sections).
+
+**HTML anchors:** `#bottomStrip` (inside `.cal-column`), `#calMainRow` / `#besideStrip` (inside `.cal-column`, wrapping `.cal-card`), `.sidebar`, `#besideSideSelect` (Settings → Widget Layout)
+
+**localStorage:** `fh_widgets`, `fh_widget_placement`, `fh_besideSide`
 
 ---
 
@@ -1031,7 +1043,8 @@ const HA_TOGGLE_DOMAINS = ['light', 'switch', 'fan', 'input_boolean'];
 | `fh_widgets` | JSON object | Widgets | `{ shopping: bool, todo: bool, … }` |
 | `fh_haConfig` | JSON object | Home Assistant | Fallback only — synced via Firestore `settings/homeAssistant` otherwise. `{ baseUrl, entities: [{ id, name }] }` |
 | `fh_haToken` | string | Home Assistant | Long-lived access token. **Per-device, never synced** — see FEATURES §21 |
-| `fh_widget_placement` | JSON object | Widgets | `{ shopping: 'sidebar'\|'bottom', … }` |
+| `fh_widget_placement` | JSON object | Widgets | `{ shopping: 'sidebar'\|'bottom'\|'beside', … }` |
+| `fh_besideSide` | JSON string | Widgets | `'left'`\|`'right'`: which side of the events the Day/Agenda beside column sits (per device) |
 | `fh_mealPlan` | JSON object | Meals | `{ dateKey: { breakfast, lunch, dinner } }` |
 | `fh_mealAiKey` | string | Meals | Optional per-device Gemini key override. Blank (the normal production case) routes through `/.netlify/functions/ai` and the server's `GEMINI_KEY` |
 | `fh_mealAiProvider` | string | Meals | `'gemini'` \| `'openai'` |
