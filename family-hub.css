@@ -4571,6 +4571,7 @@ body.nautical-mode .assistant-msg.ai {
   opacity: 0;
   transition: opacity .15s;
   flex-shrink: 0;
+  touch-action: none;   /* a finger on the handle drags (startWidgetDrag), not scrolls */
 }
 .card-header:hover .widget-drag-handle { opacity: 0.5; }
 .widget-drag-handle:hover { opacity: 1 !important; cursor: grab; }
@@ -4580,7 +4581,15 @@ body.nautical-mode .assistant-msg.ai {
   outline-offset: 3px;
   border-radius: 12px;
 }
-@media (hover: none) { .widget-drag-handle { opacity: 0.4; } }
+/* No hover to reveal it on touch, so it stays visible, with a finger-sized
+   hit area (the negative margin keeps the header row the same height). The
+   wall panel may report a mouse, so Wall display gets the same treatment. */
+@media (hover: none) {
+  .widget-drag-handle { opacity: 0.4; padding: 10px 12px 10px 4px; margin: -10px 0; }
+}
+html.wall-display .widget-drag-handle {
+  opacity: 0.45; font-size: 1.3rem; padding: 10px 12px 10px 4px; margin: -10px 0;
+}
 
 /* ── Widget visibility toggles (Settings → Widgets) ── */
 .widget-toggle-list {

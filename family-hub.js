@@ -528,7 +528,10 @@ function applyWidgetPlacement() {
 }
 
 // ── Widget drag-and-drop ──
-let _dndSrcKey = null;
+// Pointer Events rather than HTML5 drag-and-drop: Chromium never starts an
+// HTML5 drag from a finger on Linux, so on the wall panel's touchscreen the
+// handle did nothing. One pointer path covers mouse, touch and pen.
+let _widgetDrag = null;   // { key, card, handle, pointerId, target, x, y, raf }
 
 function initWidgetDragDrop() {
   WIDGET_ORDER.forEach(({ key, id }) => {
@@ -543,48 +546,75 @@ function initWidgetDragDrop() {
       handle.className = 'widget-drag-handle';
       handle.textContent = '⠿';
       handle.title = 'Drag to reorder';
-      handle.addEventListener('mousedown', () => { card.draggable = true; });
+      handle.addEventListener('pointerdown', e => startWidgetDrag(e, card, key, handle));
       header.prepend(handle);
     }
-
-    card.addEventListener('dragstart', e => {
-      _dndSrcKey = key;
-      e.dataTransfer.effectAllowed = 'move';
-      setTimeout(() => card.classList.add('widget-dragging'), 0);
-    });
-    card.addEventListener('dragend', () => {
-      card.draggable = false;
-      card.classList.remove('widget-dragging');
-      document.querySelectorAll('.widget-drop-target').forEach(el => el.classList.remove('widget-drop-target'));
-      _dndSrcKey = null;
-    });
-    card.addEventListener('dragover', e => {
-      if (!_dndSrcKey || _dndSrcKey === key) return;
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      document.querySelectorAll('.widget-drop-target').forEach(el => el.classList.remove('widget-drop-target'));
-      card.classList.add('widget-drop-target');
-    });
-    card.addEventListener('dragleave', e => {
-      if (!e.relatedTarget || !card.contains(e.relatedTarget)) {
-        card.classList.remove('widget-drop-target');
-      }
-    });
-    card.addEventListener('drop', e => {
-      e.preventDefault();
-      if (!_dndSrcKey || _dndSrcKey === key) return;
-      card.classList.remove('widget-drop-target');
-      const order   = resolvedWidgetOrder();
-      const srcIdx  = order.indexOf(_dndSrcKey);
-      const tgtIdx  = order.indexOf(key);
-      if (srcIdx === -1 || tgtIdx === -1) return;
-      order.splice(srcIdx, 1);
-      order.splice(tgtIdx, 0, _dndSrcKey);
-      widgetOrder = order;
-      localStorage.setItem('fh_widget_order', JSON.stringify(widgetOrder));
-      applyWidgetPlacement();
-    });
   });
+}
+
+function startWidgetDrag(e, card, key, handle) {
+  if (e.button !== 0 || _widgetDrag) return;
+  e.preventDefault();   // no text selection; the handle has no click of its own
+  handle.setPointerCapture(e.pointerId);
+  _widgetDrag = { key, card, handle, pointerId: e.pointerId, target: null, x: e.clientX, y: e.clientY, raf: 0 };
+  card.classList.add('widget-dragging');
+  handle.addEventListener('pointermove', moveWidgetDrag);
+  handle.addEventListener('pointerup', endWidgetDrag);
+  handle.addEventListener('pointercancel', endWidgetDrag);
+  _widgetDrag.raf = requestAnimationFrame(autoScrollWidgetDrag);
+}
+
+function moveWidgetDrag(e) {
+  const d = _widgetDrag;
+  if (!d || e.pointerId !== d.pointerId) return;
+  d.x = e.clientX; d.y = e.clientY;
+  // Pointer capture keeps events on the handle, so find the card under the
+  // finger by position. The dragged card is only dimmed, so skip it.
+  const over = document.elementFromPoint(d.x, d.y)?.closest('[data-widget-key]');
+  const target = over && over !== d.card ? over : null;
+  if (target !== d.target) {
+    d.target?.classList.remove('widget-drop-target');
+    target?.classList.add('widget-drop-target');
+    d.target = target;
+  }
+}
+
+/** While dragging, scroll the card's column when the pointer is within 60px
+ *  of its top or bottom edge, so a card can travel past what's on screen. */
+function autoScrollWidgetDrag() {
+  const d = _widgetDrag;
+  if (!d) return;
+  const col = d.card.parentElement;
+  if (col && col.scrollHeight > col.clientHeight) {
+    const r = col.getBoundingClientRect(), edge = 60;
+    if (d.y < r.top + edge)         col.scrollTop -= Math.ceil((r.top + edge - d.y) / 4);
+    else if (d.y > r.bottom - edge) col.scrollTop += Math.ceil((d.y - (r.bottom - edge)) / 4);
+  }
+  d.raf = requestAnimationFrame(autoScrollWidgetDrag);
+}
+
+function endWidgetDrag(e) {
+  const d = _widgetDrag;
+  if (!d || e.pointerId !== d.pointerId) return;
+  _widgetDrag = null;
+  cancelAnimationFrame(d.raf);
+  d.handle.removeEventListener('pointermove', moveWidgetDrag);
+  d.handle.removeEventListener('pointerup', endWidgetDrag);
+  d.handle.removeEventListener('pointercancel', endWidgetDrag);
+  d.card.classList.remove('widget-dragging');
+  d.target?.classList.remove('widget-drop-target');
+  if (e.type !== 'pointerup' || !d.target) return;
+
+  // Same reorder as before: the dragged card takes the target's slot
+  const order  = resolvedWidgetOrder();
+  const srcIdx = order.indexOf(d.key);
+  const tgtIdx = order.indexOf(d.target.dataset.widgetKey);
+  if (srcIdx === -1 || tgtIdx === -1) return;
+  order.splice(srcIdx, 1);
+  order.splice(tgtIdx, 0, d.key);
+  widgetOrder = order;
+  localStorage.setItem('fh_widget_order', JSON.stringify(widgetOrder));
+  applyWidgetPlacement();
 }
 
 function applyWidgetVisibility() {
