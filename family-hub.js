@@ -10864,20 +10864,14 @@ function updateBriefingPill(active) {
 
 const BRIEFING_AUTOSHOWN_KEY = 'fh_briefingAutoShown';   // date we last auto-opened
 
-const BRIEFING_AUTO_FROM_HOUR = 6;   // a kiosk's date rollover waits until then
-
 // Proactively open the briefing once per calendar day (first load / date rollover
 // on a long-open kiosk). Respects dismissal — once auto-shown for the day it
 // won't re-pop, and the user can still open it by hand via the pill.
-// It waits until 6am so the wall panel doesn't open (and speak) at midnight,
-// and it reads aloud only in the morning; an afternoon first load stays silent.
 function maybeAutoBriefing() {
-  const now = new Date();
-  const today = localDateKey(now);
+  const today = localDateKey(new Date());
   if (localStorage.getItem(BRIEFING_AUTOSHOWN_KEY) === today) return;
-  if (now.getHours() < BRIEFING_AUTO_FROM_HOUR) return;
   localStorage.setItem(BRIEFING_AUTOSHOWN_KEY, today);
-  loadDailyBriefing({ speak: now.getHours() < 12 });
+  loadDailyBriefing();
 }
 
 let briefingSpeech = null;   // assistantSpeech handle while the briefing is read aloud
