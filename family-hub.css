@@ -3122,10 +3122,10 @@ body.nautical-mode #eventEditorModal .modal {
   background: color-mix(in srgb, var(--text) 10%, transparent);
   border: 1px solid var(--line);
 }
-/* Logo or fallback helmet, at any size: the wrapper sets the box */
+/* Logo or fallback color disc, at any size: the wrapper sets the box */
 .nfl-mark { display: inline-grid; place-items: center; flex-shrink: 0; overflow: hidden; }
 .nfl-mark img { width: 82%; height: 82%; object-fit: contain; }
-.nfl-mark .nfl-helmet { width: 88%; height: 88%; }
+.nfl-mark .nfl-colors { width: 100%; height: 100%; }
 /* Pill badges: two small logo discs ahead of "Bills @ Vikings" */
 .nfl-badges { display: inline-flex; gap: 2px; margin-right: 5px; vertical-align: middle; }
 .nfl-badges .nfl-mark {

@@ -4107,7 +4107,7 @@ function _evtDetailsWhen(ev) {
 // "Bills vs. Jets") becomes a matchup: pills get both teams' logos and a short
 // "Bills @ Vikings" label, and the read-only details view becomes a game-day
 // card. Logos are ESPN's CDN images (unofficial URL, checked 2026-11-05); if
-// one fails to load, an original helmet drawn in the team's colors stands in.
+// one fails to load, a disc in the team's colors with its abbreviation stands in.
 // colors: [primary, secondary], brand data rather than theme tokens.
 const NFL_TEAMS = [
   ['ari', 'Arizona',       'Cardinals',  '#97233F', '#000000'],
@@ -4170,30 +4170,29 @@ const nflShortLabel = (m, abbr = false) =>
   abbr ? `${m.away.code.toUpperCase()} ${m.sep} ${m.home.code.toUpperCase()}`
        : `${m.away.name} ${m.sep} ${m.home.name}`;
 
-/** Original helmet silhouette in the team's colors; flip faces it left. */
-function nflHelmetSvg(t, flip = false) {
-  return `<svg class="nfl-helmet" viewBox="0 0 100 80" aria-hidden="true">
-    <g${flip ? ' transform="translate(100 0) scale(-1 1)"' : ''}>
-      <path d="M14 56 C6 28 28 6 56 6 C80 6 94 22 94 42 L94 48 L74 50 L70 62 L38 66 C26 66 18 63 14 56 Z" fill="${t.primary}" stroke="rgba(0,0,0,.35)" stroke-width="2"/>
-      <path d="M36 8 C60 3 84 14 92 36" fill="none" stroke="${t.secondary}" stroke-width="7" stroke-linecap="round"/>
-      <circle cx="48" cy="42" r="6" fill="rgba(0,0,0,.45)"/>
-      <path d="M72 44 H98 M74 55 H98 M84 40 V62 M97 40 V62 M70 62 L84 62" fill="none" stroke="#9aa3ad" stroke-width="4" stroke-linecap="round"/>
-    </g></svg>`;
+/** Fallback mark: a disc in the team's primary color, ringed in its
+    secondary, with the abbreviation. Scales with its box (SVG text). */
+function nflColorsSvg(t) {
+  return `<svg class="nfl-colors" viewBox="0 0 100 100" aria-hidden="true">
+    <circle cx="50" cy="50" r="45" fill="${t.primary}" stroke="${t.secondary}" stroke-width="10"/>
+    <text x="50" y="51" text-anchor="middle" dominant-baseline="central" font-size="${t.code.length > 2 ? 30 : 38}"
+          font-weight="800" font-family="system-ui, sans-serif" fill="${readableTextOn(t.primary)}">${t.code.toUpperCase()}</text>
+  </svg>`;
 }
 
-const _nflLogoFailed = new Set();   // codes whose logo didn't load: draw the helmet from then on
-/** The team's logo, or its helmet once the logo has failed. */
-function nflTeamMark(t, flip = false) {
+const _nflLogoFailed = new Set();   // codes whose logo didn't load: draw the colors from then on
+/** The team's logo, or its color disc once the logo has failed. */
+function nflTeamMark(t) {
   const wrap = document.createElement('span');
   wrap.className = 'nfl-mark';
   wrap.title = `${t.city} ${t.name}`;
-  const helmet = () => { wrap.innerHTML = nflHelmetSvg(t, flip); };
-  if (_nflLogoFailed.has(t.code)) { helmet(); return wrap; }
+  const colors = () => { wrap.innerHTML = nflColorsSvg(t); wrap.classList.add('is-colors'); };
+  if (_nflLogoFailed.has(t.code)) { colors(); return wrap; }
   const img = document.createElement('img');
   img.alt = '';
   img.loading = 'lazy';
   img.src = `https://a.espncdn.com/i/teamlogos/nfl/500/${t.code}.png`;
-  img.onerror = () => { _nflLogoFailed.add(t.code); helmet(); };
+  img.onerror = () => { _nflLogoFailed.add(t.code); colors(); };
   wrap.appendChild(img);
   return wrap;
 }
@@ -4202,7 +4201,7 @@ function nflTeamMark(t, flip = false) {
 function prependMatchupBadges(el, m) {
   const b = document.createElement('span');
   b.className = 'nfl-badges';
-  b.append(nflTeamMark(m.away), nflTeamMark(m.home, true));
+  b.append(nflTeamMark(m.away), nflTeamMark(m.home));
   el.prepend(b);
 }
 
@@ -4238,18 +4237,18 @@ function renderMatchupCard(ev, m) {
 
   const banner = document.createElement('div');
   banner.className = 'nfl-banner';
-  const side = (t, flip) => {
+  const side = t => {
     const d = document.createElement('div');
     d.className = 'nfl-side';
     const city = document.createElement('div'); city.className = 'nfl-city'; city.textContent = t.city;
     const name = document.createElement('div'); name.className = 'nfl-name'; name.textContent = t.name;
-    d.append(nflTeamMark(t, flip), city, name);
+    d.append(nflTeamMark(t), city, name);
     return d;
   };
   const sep = document.createElement('div');
   sep.className = 'nfl-sep';
   sep.textContent = m.sep === '@' ? 'AT' : 'VS';
-  banner.append(side(m.away, false), sep, side(m.home, true));
+  banner.append(side(m.away), sep, side(m.home));
 
   const kick = document.createElement('div');
   kick.className = 'nfl-kickoff';
