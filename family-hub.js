@@ -10851,7 +10851,7 @@ function toggleBriefing() {
   if (banner && banner.style.display !== 'none') {
     dismissBriefing();
   } else {
-    loadDailyBriefing();
+    loadDailyBriefing({ speak: true });
   }
 }
 
@@ -10874,8 +10874,18 @@ function maybeAutoBriefing() {
   loadDailyBriefing();
 }
 
-/** Show (or generate) the daily briefing banner above the chat. */
-async function loadDailyBriefing() {
+let briefingSpeech = null;   // assistantSpeech handle while the briefing is read aloud
+
+/** Read the briefing aloud (when 🔊 is on). speakAssistant() sets
+    assistantSpeech synchronously, so the handle lets dismiss stop only this. */
+function speakBriefing(text) {
+  speakAssistant(text);
+  briefingSpeech = assistantSpeech;
+}
+
+/** Show (or generate) the daily briefing banner above the chat. Only a tap on
+    the pill passes speak: the once-a-day auto-open stays silent. */
+async function loadDailyBriefing({ speak = false } = {}) {
   const banner = document.getElementById('briefingBanner');
   if (!banner) return;
 
@@ -10893,6 +10903,7 @@ async function loadDailyBriefing() {
   // The greeting names the user, so a name change in Settings invalidates it.
   if (cachedDate === today && cachedBucket === bucket && cachedName === userName && cachedText) {
     showBriefingBanner(cachedText);
+    if (speak) speakBriefing(cachedText);
     return;
   }
 
@@ -10926,6 +10937,7 @@ Be specific and personal. Use the family data above, including the correct prono
       localStorage.setItem(BRIEFING_TEXT_KEY,   text);
       localStorage.setItem(BRIEFING_NAME_KEY,   userName);
       showBriefingBanner(text);
+      if (speak) speakBriefing(text);
     } else {
       banner.style.display = 'none';
     }
@@ -10958,6 +10970,8 @@ function dismissBriefing() {
   const banner = document.getElementById('briefingBanner');
   if (banner) banner.style.display = 'none';
   updateBriefingPill(false);
+  if (briefingSpeech && assistantSpeech === briefingSpeech) stopAssistantSpeech();
+  briefingSpeech = null;
 }
 
 // ── Assistant voice output (TTS) ───────────────────────────────
