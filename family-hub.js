@@ -10988,7 +10988,7 @@ const GEMINI_INTERACTIONS_URL = 'https://generativelanguage.googleapis.com/v1bet
 const ASSISTANT_VOICES = {
   default: { voice: 'Charon' },
   alfred:  { voice: 'Algenib', style: 'dry, formal and unhurried, like an old-fashioned butler' },
-  jarvis:  { voice: 'Iapetus', style: 'crisp, calm and precise, with quiet dry wit' },
+  jarvis:  { voice: 'Iapetus', style: 'a refined British accent (received pronunciation), calm, crisp and measured, warm but precise, with quiet dry wit' },
 };
 const GEMINI_TTS_TIMEOUT_MS = 20000;
 
