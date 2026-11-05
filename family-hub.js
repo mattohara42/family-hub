@@ -1156,15 +1156,23 @@ function maybeReloadForUpdate() {
 
 window.addEventListener('load', () => {
   if ('serviceWorker' in navigator) {
-    const hadController = !!navigator.serviceWorker.controller;
-    navigator.serviceWorker.register('/sw.js')
+    // A new SW taking control = a fresh deploy, so reload-when-idle. The one
+    // exception is the very first install, whose clients.claim() also fires
+    // controllerchange. That's told apart by whether a worker was already
+    // installed, not by whether this page is controlled: a hard refresh
+    // loads the page uncontrolled even though the worker exists, and keying
+    // on the controller made every page loaded that way ignore the next
+    // deploy for good (the wall panel sat on a two-day-old build, 2026-11).
+    navigator.serviceWorker.getRegistration().then(existing => {
+      let ignoreNextChange = !(existing && existing.active);
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (ignoreNextChange) { ignoreNextChange = false; return; }
+        _swUpdatePending = true;
+      });
+      return navigator.serviceWorker.register('/sw.js');
+    })
       .then(reg => { setInterval(() => reg.update().catch(() => {}), 15 * 60000); })
       .catch(err => console.warn('[SW] Registration failed:', err));
-    // A new SW taking control = a fresh deploy. Ignore the first-ever activation
-    // (no prior controller), then reload-when-idle on every later update.
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (hadController) _swUpdatePending = true;
-    });
     setInterval(maybeReloadForUpdate, 20000);
   }
   probeEventsBackend();
