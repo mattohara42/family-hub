@@ -3075,6 +3075,64 @@ body.nautical-mode #eventEditorModal .modal {
 }
 .evt-details-link { text-decoration: none; margin-top: 12px; display: inline-block; }
 
+/* ── NFL Matchups ── */
+/* Team-brand surfaces: the fills are each team's own color (set inline as
+   --away/--home), like an event pill's ev.color, so the text and logo discs on
+   them are literal white rather than theme tokens. */
+.nfl-matchup:empty { display: none; }
+.nfl-matchup { margin: 4px 0 14px; }
+.modal.is-matchup .evt-details-head h2 {
+  position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0);
+}
+.modal.is-matchup .evt-details-head { justify-content: flex-end; margin-bottom: 8px; }
+.nfl-banner {
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+  padding: 18px 10px 16px; border-radius: 16px; color: #fff;
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(255,255,255,.18), transparent 60%),
+    linear-gradient(110deg, var(--away) 0 47%, var(--home) 53% 100%);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.12), 0 8px 24px rgba(0,0,0,.25);
+  text-shadow: 0 1px 3px rgba(0,0,0,.55);
+}
+.nfl-side { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; text-align: center; }
+.nfl-side .nfl-mark {
+  width: 92px; height: 92px; margin-bottom: 8px;
+  background: #fff; border-radius: 50%;
+  box-shadow: 0 4px 14px rgba(0,0,0,.35), 0 0 0 3px rgba(255,255,255,.35);
+}
+.nfl-city { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .08em; opacity: .9; }
+.nfl-name { font-size: var(--fs-title); font-weight: 800; line-height: 1.1; overflow-wrap: anywhere; }
+.nfl-sep {
+  font-size: var(--text-sm); font-weight: 800; letter-spacing: .1em;
+  width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center;
+  background: rgba(0,0,0,.35); box-shadow: 0 0 0 2px rgba(255,255,255,.5);
+}
+.nfl-kickoff {
+  text-align: center; margin-top: 12px;
+  font-size: var(--fs-title); font-weight: 700; color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.nfl-tv {
+  display: flex; flex-wrap: wrap; justify-content: center; align-items: center;
+  gap: 6px; margin-top: 10px; font-size: var(--fs-meta);
+}
+.nfl-tv-chip {
+  padding: 3px 10px; border-radius: 999px;
+  font-size: var(--text-xs); font-weight: 700; letter-spacing: .03em; color: var(--text);
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  border: 1px solid var(--line);
+}
+/* Logo or fallback color disc, at any size: the wrapper sets the box */
+.nfl-mark { display: inline-grid; place-items: center; flex-shrink: 0; overflow: hidden; }
+.nfl-mark img { width: 82%; height: 82%; object-fit: contain; }
+.nfl-mark .nfl-colors { width: 100%; height: 100%; }
+/* Pill badges: two small logo discs ahead of "Bills @ Vikings" */
+.nfl-badges { display: inline-flex; gap: 2px; margin-right: 5px; vertical-align: middle; }
+.nfl-badges .nfl-mark {
+  width: 1.45em; height: 1.45em; border-radius: 50%;
+  background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.15);
+}
+
 
 /* Tighter card body for list widgets */
 #shopCard .card-body, #todoCard .card-body {
