@@ -454,7 +454,7 @@ const WIDGET_ORDER = [
 - `toggleShop(id)` — marks item done/undone
 - `clearDoneShopping()` — removes completed items only (confirms with nothing — immediate)
 - `clearAllShopping()` — removes all items after `confirm()` dialog
-- `renderShopList(entries)` — one flat list. Aisle categories (the add-row dropdown, grouped headers, and the Settings → Shopping category list) were removed 2026-10-20; old items may still carry a `category` field, which nothing reads. 📱 SMS (`#smsTriggerBtn`, icon only) sits in the add row after Add, not in the card header
+- `renderShopList(entries)` — one flat list. Aisle categories (the add-row dropdown, grouped headers, and the Settings → Shopping category list) were removed 2026-10-20; old items may still carry a `category` field, which nothing reads. 📱 SMS (`#smsTriggerBtn`, icon only) sits in the add row before Add (2026-11-06, mirroring To-Do's ⋯ so both Add buttons end flush right; both share `.list-input-icon-btn`), not in the card header
 - `toggleSmsPopover(event)` — shows/hides SMS contact picker
 - `buildShoppingBody()` — formats the list into the message text (pending items only, if any are pending; otherwise everything)
 - `sendToContact(phone)` — opens an `sms:` URL with `buildShoppingBody()`'s text pre-filled
@@ -945,7 +945,7 @@ Secondary widgets (Chores, Word, Joke, Quotes, Countdown, News, Stock, Year-at-a
 
 **Refocus on mobile:** `#backToTodayBtn` keeps its "Refocus" text in the DOM (and `aria-label="Back to today"`) but renders as a 32px round ↺ icon under the mobile query (`font-size: 0` plus a `::before` glyph). The word alone took a third of the header width on a phone.
 
-**Day view all-day ＋ hidden on mobile:** `.day-allday-row .day-add-btn` is `display: none` under the mobile query (2026-10-21). The 44px phone time-label column can't fit "All day ＋", so the ＋ overflowed onto "No all-day events". `#mobileAddFab` already opens the editor on the viewed day, with its own All-day toggle.
+**Day view all-day ＋:** a round `.day-allday-add` button at the right end of `.day-allday-row` (2026-11-06; 44px on the wall display). It used to be text inside the "All day" label, which overflowed the label column onto "No all-day events" at every width. Still `display: none` under the mobile query, since `#mobileAddFab` already opens the editor on the viewed day, with its own All-day toggle.
 
 **Edge-to-edge:** the 640px query zeroes `body` padding down to safe-area insets only (notch/home indicator stay — that's hardware, not decoration) and strips `.cal-card`'s border/radius/shadow with `!important` — needed because the nautical/aurora/tactile theme overrides target `.card.cal-card` with more classes in the selector, which otherwise outranks a plain `.cal-card` rule regardless of source order.
 

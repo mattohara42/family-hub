@@ -1157,6 +1157,10 @@ body.nautical-mode .card {
   flex-shrink: 1;
   flex-wrap: wrap;
 }
+/* A title block (h2 + subtitle) stretches like a bare h2 does. Without this,
+   the injected ⠿ drag handle made three header children and space-between
+   centered the title (Budget). */
+.card-header > .card-title-wrap { flex: 1; }
 .card-body { padding: 12px 14px; }
 
 /* ── Calendar Swipe / Period Slide ──
@@ -2592,7 +2596,15 @@ body.nautical-mode .meal-adjust-chip:hover { background: var(--accent2); border-
 .day-todo-row:last-child { border-bottom: none; }
 .day-todo-text { color: var(--text); }
 .day-todo-assignee { color: var(--accent); font-size: var(--fs-meta); }
-.day-add-btn { font-size: var(--fs-meta); color: var(--accent); cursor: pointer; margin-left: 4px; }
+.day-allday-add {
+  width: 30px; height: 30px; flex-shrink: 0; align-self: center;
+  border-radius: 50%; border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent); font-size: var(--text-base); line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; padding: 0;
+}
+.day-allday-add:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); }
 .day-allday-empty { font-size: var(--fs-meta); color: var(--muted); padding-top: 3px; }
 .school-day-section {
   background: color-mix(in srgb, var(--accent2) 7%, transparent); border-radius: 8px;
@@ -2766,6 +2778,9 @@ body.light-mode .sms-contact-row:hover { background: rgba(0,0,0,.05); }
   padding: 4px 8px;
   font-size: var(--text-xs);
 }
+/* Secondary icon button beside Add (To-Do ⋯, Shopping 📱): same look in both
+   rows, always left of Add so the Add buttons line up across cards. */
+.list-input-icon-btn { background: var(--surface2); color: var(--muted); padding: 0 9px; }
 .list-input-row input::placeholder { color: var(--muted); }
 .list-input-row input:focus { outline: none; border-color: var(--accent); }
 .list-items { list-style: none; }
@@ -4471,6 +4486,13 @@ body.nautical-mode .assistant-chip:hover { background: var(--accent2); border-co
   transition: opacity .15s;
 }
 .assistant-send:hover { opacity: .82; }
+/* Drawn arrow, sized to the circle: the old "↑" text glyph stayed thin and
+   small when the button grew to 52px on the wall panel. */
+.assistant-send svg {
+  width: 55%; height: 55%;
+  fill: none; stroke: currentColor; stroke-width: 2.6;
+  stroke-linecap: round; stroke-linejoin: round;
+}
 
 .assistant-mic {
   width: 30px;
@@ -6119,7 +6141,9 @@ body.flavor-tactile.nautical-mode .cal-card .card-body {
 /* big numbers in the display serif for a crafted feel */
 body.flavor-tactile .wx-temp,
 body.flavor-tactile .budget-card-amt,
+body.flavor-tactile .budget-total-amount,
 body.flavor-tactile .budget-day-amt,
+body.flavor-tactile .budget-day-total-amt,
 body.flavor-tactile .countdown-days {
   font-family: var(--font-display);
   font-optical-sizing: auto;
@@ -6435,6 +6459,7 @@ html.wall-display :is(*, .sidebar)::-webkit-scrollbar-thumb {
 }
 /* Assistant controls at finger size. The (hover: none) touch block already
    grows send/mic, but a panel with a mouse attached never matches it. */
+html.wall-display .day-allday-add { width: 44px; height: 44px; font-size: 1.3rem; }
 html.wall-display .assistant-send,
 html.wall-display .assistant-mic { width: 52px; height: 52px; font-size: 1.4rem; }
 html.wall-display .assistant-input { padding: 12px 16px; font-size: var(--text-base); }
@@ -6534,9 +6559,8 @@ html.wall-display .assistant-confirm-actions .btn { min-width: 88px; min-height:
   .day-hour-row { grid-template-columns: 44px 1fr; }
   .day-time-label { width: 44px; font-size: var(--text-xs); }
   .day-hour-label { font-size: var(--text-xs); padding-right: 6px; }
-  /* The 44px label can't fit "All day ＋" (the ＋ overflowed onto "No all-day
-     events"), and #mobileAddFab already opens the editor on the viewed day */
-  .day-allday-row .day-add-btn { display: none; }
+  /* #mobileAddFab already opens the editor on the viewed day */
+  .day-allday-add { display: none; }
 
   /* Year strip: 3 columns */
   .mini-grid { grid-template-columns: repeat(3, 1fr); padding: 10px; gap: 8px; }
