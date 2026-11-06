@@ -1513,6 +1513,15 @@ body.has-bg .cal-day.today {
   padding: 2px 0;
   -webkit-overflow-scrolling: touch;
 }
+/* Cap the list's width (headers, events, empty state) and center it: full-
+   width bars on a wide panel read as stretched. In rem so the cap grows with
+   the text (704px on desktop, 880px under Wall display's 20px root). The
+   scroll container itself stays full width, so the scrollbar keeps its edge. */
+#agendaView > * {
+  width: 100%;
+  max-width: 44rem;
+  align-self: center;
+}
 .agenda-day-header {
   font-size: var(--text-sm);
   font-weight: var(--weight-bold);
