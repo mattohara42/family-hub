@@ -1233,6 +1233,16 @@ function maybeReloadForUpdate() {
   location.reload();
 }
 
+// ── Touch hover suppression ──
+// A tap leaves :hover stuck on the tapped element, so the last-pressed button
+// kept its hover color (the wall panel's › arrow stayed blue). The panel has a
+// mouse attached, so it reports (hover: hover) and a media query can't tell.
+// Track the last pointer type instead; CSS gates hover colors on
+// html:not(.touch-input).
+document.addEventListener('pointerdown', e => {
+  document.documentElement.classList.toggle('touch-input', e.pointerType !== 'mouse');
+}, { capture: true, passive: true });
+
 window.addEventListener('load', () => {
   if ('serviceWorker' in navigator) {
     // A new SW taking control = a fresh deploy, so reload-when-idle. The one
@@ -1449,7 +1459,7 @@ function updateStatusPill() {
   const pill = document.getElementById('statusPill');
   if (!pill) return;
   if (allOk) {
-    pill.textContent = 'CONNECTED';
+    pill.textContent = 'Connected';
     pill.className = 'status-pill status-connected';
   } else {
     pill.textContent = 'STATUS';
@@ -1993,6 +2003,13 @@ const _numericMDFmt    = new Intl.DateTimeFormat(undefined, { month: 'numeric', 
 function shortWeekdayNumericDate(d) {
   return `${_weekdayShortFmt.format(d)} ${_numericMDFmt.format(d)}`;
 }
+// Desktop/wall panel has room for the month name, and "Fri, Nov 6" matches
+// the Budget card's label; phones keep the numeric form for the one-row header.
+const _dayLabelFmt   = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+const _shortMDFmt    = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
+function dayHeaderLabel(d) {
+  return isMobile ? shortWeekdayNumericDate(d) : _dayLabelFmt.format(d);
+}
 
 // ── Day View ──────────────────────────────────────────────────
 function renderDayGrid() {
@@ -2002,7 +2019,7 @@ function renderDayGrid() {
   const dateKey = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 
   // Nav label — compact so it doesn't truncate under the view toggle
-  document.getElementById('calMonthLabel').textContent = shortWeekdayNumericDate(d);
+  document.getElementById('calMonthLabel').textContent = dayHeaderLabel(d);
 
   const evts = Object.entries(calEventCache)
     .filter(([calId]) => !disabledCals.has(calId))
@@ -2862,7 +2879,8 @@ function renderAgendaView() {
   // Update header label — compact so it doesn't truncate under the view toggle
   const endDate = new Date(start); endDate.setDate(endDate.getDate() + days - 1);
   const lbl = document.getElementById('calMonthLabel');
-  if (lbl) lbl.textContent = _numericMDFmt.format(start) + ' – ' + _numericMDFmt.format(endDate);
+  const mdFmt = isMobile ? _numericMDFmt : _shortMDFmt;
+  if (lbl) lbl.textContent = mdFmt.format(start) + ' – ' + mdFmt.format(endDate);
 }
 
 function renderCalendarTabs() {
@@ -4908,7 +4926,8 @@ function renderYearStrip() {
     // Month + year label
     const lbl = document.createElement('div');
     lbl.className = 'mini-month-label';
-    lbl.textContent = ref.toLocaleDateString([], { month: 'short', year: '2-digit' });
+    // Four-digit year: "Nov 26" read as the 26th of November
+    lbl.textContent = ref.toLocaleDateString([], { month: 'short', year: 'numeric' });
     card.appendChild(lbl);
 
     // Mini grid

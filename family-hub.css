@@ -306,9 +306,9 @@ body.nautical-mode .wx-ticker { background: rgba(240,192,64,.05); border-top-col
 
 /* ── Meal & assistant chips ── */
 body.nautical-mode .meal-adjust-chip { border-color: rgba(240,192,64,.28); }
-body.nautical-mode .meal-adjust-chip:hover { background: #f0c040; border-color: #f0c040; color: #1a2e52; }
+html:not(.touch-input) body.nautical-mode .meal-adjust-chip:hover { background: #f0c040; border-color: #f0c040; color: #1a2e52; }
 body.nautical-mode .assistant-chip { border-color: rgba(240,192,64,.28); }
-body.nautical-mode .assistant-chip:hover { background: #f0c040; border-color: #f0c040; color: #1a2e52; }
+html:not(.touch-input) body.nautical-mode .assistant-chip:hover { background: #f0c040; border-color: #f0c040; color: #1a2e52; }
 
 /* ── Event editor modal ── */
 body.nautical-mode #eventEditorModal .modal {
@@ -530,9 +530,9 @@ body.aurora-mode .wx-ticker { background: rgba(255,140,0,.05); border-top-color:
 
 /* ── Meal & assistant chips ── */
 body.aurora-mode .meal-adjust-chip { border-color: rgba(255,140,0,.28); }
-body.aurora-mode .meal-adjust-chip:hover { background: #FF8C00; border-color: #FF8C00; color: #0d0820; }
+html:not(.touch-input) body.aurora-mode .meal-adjust-chip:hover { background: #FF8C00; border-color: #FF8C00; color: #0d0820; }
 body.aurora-mode .assistant-chip { border-color: rgba(255,140,0,.28); }
-body.aurora-mode .assistant-chip:hover { background: #FF8C00; border-color: #FF8C00; color: #0d0820; }
+html:not(.touch-input) body.aurora-mode .assistant-chip:hover { background: #FF8C00; border-color: #FF8C00; color: #0d0820; }
 
 /* ── Briefing banner ── */
 body.aurora-mode .briefing-banner {
@@ -815,7 +815,7 @@ body.has-bg .day-hour-row {
   cursor: pointer;
   user-select: none;
 }
-.ctrl-header:hover { background: rgba(255,255,255,.04); }
+html:not(.touch-input) .ctrl-header:hover { background: rgba(255,255,255,.04); }
 .ctrl-chevron {
   font-size: .65rem;
   color: var(--muted);
@@ -833,11 +833,23 @@ body.has-bg .day-hour-row {
   cursor: pointer;
   transition: opacity .15s, transform .1s;
 }
-.status-pill:hover { opacity: .85; transform: scale(1.03); }
+html:not(.touch-input) .status-pill:hover { opacity: .85; transform: scale(1.03); }
 .status-connected {
-  background: #2e7d4f;
-  color: #a8f0c6;
-  box-shadow: 0 0 8px rgba(46,125,79,.5);
+  /* Healthy is the normal state, so it stays quiet: a green dot and muted
+     text. Only the red STATUS state below is meant to catch the eye. */
+  background: none;
+  color: var(--muted);
+  font-weight: var(--weight-semi);
+  letter-spacing: 0;
+}
+.status-connected::before {
+  content: '';
+  display: inline-block;
+  width: .55em; height: .55em;
+  margin-right: .45em;
+  border-radius: 50%;
+  background: var(--green);
+  vertical-align: .08em;
 }
 .status-fix {
   background: #7d2e2e;
@@ -967,7 +979,7 @@ body.konami-mode {
   cursor: pointer; font-size: var(--text-base); font-weight: var(--weight-semi);
   transition: opacity .15s;
 }
-.btn:hover { opacity: .85; }
+html:not(.touch-input) .btn:hover { opacity: .85; }
 .btn-primary { background: var(--accent); color: #fff; }
 .btn-danger  { background: var(--red);    color: #fff; }
 .btn-sm      { padding: 4px 9px; font-size: var(--text-xs); }
@@ -1220,7 +1232,7 @@ body.nautical-mode .card {
   transition: background .15s, transform .1s;
   flex-shrink: 0;
 }
-.cal-month-nav button:hover  { background: var(--accent); }
+html:not(.touch-input) .cal-month-nav button:hover  { background: var(--accent); }
 .cal-month-nav button:active { transform: scale(0.93); }
 body.light-mode .cal-month-nav button {
   background: rgba(80,110,200,0.18);
@@ -1274,6 +1286,14 @@ body.nautical-mode .cal-month-nav button {
 .cal-card-header .cal-view-tabs {
   justify-self: end;
 }
+/* One row always. It used to wrap (via .card-header > div) once a beside
+   column narrowed the card, dropping the view tabs under 💡. The title gives
+   way first instead. */
+.cal-card-header .cal-header-actions,
+.cal-card-header .cal-month-nav { flex-wrap: nowrap; min-width: max-content; }
+.cal-card-header .cal-title-zone { max-width: 100%; }
+.cal-card-header .cal-app-title { min-width: 0; }
+.cal-card-header .cal-app-title-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 /* Settings as its own top-level header nav item — mobile-only (desktop keeps
    the sidebar control card's ⚙️ button). Hidden by default so it drops out
    of the box tree entirely, leaving the 3-column desktop grid above with
@@ -1727,34 +1747,36 @@ body.nautical-mode .wx-sun-progress { stroke: rgba(255,200,90,.60); }
 
 /* ── Forecast mode toggle ── */
 .wx-forecast-toggle {
+  /* Same look as the calendar's .cal-view-tab, one size down */
   display: flex;
   flex-wrap: nowrap;
+  gap: 3px;
   margin-bottom: 6px;
-  border-radius: 6px;
-  overflow: hidden;
-  border: 1px solid rgba(255,255,255,.10);
   width: fit-content;
   flex-shrink: 1;
 }
-body.light-mode .wx-forecast-toggle { border-color: rgba(0,0,0,.12); }
 .wx-forecast-toggle button {
-  background: transparent;
-  border: none;
-  color: var(--muted);
-  padding: 2px 7px;
-  font-size: var(--text-xs);
+  padding: 2px 6px;
+  border: 1px solid var(--line); border-radius: 6px;
+  background: var(--surface); color: var(--text);
+  font-size: var(--text-xs); font-weight: var(--weight-semi);
   cursor: pointer;
-  transition: background .15s, color .15s;
-  line-height: 1.8;
+  transition: all .15s;
+  line-height: 1.6;
   white-space: nowrap;
 }
 .wx-forecast-toggle button.active {
   background: var(--accent);
   color: #fff;
+  border-color: var(--accent);
 }
-.wx-forecast-toggle button:not(.active):hover {
-  background: var(--surface2);
-  color: var(--text);
+/* Keep the title whole; the tabs drop to their own row when the sidebar is
+   too narrow for both (same pattern as the wall-display Assistant header). */
+#weatherCard .card-header { flex-wrap: wrap; row-gap: 6px; }
+#weatherCard .card-header h2 { min-width: max-content; }
+#weatherCard .card-header .wx-forecast-toggle { margin-left: auto; margin-bottom: 0; }
+html:not(.touch-input) .wx-forecast-toggle button:not(.active):hover {
+  border-color: var(--accent);
 }
 
 /* ── Condition-based card tint ── */
@@ -1987,7 +2009,7 @@ body.nautical-mode .wx-ticker { background: rgba(200,169,110,.06); border-top-co
   transition: background .15s;
   flex-shrink: 0;
 }
-.wx-loc-btn:hover { background: var(--accent); color: #fff; }
+html:not(.touch-input) .wx-loc-btn:hover { background: var(--accent); color: #fff; }
 .wx-loc-dots {
   display: flex;
   gap: 6px;
@@ -2004,7 +2026,7 @@ body.nautical-mode .wx-ticker { background: rgba(200,169,110,.06); border-top-co
   transition: opacity .15s, background .15s, transform .15s;
   flex-shrink: 0;
 }
-.wx-loc-dot:hover { opacity: 0.75; transform: scale(1.2); }
+html:not(.touch-input) .wx-loc-dot:hover { opacity: 0.75; transform: scale(1.2); }
 .wx-loc-dot.active {
   background: var(--accent);
   opacity: 1;
@@ -2094,7 +2116,7 @@ body.nautical-mode .wx-ticker { background: rgba(200,169,110,.06); border-top-co
   transition: all .15s; white-space: nowrap;
 }
 .cal-view-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-.cal-view-tab:hover:not(.active) { border-color: var(--accent); }
+html:not(.touch-input) .cal-view-tab:hover:not(.active) { border-color: var(--accent); }
 
 /* ── Week View ── */
 #weekView {
@@ -2517,10 +2539,10 @@ body.has-bg.light-mode .day-hour-row.current-hour { background: rgba(190,198,225
   cursor: pointer; line-height: 1.2;
   transition: background .15s, border-color .15s, transform .1s;
 }
-.meal-adjust-chip:hover  { background: var(--accent); border-color: var(--accent); color: #fff; }
+html:not(.touch-input) .meal-adjust-chip:hover  { background: var(--accent); border-color: var(--accent); color: #fff; }
 .meal-adjust-chip:active { transform: scale(0.95); }
 body.nautical-mode .meal-adjust-chip { border-color: rgba(200,169,110,.32); }
-body.nautical-mode .meal-adjust-chip:hover { background: var(--accent2); border-color: var(--accent2); }
+html:not(.touch-input) body.nautical-mode .meal-adjust-chip:hover { background: var(--accent2); border-color: var(--accent2); }
 .meal-ing-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
 .meal-ing-chip {
   display: inline-flex; align-items: center; gap: 4px;
@@ -2981,7 +3003,7 @@ body.nautical-mode #eventEditorModal .modal {
   padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: .9rem;
   transition: background .15s;
 }
-.btn-danger:hover { background: color-mix(in srgb, var(--red) 30%, transparent); }
+html:not(.touch-input) .btn-danger:hover { background: color-mix(in srgb, var(--red) 30%, transparent); }
 .evt-editor-allday-row {
   display: flex; align-items: center; gap: 8px; margin: 0 0 14px;
 }
@@ -3632,7 +3654,7 @@ body.has-bg #yearStrip {
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
 }
-.strip-nav-btn:hover { background: var(--accent); }
+html:not(.touch-input) .strip-nav-btn:hover { background: var(--accent); }
 .strip-side-nav {
   background: var(--surface2);
   border: none;
@@ -3646,7 +3668,7 @@ body.has-bg #yearStrip {
   flex-shrink: 0;
   transition: background .15s;
 }
-.strip-side-nav:hover { background: var(--accent); }
+html:not(.touch-input) .strip-side-nav:hover { background: var(--accent); }
 
 .mini-grid {
   display: grid;
@@ -4372,11 +4394,11 @@ body.nautical-mode .briefing-banner {
   white-space: nowrap;
   transition: background .15s, border-color .15s, transform .1s;
 }
-.assistant-chip:hover  { background: var(--accent); border-color: var(--accent); color: #fff; }
+html:not(.touch-input) .assistant-chip:hover  { background: var(--accent); border-color: var(--accent); color: #fff; }
 .assistant-chip:active { transform: scale(0.95); }
 body.light-mode    .assistant-chip { border-color: rgba(0,0,0,.12); }
 body.nautical-mode .assistant-chip { border-color: rgba(200,169,110,.32); }
-body.nautical-mode .assistant-chip:hover { background: var(--accent2); border-color: var(--accent2); }
+html:not(.touch-input) body.nautical-mode .assistant-chip:hover { background: var(--accent2); border-color: var(--accent2); }
 .assistant-msg {
   max-width: 86%;
   padding: 7px 11px;
@@ -4487,7 +4509,7 @@ body.nautical-mode .assistant-chip:hover { background: var(--accent2); border-co
   flex-shrink: 0;
   transition: background .15s, box-shadow .15s;
 }
-.assistant-mic:hover { background: var(--surface); }
+html:not(.touch-input) .assistant-mic:hover { background: var(--surface); }
 
 /* 'prompt' — subtle ring to hint first-time setup */
 .assistant-mic.mic-prompt {
@@ -4691,14 +4713,14 @@ a, button, input, select, textarea, label,
 }
 
 /* ── 2. Suppress hover effects on touch devices ──
-   (hover states persist after tap, creating stuck highlights) */
+   (hover states persist after tap, creating stuck highlights). The main
+   controls are gated on html:not(.touch-input) instead (set from the last
+   pointer type in family-hub.js), which also covers the wall panel: it has a
+   mouse attached, so (hover: none) never matches there. */
 @media (hover: none) {
-  .btn:hover                     { opacity: 1; }
   .cal-tab:hover                 { opacity: 1; }
   .cal-tab.cal-tab-off:hover     { opacity: .45; }
-  .cal-view-tab:hover:not(.active) { border-color: var(--line); }
   .modal-tab:hover:not(.active)  { color: var(--muted); }
-  .cal-month-nav button:hover    { background: var(--surface2); }
   .budget-pill:hover             { background: color-mix(in srgb, var(--red) 18%, transparent); }
   .budget-item-del:hover         { color: var(--muted); }
   .sms-contact-row:hover         { background: none; }
@@ -5201,7 +5223,7 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
   display: flex; align-items: center; justify-content: center;
   touch-action: manipulation;
 }
-.budget-card-nav:hover { background: var(--accent); color: #fff; }
+html:not(.touch-input) .budget-card-nav:hover { background: var(--accent); color: #fff; }
 
 .budget-add-form-inner {
   background: var(--surface2);
@@ -5315,7 +5337,7 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
   touch-action: manipulation;
   min-width: 62px;
 }
-.ha-btn:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); color: #fff; }
+html:not(.touch-input) .ha-btn:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); color: #fff; }
 .ha-btn:disabled { opacity: .5; cursor: default; }
 /* Offline, unknown, or a bad entity ID — state is unreliable, so say so quietly
    rather than rendering a control that would lie about what it does. */
@@ -6427,10 +6449,12 @@ html.wall-display .school-day-subject-chip { padding: 2px 7px; border-radius: 10
    and coming later wins the tie. Scrollbars hidden with scrollbar-width: none
    stay hidden, since that property overrides ::-webkit-scrollbar. */
 html.wall-display :is(*, .sidebar)::-webkit-scrollbar { width: 36px; height: 36px; }
-html.wall-display :is(*, .sidebar)::-webkit-scrollbar-track { background: color-mix(in srgb, var(--muted) 12%, transparent); border-radius: 18px; }
+/* The thumb is drawn 14px wide inside the 36px bar: still a full-width grab
+   area, but it no longer reads as the heaviest thing on screen. */
+html.wall-display :is(*, .sidebar)::-webkit-scrollbar-track { background: transparent; }
 html.wall-display :is(*, .sidebar)::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--muted) 75%, transparent);
-  border: 5px solid transparent; background-clip: padding-box;
+  background: color-mix(in srgb, var(--muted) 45%, transparent);
+  border: 11px solid transparent; background-clip: padding-box;
   border-radius: 18px; min-height: 72px;
 }
 /* Assistant controls at finger size. The (hover: none) touch block already
