@@ -2020,9 +2020,7 @@ function renderDayGrid() {
   allDayRow.className = 'day-allday-row';
   const adLabel = document.createElement('div');
   adLabel.className = 'day-time-label';
-  adLabel.innerHTML = googleToken
-    ? `All day <span class="day-add-btn" title="Add all-day event" onclick="openEventEditor(null,'${dateKey}',null,null,true)">＋</span>`
-    : 'All day';
+  adLabel.textContent = 'All day';
   const adPills = document.createElement('div');
   adPills.className = 'day-allday-pills';
   if (allDayEvts.length) {
@@ -2044,6 +2042,17 @@ function renderDayGrid() {
   }
   allDayRow.appendChild(adLabel);
   allDayRow.appendChild(adPills);
+  // Its own button at the row's end: inside the 56px label column, "All day ＋"
+  // overflowed onto "No all-day events" and the ＋ had no tap area of its own.
+  if (googleToken) {
+    const adAdd = document.createElement('button');
+    adAdd.className = 'day-allday-add';
+    adAdd.title = 'Add all-day event';
+    adAdd.setAttribute('aria-label', 'Add all-day event');
+    adAdd.textContent = '＋';
+    adAdd.onclick = () => openEventEditor(null, dateKey, null, null, true);
+    allDayRow.appendChild(adAdd);
+  }
   wrap.appendChild(allDayRow);
 
   // ── School Day Cycle section (day view) — one line; see startMarqueeIfOverflowing() ──
