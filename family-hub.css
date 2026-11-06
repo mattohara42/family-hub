@@ -2626,7 +2626,7 @@ html:not(.touch-input) body.nautical-mode .meal-adjust-chip:hover { background: 
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; padding: 0;
 }
-.day-allday-add:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); }
+html:not(.touch-input) .day-allday-add:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); }
 .day-allday-empty { font-size: var(--fs-meta); color: var(--muted); padding-top: 3px; }
 .school-day-section {
   background: color-mix(in srgb, var(--accent2) 7%, transparent); border-radius: 8px;
