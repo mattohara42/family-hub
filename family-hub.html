@@ -387,7 +387,7 @@
     <div class="card" id="wotdCard">
       <div class="card-header">
         <h2>📖 Word of the Day</h2>
-        <button onclick="refreshWotd()" title="New word" aria-label="New word" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.6rem;line-height:1">↺</button>
+        <button onclick="refreshWotd()" title="New word" aria-label="New word" class="card-refresh-btn">↺</button>
       </div>
       <div class="card-body" id="wotdBody">
         <div style="text-align:center;color:var(--muted);font-size:.85rem">Loading…</div>
@@ -398,7 +398,7 @@
     <div class="card" id="dadjokeCard">
       <div class="card-header">
         <h2>😄 Dad Joke</h2>
-        <button onclick="refreshDadJoke()" title="New joke" aria-label="New joke" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.6rem;line-height:1">↺</button>
+        <button onclick="refreshDadJoke()" title="New joke" aria-label="New joke" class="card-refresh-btn">↺</button>
       </div>
       <div class="card-body" id="dadjokeBody">
         <div style="text-align:center;color:var(--muted);font-size:.85rem">Loading…</div>
@@ -409,7 +409,7 @@
     <div class="card" id="quoteCard">
       <div class="card-header">
         <h2>✨ Quote of the Day</h2>
-        <button onclick="refreshQuote()" title="New quote" aria-label="New quote" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.6rem;line-height:1">↺</button>
+        <button onclick="refreshQuote()" title="New quote" aria-label="New quote" class="card-refresh-btn">↺</button>
       </div>
       <div class="card-body" id="quoteBody">
         <div style="text-align:center;color:var(--muted);font-size:.85rem">Loading…</div>
@@ -420,7 +420,7 @@
     <div class="card" id="newsCard">
       <div class="card-header">
         <h2>📰 News</h2>
-        <button onclick="loadNewsFeeds(true)" title="Refresh news" aria-label="Refresh news" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.6rem;line-height:1">↺</button>
+        <button onclick="loadNewsFeeds(true)" title="Refresh news" aria-label="Refresh news" class="card-refresh-btn">↺</button>
       </div>
       <div class="card-body" id="newsBody" style="padding:10px 14px">
         <div style="text-align:center;color:var(--muted);font-size:.85rem">Loading…</div>
@@ -431,7 +431,7 @@
     <div class="card" id="stockCard">
       <div class="card-header">
         <h2>📈 Stocks</h2>
-        <button onclick="loadStockQuotes(true)" title="Refresh stocks" aria-label="Refresh stocks" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.6rem;line-height:1">↺</button>
+        <button onclick="loadStockQuotes(true)" title="Refresh stocks" aria-label="Refresh stocks" class="card-refresh-btn">↺</button>
       </div>
       <div class="card-body" id="stockBody" style="padding:10px 14px">
         <div style="text-align:center;color:var(--muted);font-size:.85rem">Add tickers in ⚙️ Settings.</div>
@@ -442,7 +442,7 @@
     <div class="card" id="haCard">
       <div class="card-header">
         <h2>🏠 Home</h2>
-        <button onclick="refreshHaStates()" title="Refresh devices" aria-label="Refresh devices" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.6rem;line-height:1">↺</button>
+        <button onclick="refreshHaStates()" title="Refresh devices" aria-label="Refresh devices" class="card-refresh-btn">↺</button>
       </div>
       <div class="card-body" id="haBody" style="padding:6px 14px 10px">
         <div class="ha-empty">Add your Home Assistant URL and token in ⚙️ Settings → 🏠 Home Assistant.</div>
