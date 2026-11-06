@@ -710,7 +710,7 @@ function budgetDatesInRange(item, startD, endD) {
       hit = (m === item.month && dom === item.dayOfMonth);
     }
     if (hit) {
-      results.push(cur.toISOString().slice(0,10));
+      results.push(localDateKey(cur));
     }
     cur.setDate(cur.getDate() + 1);
   }
@@ -2295,7 +2295,7 @@ function renderMultidayOverlay() {
     const out = [];
     const d = new Date(startDate + 'T00:00:00');
     const end = new Date(endDate + 'T00:00:00');
-    while (d <= end) { out.push(d.toISOString().slice(0, 10)); d.setDate(d.getDate() + 1); }
+    while (d <= end) { out.push(localDateKey(d)); d.setDate(d.getDate() + 1); }
     return out;
   };
 
@@ -2691,7 +2691,7 @@ function cacheCalEvents(target, calId, items, color, holiday = false) {
     if (base.allDay && base.startDate && base.endDate && base.endDate > base.startDate) {
       const endD = new Date(base.endDate + 'T00:00:00');
       for (let d = new Date(base.startDate + 'T00:00:00'); d < endD; d.setDate(d.getDate() + 1)) {
-        const key = d.toISOString().slice(0, 10);
+        const key = localDateKey(d);
         if (!target[calId][key]) target[calId][key] = [];
         pushEventDeduped(target[calId][key], base);
       }
@@ -2784,7 +2784,7 @@ function renderAgendaView() {
   let hasAny = false;
   for (let i = 0; i < days; i++) {
     const d = new Date(start); d.setDate(d.getDate() + i);
-    const key = d.toISOString().slice(0,10);
+    const key = localDateKey(d);
     const isToday = d.getTime() === today.getTime();
 
     const evts = Object.entries(calEventCache)
@@ -4655,7 +4655,7 @@ async function rescheduleEvent(ev, newDateKey) {
   const shiftDateStr = (str, delta) => {
     const d = new Date(str + 'T00:00:00');
     d.setDate(d.getDate() + delta);
-    return d.toISOString().slice(0, 10);
+    return localDateKey(d);
   };
   const shiftDT = (isoStr, delta) => {
     const d = new Date(isoStr);
@@ -8819,7 +8819,7 @@ async function saveMealTemplate() {
 
   // createdAt is a plain "YYYY-MM-DD" string (displayed in the template list),
   // not a server timestamp — ISO date strings still sort correctly with orderBy.
-  const item = { name, createdAt: new Date().toISOString().slice(0, 10), week };
+  const item = { name, createdAt: localDateKey(new Date()), week };
   if (db) {
     await db.collection('mealTemplates').add(item).catch(_fsWriteError);
   } else {
@@ -8944,7 +8944,7 @@ async function saveRecipeBoxItem(name, ingredients, extra) {
     name,
     ingredients,
     ...recipeExtras(extra),
-    createdAt: new Date().toISOString().slice(0, 10),
+    createdAt: localDateKey(new Date()),
   };
   if (db) {
     await db.collection('recipeBox').add(item).catch(_fsWriteError);
@@ -10075,7 +10075,7 @@ async function assistantAddEvent(dateStr, timeStr, title, member) {
   if (allDay) {
     start = { date: dateStr };
     const next = new Date(dateStr + 'T00:00:00'); next.setDate(next.getDate() + 1);
-    end = { date: next.toISOString().slice(0, 10) };
+    end = { date: localDateKey(next) };
   } else {
     const tz  = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const endD = new Date(`${dateStr}T${timeStr}:00`); endD.setHours(endD.getHours() + 1);
@@ -10646,7 +10646,7 @@ const EASTER_EGG_FRANCHISES = [
       const now = new Date();
       const weekStart = new Date(now); weekStart.setDate(now.getDate() - now.getDay());
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      const fmt = d => d.toISOString().slice(0, 10);
+      const fmt = d => localDateKey(d);
       const weekTotal = budgetItems.filter(i => i.date >= fmt(weekStart)).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0).toFixed(2);
       const monthTotal = budgetItems.filter(i => i.date >= fmt(monthStart)).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0).toFixed(2);
       return `YOU. COMPLETE. ME. Also: this week $${weekTotal}, this month $${monthTotal}.`;
@@ -10787,7 +10787,7 @@ const EASTER_EGG_FRANCHISES = [
       if (!/life finds a way/.test(t)) return null;
       const now = new Date();
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      const monthTotal = budgetItems.filter(i => i.date >= monthStart.toISOString().slice(0, 10)).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0).toFixed(2);
+      const monthTotal = budgetItems.filter(i => i.date >= localDateKey(monthStart)).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0).toFixed(2);
       return `Life, uh, finds a way. So does your grocery bill — $${monthTotal} logged so far this month.`;
     },
     t => /hold onto your butts/.test(t) ? `Hold onto your butts. This is just the shopping list, but I appreciate the drama.` : null,
@@ -10821,7 +10821,7 @@ const EASTER_EGG_FRANCHISES = [
       if (!/treat yo ?self/.test(t)) return null;
       const now = new Date();
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      const monthTotal = budgetItems.filter(i => i.date >= monthStart.toISOString().slice(0, 10)).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0).toFixed(2);
+      const monthTotal = budgetItems.filter(i => i.date >= localDateKey(monthStart)).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0).toFixed(2);
       return `Treat. Yo. Self. 💅 Just so you know, your bills this month already total $${monthTotal} — budget accordingly.`;
     },
   ]},
