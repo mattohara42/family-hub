@@ -11047,8 +11047,14 @@ async function _sendAssistantMessage(input, text) {
     assistantHistory.push({ role: 'model', parts: [{ text: finalText }] });
     saveAssistantHistory();
     renderAssistantMessages();
-    // read aloud if TTS is on, including any Yes/No question this turn raised
-    speakAssistant([finalText, ...assistantPendingConfirms.slice(askedBefore).map(c => c.question)].join(' '));
+    // Read aloud if TTS is on, including any Yes/No question this turn raised.
+    // The ✓ lines stay on screen as proof, but Gemini's own sentence nearly
+    // always says the same thing ("I've added X…"), so speaking both read
+    // every action twice. Speak ✓ only when Gemini wrote nothing else; ⚠️
+    // lines are always spoken since a failure must not go unheard.
+    const spokenConfirms = cleanText ? confirms.filter(c => !c.trim().startsWith('✓')) : confirms;
+    speakAssistant([cleanText, ...spokenConfirms, ...assistantPendingConfirms.slice(askedBefore).map(c => c.question)]
+      .filter(Boolean).join(' '));
 
   } catch(e) {
     thinkEl.remove();
