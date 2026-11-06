@@ -12844,6 +12844,30 @@ function applyAppTitle() {
   }
   el.innerHTML = `<button type="button" class="cal-app-emoji" onclick="openMobileLists()" aria-label="Open lists and settings" title="Lists">${emoji}</button><span class="cal-app-title-text">${textHtml}</span>`;
   document.title = title;
+  watchAppTitleFit();
+}
+
+// Hide the header title outright when the calendar is too narrow to show all
+// of it ("Fa…" read as a glitch). It's hidden with visibility, not display,
+// so it keeps its box: scrollWidth still reports the full text width, and it
+// comes back as soon as the column has room. Width depends on the user's own
+// title and on the font, so a fixed CSS breakpoint can't do this.
+let _appTitleFitObserver = null;
+function syncAppTitleFit() {
+  const t = document.querySelector('.cal-card-header .cal-app-title-text');
+  if (!t) return;
+  t.parentElement.classList.toggle('title-clipped', t.scrollWidth > t.clientWidth + 1);
+}
+function watchAppTitleFit() {
+  if (!_appTitleFitObserver && 'ResizeObserver' in window) {
+    const zone = document.querySelector('.cal-card-header .cal-title-zone');
+    if (zone) {
+      _appTitleFitObserver = new ResizeObserver(syncAppTitleFit);
+      _appTitleFitObserver.observe(zone);
+      document.fonts?.ready.then(syncAppTitleFit);   // Fraunces swaps in late
+    }
+  }
+  syncAppTitleFit();
 }
 
 function applyAssistantName() {

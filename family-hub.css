@@ -1304,7 +1304,10 @@ body.nautical-mode .cal-month-nav button {
 .cal-card-header .cal-month-nav { flex-wrap: nowrap; min-width: max-content; }
 .cal-card-header .cal-title-zone { max-width: 100%; }
 .cal-card-header .cal-app-title { min-width: 0; }
-.cal-card-header .cal-app-title-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.cal-card-header .cal-app-title-text { min-width: 0; overflow: hidden; }
+/* Set by syncAppTitleFit() when the text doesn't fit: hidden rather than
+   truncated. visibility keeps the box so it can be measured to come back. */
+.cal-card-header .cal-app-title.title-clipped .cal-app-title-text { visibility: hidden; }
 /* Settings as its own top-level header nav item — mobile-only (desktop keeps
    the sidebar control card's ⚙️ button). Hidden by default so it drops out
    of the box tree entirely, leaving the 3-column desktop grid above with
