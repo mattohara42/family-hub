@@ -9781,6 +9781,13 @@ function assistantAddressee() {
   return s ? s.name : null;
 }
 
+/** " [for Kate, Matt]" from the event's member tags (or names in its title),
+ *  so the model attributes events from data instead of guessing. */
+function eventForTag(ev) {
+  const names = eventMemberNames(ev);
+  return names.length ? ` [for ${names.join(', ')}]` : '';
+}
+
 function buildAssistantContext() {
   const today = new Date();
   const fmt = (d, opts) => d.toLocaleDateString('en-US', opts);
@@ -9804,9 +9811,9 @@ function buildAssistantContext() {
       .map(e => {
         if (!e.allDay && e.startDT) {
           const t = new Date(e.startDT).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-          return `${e.summary} at ${t}`;
+          return `${e.summary} at ${t}${eventForTag(e)}`;
         }
-        return e.summary;
+        return `${e.summary}${eventForTag(e)}`;
       });
     if (evts.length) calLines.push(`  ${label}: ${evts.join(', ')}`);
   }
@@ -9815,7 +9822,7 @@ function buildAssistantContext() {
   for (let i = 7; i < ASSISTANT_CAL_DAYS; i++) {
     const d = new Date(today);
     d.setDate(d.getDate() + i);
-    const titles = assistantEventsOn(localDateStr(d)).map(e => e.summary);
+    const titles = assistantEventsOn(localDateStr(d)).map(e => `${e.summary}${eventForTag(e)}`);
     if (titles.length) laterLines.push(`  ${fmt(d, { weekday: 'short', month: 'short', day: 'numeric' })}: ${titles.join(', ')}`);
   }
 
@@ -9923,6 +9930,7 @@ ${calLines.length ? calLines.join('\n') : '  (no upcoming events)'}
 
 Calendar — the 3 weeks after that (titles only):
 ${laterLines.length ? laterLines.join('\n') : '  (nothing scheduled)'}
+An event's [for …] tag lists exactly who it belongs to. Attribute events to people only from that tag; if an event has no tag, don't say whose it is.
 
 Birthdays (soonest first):
 ${bdayLines.length ? bdayLines.join('\n') : '  (none added)'}
