@@ -1174,6 +1174,13 @@ body.nautical-mode .card {
    centered the title (Budget). */
 .card-header > .card-title-wrap { flex: 1; }
 .card-body { padding: 12px 14px; }
+/* ↺ in the headers of Word of the Day, Dad Joke, Quote, News, Stocks and
+   Home (was the same inline style repeated six times) */
+.card-refresh-btn {
+  background: none; border: none;
+  color: var(--muted); cursor: pointer;
+  font-size: 1.6rem; line-height: 1;
+}
 
 /* ── Calendar Swipe / Period Slide ──
    #calViews holds the four period views and is what the finger drags. The
