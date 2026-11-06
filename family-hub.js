@@ -11991,7 +11991,9 @@ let recurringItems = lcLoadRecurring();
 // School Day Cycle — a repeating "Day N" rotation (e.g. a 4-day A/B/C/D
 // schedule) computed from a start/end date, skipping weekends + entered
 // non-school days. Shown only in Week/Day view — see renderWeekGrid/renderDayGrid.
-const SCHOOL_CYCLE_DEFAULTS = { startDate: '', endDate: '', cycleLength: 4 };
+// corrections: [{date, day}] — "on this date it's Day N", for when the
+// school's count and ours drift apart; the latest one on or before a date wins.
+const SCHOOL_CYCLE_DEFAULTS = { startDate: '', endDate: '', cycleLength: 4, corrections: [] };
 let schoolDayCycle    = { ...SCHOOL_CYCLE_DEFAULTS, ...lsGet('fh_schoolDayCycle', {}) };
 let schoolHolidays    = lsGet('fh_schoolHolidays', []);     // [{id, date, label}] — non-school weekdays, skipped in the count
 let schoolDaySubjects = lsGet('fh_schoolDaySubjects', []);  // [{id, subject, dayNumbers:[1,3], members:['Kate']}]
@@ -12251,14 +12253,19 @@ function schoolDayNumberFor(dateKey) {
   if (target.getDay() === 0 || target.getDay() === 6) return null;
   const skip = schoolHolidaySet();
   if (skip.has(dateKey)) return null;
+  // Count from the latest correction on or before this date, else from Day 1.
+  const fix = (schoolDayCycle.corrections || [])
+    .filter(c => c.date >= startDate && c.date <= dateKey)
+    .sort((a, b) => a.date < b.date ? -1 : 1).pop();
+  const base = fix ? fix.day : 1;
   let count = 0;
-  const cur = new Date(startDate + 'T00:00:00');
+  const cur = new Date((fix ? fix.date : startDate) + 'T00:00:00');
   while (cur <= target) {
     const dow = cur.getDay();
     if (dow !== 0 && dow !== 6 && !skip.has(localDateKey(cur))) count++;
     cur.setDate(cur.getDate() + 1);
   }
-  return count === 0 ? null : ((count - 1) % cycleLength) + 1;
+  return count === 0 ? null : ((base - 1 + count - 1) % cycleLength) + 1;
 }
 
 function schoolDaySubjectsForDayNumber(n) {
@@ -12271,7 +12278,7 @@ async function scdSaveCycle() {
   const endDate      = document.getElementById('scdEndDate').value;
   const cycleLength = Math.max(2, Math.min(10, parseInt(document.getElementById('scdCycleLength').value, 10) || 4));
   if (startDate && endDate && endDate < startDate) { alert('End date must be after start date.'); return; }
-  schoolDayCycle = { startDate, endDate, cycleLength };
+  schoolDayCycle = { ...schoolDayCycle, startDate, endDate, cycleLength };
   saveFsSetting('schoolDayCycle', 'fh_schoolDayCycle', schoolDayCycle);
   scdRenderCycleStatus();
   scdRenderSubjectDayChecks();
@@ -12279,6 +12286,7 @@ async function scdSaveCycle() {
 }
 
 function scdRenderCycleStatus() {
+  scdRenderCorrectionList();
   const el = document.getElementById('scdCycleStatus');
   if (!el) return;
   if (!schoolDayCycle.startDate || !schoolDayCycle.endDate) {
@@ -12289,6 +12297,38 @@ function scdRenderCycleStatus() {
   el.textContent = todayNum != null
     ? `Today is Day ${todayNum} of ${schoolDayCycle.cycleLength}.`
     : 'Today falls outside the school year (or is a weekend / non-school day).';
+}
+
+// ── School Day Cycle corrections ──
+function scdRenderCorrectionList() {
+  const el = document.getElementById('scdCorrectionList');
+  if (!el) return;
+  const list = [...(schoolDayCycle.corrections || [])].sort((a, b) => a.date < b.date ? -1 : 1);
+  el.innerHTML = list.length ? list.map(c =>
+    `<div class="lc-item">
+      <span class="lc-item-label">Day ${c.day}</span>
+      <span class="lc-item-meta">${esc(c.date)}</span>
+      <button class="lc-del" onclick="scdDelCorrection('${esc(c.date)}')">✕</button></div>`
+  ).join('') : '<div class="lc-empty">No corrections. The count runs from the start date.</div>';
+}
+function scdSaveCorrections(corrections) {
+  schoolDayCycle = { ...schoolDayCycle, corrections };
+  saveFsSetting('schoolDayCycle', 'fh_schoolDayCycle', schoolDayCycle);
+  scdRenderCycleStatus();
+  renderCurrentView();
+}
+function scdAddCorrection() {
+  const date = document.getElementById('scdCorrectionDate').value;
+  const day  = parseInt(document.getElementById('scdCorrectionDay').value, 10);
+  const n    = schoolDayCycle.cycleLength || 4;
+  if (!date) { alert('Pick a date.'); return; }
+  if (!(day >= 1 && day <= n)) { alert(`Day must be 1 to ${n}.`); return; }
+  // One correction per date: a new one on the same date replaces it.
+  scdSaveCorrections([...(schoolDayCycle.corrections || []).filter(c => c.date !== date), { date, day }]);
+  document.getElementById('scdCorrectionDay').value = '';
+}
+function scdDelCorrection(date) {
+  scdSaveCorrections((schoolDayCycle.corrections || []).filter(c => c.date !== date));
 }
 
 function lcRenderSchoolHolidayList() {
@@ -12392,6 +12432,7 @@ function scdOpenSettings() {
   document.getElementById('scdStartDate').value   = schoolDayCycle.startDate || '';
   document.getElementById('scdEndDate').value     = schoolDayCycle.endDate || '';
   document.getElementById('scdCycleLength').value = schoolDayCycle.cycleLength || 4;
+  document.getElementById('scdCorrectionDate').value = localDateKey(new Date());
   scdRenderCycleStatus();
   lcRenderSchoolHolidayList();
   scdRenderSubjectDayChecks();

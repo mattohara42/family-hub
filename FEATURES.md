@@ -77,7 +77,7 @@ family-hub.js     (all logic)
 ├── ── CALENDAR TABS ──        renderCalendarTabs
 ├── ── CALENDAR EVENT EDITOR── openEventEditor, saveCalEvent, deleteCalEvent
 ├── ── LOCAL CALENDARS ──      injectLocalEvents, lcAddBirthday/lcAddRecurring/lcNewRecurring/lcEditRecurring (＋ Add or ✎ opens `lcOpenRecurForm()`, a drill-in screen: `#settingsModal.recur-editing` hides the rest of the Calendar panel and swaps the modal footer to the item's own Cancel/Add-or-Save, so there's only one Save on screen; `lcRecurScheduleChanged()` shows weekday chips for weekly only and Starts only when it changes the schedule)/etc. (LC_IDS, LC_DEFS); recurringOccursOn/recurringSummary for the 🔁 Recurring calendar
-├── ── SCHOOL DAY CYCLE ──     schoolDayNumberFor, scdAddHoliday/scdAddSubject (Week/Day view badge only, no LC_IDS entry) — settings UI lives in its own top-level 'school' tab, not 'calendar' (see below)
+├── ── SCHOOL DAY CYCLE ──     schoolDayNumberFor, scdAddHoliday/scdAddSubject/scdAddCorrection (Week/Day view badge only, no LC_IDS entry) — settings UI lives in its own top-level 'school' tab, not 'calendar' (see below)
 ├── ── BUDGET ──               renderBudgetCard (context-sensitive), budgetDatesInRange, budgetEventsForDate (privacy-gated), toggleBudgetPrivacy
 ├── ── WEATHER ──              showWeatherLocation, loadWeatherByCity, renderWeatherData,
 │                              renderSunArc, renderWeatherTicker, prev/nextWeatherLocation,
@@ -1061,7 +1061,7 @@ const HA_TOGGLE_DOMAINS = ['light', 'switch', 'fan', 'input_boolean'];
 | `fh_onThisDay` | JSON `{date, events[]}` | Daily briefing | Today's filtered Wikipedia "on this day" candidates, so the three daily briefings share one fetch |
 | `fh_recurring` | JSON array | Recurring | Fallback only — migrated to Firestore `recurringItems` collection. Legacy `fh_medications`/`fh_trash` are folded into it on load (`lcLoadRecurring()`) |
 | `fh_school` | JSON array | Life Admin | Fallback only — migrated to Firestore `schoolPeriods` collection |
-| `fh_schoolDayCycle` | JSON object | School Day Cycle | `{ startDate, endDate, cycleLength }` — fallback only, synced via Firestore `settings/schoolDayCycle` doc otherwise (defaults come from `SCHOOL_CYCLE_DEFAULTS`) |
+| `fh_schoolDayCycle` | JSON object | School Day Cycle | `{ startDate, endDate, cycleLength, corrections: [{date, day}] }` (`corrections`: "on this date it's Day N", set in ✏️ Correct the Day when the school's count drifts from ours; `schoolDayNumberFor()` counts on from the latest one on or before the date) — fallback only, synced via Firestore `settings/schoolDayCycle` doc otherwise (defaults come from `SCHOOL_CYCLE_DEFAULTS`) |
 | `fh_schoolHolidays` | JSON array | School Day Cycle | Fallback only — migrated to Firestore `schoolHolidays` collection — `[{date, label}]`, weekdays skipped when computing Day N |
 | `fh_schoolDaySubjects` | JSON array | School Day Cycle | Fallback only — migrated to Firestore `schoolDaySubjects` collection — `[{subject, dayNumbers, members}]`, per-kid subject assignments keyed to the cycle's Day N |
 | `fh_countdowns` | JSON array | Countdowns | Fallback only — migrated to Firestore `countdowns` collection |
