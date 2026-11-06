@@ -6496,6 +6496,11 @@ html.wall-display .assistant-mic { width: 52px; height: 52px; font-size: 1.4rem;
 html.wall-display .assistant-input { padding: 12px 16px; font-size: var(--text-base); }
 html.wall-display .assistant-icon-btn { min-width: 48px; min-height: 48px; font-size: 1.7rem; }
 html.wall-display .assistant-clear-btn { font-size: 2rem; }
+/* The card headers' ↺ at the same finger size as the Assistant's ↺ above */
+html.wall-display .card-refresh-btn {
+  min-width: 48px; min-height: 48px; font-size: 2rem;
+  display: inline-flex; align-items: center; justify-content: center;
+}
 html.wall-display .briefing-pill { padding: 10px 16px; font-size: var(--text-sm); }
 /* Those bigger buttons don't fit beside the title in a narrow sidebar: the
    title shrank to nothing under the Briefing pill. Keep the title whole and
