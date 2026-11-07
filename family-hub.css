@@ -5542,7 +5542,13 @@ body .card-header h2 {
   pointer-events: none;
 }
 /* an icon followed by a label; flex rows with a gap don't need it */
-h2 > .ic, #settingsModalGear, .briefing-pill > .ic { margin-right: .4em; }
+h2 > .ic, #settingsModalGear, .briefing-pill > .ic, .ic-lead { margin-right: .4em; }
+/* The ↺ buttons kept their glyph-sized font (and the wall display's larger
+   one), so the icon scales off it rather than taking 1.15em of it */
+.card-refresh-btn .ic,
+.assistant-clear-btn .ic { width: .7em; height: .7em; }
+/* Settings intro badge: the span was sized for an emoji */
+.settings-intro > span { display: flex; color: var(--accent); font-size: 1.25rem; line-height: 1; }
 #settingsModalGear .ic { vertical-align: -0.15em; }
 .card-header h2 > .ic,
 .settings-nav-item > .ic { margin-right: 0; }
