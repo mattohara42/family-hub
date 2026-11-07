@@ -459,10 +459,12 @@ async function fetchTicketmaster(city, state, lat, lon, filters = {}) {
 // OPENSTREETMAP (things to do — museums, parks, galleries, theatres)
 // ────────────────────────────────────────────────────────────────
 
-// Overpass mirrors (try in order on failure)
+// Public Overpass instances (wiki.openstreetmap.org/wiki/Overpass_API),
+// queried together; the first good answer wins
 const OVERPASS_ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
-  'https://overpass.kumi.systems/api/interpreter'
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter'
 ];
 
 // Map an OSM tag value to one of our canonical event types + a human label
@@ -501,37 +503,38 @@ async function fetchOpenStreetMap(city, state, lat, lon, radiusMinutes) {
 );
 out center tags 80;`;
 
-    // One shared deadline just inside the source cap, so the first mirror
-    // gets the whole budget and the second only runs if the first fails fast
-    // (it used to get 8s each, so neither ever had time to finish).
-    const deadline = Date.now() + SOURCE_TIMEOUT_MS - 1000;
+    // Ask every mirror at once with the whole budget (just inside the source
+    // cap) and take the first good answer. One at a time, the first mirror
+    // used up the budget and the others never got asked.
     const failures = [];
-    let data = null;
-    for (const endpoint of OVERPASS_ENDPOINTS) {
-      const remaining = deadline - Date.now();
-      if (remaining < 2000) break;
+    const controllers = OVERPASS_ENDPOINTS.map(() => new AbortController());
+    const timer = setTimeout(() => controllers.forEach(c => c.abort()), SOURCE_TIMEOUT_MS - 1000);
+    const data = await Promise.any(OVERPASS_ENDPOINTS.map(async (endpoint, i) => {
       const host = new URL(endpoint).host;
       try {
         const r = await fetch(endpoint, {
           method: 'POST',
-          signal: AbortSignal.timeout(remaining),
+          signal: controllers[i].signal,
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
             'User-Agent': 'FamilyHub/1.0 (event discovery)'
           },
           body: 'data=' + encodeURIComponent(query)
         });
-        if (r.ok) { data = await r.json(); break; }
-        failures.push(`${host} HTTP ${r.status}`);
-      } catch (endpointErr) {
-        failures.push(`${host} ${endpointErr.name === 'TimeoutError' ? 'timed out' : endpointErr.message}`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const json = await r.json();
+        controllers.forEach((c, j) => { if (j !== i) c.abort(); });
+        return json;
+      } catch (err) {
+        failures.push(`${host} ${err.name === 'AbortError' ? 'timed out' : err.message}`);
+        throw err;
       }
-    }
+    })).catch(() => null).finally(() => clearTimeout(timer));
 
     if (!data) {
       console.warn('[Events] Overpass failed:', failures.join('; '));
       sourceStatus.osm.ok = false;
-      sourceStatus.osm.error = failures.join('; ') || 'no time left for Overpass';
+      sourceStatus.osm.error = failures.join('; ');
       return [];
     }
 
@@ -1343,5 +1346,7 @@ exports._test = {
   expandFairportSchedule,
   fetchFairport,
   stripHtml,
-  parsePittsfordEvents
+  parsePittsfordEvents,
+  fetchOpenStreetMap,
+  sourceStatus
 };

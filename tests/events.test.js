@@ -147,3 +147,48 @@ test('status probe reports which keys are configured, without a location', async
     if (saved.tm === undefined) delete process.env.TICKETMASTER_KEY; else process.env.TICKETMASTER_KEY = saved.tm;
   }
 });
+
+// Things to Do: every Overpass mirror is asked at once and the first good
+// answer wins (one at a time, the first mirror used the whole budget).
+// The module's fetch wrapper calls globalThis.fetch, so it's stubbed here.
+test('fetchOpenStreetMap takes the first good mirror and reports failures', async () => {
+  const { fetchOpenStreetMap, sourceStatus } = require('../netlify/functions/events.js')._test;
+  const realFetch = globalThis.fetch;
+  const delay = (ms, signal) => new Promise((resolve, reject) => {
+    const t = setTimeout(resolve, ms);
+    signal.addEventListener('abort', () => { clearTimeout(t); reject(Object.assign(new Error('aborted'), { name: 'AbortError' })); });
+  });
+  const stub = plan => async (url, opts) => {
+    const step = plan[new URL(url).host];
+    await delay(step.ms, opts.signal);
+    if (step.status) return { ok: false, status: step.status };
+    return { ok: true, status: 200, json: async () => ({
+      elements: [{ type: 'node', id: 1, lat: 43.16, lon: -77.6, tags: { name: 'Strong Museum', tourism: 'museum' } }]
+    }) };
+  };
+  try {
+    globalThis.fetch = stub({
+      'overpass-api.de': { ms: 5000 },
+      'overpass.kumi.systems': { ms: 10, status: 429 },
+      'overpass.private.coffee': { ms: 50 }
+    });
+    const t0 = Date.now();
+    const events = await fetchOpenStreetMap('Rochester', 'NY', 43.1566, -77.6088, 120);
+    assert.equal(events.length, 1);
+    assert.equal(events[0].source, 'osm');
+    assert.ok(Date.now() - t0 < 1000, 'did not wait for the slow mirror');
+    assert.equal(sourceStatus.osm.ok, true);
+
+    globalThis.fetch = stub({
+      'overpass-api.de': { ms: 10, status: 504 },
+      'overpass.kumi.systems': { ms: 10, status: 429 },
+      'overpass.private.coffee': { ms: 10, status: 503 }
+    });
+    assert.deepEqual(await fetchOpenStreetMap('Rochester', 'NY', 43.1566, -77.6088, 120), []);
+    assert.equal(sourceStatus.osm.ok, false);
+    assert.match(sourceStatus.osm.error, /overpass-api\.de HTTP 504/);
+    assert.match(sourceStatus.osm.error, /overpass\.kumi\.systems HTTP 429/);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
