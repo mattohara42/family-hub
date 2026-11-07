@@ -277,6 +277,17 @@ if (['nautical', 'aurora', 'amazing', 'nautical-light'].includes(localStorage.ge
 localStorage.removeItem('fh_flavor');
 const _savedMode    = localStorage.getItem('fh_mode');
 let appMode         = _savedMode || 'auto';  // 'auto' | 'light' | 'dark' | 'colorblind'
+// Theme = the material/design axis, orthogonal to the Colors axis above.
+// To ship a theme, add an entry here AND a `body.theme-<id>` block in the
+// ✦ THEMES section of family-hub.css that sets the material tokens. Tactile
+// is the base CSS (no class). Per device, like fh_mode.
+const THEMES = [
+  { id: 'tactile', label: '✦ Tactile' },
+  { id: 'glass',   label: '◇ Glass' },
+  { id: 'paper',   label: '▤ Paper' },
+];
+const _savedTheme   = localStorage.getItem('fh_theme');
+let appTheme        = THEMES.some(t => t.id === _savedTheme) ? _savedTheme : 'tactile';
 // Compute isMobile boolean for viewport-width-dependent logic
 // A phone turned sideways is ~930px wide but only ~430px tall, so width alone
 // handed it the desktop layout squeezed into a strip. Mirrors the CSS mobile
@@ -1266,6 +1277,8 @@ window.addEventListener('load', () => {
     initGoogleAuth();
   }
   applyAppMode(appMode);
+  applyTheme(appTheme);
+  renderThemeButtons();
   applyMotion();
   applyWallDisplay();
   applyAppTitle();
@@ -12976,6 +12989,39 @@ window.matchMedia('(orientation: portrait)').addEventListener('change', () => {
   if (layoutMode === 'auto') applyLayoutMode();
 });
 
+// Unknown ids fall back to Tactile, so a stale fh_theme never wedges the UI.
+function applyTheme(theme) {
+  if (!THEMES.some(t => t.id === theme)) theme = 'tactile';
+  appTheme = theme;
+  THEMES.forEach(t => {
+    if (t.id !== 'tactile') document.body.classList.toggle('theme-' + t.id, t.id === theme);
+  });
+}
+
+function setTheme(theme) {
+  applyTheme(theme);
+  localStorage.setItem('fh_theme', appTheme);
+  highlightThemeButtons();
+}
+
+// Settings → Look & Feel → Theme buttons, built from THEMES.
+function renderThemeButtons() {
+  const wrap = document.getElementById('themeButtons');
+  if (!wrap) return;
+  wrap.innerHTML = THEMES.map(t =>
+    `<button type="button" id="themeBtn-${t.id}" class="btn btn-sm" onclick="setTheme('${t.id}')" ` +
+    `style="flex:1;min-width:90px;display:flex;align-items:center;justify-content:center;gap:5px">${t.label}</button>`
+  ).join('');
+  highlightThemeButtons();
+}
+
+function highlightThemeButtons() {
+  THEMES.forEach(t => {
+    const btn = document.getElementById('themeBtn-' + t.id);
+    if (btn) btn.className = 'btn btn-sm' + (appTheme === t.id ? ' btn-mode-active' : '');
+  });
+}
+
 function setAppMode(mode) {
   applyAppMode(mode);
   localStorage.setItem('fh_mode', mode);
@@ -13400,6 +13446,7 @@ function openSettings() {
   document.getElementById('modeLight').className           = 'btn btn-sm' + (appMode === 'light'          ? ' btn-mode-active' : '');
   document.getElementById('modeDark').className            = 'btn btn-sm' + (appMode === 'dark'           ? ' btn-mode-active' : '');
   document.getElementById('modeColorblind').className      = 'btn btn-sm' + (appMode === 'colorblind'     ? ' btn-mode-active' : '');
+  highlightThemeButtons();
   renderBgPreview();
   const statusEl = document.getElementById('bgStatus');
   if (statusEl && bgPhotos.length) {

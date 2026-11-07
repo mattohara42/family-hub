@@ -335,7 +335,7 @@ let slideInterval = parseInt(localStorage.getItem('fh_slideInterval')) || 30;
 
 ### 5. Appearance Themes
 
-Toggled via ⚙️ Settings → Look & Feel. Nautical and Aurora were removed 2026-11-07, along with the Basic/Tactile flavor switch.
+Two independent pickers in ⚙️ Settings → Look & Feel: **Theme** (the material: Tactile, Glass, Paper) and **Colors** (below). Nautical and Aurora were removed 2026-11-07, along with the old Basic/Tactile flavor switch.
 
 | Mode | Class on `<body>` | Description |
 |---|---|---|
@@ -357,7 +357,7 @@ let appMode = localStorage.getItem('fh_mode') || 'auto'; // 'auto' | 'light' | '
 - `applyAppMode(mode)` — removes all mode classes, adds the one for `resolveAppMode(mode)`
 - `setAppMode(mode)` — calls `applyAppMode`, saves to localStorage, updates button highlights
 
-**Material (formerly the Tactile flavor):** paper surface gradient, grain, layered shadow, 16px radius, Fraunces display type and Hanken Grotesk body type (self-hosted in `fonts/`, pre-cached by `sw.js`). It reads each theme's color tokens; CSS lives in the `✦ MATERIAL` section of `family-hub.css`. It used to be opt-in under `body.flavor-tactile`; it is now unconditional, and `fh_flavor` is cleared on load.
+**Theme (material axis, added 2026-11-07):** `THEMES` registry (`tactile` default; `glass` = clear slabs over a scene or the background photo with Inter Tight type, `paper` = a flat printed planner page with Newsreader + IBM Plex Sans and a warm newsprint palette under light/dark). `appTheme` / `fh_theme` (per device, not synced; unknown values fall back to Tactile). `applyTheme(theme)` toggles `body.theme-<id>` (Tactile = no class); `setTheme()` persists and re-highlights; `renderThemeButtons()` builds `#themeButtons` from the registry (load listener), `highlightThemeButtons()` runs from `openSettings()`. CSS: material tokens on `body` (see CLAUDE.md, Theme axis) with Tactile's values as defaults, the material rules in `✦ MATERIAL`, and one block per theme in `✦ THEMES` near the end of `family-hub.css`; a phone tweak (Glass's smaller column radius) sits at the very end. **Adding a theme:** an entry in `THEMES`, a `body.theme-<id>` block (+ `.light-mode` variant) setting the tokens, and any font it needs self-hosted in `fonts/` with an `@font-face` at the top of the CSS. Tactile's fonts are pre-cached by `sw.js`; other themes' fonts are runtime-cached on first use.
 
 **localStorage:** `fh_mode`. A saved `'nautical'`/`'aurora'` (or the older `'amazing'`/`'nautical-light'`) is removed on load, so the device falls back to Auto.
 

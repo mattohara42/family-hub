@@ -1032,17 +1032,24 @@ For `<pi-address>`, use the Pi's Tailscale name from the
 
 ### Appearance Themes
 
-Six themes are available in ⚙️ **Settings → 🎨 Look & Feel → Appearance**:
+⚙️ **Settings → 🎨 Look & Feel** has two pickers. **Theme** sets the look:
 
 | Theme | Description |
+|---|---|
+| ✦ Tactile | Hand-made paper cards with soft shadows, faint grain and a serif display font (default) |
+| ◇ Glass | Clear glass panels floating over a soft colored scene (or your background photo) |
+| ▤ Paper | A flat printed planner page: ruled days, no shadows, serif headings |
+
+**Colors** picks light or dark, and works with any theme:
+
+| Colors | Description |
 |---|---|
 | 🌓 Auto | Follows the device's light/dark setting and switches with it (default) |
 | ☀️ Light | Light grey background, dark text |
 | 🌙 Dark | Deep charcoal background, blue accents |
 | 👁 Accessible | High-contrast dark theme with a colorblind-safe (Okabe-Ito) palette |
 
-Every theme uses the same hand-made look: a serif display font, paper-like cards with soft
-shadows and a faint grain. The grain is turned off under the Accessible theme.
+Tactile's grain is turned off under Accessible colors.
 
 ### Widget Placement
 

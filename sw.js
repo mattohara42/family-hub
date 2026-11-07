@@ -7,8 +7,9 @@
 const CACHE_VERSION = 'fh-1783821658408';
 const CACHE_NAME    = `family-hub-${CACHE_VERSION}`;
 
-// The fonts (fonts/*.woff2, ~184 KB) are pre-cached: every page renders with
-// them. The Pond Chimes screensaver (pond/index.html + pond/vendor/Tone.js,
+// Tactile's fonts (~184 KB) are pre-cached: it's the default theme. Glass and
+// Paper fonts (fonts/inter-tight, newsreader-*, ibm-plex-sans) are not: the
+// fetch handler runtime-caches them on first use. The Pond Chimes screensaver (pond/index.html + pond/vendor/Tone.js,
 // ~426 KB) is deliberately not: only the pond screensaver mode loads it, and
 // the fetch handler runtime-caches it on first use, so one run keeps it
 // available offline.

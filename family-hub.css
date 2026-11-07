@@ -1,4 +1,5 @@
-/* ── Fonts (self-hosted): Fraunces for display type, Hanken Grotesk for body ── */
+/* ── Fonts (self-hosted). Tactile: Fraunces + Hanken Grotesk. Glass: Inter Tight.
+   Paper: Newsreader + IBM Plex Sans. ── */
 @font-face {
   font-family: 'Fraunces';
   font-style: normal;
@@ -19,6 +20,36 @@
   font-weight: 400 700;
   font-display: swap;
   src: url('fonts/hanken-grotesk.woff2') format('woff2');
+}
+/* Glass theme */
+@font-face {
+  font-family: 'Inter Tight';
+  font-style: normal;
+  font-weight: 200 700;
+  font-display: swap;
+  src: url('fonts/inter-tight.woff2') format('woff2');
+}
+/* Paper theme */
+@font-face {
+  font-family: 'Newsreader';
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url('fonts/newsreader-roman.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Newsreader';
+  font-style: italic;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url('fonts/newsreader-italic.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url('fonts/ibm-plex-sans.woff2') format('woff2');
 }
 
 :root {
@@ -116,16 +147,8 @@ body.colorblind-mode {
   --strip-bg-photo:     rgba(13,17,23,0.75);
 }
 
-/* Calendar today/current-week: sky-blue glow instead of gold */
-body.colorblind-mode .cal-day.current-week,
-body.colorblind-mode .week-day-col.today,
-body.colorblind-mode .day-hour-row.current-hour {
-  box-shadow: 0 0 0 1.5px rgba(86,180,233,0.85), 0 0 10px rgba(86,180,233,0.25);
-}
-body.colorblind-mode .cal-day.current-week     { background: rgba(86,180,233,0.22); }
-body.colorblind-mode .cal-day.today            { background: rgba(86,180,233,0.45); box-shadow: 0 0 0 1.5px rgba(86,180,233,0.85), 0 0 10px rgba(86,180,233,0.25); }
-body.colorblind-mode .week-day-col.today       { background: rgba(86,180,233,0.30); }
-body.colorblind-mode .cal-dow.current-dow      { background: rgba(86,180,233,0.20); border-radius: 6px; }
+/* Today/current-week highlights follow --accent (sky blue here) through the
+   material tokens (--today-bg, --today-ring), so they need no override. */
 
 /* ── Light mode overrides ── */
 body.light-mode {
@@ -193,6 +216,69 @@ body {
 body {
   --ink: var(--text);
   --ink-soft: var(--muted);
+
+  /* ── Material tokens ──────────────────────────────────────────
+     Component CSS reads these; a Theme (Tactile = these defaults,
+     body.theme-glass, body.theme-paper) only sets them, so every
+     component follows the theme without per-theme selectors. They
+     live on body (not :root) because they reference theme colors.
+     Colors (light/dark/accessible) stay on their own axis. */
+  --display-weight: var(--weight-semi);
+  --card-bg:
+    radial-gradient(120% 80% at 50% -10%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 60%),
+    linear-gradient(180deg, var(--surface-hi) 0%, var(--surface-solid) 18%, var(--surface-solid) 82%, var(--surface-lo) 100%);
+  --cal-card-bg: var(--card-bg);
+  --card-border: var(--line);
+  --card-shadow:
+    0 1px 1px rgba(0,0,0,.28),
+    0 3px 7px rgba(0,0,0,.20),
+    0 14px 30px rgba(0,0,0,.28),
+    inset 0 1px 0 var(--surface-hi),
+    inset 0 -1px 0 var(--surface-lo);
+  --card-blur: none;
+  --cal-card-blur: none;
+  --grain-opacity: 0.05;
+  --grain-blend: soft-light;
+  /* controls: view tabs, period arrows, forecast toggle, .btn */
+  --control-radius: 11px;
+  --tab-radius: 9px;
+  --control-bg: linear-gradient(180deg, var(--surface-hi), var(--surface-solid));
+  --control-border: var(--line);
+  --control-shadow: 0 1px 2px rgba(0,0,0,.28);
+  --control-active-bg: var(--accent);
+  --control-active-ink: #fff;
+  --control-active-border: var(--accent);
+  --control-active-shadow: 0 3px 10px color-mix(in srgb, var(--accent) 30%, transparent);
+  /* recessed fills: hourly tiles, 6-month strip cards */
+  --well-bg: color-mix(in srgb, var(--surface-lo) 55%, var(--surface-solid));
+  --well-shadow: inset 0 1px 2px rgba(0,0,0,.30);
+  /* calendar day columns (Week) and cells (Month) */
+  --col-bg: var(--well-bg);
+  --col-border: color-mix(in srgb, var(--text) 14%, transparent);
+  --col-radius: 10px;
+  --col-gap: 4px;
+  --col-blur: none;
+  --today-bg: color-mix(in srgb, var(--accent) 16%, var(--col-bg));
+  --week-bg: color-mix(in srgb, var(--accent) 7%, var(--col-bg));
+  --today-ring: 0 0 0 1.5px color-mix(in srgb, var(--accent) 60%, transparent);
+  --event-radius: 8px;
+  --chip-radius: 999px;
+}
+/* Tactile in light colors: warm shadows, multiply grain */
+body.light-mode {
+  --card-shadow:
+    0 1px 1px rgba(70,55,30,.08),
+    0 3px 6px rgba(70,55,30,.08),
+    0 14px 30px rgba(70,55,30,.10),
+    inset 0 1px 0 var(--surface-hi),
+    inset 0 -1px 0 var(--surface-lo);
+  --grain-opacity: 0.06;
+  --grain-blend: multiply;
+  --control-shadow: 0 1px 2px rgba(70,55,30,.12);
+  --well-shadow: inset 0 1px 2px rgba(70,55,30,.08);
+  /* blue mixed into cream reads grey; today is the bright sheet + accent ring */
+  --today-bg: var(--surface-hi);
+  --week-bg: color-mix(in srgb, var(--surface-hi) 55%, var(--col-bg));
 }
 input, textarea, [contenteditable]:not([contenteditable="false"]) {
   -webkit-user-select: text;
@@ -219,11 +305,15 @@ input, textarea, [contenteditable]:not([contenteditable="false"]) {
   background: var(--scrim);
 }
 
-/* When a photo is active, make cards semi-transparent */
-body.has-bg .card {
-  background: var(--card-bg-photo);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+/* When a photo is active, make cards semi-transparent (material tokens, so a
+   Theme declared later in the file can still choose its own surfaces) */
+body.has-bg {
+  --card-bg: var(--card-bg-photo);
+  --card-blur: blur(6px);
+  --cal-card-bg: var(--cal-card-bg-photo);
+  /* day cells and week columns let the photo show through */
+  --col-bg: var(--cal-day-bg-photo);
+  --col-blur: blur(4px);
 }
 /* During a photo crossfade, drop the per-frame backdrop blur — recomputing it
    for every card while the photo fades stalls the main thread and drops clicks.
@@ -231,20 +321,6 @@ body.has-bg .card {
 body.bg-fading .card {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-}
-/* Calendar card specifically */
-body.has-bg .card.cal-card {
-  background: var(--cal-card-bg-photo);
-}
-/* Day cells transparent so photo shows through */
-body.has-bg .cal-day {
-  background: var(--cal-day-bg-photo);
-}
-/* Week columns + day hour rows match the same transparency */
-body.has-bg .week-day-col {
-  background: var(--cal-day-bg-photo);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
 }
 body.has-bg .day-hour-row {
   background: transparent;
@@ -722,11 +798,12 @@ body:not(.force-landscape).auto-portrait #bottomStrip {
   gap: 10px;
 }
 .cal-month-nav button {
-  background: rgba(80,110,200,0.35);
-  border: none;
+  background: var(--control-bg);
+  border: 1px solid var(--control-border);
+  box-shadow: var(--control-shadow);
   color: var(--text);
   width: 44px; height: 38px;
-  border-radius: 10px;
+  border-radius: var(--control-radius);
   cursor: pointer;
   font-size: 1.5rem;
   line-height: 1;
@@ -736,9 +813,6 @@ body:not(.force-landscape).auto-portrait #bottomStrip {
 }
 html:not(.touch-input) .cal-month-nav button:hover  { background: var(--accent); }
 .cal-month-nav button:active { transform: scale(0.93); }
-body.light-mode .cal-month-nav button {
-  background: rgba(80,110,200,0.18);
-}
 .cal-title-zone {
   display: flex;
   align-items: center;
@@ -927,9 +1001,9 @@ body.light-mode .cal-month-nav button {
   padding: 4px;
   /* Stronger than --line (a hairline divider elsewhere) so each day reads
      as its own cell rather than blending into the grid's background. */
-  border: 1px solid color-mix(in srgb, var(--text) 22%, transparent);
-  border-radius: 8px;
-  background: var(--surface2);
+  border: 1px solid var(--col-border);
+  border-radius: var(--col-radius);
+  background: var(--col-bg);
   font-size: var(--text-sm);
   cursor: default;
   position: relative;
@@ -953,19 +1027,13 @@ body.light-mode .cal-month-nav button {
 .cal-day.other-month { opacity: .35; }
 
 /* ── Current day-of-week header highlight (month view) ── */
-.cal-dow.current-dow                          { color: var(--accent); background: rgba(255,255,255,0.13); border-radius: 6px; }
-body.light-mode .cal-dow.current-dow          { background: rgba(0,0,0,0.10); }
+.cal-dow.current-dow { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: 6px; }
 
-.cal-day.current-week,
 .week-day-col.today,
 .day-hour-row.current-hour {
-  box-shadow: 0 0 0 1.5px rgba(212,175,55,0.85),
-              0 0 10px rgba(212,175,55,0.25);
+  box-shadow: var(--today-ring);
 }
-body .cal-day.current-week { background: rgba(110,125,200,0.70); }
-body.light-mode .cal-day.current-week { background: rgba(190,198,225,0.88); }
-body.has-bg .cal-day.current-week { background: rgba(110,125,200,0.55); }
-body.has-bg.light-mode .cal-day.current-week { background: rgba(190,198,225,0.75); }
+.cal-day.current-week { background: var(--week-bg); }
 .cal-day-num {
   font-size: var(--text-sm);
   font-weight: var(--weight-semi);
@@ -981,16 +1049,10 @@ body.has-bg.light-mode .cal-day.current-week { background: rgba(190,198,225,0.75
   color: #fff;
   font-weight: var(--weight-bold);
 }
-/* Today's cell pops above the current-week row with a stronger tint + gold glow */
-body .cal-day.today {
-  background: color-mix(in srgb, var(--accent) 75%, transparent);
-  box-shadow: 0 0 0 1.5px rgba(212,175,55,0.85), 0 0 10px rgba(212,175,55,0.25);
-}
-body.light-mode .cal-day.today {
-  background: rgba(74,108,247,0.20);
-}
-body.has-bg .cal-day.today {
-  background: color-mix(in srgb, var(--accent) 60%, transparent);
+/* Today's cell pops above the current-week row with a stronger tint + accent ring */
+.cal-day.today {
+  background: var(--today-bg);
+  box-shadow: var(--today-ring);
 }
 .cal-event {
   font-size: var(--text-xs);
@@ -1249,8 +1311,9 @@ body.light-mode    .wx-sun-track    { stroke: rgba(0,0,0,.16); }
 }
 .wx-forecast-toggle button {
   padding: 2px 6px;
-  border: 1px solid var(--line); border-radius: 6px;
-  background: var(--surface); color: var(--text);
+  border: 1px solid var(--control-border); border-radius: var(--tab-radius);
+  background: var(--control-bg); color: var(--text);
+  box-shadow: var(--control-shadow);
   font-size: var(--text-xs); font-weight: var(--weight-semi);
   cursor: pointer;
   transition: all .15s;
@@ -1258,9 +1321,10 @@ body.light-mode    .wx-sun-track    { stroke: rgba(0,0,0,.16); }
   white-space: nowrap;
 }
 .wx-forecast-toggle button.active {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
+  background: var(--control-active-bg);
+  color: var(--control-active-ink);
+  border-color: var(--control-active-border);
+  box-shadow: var(--control-active-shadow);
 }
 /* Keep the title whole; the tabs drop to their own row when the sidebar is
    too narrow for both (same pattern as the wall-display Assistant header). */
@@ -1399,8 +1463,9 @@ body.light-mode .wx-curve-dot   { stroke: #fff; }
   gap: 2px;
   min-width: 46px;
   padding: 6px 4px;
-  border-radius: 8px;
-  background: var(--surface2);
+  border-radius: calc(var(--tab-radius) + 1px);
+  background: var(--well-bg);
+  box-shadow: var(--well-shadow);
   flex-shrink: 0;
 }
 .wx-hour-time { color: var(--muted); font-size: .68rem; }
@@ -1597,12 +1662,16 @@ html:not(.touch-input) .wx-loc-dot:hover { opacity: 0.75; transform: scale(1.2);
 }
 .cal-view-tab {
   padding: 4px 13px;
-  border: 1px solid var(--line); border-radius: 6px;
-  background: var(--surface); color: var(--text);
+  border: 1px solid var(--control-border); border-radius: var(--tab-radius);
+  background: var(--control-bg); color: var(--text);
+  box-shadow: var(--control-shadow);
   cursor: pointer; font-size: var(--text-sm); font-weight: var(--weight-semi);
   transition: all .15s; white-space: nowrap;
 }
-.cal-view-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.cal-view-tab.active {
+  background: var(--control-active-bg); color: var(--control-active-ink);
+  border-color: var(--control-active-border); box-shadow: var(--control-active-shadow);
+}
 html:not(.touch-input) .cal-view-tab:hover:not(.active) { border-color: var(--accent); }
 
 /* ── Week View ── */
@@ -1619,7 +1688,7 @@ html:not(.touch-input) .cal-view-tab:hover:not(.active) { border-color: var(--ac
      section one day lacks still takes the row's height there, so each band
      lines up across the week. Only the timed-events row grows. */
   grid-template-rows: auto auto 1fr auto auto auto;
-  column-gap: 3px; row-gap: 0;
+  column-gap: var(--col-gap); row-gap: 0;
   flex: 1;
   min-height: 0;
   margin-top: 4px;
@@ -1635,9 +1704,11 @@ html:not(.touch-input) .cal-view-tab:hover:not(.active) { border-color: var(--ac
   min-height: 0;
   /* Stronger than --line (a hairline divider elsewhere) so each day reads
      as its own column rather than blending into the grid's background. */
-  border: 1px solid color-mix(in srgb, var(--text) 22%, transparent);
-  border-radius: 8px; overflow: hidden;
-  background: var(--surface2);
+  border: 1px solid var(--col-border);
+  border-radius: var(--col-radius); overflow: hidden;
+  background: var(--col-bg);
+  backdrop-filter: var(--col-blur);
+  -webkit-backdrop-filter: var(--col-blur);
 }
 .week-day-header {
   grid-row: 1;
@@ -1675,10 +1746,7 @@ html:not(.touch-input) .cal-view-tab:hover:not(.active) { border-color: var(--ac
   border-radius: 50%;
   margin: 3px auto 0;
 }
-body .week-day-col.today { background: rgba(110,125,200,0.70); }
-body.light-mode .week-day-col.today { background: rgba(190,198,225,0.88); }
-body.has-bg .week-day-col.today { background: rgba(110,125,200,0.55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
-body.has-bg.light-mode .week-day-col.today { background: rgba(190,198,225,0.75); }
+.week-day-col.today { background: var(--today-bg); }
 .week-day-col.today .week-day-dow { color: var(--accent); }
 .week-day-col.today .week-day-num { background: var(--accent); color: #fff; }
 /* ── School Day Cycle badge (Week/Day view only) ── */
@@ -1765,13 +1833,10 @@ body.has-bg.light-mode .week-day-col.today { background: rgba(190,198,225,0.75);
   min-height: 54px;
   border-bottom: 1px solid rgba(128,128,128,.07);
 }
-body .day-hour-row.current-hour {
-  background: rgba(110,125,200,0.70);
+.day-hour-row.current-hour {
+  background: var(--today-bg);
   border-left: 2px solid var(--accent);
 }
-body.light-mode .day-hour-row.current-hour { background: rgba(190,198,225,0.88); }
-body.has-bg .day-hour-row.current-hour { background: rgba(110,125,200,0.55); }
-body.has-bg.light-mode .day-hour-row.current-hour { background: rgba(190,198,225,0.75); }
 .day-hour-row.current-hour .day-hour-label { color: var(--accent); font-weight: var(--weight-bold); }
 .day-hour-label {
   font-size: var(--fs-meta); color: var(--muted);
@@ -3093,25 +3158,19 @@ body.light-mode .lc-select  { border-color: rgba(0,0,0,.15); }
 
 /* ── 6-month strip ── */
 #yearStrip {
-  background: var(--surface);
+  background: var(--card-bg);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  border: 1px solid color-mix(in srgb, var(--accent) 38%, transparent);
+  box-shadow: var(--card-shadow);
+  border: 1px solid var(--card-border);
+  backdrop-filter: var(--card-blur);
+  -webkit-backdrop-filter: var(--card-blur);
   overflow: hidden;
   display: flex;
   align-items: stretch;
 }
-body.light-mode #yearStrip {
-  border-color: rgba(0,0,0,0.18);
-}
-body.has-bg #yearStrip {
-  background: var(--strip-bg-photo);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-}
 .strip-nav-btn {
-  background: var(--surface2);
-  border: none;
+  background: var(--control-bg);
+  border: 1px solid var(--control-border);
   color: var(--text);
   width: 24px; height: 24px;
   border-radius: 6px;
@@ -3122,7 +3181,7 @@ body.has-bg #yearStrip {
 }
 html:not(.touch-input) .strip-nav-btn:hover { background: var(--accent); }
 .strip-side-nav {
-  background: var(--surface2);
+  background: var(--well-bg);
   border: none;
   color: var(--text);
   width: 28px;
@@ -3145,8 +3204,9 @@ html:not(.touch-input) .strip-side-nav:hover { background: var(--accent); }
 }
 
 .mini-card {
-  background: var(--surface2);
-  border-radius: 6px;
+  background: var(--well-bg);
+  box-shadow: var(--well-shadow);
+  border-radius: calc(var(--tab-radius) - 1px);
   padding: 5px 4px 4px;
   cursor: pointer;
   transition: background .15s, transform .15s;
@@ -3156,18 +3216,11 @@ html:not(.touch-input) .strip-side-nav:hover { background: var(--accent); }
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   transform: translateY(-1px);
 }
-.mini-card.current-month {
+.mini-card.current-month,
+body.has-bg .mini-card.current-month {
   border-color: transparent;
-  box-shadow: 0 0 0 1.5px rgba(212,175,55,0.85),
-              0 0 10px rgba(212,175,55,0.25);
-}
-body .mini-card.current-month            { background: rgba(110,125,200,0.70); }
-body.light-mode .mini-card.current-month { background: rgba(190,198,225,0.88); }
-body.has-bg .mini-card.current-month             { background: rgba(110,125,200,0.55); }
-body.has-bg.light-mode .mini-card.current-month  { background: rgba(190,198,225,0.75); }
-body.colorblind-mode .mini-card.current-month    {
-  background: rgba(86,180,233,0.22);
-  box-shadow: 0 0 0 1.5px rgba(86,180,233,0.85), 0 0 10px rgba(86,180,233,0.25);
+  background: var(--today-bg);
+  box-shadow: var(--today-ring);
 }
 body.has-bg .mini-card {
   background: var(--mini-card-bg-photo);
@@ -5474,27 +5527,20 @@ body .cal-app-title,
 body .card-header h2 {
   font-family: var(--font-display);
   font-optical-sizing: auto;
-  font-weight: var(--weight-semi);
+  font-weight: var(--display-weight);
   letter-spacing: -0.01em;
 }
 
-/* ── Crafted card material (replaces flat glass) ── */
+/* ── Card material (all from the material tokens on body) ── */
 body .card {
-  background:
-    radial-gradient(120% 80% at 50% -10%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 60%),
-    linear-gradient(180deg, var(--surface-hi) 0%, var(--surface-solid) 18%, var(--surface-solid) 82%, var(--surface-lo) 100%);
-  border: 1px solid var(--line);
-  box-shadow:
-    0 1px 1px rgba(0,0,0,.28),
-    0 3px 7px rgba(0,0,0,.20),
-    0 14px 30px rgba(0,0,0,.28),
-    inset 0 1px 0 var(--surface-hi),
-    inset 0 -1px 0 var(--surface-lo);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--card-shadow);
+  backdrop-filter: var(--card-blur);
+  -webkit-backdrop-filter: var(--card-blur);
   position: relative;
 }
-/* per-card paper grain */
+/* per-card paper grain (opacity 0 in themes without grain) */
 body .card::after {
   content: "";
   position: absolute;
@@ -5503,46 +5549,29 @@ body .card::after {
   border-radius: inherit;
   background-image: var(--grain);
   background-size: 160px;
-  opacity: 0.05;
-  mix-blend-mode: soft-light;
+  opacity: var(--grain-opacity);
+  mix-blend-mode: var(--grain-blend);
   z-index: 0;
 }
 /* keep card content above the grain layer */
 body .card > * { position: relative; z-index: 1; }
 
-/* the calendar card needs its own material rule: the base
-   `.card.cal-card` rule outranks the generic `.card` selector above */
+/* the calendar card has its own surface/blur tokens: a background photo
+   shows through it more, and Glass drops it entirely */
 body .card.cal-card {
-  background:
-    radial-gradient(120% 80% at 50% -10%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 60%),
-    linear-gradient(180deg, var(--surface-hi) 0%, var(--surface-solid) 18%, var(--surface-solid) 82%, var(--surface-lo) 100%);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
-/* softer, warm shadow + multiply grain for the light themes */
-body.light-mode .card {
-  box-shadow:
-    0 1px 1px rgba(70,55,30,.08),
-    0 3px 6px rgba(70,55,30,.08),
-    0 14px 30px rgba(70,55,30,.10),
-    inset 0 1px 0 var(--surface-hi),
-    inset 0 -1px 0 var(--surface-lo);
-}
-body.light-mode .card::after {
-  mix-blend-mode: multiply;
-  opacity: 0.06;
+  background: var(--cal-card-bg);
+  backdrop-filter: var(--cal-card-blur);
+  -webkit-backdrop-filter: var(--cal-card-blur);
 }
 
 /* ── Buttons / inputs: a touch more crafted ── */
-body .btn { border-radius: 11px; }
+body .btn { border-radius: var(--control-radius); }
 body .btn-primary {
   box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
-
 /* ── Dense components & prominent numerals ── */
-/* big numbers in the display serif for a crafted feel */
+/* big numbers in the display face */
 body .wx-temp,
 body .budget-card-amt,
 body .budget-total-amount,
@@ -5556,20 +5585,166 @@ body .countdown-days {
 /* suggestion chips as soft accent-tinted pills */
 body .assistant-chip,
 body .meal-adjust-chip {
-  border-radius: 999px;
+  border-radius: var(--chip-radius);
   background: color-mix(in srgb, var(--accent) 10%, transparent);
   border-color: color-mix(in srgb, var(--accent) 28%, transparent);
 }
+.week-meal-item,
+.school-day-subject-chip { border-radius: var(--chip-radius); }
 
 /* ── KTD-4: accessibility modes keep the material *structure* (type, radius,
       surface depth) but drop decorative texture/glow that can impair
       color discrimination ── */
-body.colorblind-mode .card::after,
-body.safe-palette-on .card::after { display: none; }
-body.colorblind-mode .card,
-body.safe-palette-on .card {
-  background: linear-gradient(180deg, var(--surface-hi) 0%, var(--surface-solid) 20%, var(--surface-solid) 80%, var(--surface-lo) 100%);
+body.colorblind-mode,
+body.safe-palette-on {
+  --grain-opacity: 0;
+  --card-bg: linear-gradient(180deg, var(--surface-hi) 0%, var(--surface-solid) 20%, var(--surface-solid) 80%, var(--surface-lo) 100%);
 }
+
+/* ════════════════════════════════════════════════════════════════
+   ✦  THEMES — Tactile is the base above. A theme class on body sets the
+   material tokens (and, rarely, a structural rule tokens can't express).
+   Light/dark/accessible colors stay on the Colors axis: each theme gives
+   values for dark (the default) and for body.light-mode. A theme may
+   tune the palette for light/dark but leaves colorblind-mode's alone.
+   Registry: THEMES in family-hub.js. Keep these blocks after the has-bg
+   and KTD-4 token rules so a theme's surfaces win over them.
+   ════════════════════════════════════════════════════════════════ */
+
+/* ── Theme: Glass (clear slabs floating over a scene or the photo) ── */
+body.theme-glass {
+  --font-display: 'Inter Tight', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-body:    'Inter Tight', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --display-weight: var(--weight-semi);
+  --radius: 26px;
+  --card-bg: rgba(255,255,255,.07);
+  --cal-card-bg: transparent;
+  --card-border: rgba(255,255,255,.18);
+  --card-shadow: inset 0 1px 0 rgba(255,255,255,.22), inset 0 -1px 0 rgba(255,255,255,.04), 0 18px 40px rgba(0,0,0,.35);
+  --card-blur: blur(12px) saturate(180%);
+  --cal-card-blur: none;
+  --grain-opacity: 0;
+  --control-radius: 999px;
+  --tab-radius: 999px;
+  --control-bg: rgba(255,255,255,.08);
+  --control-border: rgba(255,255,255,.18);
+  --control-shadow: none;
+  --control-active-bg: var(--text);
+  --control-active-ink: var(--bg);
+  --control-active-border: var(--text);
+  --control-active-shadow: none;
+  --well-bg: rgba(255,255,255,.07);
+  --well-shadow: none;
+  --col-bg: rgba(255,255,255,.06);
+  --col-border: rgba(255,255,255,.16);
+  --col-radius: 22px;
+  --col-gap: 10px;
+  --col-blur: blur(10px) saturate(180%);
+  --today-bg: rgba(255,255,255,.16);
+  --week-bg: rgba(255,255,255,.10);
+  --today-ring: 0 0 0 1px rgba(255,255,255,.55), inset 0 1px 0 rgba(255,255,255,.3);
+  --event-radius: 16px;
+  /* the scene the glass sits on (a background photo replaces it) */
+  background:
+    radial-gradient(60% 70% at 20% 10%, #1d3b5a 0%, transparent 70%),
+    radial-gradient(50% 60% at 90% 85%, #3a2340 0%, transparent 70%),
+    linear-gradient(160deg, #0d1622, #070a10);
+}
+body.theme-glass.light-mode {
+  --card-bg: rgba(255,255,255,.30);
+  --card-border: rgba(255,255,255,.72);
+  --card-shadow: inset 0 1px 1px rgba(255,255,255,.9), inset 0 -1px 1px rgba(255,255,255,.25), 0 16px 36px rgba(20,40,80,.16);
+  --control-bg: rgba(255,255,255,.30);
+  --control-border: rgba(255,255,255,.75);
+  --well-bg: rgba(255,255,255,.28);
+  --col-bg: rgba(255,255,255,.24);
+  --col-border: rgba(255,255,255,.66);
+  --today-bg: rgba(255,255,255,.58);
+  --week-bg: rgba(255,255,255,.40);
+  --today-ring: 0 0 0 1px rgba(255,255,255,.95), 0 8px 20px rgba(20,40,80,.12);
+  background:
+    radial-gradient(55% 70% at 18% 12%, #ffd9a8 0%, transparent 70%),
+    radial-gradient(50% 60% at 85% 20%, #8fd0e8 0%, transparent 70%),
+    radial-gradient(60% 60% at 60% 100%, #7ea6d8 0%, transparent 70%),
+    linear-gradient(160deg, #cfe3ee, #9fb9d6);
+}
+/* a background photo is the scene: let it through */
+body.theme-glass.has-bg { background: var(--bg); }
+/* light glass needs firmer text on a bright, busy scene */
+body.theme-glass.light-mode { --text: #0e1a2b; --muted: #3e4a5c; }
+body.theme-glass .card.cal-card { border-color: transparent; box-shadow: none; }
+body.theme-glass .cal-grid { gap: 6px; }
+body.theme-glass .cal-day { backdrop-filter: var(--col-blur); -webkit-backdrop-filter: var(--col-blur); }
+body.theme-glass .card.cal-card::after { display: none; }
+body.theme-glass .week-event,
+body.theme-glass .day-event-pill,
+body.theme-glass .agenda-event { border-radius: var(--event-radius); }
+
+/* ── Theme: Paper (a flat printed planner page) ── */
+body.theme-paper {
+  --font-display: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --font-body:    'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --display-weight: var(--weight-medium);
+  --radius: 4px;
+  --card-bg: var(--surface-solid);
+  --card-border: var(--line);
+  --card-shadow: none;
+  --card-blur: none;
+  --cal-card-blur: none;
+  --grain-opacity: 0;
+  --control-radius: 3px;
+  --tab-radius: 3px;
+  --control-bg: transparent;
+  --control-border: transparent;
+  --control-shadow: none;
+  --control-active-bg: transparent;
+  --control-active-ink: var(--text);
+  --control-active-border: transparent;
+  --control-active-shadow: inset 0 -2px 0 var(--accent);
+  --well-bg: transparent;
+  --well-shadow: inset 0 0 0 1px var(--line);
+  --col-bg: transparent;
+  --col-border: transparent;
+  --col-radius: 0;
+  --col-gap: 0;
+  --col-blur: none;
+  --today-bg: color-mix(in srgb, var(--accent) 7%, var(--surface-solid));
+  --week-bg: color-mix(in srgb, var(--accent) 3%, var(--surface-solid));
+  --today-ring: inset 0 2px 0 var(--accent);
+  --event-radius: 3px;
+  --chip-radius: 3px;
+}
+/* warm newsprint palette for light and dark (Accessible keeps its own) */
+body.theme-paper:not(.colorblind-mode) {
+  --bg: #171613;
+  --surface-solid: #201f1b;
+  --surface-hi: #24231f;
+  --surface-lo: #1b1a17;
+  --line: #3b382f;
+  --text: #ece6d6;
+  --muted: #a39d8c;
+  --accent: #e8875f;
+}
+body.theme-paper.light-mode:not(.colorblind-mode) {
+  --bg: #efece4;
+  --surface-solid: #fffefa;
+  --surface-hi: #fffefa;
+  --surface-lo: #f6f2e8;
+  --line: #d8d2c2;
+  --text: #1d1b16;
+  --muted: #6b6658;
+  --accent: #a33a1e;
+}
+body.theme-paper { background: var(--bg); }
+/* ruled day dividers instead of boxed columns/cells */
+body.theme-paper .week-day-col + .week-day-col { border-left-color: var(--line); }
+body.theme-paper .cal-grid { gap: 0; }
+body.theme-paper .cal-day { border-width: 0 0 1px 1px; border-color: var(--line); }
+body.theme-paper .week-day-header { border-bottom-color: var(--line); }
+body.theme-paper .week-event,
+body.theme-paper .day-event-pill,
+body.theme-paper .agenda-event { border-radius: var(--event-radius); }
+body.theme-paper .cal-month-nav button { font-family: var(--font-display); }
 
 /* ── Screensaver ── */
 /* Idle-triggered full-screen photo slideshow (see SCREENSAVER_BACKLOG.md S1).
@@ -5711,7 +5886,7 @@ body #saverClockTime { font-family: var(--font-display); }
     transition: transform 0.35s cubic-bezier(.22,.61,.36,1), box-shadow 0.35s ease;
   }
   body .card:not(.cal-card):hover {
-    transform: translateY(-2px);
+    transform: translateY(var(--card-lift, -2px));
     box-shadow:
       0 2px 3px rgba(0,0,0,.30),
       0 8px 16px rgba(0,0,0,.24),
@@ -5727,6 +5902,9 @@ body #saverClockTime { font-family: var(--font-display); }
       inset 0 1px 0 var(--surface-hi),
       inset 0 -1px 0 var(--surface-lo);
   }
+  /* Glass and Paper keep their own shadow on hover; Paper doesn't lift */
+  body.theme-glass .card:not(.cal-card):hover { box-shadow: var(--card-shadow); }
+  body.theme-paper .card:not(.cal-card):hover { box-shadow: var(--card-shadow); transform: none; }
 }
 
 /* ── Mobile chrome (FABs + Lists sheet) — neutral tokens only,
@@ -5987,4 +6165,9 @@ html.wall-display .assistant-confirm-actions .btn { min-width: 88px; min-height:
   .cal-day { min-height: 44px; }
   .mini-grid { grid-template-columns: repeat(2, 1fr); }
   #calMonthLabel { font-size: 1rem; }
+}
+
+/* Glass on a phone: its 22px column radius turns narrow Month cells into pills */
+@media (max-width: 640px), (max-height: 500px) and (orientation: landscape) and (pointer: coarse) {
+  body.theme-glass { --col-radius: 12px; }
 }

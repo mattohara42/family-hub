@@ -56,7 +56,7 @@ you edit is what the browser runs.
 
 **Presentation**
 - Themes: Auto (default, follows the device or sunset), Light, Dark, Accessible (colorblind-safe)
-- One hand-made material across every theme: paper-like cards, soft shadows, grain, self-hosted Fraunces/Hanken type
+- Three themes (the material), independent of colors: Tactile (hand-made paper, the default), Glass (clear slabs), Paper (a flat printed planner); all fonts self-hosted
 - Configurable widget placement and ordering on desktop; a registry-driven bottom-tab layout on phones
 - Installable PWA with a network-first service worker, so the wall panel survives a flaky connection
 
