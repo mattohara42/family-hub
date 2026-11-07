@@ -168,6 +168,14 @@ function safeUrl(url) {
   } catch { return '#'; }
 }
 
+/** Markup for a Lucide icon from the inline sprite in family-hub.html
+ *  (#i-<name>). Chrome only (buttons, titles, nav, Settings labels), never
+ *  content. Pass lead=true when a text label follows, for the gap after it.
+ *  A name missing from the sprite renders as nothing. */
+function icon(name, lead = false) {
+  return `<svg class="ic${lead ? ' ic-lead' : ''}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
+}
+
 /** Safe JSON.parse from localStorage — returns fallback on missing or corrupt data. */
 function lsGet(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key) ?? 'null') ?? fallback; }
@@ -282,9 +290,9 @@ let appMode         = _savedMode || 'auto';  // 'auto' | 'light' | 'dark' | 'col
 // ✦ THEMES section of family-hub.css that sets the material tokens. Tactile
 // is the base CSS (no class). Per device, like fh_mode.
 const THEMES = [
-  { id: 'tactile', label: '✦ Tactile' },
-  { id: 'glass',   label: '◇ Glass' },
-  { id: 'paper',   label: '▤ Paper' },
+  { id: 'tactile', icon: 'hand',     label: 'Tactile' },
+  { id: 'glass',   icon: 'gem',      label: 'Glass' },
+  { id: 'paper',   icon: 'notebook', label: 'Paper' },
 ];
 const _savedTheme   = localStorage.getItem('fh_theme');
 let appTheme        = THEMES.some(t => t.id === _savedTheme) ? _savedTheme : 'tactile';
@@ -956,7 +964,7 @@ function applyBudgetPrivacy() {
   if (addBtn) addBtn.style.display = budgetHidden ? 'none' : '';
   if (notice) notice.style.display = budgetHidden ? '' : 'none';
   if (btn) {
-    btn.textContent = budgetHidden ? '🙈' : '👁';
+    btn.innerHTML = icon(budgetHidden ? 'eye-off' : 'eye');
     btn.title = budgetHidden ? 'Show bill amounts' : 'Hide bill amounts (privacy)';
   }
   // The sidebar Budget card (btn, above) isn't reachable on mobile at all —
@@ -966,7 +974,7 @@ function applyBudgetPrivacy() {
   const calBtn = document.getElementById('calBudgetPrivacyBtn');
   if (calBtn) {
     calBtn.style.display = (isMobile && budgetItems.length) ? '' : 'none';
-    calBtn.textContent = budgetHidden ? '🙈' : '👁';
+    calBtn.innerHTML = icon(budgetHidden ? 'eye-off' : 'eye');
     calBtn.title = budgetHidden ? 'Show bill amounts' : 'Hide bill amounts (privacy)';
     calBtn.setAttribute('aria-label', calBtn.title);
   }
@@ -1966,7 +1974,7 @@ function renderWeekGrid() {
     } else {
       const addBtn = document.createElement('button');
       addBtn.className = 'week-add-meal-btn';
-      addBtn.textContent = '🍽 + plan meal';
+      addBtn.innerHTML = icon('utensils', true) + '+ plan meal';
       addBtn.onclick = () => openMealModal(dateKey, 'all');
       mealsStrip.appendChild(addBtn);
     }
@@ -1993,7 +2001,7 @@ function renderWeekGrid() {
   bulkBar.style.cssText = 'display:flex;justify-content:flex-end;padding:6px 2px 2px';
   const bulkBtn = document.createElement('button');
   bulkBtn.className = 'btn btn-sm';
-  bulkBtn.textContent = '🛒 Add week\'s ingredients to shopping';
+  bulkBtn.innerHTML = icon('shopping-cart', true) + 'Add week\'s ingredients to shopping';
   bulkBtn.style.cssText = 'font-size:.75rem;padding:4px 10px';
   bulkBtn.onclick = exportWeekMealsToShopping;
   bulkBar.appendChild(bulkBtn);
@@ -4051,8 +4059,9 @@ function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
   if (ev && (ev.holiday || ev.readOnly)) return;
   evtEditing = ev || null;
 
-  document.getElementById('eventEditorTitle').textContent =
-    ev?.eventId ? '✏️ Edit Event' : (ev ? '📅 Add to Calendar' : '📅 New Event');
+  document.getElementById('eventEditorTitle').innerHTML =
+    icon(ev?.eventId ? 'pencil' : 'calendar-plus') +
+    (ev?.eventId ? 'Edit Event' : (ev ? 'Add to Calendar' : 'New Event'));
   document.getElementById('evtEdTitle').value      = ev?.summary     || '';
   document.getElementById('evtEdDesc').value       = ev?.description || '';
   document.getElementById('evtEdLocation').value   = ev?.location    || '';
@@ -5051,9 +5060,9 @@ async function fetchWeatherByGeolocation() {
     return;
   }
   const btn = document.getElementById('geoLocBtn');
-  if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+  if (btn) { btn.innerHTML = icon('hourglass'); btn.disabled = true; }
 
-  const restore = () => { if (btn) { btn.textContent = '📍'; btn.disabled = false; } };
+  const restore = () => { if (btn) { btn.innerHTML = icon('locate-fixed'); btn.disabled = false; } };
 
   navigator.geolocation.getCurrentPosition(
     async ({ coords: { latitude: lat, longitude: lon } }) => {
@@ -7244,7 +7253,7 @@ function renderChoreCard() {
       </span>
       <span class="chore-pts-total">${pts} / ${threshold} pts${rewardLabel}</span>
       ${pts >= threshold
-        ? `<button class="btn btn-sm chore-redeem-btn" onclick="redeemChoreReward('${member.id}')">🎉 Redeem!</button>`
+        ? `<button class="btn btn-sm chore-redeem-btn" onclick="redeemChoreReward('${member.id}')">${icon('gift', true)}Redeem!</button>`
         : ''}
     `;
     section.appendChild(header);
@@ -7471,7 +7480,7 @@ function openMealModal(dateKey, mealType) {
     all:       'e.g. chicken breasts, pasta, canned tomatoes, frozen shrimp…',
   };
 
-  document.getElementById('mealModalTitle').textContent    = `🍽 ${typeLabel}`;
+  document.getElementById('mealModalTitle').innerHTML      = icon('utensils') + esc(typeLabel);
   document.getElementById('mealModalSubtitle').textContent = dateLabel;
   document.getElementById('mealStyleInput').value          = '';
   document.getElementById('mealStyleInput').placeholder    = STYLE_PLACEHOLDERS[mealType] || STYLE_PLACEHOLDERS.all;
@@ -8720,7 +8729,7 @@ function renderMealSuggestions() {
            class="btn btn-sm btn-secondary" style="text-decoration:none">
           📖 ${site.name} ↗
         </a>
-        <button class="btn btn-sm btn-primary" onclick="acceptMeal(${i})">✓ Use This</button>
+        <button class="btn btn-sm btn-primary" onclick="acceptMeal(${i})">${icon('check', true)}Use This</button>
         <button class="btn btn-sm" style="background:var(--surface2);color:var(--text)"
                 onclick="addMealIngredients(${i})">🛒 Add Ingredients</button>
       </div>`;
@@ -9127,7 +9136,7 @@ function renderRecipeImportPreview() {
       </div>
     </div>
     <div class="recipe-import-actions">
-      <button class="btn btn-sm btn-secondary" onclick="saveImportedRecipe()">📖 Save to Recipe Box</button>
+      <button class="btn btn-sm btn-secondary" onclick="saveImportedRecipe()">${icon('book-open', true)}Save to Recipe Box</button>
       <button class="btn btn-sm btn-primary"   onclick="useImportedRecipe()">+ Use for this meal</button>
       <button class="btn btn-sm" onclick="clearRecipeImport()">Cancel</button>
     </div>`;
@@ -9410,7 +9419,7 @@ function openMealDetail(dateKey, mealType) {
     const site = RECIPE_SITES[meal.recipeSite];
     recipeEl.href = safeUrl(recipeUrl);
     // Imported recipes know their own source; AI-suggested ones only name a site.
-    recipeEl.textContent = `📖 ${meal.sourceName || (site ? site.name : 'View recipe')} ↗`;
+    recipeEl.innerHTML = icon('book-open', true) + esc(meal.sourceName || (site ? site.name : 'View recipe')) + ' ↗';
     recipeEl.style.display = '';
   } else recipeEl.style.display = 'none';
 
@@ -11431,7 +11440,7 @@ function updateAssistantTtsBtn() {
   if (!btn) return;
   const supported = 'AudioContext' in window || 'speechSynthesis' in window;
   btn.style.display = supported ? '' : 'none';
-  btn.textContent = assistantTTS ? '🔊' : '🔇';
+  btn.innerHTML = icon(assistantTTS ? 'volume-2' : 'volume-x');
   btn.title = assistantTTS ? 'Reading replies aloud (click to mute)' : 'Read replies aloud';
   btn.style.color = assistantTTS ? 'var(--accent)' : 'var(--muted)';
 }
@@ -12883,7 +12892,7 @@ function applyAssistantName() {
   if (input) input.setAttribute('aria-label', 'Message to ' + name);
   // Widget label in settings
   const widgetLabel = document.getElementById('assistantWidgetLabel');
-  if (widgetLabel) widgetLabel.textContent = '🤖 ' + name;
+  if (widgetLabel) widgetLabel.innerHTML = icon('bot', true) + esc(name);
 }
 
 // 'auto' only ever resolves to light/dark — Accessible is a deliberate
@@ -13010,7 +13019,7 @@ function renderThemeButtons() {
   if (!wrap) return;
   wrap.innerHTML = THEMES.map(t =>
     `<button type="button" id="themeBtn-${t.id}" class="btn btn-sm" onclick="setTheme('${t.id}')" ` +
-    `style="flex:1;min-width:90px;display:flex;align-items:center;justify-content:center;gap:5px">${t.label}</button>`
+    `style="flex:1;min-width:90px;display:flex;align-items:center;justify-content:center;gap:5px">${icon(t.icon)}${t.label}</button>`
   ).join('');
   highlightThemeButtons();
 }
@@ -13054,16 +13063,16 @@ function setAllEggFranchiseChips(on) {
 // fh_motionOff (a phone and the panel want different answers) and applied as
 // body.no-anim-<key> classes that family-hub.css § Motion switches keys on.
 const MOTION_ANIMS = [
-  { key: 'wxIcon',      label: '🌤 Weather icon',      sub: 'Drifting cloud, turning sun, bobbing rain' },
-  { key: 'sunGlow',     label: '☀️ Sun glow',          sub: 'Pulse on the daylight arc' },
-  { key: 'moonGlow',    label: '🌕 Full-moon glow',    sub: 'Only on full-moon nights' },
-  { key: 'wxTicker',    label: '📜 Weather tickers',   sub: 'Scrolling forecast lines (swipe them by hand when off)' },
-  { key: 'asstTicker',  label: '🤖 Assistant prompts', sub: 'Scrolling suggestion chips' },
-  { key: 'statusPulse', label: '🔴 Status warning',    sub: 'Red pulse when something needs fixing' },
-  { key: 'choreBadge',  label: '⭐ Chore reward',       sub: 'Pulsing Redeem button' },
+  { key: 'wxIcon',      icon: 'cloud-sun', label: 'Weather icon',      sub: 'Drifting cloud, turning sun, bobbing rain' },
+  { key: 'sunGlow',     icon: 'sun', label: 'Sun glow',          sub: 'Pulse on the daylight arc' },
+  { key: 'moonGlow',    icon: 'moon', label: 'Full-moon glow',    sub: 'Only on full-moon nights' },
+  { key: 'wxTicker',    icon: 'scroll-text', label: 'Weather tickers',   sub: 'Scrolling forecast lines (swipe them by hand when off)' },
+  { key: 'asstTicker',  icon: 'bot', label: 'Assistant prompts', sub: 'Scrolling suggestion chips' },
+  { key: 'statusPulse', icon: 'circle-alert', label: 'Status warning',    sub: 'Red pulse when something needs fixing' },
+  { key: 'choreBadge',  icon: 'star', label: 'Chore reward',       sub: 'Pulsing Redeem button' },
   // Not an animation, but the same per-device switch: backdrop blur is redrawn on every
   // frame of a swipe, and turning it off halved the panel's longest frames (1.1s → 0.5s).
-  { key: 'glass',       label: '🧊 Frosted glass',     sub: 'Blur behind cards. Off makes swipes and view changes about twice as quick on a Pi' },
+  { key: 'glass',       icon: 'gem', label: 'Frosted glass',     sub: 'Blur behind cards. Off makes swipes and view changes about twice as quick on a Pi' },
 ];
 
 function applyMotion() {
@@ -13078,7 +13087,7 @@ function renderMotionToggles() {
         <span class="toggle-track"></span>
       </label>
       <div>
-        <div class="toggle-label">${a.label}</div>
+        <div class="toggle-label">${icon(a.icon, true)}${a.label}</div>
         <div class="toggle-sub">${a.sub}</div>
       </div>
     </div>`).join('');
@@ -13293,28 +13302,28 @@ function releaseFocusTrap() {
 // MOBILE_SHEET_SECTIONS.
 const SETTINGS_GROUPS = [
   { label: 'General', items: [
-    { tab: 'look',        label: '🎨 Look & Feel' },
-    { tab: 'screensaver', label: '🖼 Images', desktopOnly: true },
-    { tab: 'family',      label: '👨‍👩‍👧 Family' },
-    { tab: 'assistant',   label: '🤖 Assistant' },
+    { tab: 'look',        icon: 'palette', label: 'Look & Feel' },
+    { tab: 'screensaver', icon: 'image', label: 'Images', desktopOnly: true },
+    { tab: 'family',      icon: 'users', label: 'Family' },
+    { tab: 'assistant',   icon: 'bot', label: 'Assistant' },
   ]},
   { label: 'Calendar', items: [
-    { tab: 'calendar', label: '📅 Calendar' },
-    { tab: 'school',   label: '🏫 School' },
-    { tab: 'events',   label: '💡 Events' },
-    { tab: 'mow',      label: '🌿 Mowing', desktopOnly: true },
+    { tab: 'calendar', icon: 'calendar', label: 'Calendar' },
+    { tab: 'school',   icon: 'school', label: 'School' },
+    { tab: 'events',   icon: 'lightbulb', label: 'Events' },
+    { tab: 'mow',      icon: 'sprout', label: 'Mowing', desktopOnly: true },
   ]},
   { label: 'Widgets', items: [
-    { tab: 'widgets',  label: '🧩 Widget Layout', desktopOnly: true },
-    { tab: 'weather',  label: '🌤 Weather', desktopOnly: true },
-    { tab: 'feeds',    label: '📊 Feeds', desktopOnly: true },
-    { tab: 'shopping', label: '🛒 Shopping' },
-    { tab: 'chores',   label: '⭐ Chores', desktopOnly: true },
-    { tab: 'meals',    label: '🍽 Meals' },
-    { tab: 'homeassistant', label: '🏠 Home Assistant' },
+    { tab: 'widgets',  icon: 'layout-grid', label: 'Widget Layout', desktopOnly: true },
+    { tab: 'weather',  icon: 'cloud-sun', label: 'Weather', desktopOnly: true },
+    { tab: 'feeds',    icon: 'rss', label: 'Feeds', desktopOnly: true },
+    { tab: 'shopping', icon: 'shopping-cart', label: 'Shopping' },
+    { tab: 'chores',   icon: 'star', label: 'Chores', desktopOnly: true },
+    { tab: 'meals',    icon: 'utensils', label: 'Meals' },
+    { tab: 'homeassistant', icon: 'house', label: 'Home Assistant' },
   ]},
   { label: 'Advanced', gated: true, items: [
-    { tab: 'eggs', label: '🥚 Easter Eggs' },
+    { tab: 'eggs', icon: 'egg', label: 'Easter Eggs' },
   ]},
 ];
 
@@ -13327,7 +13336,7 @@ function renderSettingsNav() {
     <div class="settings-nav-group${g.gated ? ' settings-nav-group--gated' : ''}">
       <div class="settings-nav-label">${g.label}</div>
       ${g.items.map(it =>
-        `<button type="button" class="settings-nav-item" data-tab="${it.tab}" onclick="switchSettingsTab('${it.tab}')">${it.label}</button>`
+        `<button type="button" class="settings-nav-item" data-tab="${it.tab}" onclick="switchSettingsTab('${it.tab}')">${icon(it.icon)}${esc(it.label)}</button>`
       ).join('')}
     </div>`).join('');
 }
@@ -15130,7 +15139,7 @@ function renderEventCard(event) {
   const linkIcon = `<svg class="event-link-icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`;
 
   // "Add to Calendar" button (opens the verify-and-add editor)
-  const addBtn = `<button class="event-add-btn" onclick="addEventToCalendar('${encodeURIComponent(event.id)}')" title="Add to calendar">📅 Add</button>`;
+  const addBtn = `<button class="event-add-btn" onclick="addEventToCalendar('${encodeURIComponent(event.id)}')" title="Add to calendar">${icon('calendar-plus', true)}Add</button>`;
 
   // Compact layout for image-less sources (Things to Do, Library): no image
   // header — the type emoji becomes a small icon on the right.

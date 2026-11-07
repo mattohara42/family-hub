@@ -5506,16 +5506,60 @@ html:not(.touch-input) .event-tab:hover:not(.active) { border-color: var(--accen
    flavor, now the only one). Color always comes from the active theme;
    these rules set the material: surface, type, shadow, radius, grain.
    ════════════════════════════════════════════════════════════════ */
-/* ── Display type for headings + app/card titles ── */
+/* ── Display type for headings + the app title ── */
 body h1,
 body h2,
-body .cal-app-title,
-body .card-header h2 {
+body .cal-app-title {
   font-family: var(--font-display);
   font-optical-sizing: auto;
   font-weight: var(--display-weight);
   letter-spacing: -0.01em;
 }
+/* Card titles are small labels, and the display serif read as heavy and
+   blocky at that size, so they use the theme's body sans instead. */
+body .card-header h2 {
+  font-family: var(--font-body);
+  font-weight: var(--weight-semi);
+  letter-spacing: 0;
+}
+
+/* ── Icons (Lucide sprite at the top of family-hub.html, icon() in JS) ──
+   Line icons in currentColor with a soft accent-tinted fill (duotone), so
+   they pick up each theme's ink and accent. Used for chrome only (card
+   titles, toolbar buttons, Settings nav, modal titles); content emoji such
+   as Easter eggs, countdown icons and weather art stay emoji. */
+.icon-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+.ic {
+  width: 1.15em;
+  height: 1.15em;
+  flex-shrink: 0;
+  vertical-align: -0.2em;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: color-mix(in srgb, var(--accent) 22%, transparent);
+  pointer-events: none;
+}
+/* an icon followed by a label; flex rows with a gap don't need it */
+h2 > .ic, #settingsModalGear, .briefing-pill > .ic, .ic-lead { margin-right: .4em; }
+/* The ↺ buttons kept their glyph-sized font (and the wall display's larger
+   one), so the icon scales off it rather than taking 1.15em of it */
+.card-refresh-btn .ic,
+.assistant-clear-btn .ic { width: .7em; height: .7em; }
+/* Settings intro badge: the span was sized for an emoji */
+.settings-intro > span { display: flex; color: var(--accent); font-size: 1.25rem; line-height: 1; }
+#settingsModalGear .ic { vertical-align: -0.15em; }
+.card-header h2 > .ic,
+.settings-nav-item > .ic { margin-right: 0; }
+.card-header h2 > .ic { color: var(--accent); }
+.mobile-sheet-tab { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.mobile-sheet-tab.active .ic { fill: color-mix(in srgb, #fff 25%, transparent); }
+/* Icon-only buttons that relied on emoji color. An icon in currentColor
+   would otherwise take the browser's default button ink. */
+.cal-event-discover-btn,
+.cal-header-settings-btn,
+.mobile-sheet-action { color: var(--text); line-height: 1; }
 
 /* ── Card material (all from the material tokens on body) ── */
 body .card {
