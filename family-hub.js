@@ -168,6 +168,13 @@ function safeUrl(url) {
   } catch { return '#'; }
 }
 
+/** Markup for a Lucide icon from the inline sprite in family-hub.html
+ *  (#i-<name>). Chrome only: card titles, toolbar buttons, Settings nav,
+ *  modal titles. A name missing from the sprite renders as nothing. */
+function icon(name) {
+  return `<svg class="ic" aria-hidden="true"><use href="#i-${name}"/></svg>`;
+}
+
 /** Safe JSON.parse from localStorage — returns fallback on missing or corrupt data. */
 function lsGet(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key) ?? 'null') ?? fallback; }
@@ -956,7 +963,7 @@ function applyBudgetPrivacy() {
   if (addBtn) addBtn.style.display = budgetHidden ? 'none' : '';
   if (notice) notice.style.display = budgetHidden ? '' : 'none';
   if (btn) {
-    btn.textContent = budgetHidden ? '🙈' : '👁';
+    btn.innerHTML = icon(budgetHidden ? 'eye-off' : 'eye');
     btn.title = budgetHidden ? 'Show bill amounts' : 'Hide bill amounts (privacy)';
   }
   // The sidebar Budget card (btn, above) isn't reachable on mobile at all —
@@ -966,7 +973,7 @@ function applyBudgetPrivacy() {
   const calBtn = document.getElementById('calBudgetPrivacyBtn');
   if (calBtn) {
     calBtn.style.display = (isMobile && budgetItems.length) ? '' : 'none';
-    calBtn.textContent = budgetHidden ? '🙈' : '👁';
+    calBtn.innerHTML = icon(budgetHidden ? 'eye-off' : 'eye');
     calBtn.title = budgetHidden ? 'Show bill amounts' : 'Hide bill amounts (privacy)';
     calBtn.setAttribute('aria-label', calBtn.title);
   }
@@ -4051,8 +4058,9 @@ function openEventEditor(ev, dateKey, startTime, endTime, forceAllDay) {
   if (ev && (ev.holiday || ev.readOnly)) return;
   evtEditing = ev || null;
 
-  document.getElementById('eventEditorTitle').textContent =
-    ev?.eventId ? '✏️ Edit Event' : (ev ? '📅 Add to Calendar' : '📅 New Event');
+  document.getElementById('eventEditorTitle').innerHTML =
+    icon(ev?.eventId ? 'pencil' : 'calendar-plus') +
+    (ev?.eventId ? 'Edit Event' : (ev ? 'Add to Calendar' : 'New Event'));
   document.getElementById('evtEdTitle').value      = ev?.summary     || '';
   document.getElementById('evtEdDesc').value       = ev?.description || '';
   document.getElementById('evtEdLocation').value   = ev?.location    || '';
@@ -5051,9 +5059,9 @@ async function fetchWeatherByGeolocation() {
     return;
   }
   const btn = document.getElementById('geoLocBtn');
-  if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+  if (btn) { btn.innerHTML = icon('hourglass'); btn.disabled = true; }
 
-  const restore = () => { if (btn) { btn.textContent = '📍'; btn.disabled = false; } };
+  const restore = () => { if (btn) { btn.innerHTML = icon('locate-fixed'); btn.disabled = false; } };
 
   navigator.geolocation.getCurrentPosition(
     async ({ coords: { latitude: lat, longitude: lon } }) => {
@@ -7471,7 +7479,7 @@ function openMealModal(dateKey, mealType) {
     all:       'e.g. chicken breasts, pasta, canned tomatoes, frozen shrimp…',
   };
 
-  document.getElementById('mealModalTitle').textContent    = `🍽 ${typeLabel}`;
+  document.getElementById('mealModalTitle').innerHTML      = icon('utensils') + esc(typeLabel);
   document.getElementById('mealModalSubtitle').textContent = dateLabel;
   document.getElementById('mealStyleInput').value          = '';
   document.getElementById('mealStyleInput').placeholder    = STYLE_PLACEHOLDERS[mealType] || STYLE_PLACEHOLDERS.all;
@@ -11431,7 +11439,7 @@ function updateAssistantTtsBtn() {
   if (!btn) return;
   const supported = 'AudioContext' in window || 'speechSynthesis' in window;
   btn.style.display = supported ? '' : 'none';
-  btn.textContent = assistantTTS ? '🔊' : '🔇';
+  btn.innerHTML = icon(assistantTTS ? 'volume-2' : 'volume-x');
   btn.title = assistantTTS ? 'Reading replies aloud (click to mute)' : 'Read replies aloud';
   btn.style.color = assistantTTS ? 'var(--accent)' : 'var(--muted)';
 }
@@ -13293,28 +13301,28 @@ function releaseFocusTrap() {
 // MOBILE_SHEET_SECTIONS.
 const SETTINGS_GROUPS = [
   { label: 'General', items: [
-    { tab: 'look',        label: '🎨 Look & Feel' },
-    { tab: 'screensaver', label: '🖼 Images', desktopOnly: true },
-    { tab: 'family',      label: '👨‍👩‍👧 Family' },
-    { tab: 'assistant',   label: '🤖 Assistant' },
+    { tab: 'look',        icon: 'palette', label: 'Look & Feel' },
+    { tab: 'screensaver', icon: 'image', label: 'Images', desktopOnly: true },
+    { tab: 'family',      icon: 'users', label: 'Family' },
+    { tab: 'assistant',   icon: 'bot', label: 'Assistant' },
   ]},
   { label: 'Calendar', items: [
-    { tab: 'calendar', label: '📅 Calendar' },
-    { tab: 'school',   label: '🏫 School' },
-    { tab: 'events',   label: '💡 Events' },
-    { tab: 'mow',      label: '🌿 Mowing', desktopOnly: true },
+    { tab: 'calendar', icon: 'calendar', label: 'Calendar' },
+    { tab: 'school',   icon: 'school', label: 'School' },
+    { tab: 'events',   icon: 'lightbulb', label: 'Events' },
+    { tab: 'mow',      icon: 'sprout', label: 'Mowing', desktopOnly: true },
   ]},
   { label: 'Widgets', items: [
-    { tab: 'widgets',  label: '🧩 Widget Layout', desktopOnly: true },
-    { tab: 'weather',  label: '🌤 Weather', desktopOnly: true },
-    { tab: 'feeds',    label: '📊 Feeds', desktopOnly: true },
-    { tab: 'shopping', label: '🛒 Shopping' },
-    { tab: 'chores',   label: '⭐ Chores', desktopOnly: true },
-    { tab: 'meals',    label: '🍽 Meals' },
-    { tab: 'homeassistant', label: '🏠 Home Assistant' },
+    { tab: 'widgets',  icon: 'layout-grid', label: 'Widget Layout', desktopOnly: true },
+    { tab: 'weather',  icon: 'cloud-sun', label: 'Weather', desktopOnly: true },
+    { tab: 'feeds',    icon: 'rss', label: 'Feeds', desktopOnly: true },
+    { tab: 'shopping', icon: 'shopping-cart', label: 'Shopping' },
+    { tab: 'chores',   icon: 'star', label: 'Chores', desktopOnly: true },
+    { tab: 'meals',    icon: 'utensils', label: 'Meals' },
+    { tab: 'homeassistant', icon: 'house', label: 'Home Assistant' },
   ]},
   { label: 'Advanced', gated: true, items: [
-    { tab: 'eggs', label: '🥚 Easter Eggs' },
+    { tab: 'eggs', icon: 'egg', label: 'Easter Eggs' },
   ]},
 ];
 
@@ -13327,7 +13335,7 @@ function renderSettingsNav() {
     <div class="settings-nav-group${g.gated ? ' settings-nav-group--gated' : ''}">
       <div class="settings-nav-label">${g.label}</div>
       ${g.items.map(it =>
-        `<button type="button" class="settings-nav-item" data-tab="${it.tab}" onclick="switchSettingsTab('${it.tab}')">${it.label}</button>`
+        `<button type="button" class="settings-nav-item" data-tab="${it.tab}" onclick="switchSettingsTab('${it.tab}')">${icon(it.icon)}${esc(it.label)}</button>`
       ).join('')}
     </div>`).join('');
 }
