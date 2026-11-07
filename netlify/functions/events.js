@@ -224,7 +224,7 @@ exports.handler = async (event) => {
       },
       warnings: Object.entries(sourceStatus)
         .filter(([, status]) => !status.ok)
-        .map(([name]) => `${name} unavailable`)
+        .map(([name, status]) => `${name} unavailable${status.error ? `: ${status.error}` : ''}`)
     });
 
   } catch (err) {
@@ -485,24 +485,36 @@ function osmCategoryInfo(tags) {
  */
 async function fetchOpenStreetMap(city, state, lat, lon, radiusMinutes) {
   try {
-    // Cap the POI search radius — things-to-do are local day-trips, and a huge
-    // Overpass area is slow. Derive from drive radius but cap at 60km.
+    // Cap the POI search radius: things-to-do are local day-trips, and the
+    // search cost grows with the area. The old 60km cap with every named
+    // park/garden ran past the source cap on every request (2026-11-07), so
+    // it's 25km now and parks/reserves must be notable (have a wikidata tag).
     const radiusMiles = (parseInt(radiusMinutes) || 120) / 60 * 70;
-    const radiusMeters = Math.min(Math.round(radiusMiles * 1609), 60000);
+    const radiusMeters = Math.min(Math.round(radiusMiles * 1609), 25000);
+    const around = `(around:${radiusMeters},${lat},${lon})`;
 
-    const query = `[out:json][timeout:25];
+    const query = `[out:json][timeout:10];
 (
-  nwr["tourism"~"^(museum|gallery|theme_park|zoo|aquarium|viewpoint)$"]["name"](around:${radiusMeters},${lat},${lon});
-  nwr["leisure"~"^(park|nature_reserve|garden)$"]["name"](around:${radiusMeters},${lat},${lon});
-  nwr["amenity"~"^(theatre|arts_centre|cinema)$"]["name"](around:${radiusMeters},${lat},${lon});
+  nwr["tourism"~"^(museum|gallery|theme_park|zoo|aquarium|viewpoint)$"]["name"]${around};
+  nwr["leisure"~"^(park|nature_reserve)$"]["name"]["wikidata"]${around};
+  nwr["amenity"~"^(theatre|arts_centre|cinema)$"]["name"]${around};
 );
 out center tags 80;`;
 
+    // One shared deadline just inside the source cap, so the first mirror
+    // gets the whole budget and the second only runs if the first fails fast
+    // (it used to get 8s each, so neither ever had time to finish).
+    const deadline = Date.now() + SOURCE_TIMEOUT_MS - 1000;
+    const failures = [];
     let data = null;
     for (const endpoint of OVERPASS_ENDPOINTS) {
+      const remaining = deadline - Date.now();
+      if (remaining < 2000) break;
+      const host = new URL(endpoint).host;
       try {
         const r = await fetch(endpoint, {
           method: 'POST',
+          signal: AbortSignal.timeout(remaining),
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
             'User-Agent': 'FamilyHub/1.0 (event discovery)'
@@ -510,14 +522,16 @@ out center tags 80;`;
           body: 'data=' + encodeURIComponent(query)
         });
         if (r.ok) { data = await r.json(); break; }
+        failures.push(`${host} HTTP ${r.status}`);
       } catch (endpointErr) {
-        console.warn(`[Events] Overpass endpoint failed (${endpoint}):`, endpointErr.message);
+        failures.push(`${host} ${endpointErr.name === 'TimeoutError' ? 'timed out' : endpointErr.message}`);
       }
     }
 
     if (!data) {
+      console.warn('[Events] Overpass failed:', failures.join('; '));
       sourceStatus.osm.ok = false;
-      sourceStatus.osm.error = 'all Overpass endpoints failed';
+      sourceStatus.osm.error = failures.join('; ') || 'no time left for Overpass';
       return [];
     }
 
