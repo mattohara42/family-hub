@@ -135,6 +135,6 @@ The briefing banner already existed (on-demand via the `#briefingPill`). Made it
 
 - **One AI key.** The assistant shares the Meals Gemini key (`mealAiKey`). No second provider to manage.
 - **No build step.** Any helper must be inline; respect the CSP.
-- **Three themes.** Chips, toggles, and any new UI must look correct in dark, light, and nautical modes.
+- **Every theme.** Chips, toggles, and any new UI must look correct in dark, light, and Accessible modes.
 - **Side-effects are visible.** Any action that writes/deletes must surface a confirmation in the chat.
 - **Keep quick-prompts current.** Every shipped capability should add/refresh a chip in `ASSISTANT_QUICK_PROMPTS`.

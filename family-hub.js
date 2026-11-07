@@ -270,19 +270,24 @@ let calPalette = lsGet('fh_calPalette', 'off');
 let familyMembers   = lsGet('fh_familyMembers', []);
 // each: { name: string }
 let todoItems       = []; // in-memory mirror of Firestore 'todo' collection for calendar use
-// Migrate old mode names
-if (localStorage.getItem('fh_mode') === 'amazing')        localStorage.setItem('fh_mode', 'nautical');
-if (localStorage.getItem('fh_mode') === 'nautical-light') localStorage.setItem('fh_mode', 'nautical');
+// Nautical and Aurora were retired (2026-11-07); a device still on one of
+// them (or on their older names) falls back to Auto.
+if (['nautical', 'aurora', 'amazing', 'nautical-light'].includes(localStorage.getItem('fh_mode'))) localStorage.removeItem('fh_mode');
+// The Basic/Tactile flavor choice is gone too: Tactile's material is now the base CSS.
+localStorage.removeItem('fh_flavor');
 const _savedMode    = localStorage.getItem('fh_mode');
-let appMode         = _savedMode || 'auto';  // 'auto' | 'light' | 'dark' | 'nautical' | 'aurora' | 'colorblind'
-// Flavor registry — to ship a new flavor, add an entry here AND a matching
-// `body.flavor-<id>` section in family-hub.css. Everything else is data-driven.
-const FLAVORS = [
-  { id: 'basic',   label: '◻ Basic' },
+let appMode         = _savedMode || 'auto';  // 'auto' | 'light' | 'dark' | 'colorblind'
+// Theme = the material/design axis, orthogonal to the Colors axis above.
+// To ship a theme, add an entry here AND a `body.theme-<id>` block in the
+// ✦ THEMES section of family-hub.css that sets the material tokens. Tactile
+// is the base CSS (no class). Per device, like fh_mode.
+const THEMES = [
   { id: 'tactile', label: '✦ Tactile' },
+  { id: 'glass',   label: '◇ Glass' },
+  { id: 'paper',   label: '▤ Paper' },
 ];
-const _savedFlavor  = localStorage.getItem('fh_flavor');
-let appFlavor       = FLAVORS.some(f => f.id === _savedFlavor) ? _savedFlavor : 'basic';  // design-system layer, orthogonal to appMode
+const _savedTheme   = localStorage.getItem('fh_theme');
+let appTheme        = THEMES.some(t => t.id === _savedTheme) ? _savedTheme : 'tactile';
 // Compute isMobile boolean for viewport-width-dependent logic
 // A phone turned sideways is ~930px wide but only ~430px tall, so width alone
 // handed it the desktop layout squeezed into a strip. Mirrors the CSS mobile
@@ -1272,10 +1277,10 @@ window.addEventListener('load', () => {
     initGoogleAuth();
   }
   applyAppMode(appMode);
-  applyFlavor(appFlavor);
+  applyTheme(appTheme);
+  renderThemeButtons();
   applyMotion();
   applyWallDisplay();
-  renderFlavorButtons();
   applyAppTitle();
   applyAssistantName();
   applyCalPalette();
@@ -12751,8 +12756,6 @@ function setMobileListsSection(section) {
 const THEME_COLORS = {
   dark:             '#0f1117',
   light:            '#f0f2f8',
-  nautical:         '#1a2e52',
-  aurora:           '#ede8ff',
   colorblind:       '#0d1117',
 };
 
@@ -12883,8 +12886,8 @@ function applyAssistantName() {
   if (widgetLabel) widgetLabel.textContent = '🤖 ' + name;
 }
 
-// 'auto' only ever resolves to light/dark — Nautical/Aurora/Accessible are
-// deliberate manual palettes, not something a day/night switch should pick.
+// 'auto' only ever resolves to light/dark — Accessible is a deliberate
+// manual palette, not something a day/night switch should pick.
 function resolveAppMode(mode) {
   if (mode !== 'auto') return mode;
   if (autoThemeBySun) return isNightNow() ? 'dark' : 'light';
@@ -12894,24 +12897,11 @@ function resolveAppMode(mode) {
 function applyAppMode(mode) {
   appMode = mode;
   const effective = resolveAppMode(mode);
-  document.body.classList.remove('light-mode', 'nautical-mode', 'aurora-mode', 'colorblind-mode');
+  document.body.classList.remove('light-mode', 'colorblind-mode');
   if (effective === 'light')      document.body.classList.add('light-mode');
-  if (effective === 'nautical')   document.body.classList.add('nautical-mode');
-  if (effective === 'aurora')     document.body.classList.add('aurora-mode');
   if (effective === 'colorblind') document.body.classList.add('colorblind-mode');
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.content = THEME_COLORS[effective] || THEME_COLORS.dark;
-}
-
-// Flavor = design-system layer, orthogonal to the theme/mode. Basic is the
-// default (absence of class), mirroring dark-is-default for themes. Unknown
-// values fall back to Basic so a stale fh_flavor never wedges the UI.
-function applyFlavor(flavor) {
-  if (!FLAVORS.some(f => f.id === flavor)) flavor = 'basic';
-  appFlavor = flavor;
-  FLAVORS.forEach(f => {
-    if (f.id !== 'basic') document.body.classList.toggle('flavor-' + f.id, f.id === flavor);
-  });
 }
 
 // Keep 'auto' in sync with the device's day/night switch — mirrors the
@@ -12999,33 +12989,46 @@ window.matchMedia('(orientation: portrait)').addEventListener('change', () => {
   if (layoutMode === 'auto') applyLayoutMode();
 });
 
+// Unknown ids fall back to Tactile, so a stale fh_theme never wedges the UI.
+function applyTheme(theme) {
+  if (!THEMES.some(t => t.id === theme)) theme = 'tactile';
+  appTheme = theme;
+  THEMES.forEach(t => {
+    if (t.id !== 'tactile') document.body.classList.toggle('theme-' + t.id, t.id === theme);
+  });
+}
+
+function setTheme(theme) {
+  applyTheme(theme);
+  localStorage.setItem('fh_theme', appTheme);
+  highlightThemeButtons();
+}
+
+// Settings → Look & Feel → Theme buttons, built from THEMES.
+function renderThemeButtons() {
+  const wrap = document.getElementById('themeButtons');
+  if (!wrap) return;
+  wrap.innerHTML = THEMES.map(t =>
+    `<button type="button" id="themeBtn-${t.id}" class="btn btn-sm" onclick="setTheme('${t.id}')" ` +
+    `style="flex:1;min-width:90px;display:flex;align-items:center;justify-content:center;gap:5px">${t.label}</button>`
+  ).join('');
+  highlightThemeButtons();
+}
+
+function highlightThemeButtons() {
+  THEMES.forEach(t => {
+    const btn = document.getElementById('themeBtn-' + t.id);
+    if (btn) btn.className = 'btn btn-sm' + (appTheme === t.id ? ' btn-mode-active' : '');
+  });
+}
+
 function setAppMode(mode) {
   applyAppMode(mode);
   localStorage.setItem('fh_mode', mode);
   document.getElementById('modeAuto').className           = 'btn btn-sm' + (mode === 'auto'           ? ' btn-mode-active' : '');
   document.getElementById('modeLight').className          = 'btn btn-sm' + (mode === 'light'          ? ' btn-mode-active' : '');
   document.getElementById('modeDark').className           = 'btn btn-sm' + (mode === 'dark'           ? ' btn-mode-active' : '');
-  document.getElementById('modeNautical').className       = 'btn btn-sm' + (mode === 'nautical'       ? ' btn-mode-active' : '');
-  document.getElementById('modeAurora').className         = 'btn btn-sm' + (mode === 'aurora'         ? ' btn-mode-active' : '');
   document.getElementById('modeColorblind').className     = 'btn btn-sm' + (mode === 'colorblind'     ? ' btn-mode-active' : '');
-}
-
-function setFlavor(flavor) {
-  applyFlavor(flavor);
-  localStorage.setItem('fh_flavor', appFlavor);  // appFlavor is the validated value
-  highlightFlavorButtons();
-}
-
-// Renders the Settings flavor buttons from the FLAVORS registry, so adding a
-// flavor needs no markup edits.
-function renderFlavorButtons() {
-  const wrap = document.getElementById('flavorButtons');
-  if (!wrap) return;
-  wrap.innerHTML = FLAVORS.map(f =>
-    `<button id="flavorBtn-${f.id}" class="btn btn-sm" onclick="setFlavor('${f.id}')" ` +
-    `style="flex:1;min-width:90px;display:flex;align-items:center;justify-content:center;gap:5px">${f.label}</button>`
-  ).join('');
-  highlightFlavorButtons();
 }
 
 // Renders the Easter Egg franchise picker from the EASTER_EGG_FRANCHISES
@@ -13044,13 +13047,6 @@ function setAllEggFranchiseChips(on) {
   document.querySelectorAll('.egg-franchise-chip').forEach(btn => btn.classList.toggle('btn-mode-active', on));
 }
 
-function highlightFlavorButtons() {
-  FLAVORS.forEach(f => {
-    const btn = document.getElementById('flavorBtn-' + f.id);
-    if (btn) btn.className = 'btn btn-sm' + (appFlavor === f.id ? ' btn-mode-active' : '');
-  });
-}
-
 // ── Motion ─────────────────────────────────────────────────────
 // Per-device switches for the endless animations (plus the frosted-glass blur). Each one keeps the browser
 // repainting forever; on the Pi 3 wall panel the weather set alone pinned a
@@ -13063,7 +13059,6 @@ const MOTION_ANIMS = [
   { key: 'moonGlow',    label: '🌕 Full-moon glow',    sub: 'Only on full-moon nights' },
   { key: 'wxTicker',    label: '📜 Weather tickers',   sub: 'Scrolling forecast lines (swipe them by hand when off)' },
   { key: 'asstTicker',  label: '🤖 Assistant prompts', sub: 'Scrolling suggestion chips' },
-  { key: 'themeBg',     label: '🌊 Theme background',  sub: 'Nautical waves, Aurora shimmer' },
   { key: 'statusPulse', label: '🔴 Status warning',    sub: 'Red pulse when something needs fixing' },
   { key: 'choreBadge',  label: '⭐ Chore reward',       sub: 'Pulsing Redeem button' },
   // Not an animation, but the same per-device switch: backdrop blur is redrawn on every
@@ -13450,10 +13445,8 @@ function openSettings() {
   document.getElementById('modeAuto').className            = 'btn btn-sm' + (appMode === 'auto'           ? ' btn-mode-active' : '');
   document.getElementById('modeLight').className           = 'btn btn-sm' + (appMode === 'light'          ? ' btn-mode-active' : '');
   document.getElementById('modeDark').className            = 'btn btn-sm' + (appMode === 'dark'           ? ' btn-mode-active' : '');
-  document.getElementById('modeNautical').className        = 'btn btn-sm' + (appMode === 'nautical'       ? ' btn-mode-active' : '');
-  document.getElementById('modeAurora').className          = 'btn btn-sm' + (appMode === 'aurora'         ? ' btn-mode-active' : '');
   document.getElementById('modeColorblind').className      = 'btn btn-sm' + (appMode === 'colorblind'     ? ' btn-mode-active' : '');
-  highlightFlavorButtons();
+  highlightThemeButtons();
   renderBgPreview();
   const statusEl = document.getElementById('bgStatus');
   if (statusEl && bgPhotos.length) {

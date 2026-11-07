@@ -555,7 +555,11 @@
         </div>
         <div class="settings-section-head">Theme</div>
         <div class="field">
-          <label>Appearance</label>
+          <label>Theme</label>
+          <div id="themeButtons" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+        </div>
+        <div class="field">
+          <label>Colors</label>
           <div class="appearance-grid" style="display:flex;gap:8px;flex-wrap:wrap">
             <button id="modeAuto" class="btn btn-sm"
                     onclick="setAppMode('auto')" title="Follow this device's system light/dark setting"
@@ -571,16 +575,6 @@
                     onclick="setAppMode('dark')"
                     style="flex:1;min-width:70px;display:flex;align-items:center;justify-content:center;gap:5px">
               <span>🌙</span> Dark
-            </button>
-            <button id="modeNautical" class="btn btn-sm"
-                    onclick="setAppMode('nautical')"
-                    style="flex:1;min-width:70px;display:flex;align-items:center;justify-content:center;gap:5px">
-              <span>⚓</span> Nautical
-            </button>
-            <button id="modeAurora" class="btn btn-sm"
-                    onclick="setAppMode('aurora')"
-                    style="flex:1;min-width:70px;display:flex;align-items:center;justify-content:center;gap:5px">
-              <span>🌌</span> Aurora
             </button>
             <button id="modeColorblind" class="btn btn-sm"
                     onclick="setAppMode('colorblind')"
@@ -598,10 +592,6 @@
               <div class="toggle-sub">Auto goes dark at sunset and light at sunrise, using your first weather location (7pm to 7am without one). For screens that never switch on their own. This device only.</div>
             </div>
           </div>
-        </div>
-        <div class="field">
-          <label>Flavor</label>
-          <div id="flavorButtons" style="display:flex;gap:8px;flex-wrap:wrap"></div>
         </div>
         <div class="field">
           <label for="calPaletteSelect">Calendar colors</label>
