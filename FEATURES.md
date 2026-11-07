@@ -520,6 +520,8 @@ Two rendering modes depending on widget placement:
 
 **HTML anchors:** `#yearCard`, `#yearCardBody`, `#yearCardTodayBtn`, `#yearStrip`, `#miniGrid`
 
+**Today and the current week (2026-11-07):** in both modes today is a full accent circle (`.mini-day.today` / `.year-card-day.today`: fixed 1.8em square, `border-radius: 50%`, accent halo). The fixed size matters: each day sits in a centred flex column, so an unsized fill shrank to the digits and read as a thin sliver. The current week gets an 18% `--accent` band. The sidebar card has real week rows (`.year-card-week-row.today-week`); the strip's grid is flat, so `renderYearStrip()` tags that week's seven cells `.mini-week-today` (plus `.wk-start`/`.wk-end` for the rounded ends), and `.mini-cal-grid` has no column gap so the band stays unbroken.
+
 ---
 
 ### 11. Meal Planning

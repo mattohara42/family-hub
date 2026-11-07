@@ -3252,8 +3252,16 @@ body.has-bg .mini-card:hover {
 .mini-cal-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 1px;
+  /* no column gap, so the current-week band reads as one unbroken strip */
+  gap: 1px 0;
 }
+/* Current week: a tinted band across its seven cells (set by renderYearStrip) */
+.mini-week-today {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  font-weight: var(--weight-semi);
+}
+.mini-week-today.wk-start { border-radius: 6px 0 0 6px; }
+.mini-week-today.wk-end   { border-radius: 0 6px 6px 0; }
 .mini-dow {
   font-size: .52rem;
   text-align: center;
@@ -3271,11 +3279,20 @@ body.has-bg .mini-card:hover {
   position: relative;
 }
 .mini-day.in-month { color: var(--text); }
-.mini-day.today {
+/* Today: a full accent circle with a soft halo. The day sits in a centred
+   flex column, so without a fixed size the fill shrank to the digits and
+   read as a thin sliver (one-digit days especially). */
+.mini-day.today,
+.year-card-day.today {
   background: var(--accent);
   color: #fff;
-  font-weight: 700;
-  border-radius: 4px;
+  font-weight: var(--weight-bold);
+  width: 1.8em;
+  height: 1.8em;
+  line-height: 1.8em;
+  padding: 0;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 /* dot row under day number for events */
 .mini-dots {
@@ -3330,13 +3347,13 @@ body.has-bg .mini-card:hover {
 }
 
 .year-card-week-row.today-week {
-  background: color-mix(in srgb, var(--accent) 13%, transparent);
-  border-radius: 4px;
-  overflow: hidden;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-radius: 6px;
+  font-weight: var(--weight-semi);
 }
 
 body.colorblind-mode .year-card-week-row.today-week {
-  background: rgba(86,180,233,0.15);
+  background: rgba(86,180,233,0.2);
 }
 
 .year-card-day {
@@ -3349,12 +3366,6 @@ body.colorblind-mode .year-card-week-row.today-week {
 }
 
 .year-card-day.in-month { color: var(--text); }
-.year-card-day.today {
-  background: var(--accent);
-  color: #fff;
-  font-weight: var(--weight-bold);
-  border-radius: 4px;
-}
 
 /* ── Settings calendar list ── */
 #settingCalList { margin-bottom: 8px; }
