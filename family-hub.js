@@ -4791,7 +4791,7 @@ function renderYearCard() {
 
     // Month + year label
     const lbl = document.createElement('div');
-    lbl.className = 'mini-month-label year-card-month-label' + (isCurrentMonth ? ' current-month-label' : '');
+    lbl.className = 'mini-month-label year-card-month-label';
     lbl.textContent = ref.toLocaleDateString([], { month: 'long', year: 'numeric' });
     if (isCurrentMonth) {
       const badge = document.createElement('span');
@@ -5016,6 +5016,18 @@ function renderYearStrip() {
       cell.className = 'mini-day';
       cell.textContent = d;
       mg.appendChild(cell);
+    }
+
+    // Band behind the current week: tag its seven cells (the grid is flat, so
+    // there's no row element to style), rounding the band's two ends.
+    if (isCurrentMonth) {
+      const days = [...mg.children].slice(7);   // skip the S M T W T F S header
+      const row  = Math.floor((firstDay + today.getDate() - 1) / 7);
+      days.slice(row * 7, row * 7 + 7).forEach((el, col) => {
+        el.classList.add('mini-week-today');
+        if (col === 0) el.classList.add('wk-start');
+        if (col === 6) el.classList.add('wk-end');
+      });
     }
 
     card.appendChild(mg);

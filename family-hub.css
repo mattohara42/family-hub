@@ -1319,6 +1319,12 @@ body.light-mode    .wx-sun-track    { stroke: rgba(0,0,0,.16); }
 .wx-day-hi { color: var(--text); font-weight: var(--weight-semi); min-width: 34px; text-align: right; }
 .wx-day-rain { color: #61afef; font-size: var(--text-sm); min-width: 36px; text-align: right; }
 
+/* Text for screen readers only (an icon-only title still needs a name) */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
 /* ── Forecast mode toggle ── */
 .wx-forecast-toggle {
   /* Same look as the calendar's .cal-view-tab, one size down */
@@ -1346,10 +1352,13 @@ body.light-mode    .wx-sun-track    { stroke: rgba(0,0,0,.16); }
   border-color: var(--control-active-border);
   box-shadow: var(--control-active-shadow);
 }
-/* Keep the title whole; the tabs drop to their own row when the sidebar is
-   too narrow for both (same pattern as the wall-display Assistant header). */
+/* The title is the cloud-sun icon alone (the word is .sr-only): "Weather"
+   cost 94px on the wall panel, enough to push the forecast tabs onto a row
+   of their own. If even the icon and tabs don't fit, the tabs still drop to
+   their own row rather than squeezing (same pattern as the wall-display
+   Assistant header). */
 #weatherCard .card-header { flex-wrap: wrap; row-gap: 6px; }
-#weatherCard .card-header h2 { min-width: max-content; }
+#weatherCard .card-header h2 { min-width: max-content; flex: 0 0 auto; }
 #weatherCard .card-header .wx-forecast-toggle { margin-left: auto; margin-bottom: 0; }
 html:not(.touch-input) .wx-forecast-toggle button:not(.active):hover {
   border-color: var(--accent);
@@ -3231,29 +3240,34 @@ body.has-bg .mini-card:hover {
   justify-content: center;
   gap: 5px;
 }
-.current-month-label {
-  font-size: .78rem;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
+/* The current month already reads from its card (accent fill and ring,
+   today's circle, the week band), so the label stays plain and "Now" is a
+   soft chip rather than an outlined box. */
 .year-card-now-badge {
   font-size: .62rem;
-  font-weight: 700;
-  font-style: normal;
+  font-weight: var(--weight-bold);
   letter-spacing: .04em;
   text-transform: uppercase;
-  background: transparent;
-  border: 1.5px solid currentColor;
-  border-radius: 3px;
-  padding: 0 4px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-radius: var(--chip-radius);
+  padding: 1px 6px;
   line-height: 1.5;
   flex-shrink: 0;
 }
 .mini-cal-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 1px;
+  /* no column gap, so the current-week band reads as one unbroken strip */
+  gap: 1px 0;
 }
+/* Current week: a tinted band across its seven cells (set by renderYearStrip) */
+.mini-week-today {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  font-weight: var(--weight-semi);
+}
+.mini-week-today.wk-start { border-radius: 6px 0 0 6px; }
+.mini-week-today.wk-end   { border-radius: 0 6px 6px 0; }
 .mini-dow {
   font-size: .52rem;
   text-align: center;
@@ -3271,11 +3285,20 @@ body.has-bg .mini-card:hover {
   position: relative;
 }
 .mini-day.in-month { color: var(--text); }
-.mini-day.today {
+/* Today: a full accent circle with a soft halo. The day sits in a centred
+   flex column, so without a fixed size the fill shrank to the digits and
+   read as a thin sliver (one-digit days especially). */
+.mini-day.today,
+.year-card-day.today {
   background: var(--accent);
   color: #fff;
-  font-weight: 700;
-  border-radius: 4px;
+  font-weight: var(--weight-bold);
+  width: 1.8em;
+  height: 1.8em;
+  line-height: 1.8em;
+  padding: 0;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 /* dot row under day number for events */
 .mini-dots {
@@ -3302,12 +3325,12 @@ body.has-bg .mini-card:hover {
   cursor: pointer;
   padding: 10px 8px 8px;
 }
-.year-card-mini.current-month {
-  border-left: 3px solid currentColor;
-  padding-left: 6px;
-}
-
 .year-card-month-label {
+  /* keep "November 2026" on one line; the Now chip wraps under it if the
+     card is too narrow, instead of the month name breaking in two */
+  white-space: nowrap;
+  flex-wrap: wrap;
+  row-gap: 3px;
   font-size: var(--text-xs);
   font-weight: var(--weight-bold);
   text-align: center;
@@ -3330,13 +3353,13 @@ body.has-bg .mini-card:hover {
 }
 
 .year-card-week-row.today-week {
-  background: color-mix(in srgb, var(--accent) 13%, transparent);
-  border-radius: 4px;
-  overflow: hidden;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-radius: 6px;
+  font-weight: var(--weight-semi);
 }
 
 body.colorblind-mode .year-card-week-row.today-week {
-  background: rgba(86,180,233,0.15);
+  background: rgba(86,180,233,0.2);
 }
 
 .year-card-day {
@@ -3349,12 +3372,6 @@ body.colorblind-mode .year-card-week-row.today-week {
 }
 
 .year-card-day.in-month { color: var(--text); }
-.year-card-day.today {
-  background: var(--accent);
-  color: #fff;
-  font-weight: var(--weight-bold);
-  border-radius: 4px;
-}
 
 /* ── Settings calendar list ── */
 #settingCalList { margin-bottom: 8px; }

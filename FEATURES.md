@@ -291,6 +291,8 @@ let sunArcEnabled       = lsGet('fh_sunArc', true);   // sun-path arc on/off
 
 **HTML anchors:** `#weatherDisplay`, `#weatherSetup`, `#wTemp`, `#wDesc`, `#wIcon`, `#wHigh`, `#wLow`, `#wRain`, `#wForecast`, `#wxSunArc`, `#wxLocNav`, `#wxLocDots`, `#weatherCity`, `#wxLocationsList`, `#sunArcToggle` (Settings → Weather)
 
+**Header (2026-11-07):** the card title is the cloud-sun icon alone; the word "Weather" is a `.sr-only` span (plus `title` on the `<h2>`), so the 5-day/Hourly/Curve/Radar tabs fit beside it. With the word visible, the wall panel's 350px header wrapped the tabs onto a row of their own. The `flex-wrap` fallback stays for anything narrower.
+
 **localStorage:** `fh_wlocations` (array — no-Firebase fallback only; synced via Firestore `settings/weatherLocations` doc otherwise), `fh_wcity` (legacy, kept in sync with first location), `fh_sunArc` (bool — sun-path arc visibility, always local). *(`fh_wkey` removed — weather is keyless now.)*
 
 **Migration:** On first run, any existing `fh_wcity` value is auto-migrated into `fh_wlocations[0]`. On first Firestore sign-in, an existing `fh_wlocations` gets uploaded to `settings/weatherLocations` (first device to sign in wins; see `runFirestoreMigrations()`).
@@ -519,6 +521,8 @@ Two rendering modes depending on widget placement:
 - `renderYearStrip()` calls `renderYearCard()` at its top to keep both in sync
 
 **HTML anchors:** `#yearCard`, `#yearCardBody`, `#yearCardTodayBtn`, `#yearStrip`, `#miniGrid`
+
+**Today and the current week (2026-11-07):** in both modes today is a full accent circle (`.mini-day.today` / `.year-card-day.today`: fixed 1.8em square, `border-radius: 50%`, accent halo). The fixed size matters: each day sits in a centred flex column, so an unsized fill shrank to the digits and read as a thin sliver. The current week gets an 18% `--accent` band. The sidebar card has real week rows (`.year-card-week-row.today-week`); the strip's grid is flat, so `renderYearStrip()` tags that week's seven cells `.mini-week-today` (plus `.wk-start`/`.wk-end` for the rounded ends), and `.mini-cal-grid` has no column gap so the band stays unbroken.
 
 ---
 
