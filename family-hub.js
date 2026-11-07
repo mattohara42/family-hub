@@ -14647,7 +14647,7 @@ let eventsData = [];           // Current displayed events
 let eventsRawData = [];        // Full result set from backend
 let eventsFetchTimestamp = 0;  // When we last fetched
 let eventsSort = 'distance';   // Current sort mode
-let eventsSourceTab = 'ticketmaster';  // Active source tab: ticketmaster | osm | libraryweb | redwings | cityspark | towns
+let eventsSourceTab = 'libraryweb';  // Active source tab: ticketmaster | osm | libraryweb | redwings | cityspark | towns
 let eventsSubTab = 'all';              // Active category sub-tab within the source
 let eventsTabFilter = 'all';   // Current tab filter
 let eventsCategoryFilter = null;  // Category filter (null = all)

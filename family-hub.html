@@ -1647,12 +1647,12 @@
 
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-shrink:0">
       <div class="events-source-tabs" style="display:flex;flex-wrap:wrap;gap:6px;flex:1">
-        <button class="event-tab active" data-source="ticketmaster" onclick="selectEventSource(this)"><span class="event-tab-icon">🎟️</span> Live Events <span class="event-tab-count" id="count-ticketmaster"></span></button>
+        <button class="event-tab active" data-source="libraryweb" onclick="selectEventSource(this)"><span class="event-tab-icon">📚</span> Library <span class="event-tab-count" id="count-libraryweb"></span></button>
+        <button class="event-tab" data-source="towns" onclick="selectEventSource(this)"><span class="event-tab-icon">🎪</span> Town Events <span class="event-tab-count" id="count-towns"></span></button>
+        <button class="event-tab" data-source="ticketmaster" onclick="selectEventSource(this)"><span class="event-tab-icon">🎟️</span> Live Events <span class="event-tab-count" id="count-ticketmaster"></span></button>
         <button class="event-tab" data-source="osm" onclick="selectEventSource(this)"><span class="event-tab-icon">📍</span> Things to Do <span class="event-tab-count" id="count-osm"></span></button>
-        <button class="event-tab" data-source="libraryweb" onclick="selectEventSource(this)"><span class="event-tab-icon">📚</span> Library <span class="event-tab-count" id="count-libraryweb"></span></button>
         <button class="event-tab" data-source="redwings" onclick="selectEventSource(this)"><span class="event-tab-icon">⚾</span> Red Wings <span class="event-tab-count" id="count-redwings"></span></button>
         <button class="event-tab" data-source="cityspark" onclick="selectEventSource(this)"><span class="event-tab-icon">🎡</span> Around Town <span class="event-tab-count" id="count-cityspark"></span></button>
-        <button class="event-tab" data-source="towns" onclick="selectEventSource(this)"><span class="event-tab-icon">🎪</span> Town Events <span class="event-tab-count" id="count-towns"></span></button>
       </div>
       <button class="btn btn-primary btn-sm events-refresh-row" onclick="refreshEvents()" title="Refresh" style="flex-shrink:0">🔄</button>
     </div>
