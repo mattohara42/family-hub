@@ -3231,21 +3231,18 @@ body.has-bg .mini-card:hover {
   justify-content: center;
   gap: 5px;
 }
-.current-month-label {
-  font-size: .78rem;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
+/* The current month already reads from its card (accent fill and ring,
+   today's circle, the week band), so the label stays plain and "Now" is a
+   soft chip rather than an outlined box. */
 .year-card-now-badge {
   font-size: .62rem;
-  font-weight: 700;
-  font-style: normal;
+  font-weight: var(--weight-bold);
   letter-spacing: .04em;
   text-transform: uppercase;
-  background: transparent;
-  border: 1.5px solid currentColor;
-  border-radius: 3px;
-  padding: 0 4px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-radius: var(--chip-radius);
+  padding: 1px 6px;
   line-height: 1.5;
   flex-shrink: 0;
 }
@@ -3319,12 +3316,12 @@ body.has-bg .mini-card:hover {
   cursor: pointer;
   padding: 10px 8px 8px;
 }
-.year-card-mini.current-month {
-  border-left: 3px solid currentColor;
-  padding-left: 6px;
-}
-
 .year-card-month-label {
+  /* keep "November 2026" on one line; the Now chip wraps under it if the
+     card is too narrow, instead of the month name breaking in two */
+  white-space: nowrap;
+  flex-wrap: wrap;
+  row-gap: 3px;
   font-size: var(--text-xs);
   font-weight: var(--weight-bold);
   text-align: center;
