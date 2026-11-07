@@ -14255,6 +14255,8 @@ function startScreensaver(manual = false) {
   if ((!saverEnabled && !manual) || saverActive || document.hidden || (!pond && !bgPhotos.length)) { resetSaverIdleTimer(); return; }
   if (isMobile) return;  // guard the direct path too (timer armed pre-resize)
   saverActive = true;
+  // Come back to a tidy sidebar: the status details are a check-once panel
+  if (controlCardOpen) toggleControlCard();
   document.getElementById('saverClock').style.transform = '';
   _saverNightOn = false;
   updateSaverOverlay(); // sets clock/info/night state before the first photo
@@ -14475,12 +14477,17 @@ function updateSaverOverlay() {
 // Activity detection: while asleep any interaction wakes (the overlay swallows
 // the tap since it's the event target); while awake it re-arms the idle timer.
 let _saverLastMove = 0;
+let _saverWakeTapAt = 0;
 function saverActivity(e) {
   markActivity();   // also feeds the kiosk auto-update idle check
   if (saverActive) {
     // The tap/click that started it on demand (and the hand settling after
     // it) mustn't wake it straight back up
     if (Date.now() - _saverManualAt < 1500) return;
+    // The overlay stops taking pointer events the moment it wakes, so this
+    // tap's click would land on whatever sits underneath (the Wake button is
+    // right over the control card header, which then toggled open)
+    if (e && (e.type === 'pointerdown' || e.type === 'touchstart')) _saverWakeTapAt = Date.now();
     stopScreensaver(); return;
   }
   if (e && e.type === 'pointermove') {
@@ -14492,6 +14499,11 @@ function saverActivity(e) {
 }
 ['pointerdown', 'pointermove', 'keydown', 'touchstart', 'wheel'].forEach(t =>
   window.addEventListener(t, saverActivity, { passive: true }));
+// Swallow the click from the tap that woke the screensaver (capture phase, so
+// it never reaches the element under the finger)
+window.addEventListener('click', e => {
+  if (Date.now() - _saverWakeTapAt < 800) { e.stopPropagation(); e.preventDefault(); _saverWakeTapAt = 0; }
+}, true);
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) stopScreensaver();
   else resetSaverIdleTimer();
