@@ -563,14 +563,19 @@ body.konami-mode {
   white-space: nowrap;
 }
 .btn {
-  padding: 8px 16px; border: none; border-radius: 8px;
+  /* a plain .btn (no variant) is a theme control; it used to fall through
+     to the browser's default white button in every theme */
+  padding: 7px 15px; border: 1px solid var(--control-border); border-radius: 8px;
+  background: var(--control-bg); color: var(--text);
+  box-shadow: var(--control-shadow);
   cursor: pointer; font-size: var(--text-base); font-weight: var(--weight-semi);
+  font-family: inherit;
   transition: opacity .15s;
 }
 html:not(.touch-input) .btn:hover { opacity: .85; }
-.btn-primary { background: var(--accent); color: #fff; }
-.btn-danger  { background: var(--red);    color: #fff; }
-.btn-sm      { padding: 4px 9px; font-size: var(--text-xs); }
+.btn-primary { background: var(--accent); color: #fff; border-color: transparent; }
+.btn-danger  { background: var(--red);    color: #fff; border-color: transparent; }
+.btn-sm      { padding: 3px 8px; font-size: var(--text-xs); }
 
 /* ── Config banner ── */
 #configBanner {
@@ -2466,7 +2471,7 @@ body.light-mode .sms-contact-row:hover { background: rgba(0,0,0,.05); }
   border: 1.5px solid color-mix(in srgb, var(--accent) 30%, var(--line));
   background: color-mix(in srgb, var(--accent) 4%, var(--surface2));
 }
-/* .btn-secondary's --surface2 fill nearly matches this modal's gradient, so
+/* .btn-secondary's --surface2 fill nearly matches the modal surface, so
    Cancel/Delete read as bare text without the same outline as the inputs */
 #eventEditorModal .btn-secondary {
   border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line));
@@ -2811,8 +2816,11 @@ html:not(.touch-input) .btn-danger:hover { background: color-mix(in srgb, var(--
 .field input[type=checkbox],
 .field input[type=radio] { width: auto; padding: 0; }
 .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; flex-shrink: 0; }
-.btn-secondary { background: var(--surface2); color: var(--text); }
-.btn-mode-active { background: var(--accent) !important; color: #fff !important; }
+.btn-secondary { background: var(--surface2); color: var(--text); border-color: transparent; box-shadow: none; }
+.btn-mode-active {
+  background: var(--control-active-bg) !important; color: var(--control-active-ink) !important;
+  border-color: var(--control-active-border) !important; box-shadow: var(--control-active-shadow) !important;
+}
 
 /* ── Settings — grouped two-pane nav ── */
 .settings-body {
