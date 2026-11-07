@@ -14647,7 +14647,7 @@ let eventsData = [];           // Current displayed events
 let eventsRawData = [];        // Full result set from backend
 let eventsFetchTimestamp = 0;  // When we last fetched
 let eventsSort = 'distance';   // Current sort mode
-let eventsSourceTab = 'libraryweb';  // Active source tab: ticketmaster | osm | libraryweb | redwings | cityspark | towns
+let eventsSourceTab = lsGet('fh_eventsTab', 'libraryweb');  // Active source tab, per device: ticketmaster | osm | libraryweb | redwings | cityspark | towns
 let eventsSubTab = 'all';              // Active category sub-tab within the source
 let eventsTabFilter = 'all';   // Current tab filter
 let eventsCategoryFilter = null;  // Category filter (null = all)
@@ -14694,6 +14694,7 @@ function applyEventsAvailability() {
 async function openEventsModal() {
   eventsModalOpen = true;
   document.getElementById('eventsModal').style.display = 'flex';
+  syncEventSourceTab();
 
   // Category filter UI was removed — skip the category fetch entirely.
 
@@ -14854,11 +14855,23 @@ function clearEventSearchFilters() {
   renderEventsList(eventsData);
 }
 
+// Mark the remembered tab active, or the first visible one if it's gone
+// (e.g. Live Events hidden once TICKETMASTER_KEY is unset)
+function syncEventSourceTab() {
+  const tabs = [...document.querySelectorAll('.events-source-tabs .event-tab')];
+  const visible = tabs.filter(t => t.style.display !== 'none');
+  const tab = visible.find(t => t.dataset.source === eventsSourceTab) || visible[0];
+  if (!tab) return;
+  tabs.forEach(t => t.classList.toggle('active', t === tab));
+  eventsSourceTab = tab.dataset.source;
+}
+
 // Switch the active source tab and re-render
 function selectEventSource(btn) {
   document.querySelectorAll('.events-source-tabs .event-tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   eventsSourceTab = btn.dataset.source;
+  localStorage.setItem('fh_eventsTab', JSON.stringify(eventsSourceTab));
   eventsSubTab = 'all';
   rebuildSubTabs();
   eventsData = applyFiltersAndSort(eventsRawData);
