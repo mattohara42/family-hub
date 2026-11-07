@@ -1319,6 +1319,12 @@ body.light-mode    .wx-sun-track    { stroke: rgba(0,0,0,.16); }
 .wx-day-hi { color: var(--text); font-weight: var(--weight-semi); min-width: 34px; text-align: right; }
 .wx-day-rain { color: #61afef; font-size: var(--text-sm); min-width: 36px; text-align: right; }
 
+/* Text for screen readers only (an icon-only title still needs a name) */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
 /* ── Forecast mode toggle ── */
 .wx-forecast-toggle {
   /* Same look as the calendar's .cal-view-tab, one size down */
@@ -1346,10 +1352,13 @@ body.light-mode    .wx-sun-track    { stroke: rgba(0,0,0,.16); }
   border-color: var(--control-active-border);
   box-shadow: var(--control-active-shadow);
 }
-/* Keep the title whole; the tabs drop to their own row when the sidebar is
-   too narrow for both (same pattern as the wall-display Assistant header). */
+/* The title is the cloud-sun icon alone (the word is .sr-only): "Weather"
+   cost 94px on the wall panel, enough to push the forecast tabs onto a row
+   of their own. If even the icon and tabs don't fit, the tabs still drop to
+   their own row rather than squeezing (same pattern as the wall-display
+   Assistant header). */
 #weatherCard .card-header { flex-wrap: wrap; row-gap: 6px; }
-#weatherCard .card-header h2 { min-width: max-content; }
+#weatherCard .card-header h2 { min-width: max-content; flex: 0 0 auto; }
 #weatherCard .card-header .wx-forecast-toggle { margin-left: auto; margin-bottom: 0; }
 html:not(.touch-input) .wx-forecast-toggle button:not(.active):hover {
   border-color: var(--accent);
