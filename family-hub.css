@@ -263,6 +263,17 @@ body {
   --today-ring: 0 0 0 1.5px color-mix(in srgb, var(--accent) 60%, transparent);
   --event-radius: 8px;
   --chip-radius: 999px;
+  /* modals: always opaque (a translucent modal goes illegible over a busy
+     photo), so Glass frosts with blur instead of a thin wash */
+  --modal-bg: linear-gradient(180deg, var(--surface-hi) 0%, var(--surface-solid) 18%, var(--surface-solid) 82%, var(--surface-lo) 100%);
+  --modal-border: var(--line);
+  --modal-shadow:
+    0 8px 48px rgba(0,0,0,.6),
+    0 2px 12px rgba(0,0,0,.4),
+    inset 0 1px 0 var(--surface-hi);
+  --modal-blur: none;
+  --scrim: rgba(0,0,0,.7);
+  --scrim-blur: none;
 }
 /* Tactile in light colors: warm shadows, multiply grain */
 body.light-mode {
@@ -279,6 +290,10 @@ body.light-mode {
   /* blue mixed into cream reads grey; today is the bright sheet + accent ring */
   --today-bg: var(--surface-hi);
   --week-bg: color-mix(in srgb, var(--surface-hi) 55%, var(--col-bg));
+  --modal-shadow:
+    0 8px 48px rgba(70,55,30,.18),
+    0 2px 12px rgba(70,55,30,.10),
+    inset 0 1px 0 var(--surface-hi);
 }
 input, textarea, [contenteditable]:not([contenteditable="false"]) {
   -webkit-user-select: text;
@@ -548,14 +563,19 @@ body.konami-mode {
   white-space: nowrap;
 }
 .btn {
-  padding: 8px 16px; border: none; border-radius: 8px;
+  /* a plain .btn (no variant) is a theme control; it used to fall through
+     to the browser's default white button in every theme */
+  padding: 7px 15px; border: 1px solid var(--control-border); border-radius: 8px;
+  background: var(--control-bg); color: var(--text);
+  box-shadow: var(--control-shadow);
   cursor: pointer; font-size: var(--text-base); font-weight: var(--weight-semi);
+  font-family: inherit;
   transition: opacity .15s;
 }
 html:not(.touch-input) .btn:hover { opacity: .85; }
-.btn-primary { background: var(--accent); color: #fff; }
-.btn-danger  { background: var(--red);    color: #fff; }
-.btn-sm      { padding: 4px 9px; font-size: var(--text-xs); }
+.btn-primary { background: var(--accent); color: #fff; border-color: transparent; }
+.btn-danger  { background: var(--red);    color: #fff; border-color: transparent; }
+.btn-sm      { padding: 3px 8px; font-size: var(--text-xs); }
 
 /* ── Config banner ── */
 #configBanner {
@@ -2434,31 +2454,9 @@ body.light-mode .sms-contact-row:hover { background: rgba(0,0,0,.05); }
      Confirmed on-device in both iOS Safari and Chrome (same WebKit engine
      underneath), so this needs its own overscroll-behavior too. */
   overscroll-behavior: contain;
-  /* 3-D card: gradient face + layered shadows + top-edge shine */
-  background: linear-gradient(160deg, #2a2f48 0%, #1a1e30 60%, #161929 100%);
-  border-top: 1px solid rgba(255,255,255,.18);
-  border-left: 1px solid rgba(255,255,255,.10);
-  box-shadow:
-    0  1px 0  rgba(255,255,255,.14) inset,
-    0  0  80px color-mix(in srgb, var(--accent) 45%, transparent),
-    0  0  40px color-mix(in srgb, var(--accent) 30%, transparent),
-    0  0  16px color-mix(in srgb, var(--accent) 20%, transparent),
-    0  0   0  1px color-mix(in srgb, var(--accent) 25%, transparent);
-  transform: perspective(800px) rotateX(2deg) translateY(-4px);
-  transform-origin: 50% 0%;
-}
-body.light-mode #eventEditorModal .modal {
-  background: linear-gradient(160deg, #ffffff 0%, #f0f2f8 60%, #e8eaf4 100%);
-  border-top: 1px solid rgba(255,255,255,1);
-  border-left: 1px solid rgba(255,255,255,.8);
-  box-shadow:
-    0  1px 0  rgba(255,255,255,1) inset,
-    0 50px 100px rgba(0,0,0,.30),
-    0 20px  40px rgba(0,0,0,.18),
-    0  6px  12px rgba(0,0,0,.12),
-    0  0    0   1px rgba(0,0,0,.08);
-  transform: perspective(800px) rotateX(2deg) translateY(-4px);
-  transform-origin: 50% 0%;
+  /* surface/border/shadow come from the --modal-* tokens on .modal; the
+     old 3-D tilt and accent glow were dropped 2026-11-07 for one modal
+     look per theme */
 }
 /* Brighter, more colorful interior than the plain .field defaults elsewhere
    (Settings etc. are untouched — this only targets the event editor) */
@@ -2473,7 +2471,7 @@ body.light-mode #eventEditorModal .modal {
   border: 1.5px solid color-mix(in srgb, var(--accent) 30%, var(--line));
   background: color-mix(in srgb, var(--accent) 4%, var(--surface2));
 }
-/* .btn-secondary's --surface2 fill nearly matches this modal's gradient, so
+/* .btn-secondary's --surface2 fill nearly matches the modal surface, so
    Cancel/Delete read as bare text without the same outline as the inputs */
 #eventEditorModal .btn-secondary {
   border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line));
@@ -2635,19 +2633,11 @@ html:not(.touch-input) .btn-danger:hover { background: color-mix(in srgb, var(--
 .list-empty { color: var(--muted); font-size: var(--text-xs); text-align: center; padding: 6px 0; }
 
 /* ── Event Details (read-only events: ICS feeds, holidays, local calendars) ── */
-/* Unlike Settings/Event Editor, this modal never got its own opaque
-   background: it was inheriting the base .modal rule's `var(--surface)`,
-   which is deliberately translucent (for cards sitting over a background
-   photo) rather than solid. Over anything busy behind it (a background
-   photo, or just the Agenda list's own text) that read as illegible,
-   especially in dark mode. `--surface-solid` is the same per-theme token
-   Settings/Event Editor already use for exactly this. Compound selector
-   because a bare .evt-details-modal ties the base .modal rule further down
-   and loses on source order (both this background and max-width were dead). */
-.modal.evt-details-modal { max-width: 460px; background: var(--surface-solid); }
-/* Discover Events sat on the translucent base .modal surface, so the calendar
-   read through it on a phone (third time this gotcha has bitten) */
-#eventsModal .modal { background: var(--surface-solid); }
+/* Compound selector: a bare .evt-details-modal ties the base .modal rule
+   further down and loses on source order. Its surface comes from the base
+   rule's --modal-bg, which is opaque (it once inherited the translucent
+   --surface and went illegible over a busy photo). */
+.modal.evt-details-modal { max-width: 460px; }
 .evt-details-head {
   display: flex; align-items: flex-start; justify-content: space-between;
   gap: 10px; margin-bottom: 4px;
@@ -2774,35 +2764,29 @@ html:not(.touch-input) .btn-danger:hover { background: color-mix(in srgb, var(--
 /* Settings modal */
 .modal-overlay {
   position: fixed; inset: 0;
-  background: rgba(0,0,0,.7);
+  background: var(--scrim);
+  backdrop-filter: var(--scrim-blur);
+  -webkit-backdrop-filter: var(--scrim-blur);
   display: flex; align-items: flex-start; justify-content: center;
   z-index: 100; padding: 20px;
   display: none;
   overflow-y: auto;
 }
 .modal {
-  background: var(--surface);
+  background: var(--modal-bg);
+  border: 1px solid var(--modal-border);
+  backdrop-filter: var(--modal-blur);
+  -webkit-backdrop-filter: var(--modal-blur);
   border-radius: var(--radius);
   padding: 28px;
   width: 100%; max-width: 520px;
-  box-shadow: var(--shadow);
+  box-shadow: var(--modal-shadow);
   margin: auto;
 }
 #settingsModal .modal {
   max-width: min(calc(100vw - 2rem), 860px);
   max-height: min(88vh, 620px);
   display: flex; flex-direction: column;
-  /* Always fully opaque — no background-photo bleed-through */
-  background: #1a1d27;
-  box-shadow:
-    0 8px 48px rgba(0,0,0,.7),
-    0 2px 12px rgba(0,0,0,.5),
-    0 0 80px color-mix(in srgb, var(--accent) 18%, transparent),
-    0 0 200px color-mix(in srgb, var(--accent) 10%, transparent);
-}
-body.light-mode #settingsModal .modal {
-  background: #f5f6fa;
-  box-shadow: 0 8px 48px rgba(0,0,0,.18), 0 2px 12px rgba(0,0,0,.10);
 }
 #settingsModal .settings-panels {
   flex: 1;
@@ -2832,8 +2816,11 @@ body.light-mode #settingsModal .modal {
 .field input[type=checkbox],
 .field input[type=radio] { width: auto; padding: 0; }
 .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; flex-shrink: 0; }
-.btn-secondary { background: var(--surface2); color: var(--text); }
-.btn-mode-active { background: var(--accent) !important; color: #fff !important; }
+.btn-secondary { background: var(--surface2); color: var(--text); border-color: transparent; box-shadow: none; }
+.btn-mode-active {
+  background: var(--control-active-bg) !important; color: var(--control-active-ink) !important;
+  border-color: var(--control-active-border) !important; box-shadow: var(--control-active-shadow) !important;
+}
 
 /* ── Settings — grouped two-pane nav ── */
 .settings-body {
@@ -2868,7 +2855,7 @@ body.light-mode #settingsModal .modal {
   width: 100%;
   padding: 7px 10px;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--tab-radius);
   background: none;
   color: var(--text);
   text-align: left;
@@ -2879,7 +2866,10 @@ body.light-mode #settingsModal .modal {
   transition: background .15s;
 }
 .settings-nav-item:hover:not(.active) { background: var(--surface2); }
-.settings-nav-item.active { background: var(--accent); color: #fff; }
+.settings-nav-item.active {
+  background: var(--control-active-bg); color: var(--control-active-ink);
+  box-shadow: var(--control-active-shadow);
+}
 /* Advanced (Easter Eggs) stays hidden until unlocked via the gear */
 .settings-nav-group--gated { display: none; }
 body.eggs-unlocked .settings-nav-group--gated { display: block; }
@@ -4585,10 +4575,7 @@ button, .cal-tab, .cal-view-tab, .modal-tab,
     line-height: 1.25;
     padding: 8px 4px;
     border-radius: 8px;
-    border-color: var(--line);
-    background: var(--surface2);
   }
-  #eventsModal .event-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
   /* .event-tab only: the category sub-tabs below reuse .event-tab-count */
   #eventsModal .event-tab-icon,
   #eventsModal .event-tab .event-tab-count { display: block; }
@@ -5143,24 +5130,23 @@ body.tv-mode .card:hover { box-shadow: none; }
    ════════════════════════════════════════════════════════════════ */
 
 .event-tab {
-  background: none;
-  border: 1px solid var(--border);
-  color: var(--muted);
+  background: var(--control-bg);
+  border: 1px solid var(--control-border);
+  box-shadow: var(--control-shadow);
+  color: var(--text);
   padding: 6px 12px;
-  border-radius: 4px;
+  border-radius: var(--tab-radius);
   font-size: var(--text-sm);
   cursor: pointer;
   transition: all 0.15s;
   white-space: nowrap;
 }
-.event-tab:hover {
-  color: var(--text);
-  border-color: var(--accent);
-}
+html:not(.touch-input) .event-tab:hover:not(.active) { border-color: var(--accent); }
 .event-tab.active {
-  background: var(--accent);
-  color: var(--bg);
-  border-color: var(--accent);
+  background: var(--control-active-bg);
+  color: var(--control-active-ink);
+  border-color: var(--control-active-border);
+  box-shadow: var(--control-active-shadow);
 }
 .event-tab-count {
   opacity: 0.7;
@@ -5644,6 +5630,13 @@ body.theme-glass {
   --week-bg: rgba(255,255,255,.10);
   --today-ring: 0 0 0 1px rgba(255,255,255,.55), inset 0 1px 0 rgba(255,255,255,.3);
   --event-radius: 16px;
+  /* frosted, not clear: mostly solid so text holds over any photo */
+  --modal-bg: color-mix(in srgb, var(--surface-solid) 80%, transparent);
+  --modal-border: rgba(255,255,255,.18);
+  --modal-shadow: inset 0 1px 0 rgba(255,255,255,.22), 0 24px 60px rgba(0,0,0,.45);
+  --modal-blur: blur(30px) saturate(160%);
+  --scrim: rgba(5,10,20,.40);
+  --scrim-blur: blur(6px);
   /* the scene the glass sits on (a background photo replaces it) */
   background:
     radial-gradient(60% 70% at 20% 10%, #1d3b5a 0%, transparent 70%),
@@ -5662,6 +5655,11 @@ body.theme-glass.light-mode {
   --today-bg: rgba(255,255,255,.58);
   --week-bg: rgba(255,255,255,.40);
   --today-ring: 0 0 0 1px rgba(255,255,255,.95), 0 8px 20px rgba(20,40,80,.12);
+  --modal-bg: color-mix(in srgb, var(--surface-solid) 78%, transparent);
+  --modal-border: rgba(255,255,255,.8);
+  --modal-shadow: inset 0 1px 1px rgba(255,255,255,.9), 0 24px 60px rgba(20,40,80,.22);
+  --scrim: rgba(20,40,80,.20);
+  --scrim-blur: blur(8px);
   background:
     radial-gradient(55% 70% at 18% 12%, #ffd9a8 0%, transparent 70%),
     radial-gradient(50% 60% at 85% 20%, #8fd0e8 0%, transparent 70%),
@@ -5713,6 +5711,13 @@ body.theme-paper {
   --today-ring: inset 0 2px 0 var(--accent);
   --event-radius: 3px;
   --chip-radius: 3px;
+  /* a sheet laid on the page: ruled edge, no lift */
+  --modal-bg: var(--surface-solid);
+  --modal-border: var(--line);
+  --modal-shadow: none;
+  --modal-blur: none;
+  --scrim: color-mix(in srgb, var(--bg) 75%, transparent);
+  --scrim-blur: none;
 }
 /* warm newsprint palette for light and dark (Accessible keeps its own) */
 body.theme-paper:not(.colorblind-mode) {
