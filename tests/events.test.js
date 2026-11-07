@@ -147,3 +147,4 @@ test('status probe reports which keys are configured, without a location', async
     if (saved.tm === undefined) delete process.env.TICKETMASTER_KEY; else process.env.TICKETMASTER_KEY = saved.tm;
   }
 });
+

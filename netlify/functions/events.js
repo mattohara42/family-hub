@@ -43,7 +43,6 @@ const OWM_GEO_BASE = 'https://api.openweathermap.org/geo/1.0';
 // Source status tracking for this request
 const sourceStatus = {
   ticketmaster: { ok: true, count: 0, error: null },
-  osm: { ok: true, count: 0, error: null },
   libraryweb: { ok: true, count: 0, error: null },
   redwings: { ok: true, count: 0, error: null },
   cityspark: { ok: true, count: 0, error: null },
@@ -167,9 +166,8 @@ exports.handler = async (event) => {
       if (sourceStatus[name]) { sourceStatus[name].ok = false; sourceStatus[name].error = err.message; }
       throw err;
     });
-    const [tmEvents, osmEvents, libEvents, rwEvents, csEvents, fpEvents, pfEvents] = await Promise.allSettled([
+    const [tmEvents, libEvents, rwEvents, csEvents, fpEvents, pfEvents] = await Promise.allSettled([
       capped(fetchTicketmaster(city, state, lat, lon, { keyword, attractionId, venueId }), 'ticketmaster'),
-      capped(fetchOpenStreetMap(city, state, lat, lon, radiusMinutes), 'osm'),
       capped(fetchLibraryWeb(city, state, lat, lon), 'libraryweb'),
       capped(fetchRedWings(city, state, lat, lon), 'redwings'),
       capped(fetchCitySpark(city, state, lat, lon), 'cityspark'),
@@ -180,7 +178,6 @@ exports.handler = async (event) => {
     // Collect all results
     const allEvents = [
       ...extractSettledValue(tmEvents, 'ticketmaster'),
-      ...extractSettledValue(osmEvents, 'osm'),
       ...extractSettledValue(libEvents, 'libraryweb'),
       ...extractSettledValue(rwEvents, 'redwings'),
       ...extractSettledValue(csEvents, 'cityspark'),
@@ -212,10 +209,12 @@ exports.handler = async (event) => {
       events: finalEvents,
       location,
       radius: radiusMinutes,
+      // Things to Do (OpenStreetMap) is fetched by the browser around this
+      // point: Overpass never answers Netlify's servers (2026-11-07)
+      center: { lat, lon, city, state },
       timestamp: Date.now(),
       sourceStats: {
         ticketmaster: sourceStatus.ticketmaster.count,
-        osm: sourceStatus.osm.count,
         libraryweb: sourceStatus.libraryweb.count,
         redwings: sourceStatus.redwings.count,
         cityspark: sourceStatus.cityspark.count,
@@ -224,7 +223,7 @@ exports.handler = async (event) => {
       },
       warnings: Object.entries(sourceStatus)
         .filter(([, status]) => !status.ok)
-        .map(([name]) => `${name} unavailable`)
+        .map(([name, status]) => `${name} unavailable${status.error ? `: ${status.error}` : ''}`)
     });
 
   } catch (err) {
@@ -451,135 +450,6 @@ async function fetchTicketmaster(city, state, lat, lon, filters = {}) {
     console.error('[Events] Ticketmaster error:', err);
     sourceStatus.ticketmaster.ok = false;
     sourceStatus.ticketmaster.error = err.message;
-    return [];
-  }
-}
-
-// ────────────────────────────────────────────────────────────────
-// OPENSTREETMAP (things to do — museums, parks, galleries, theatres)
-// ────────────────────────────────────────────────────────────────
-
-// Overpass mirrors (try in order on failure)
-const OVERPASS_ENDPOINTS = [
-  'https://overpass-api.de/api/interpreter',
-  'https://overpass.kumi.systems/api/interpreter'
-];
-
-// Map an OSM tag value to one of our canonical event types + a human label
-function osmCategoryInfo(tags) {
-  const cultural = { museum: 'Museum', gallery: 'Art gallery', arts_centre: 'Arts centre', theatre: 'Theatre', cinema: 'Cinema' };
-  const outdoor = { park: 'Park', nature_reserve: 'Nature reserve', garden: 'Garden', viewpoint: 'Scenic viewpoint' };
-  const fun = { zoo: 'Zoo', aquarium: 'Aquarium', theme_park: 'Theme park' };
-
-  const key = tags.tourism || tags.leisure || tags.amenity;
-  if (cultural[key]) return { type: 'art', label: cultural[key] };
-  if (outdoor[key]) return { type: 'hike', label: outdoor[key] };
-  if (fun[key]) return { type: 'activity', label: fun[key] };
-  return { type: 'activity', label: 'Place of interest' };
-}
-
-/**
- * Fetch nearby "things to do" from OpenStreetMap via the Overpass API.
- * Free, keyless, server-reachable. Returns dateless POIs (always-available),
- * which the distance/date filter keeps (date === null) and trims by distance.
- */
-async function fetchOpenStreetMap(city, state, lat, lon, radiusMinutes) {
-  try {
-    // Cap the POI search radius — things-to-do are local day-trips, and a huge
-    // Overpass area is slow. Derive from drive radius but cap at 60km.
-    const radiusMiles = (parseInt(radiusMinutes) || 120) / 60 * 70;
-    const radiusMeters = Math.min(Math.round(radiusMiles * 1609), 60000);
-
-    const query = `[out:json][timeout:25];
-(
-  nwr["tourism"~"^(museum|gallery|theme_park|zoo|aquarium|viewpoint)$"]["name"](around:${radiusMeters},${lat},${lon});
-  nwr["leisure"~"^(park|nature_reserve|garden)$"]["name"](around:${radiusMeters},${lat},${lon});
-  nwr["amenity"~"^(theatre|arts_centre|cinema)$"]["name"](around:${radiusMeters},${lat},${lon});
-);
-out center tags 80;`;
-
-    let data = null;
-    for (const endpoint of OVERPASS_ENDPOINTS) {
-      try {
-        const r = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'User-Agent': 'FamilyHub/1.0 (event discovery)'
-          },
-          body: 'data=' + encodeURIComponent(query)
-        });
-        if (r.ok) { data = await r.json(); break; }
-      } catch (endpointErr) {
-        console.warn(`[Events] Overpass endpoint failed (${endpoint}):`, endpointErr.message);
-      }
-    }
-
-    if (!data) {
-      sourceStatus.osm.ok = false;
-      sourceStatus.osm.error = 'all Overpass endpoints failed';
-      return [];
-    }
-
-    const seenNames = new Set();
-    const events = [];
-
-    for (const el of (data.elements || [])) {
-      try {
-        const tags = el.tags || {};
-        const name = tags.name;
-        if (!name) continue;
-
-        // Nodes carry lat/lon directly; ways/relations carry a computed center
-        const pLat = el.lat ?? el.center?.lat;
-        const pLon = el.lon ?? el.center?.lon;
-        if (pLat == null || pLon == null) continue;
-
-        // Dedupe repeated names (e.g. a park mapped as both node and area)
-        const nameKey = name.toLowerCase().trim();
-        if (seenNames.has(nameKey)) continue;
-        seenNames.add(nameKey);
-
-        const { type, label } = osmCategoryInfo(tags);
-        const website = tags.website || tags['contact:website'] || null;
-        const osmType = el.type;  // node | way | relation
-
-        events.push({
-          id: `osm_${osmType}${el.id}`,
-          title: name,
-          type,
-          source: 'osm',
-          sourceUrl: website || `https://www.openstreetmap.org/${osmType}/${el.id}`,
-          date: null,   // always-available "thing to do"
-          time: null,
-          duration: null,
-          location: {
-            city,
-            state,
-            address: tags['addr:street']
-              ? `${tags['addr:housenumber'] || ''} ${tags['addr:street']}`.trim()
-              : label,
-            lat: pLat,
-            lon: pLon,
-            distanceMiles: null
-          },
-          description: tags.description || `${label} in ${tags['addr:city'] || city}`,
-          image: tags.image || null,
-          weather: null
-        });
-      } catch (itemErr) {
-        console.warn('[Events] Error parsing OSM element:', itemErr);
-      }
-    }
-
-    sourceStatus.osm.count = events.length;
-    sourceStatus.osm.ok = true;
-    sourceStatus.osm.error = null;
-    return events;
-  } catch (err) {
-    console.warn('[Events] OpenStreetMap error:', err);
-    sourceStatus.osm.ok = false;
-    sourceStatus.osm.error = err.message;
     return [];
   }
 }
@@ -1237,8 +1107,8 @@ function filterEventsByDistanceAndDate(events, radiusMinutes, searchLat, searchL
   return events.filter(e => {
     if (!e.location.lat || !e.location.lon) return false;
 
-    // Dateless items (e.g. OSM "things to do") are always-available — keep them
-    // and let distance decide. Dated events must fall within today..+30 days.
+    // Dateless items are always-available: keep them and let distance
+    // decide. Dated events must fall within today..+30 days.
     if (e.date && (e.date < today || e.date > nextMonth)) return false;
 
     const dist = calculateDistance(
