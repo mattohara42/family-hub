@@ -1222,9 +1222,11 @@ html:not(.touch-input) .cal-month-nav button:hover  { background: var(--accent);
 @keyframes wx-shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
 @keyframes wx-drift { 0%,100% { transform: translateX(0); } 50% { transform: translateX(4px); } }
 
-.wx-temp-row { display: flex; align-items: baseline; gap: 8px; }
+/* "Feels 40°" stays whole and drops under the temperature when the
+   high/low/rain column beside it (with a "starts 3 PM" line) leaves no room */
+.wx-temp-row { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; }
 .wx-temp { font-size: 2.2rem; font-weight: var(--weight-bold); line-height: 1; }
-.wx-feels { font-size: var(--text-sm); color: var(--muted); }
+.wx-feels { font-size: var(--text-sm); color: var(--muted); white-space: nowrap; }
 .wx-desc { color: var(--muted); font-size: var(--text-sm); margin-top: 2px; text-transform: capitalize; }
 .wx-details {
   display: flex; flex-wrap: wrap; gap: 5px;
@@ -1239,16 +1241,18 @@ html:not(.touch-input) .cal-month-nav button:hover  { background: var(--accent);
   white-space: nowrap;
 }
 
+/* Today's high/low/rain: a right-aligned column at the end of .wx-current,
+   beside the big temperature (was a full-width band under it). */
 .wx-today {
   display: flex;
-  justify-content: space-evenly;
-  flex-wrap: wrap;
-  padding: 6px 0;
-  border-top: 1px solid rgba(255,255,255,.06);
-  border-bottom: 1px solid rgba(255,255,255,.06);
-  margin-bottom: 8px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  margin-left: auto;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
-.wx-today span { font-size: var(--text-sm); color: var(--muted); }
+.wx-today span { font-size: var(--text-sm); color: var(--muted); white-space: nowrap; }
 .wx-today strong { color: var(--text); }
 
 /* ── Sun-path arc ── */
@@ -4136,10 +4140,12 @@ body.light-mode .assistant-input-row {
    hit area (the negative margin keeps the header row the same height). The
    wall panel may report a mouse, so Wall display gets the same treatment. */
 @media (hover: none) {
-  .widget-drag-handle { opacity: 0.4; padding: 10px 12px 10px 4px; margin: -10px 0; }
+  .widget-drag-handle { opacity: 0.4; padding: 10px 4px 10px 0; margin: -10px 0; }
 }
 html.wall-display .widget-drag-handle {
-  opacity: 0.45; font-size: 1.3rem; padding: 10px 12px 10px 4px; margin: -10px 0;
+  /* glyph at base size, tight sides: the tall padding keeps a finger-sized
+     target without spending header width on it */
+  opacity: 0.45; padding: 10px 4px 10px 0; margin: -10px 0;
 }
 
 /* ── Widget visibility toggles (Settings → Widgets) ── */

@@ -293,6 +293,8 @@ let sunArcEnabled       = lsGet('fh_sunArc', true);   // sun-path arc on/off
 
 **Header (2026-11-07):** the card title is the cloud-sun icon alone; the word "Weather" is a `.sr-only` span (plus `title` on the `<h2>`), so the 5-day/Hourly/Curve/Radar tabs fit beside it. With the word visible, the wall panel's 350px header wrapped the tabs onto a row of their own. The `flex-wrap` fallback stays for anything narrower.
 
+**Current conditions:** today's high/low/rain (`.wx-today`: `#wHigh`, `#wLow`, `#wRain`, `#wRainTime`) is a right-aligned column at the end of `.wx-current`, beside the big temperature, instead of a full-width band under it. `.wx-temp-row` wraps, so "Feels" drops under the temperature rather than breaking when that column (with a "starts 3 PM" line) leaves no room.
+
 **localStorage:** `fh_wlocations` (array — no-Firebase fallback only; synced via Firestore `settings/weatherLocations` doc otherwise), `fh_wcity` (legacy, kept in sync with first location), `fh_sunArc` (bool — sun-path arc visibility, always local). *(`fh_wkey` removed — weather is keyless now.)*
 
 **Migration:** On first run, any existing `fh_wcity` value is auto-migrated into `fh_wlocations[0]`. On first Firestore sign-in, an existing `fh_wlocations` gets uploaded to `settings/weatherLocations` (first device to sign in wins; see `runFirestoreMigrations()`).
