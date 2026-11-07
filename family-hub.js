@@ -844,6 +844,9 @@ function renderBudgetCard() {
   // Hide entire budget card only when there are no budget items at all
   if (!budgetItems.length) {
     card.style.display = 'none';
+    // Still sync the privacy buttons: deleting the last bill must hide the
+    // mobile header's eye, which only shows while there are bills to hide.
+    applyBudgetPrivacy();
     return;
   }
   if (widgetVisibility.budget) card.style.display = '';
