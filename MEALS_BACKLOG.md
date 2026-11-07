@@ -102,6 +102,6 @@ Wegmans has been an Instacart retailer since 2017 (delivery, pickup, EBT SNAP, l
 ## Notes & Constraints
 
 - **Keyless/free external services only** for images (TheMealDB, LoremFlickr). Respect the CSP in `family-hub.html` (`img-src`, `connect-src`).
-- **Three themes.** Any new UI must look correct in dark, light, and nautical modes.
+- **Every theme.** Any new UI must look correct in dark, light, and Accessible modes.
 - **No build step.** Inline helpers only.
 - **`meal.image` is the persisted hook** — populate it to make any image source instant and reload-safe.

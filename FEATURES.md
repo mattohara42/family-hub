@@ -47,7 +47,6 @@ family-hub.html   (HTML only — no inline CSS or JS)
 
 family-hub.css    (stylesheet)
 ├── :root                  CSS variables (dark defaults)
-├── body.nautical-mode     Nautical theme overrides + decorative elements
 ├── body.light-mode        Light theme overrides
 ├── Layout                 (.layout + --sidebar-w, .cal-column, .sidebar, #bottomStrip, .cal-main-row/.beside-strip)
 ├── Calendar               (.cal-grid, .week-*, .day-*, .cal-event-*, .cal-dow)
@@ -180,7 +179,7 @@ A birthday whose name matches a family member (whole name, case-insensitive) tak
 
 Two accessors carry this, and any new color read should go through them rather than `m.color`/`sub.color`/`cal.color`: **`memberColor(m)`** and **`sourceColor(key, own)`**. Event colors are stamped at cache time (`cacheCalEvents()` args in `loadAllCalendars()`, `injectIcsEvent()`, `injectLocalEvents()`), so a palette change runs `refreshCalPalette()`, which refetches and redraws the lists. Pickers step aside: `body.cal-palette-on` hides `input.lc-color`, the `.cal-color-wrap` pickers are rendered `disabled`, and a member row shows a `.palette-dot` instead.
 
-The `colorblind` palette replaced the old per-device "Colorblind-safe swatches" toggle (`fh_safePalette`, converted on load, then uploaded by `runFirestoreMigrations()` if no palette is synced yet). It still sets `body.safe-palette-on`, which keeps Tactile decoration suppressed (KTD-4).
+The `colorblind` palette replaced the old per-device "Colorblind-safe swatches" toggle (`fh_safePalette`, converted on load, then uploaded by `runFirestoreMigrations()` if no palette is synced yet). It still sets `body.safe-palette-on`, which keeps the material's grain and glow suppressed (KTD-4).
 
 #### Event Details (read-only events)
 
@@ -336,38 +335,31 @@ let slideInterval = parseInt(localStorage.getItem('fh_slideInterval')) || 30;
 
 ### 5. Appearance Themes
 
-Three modes, toggled via ⚙️ Settings → Look & Feel:
+Toggled via ⚙️ Settings → Look & Feel. Nautical and Aurora were removed 2026-11-07, along with the Basic/Tactile flavor switch.
 
 | Mode | Class on `<body>` | Description |
 |---|---|---|
-| Dark (default) | _(none)_ | Deep charcoal, blue accent |
-| Light | `light-mode` | Light grey background, dark text |
-| Nautical | `nautical-mode` | Navy hull + 20% diagonal white stripes, beige-gold accents, anchor watermark, animated wave footer |
+| Auto (default) | resolves to one below | Follows `prefers-color-scheme` (or sunset, per device) |
+| Dark | _(none)_ | Deep charcoal, blue accent |
+| Light | `light-mode` | Warm cream paper surfaces, dark text |
+| Accessible | `colorblind-mode` | High-contrast dark, Okabe-Ito palette |
 
 **State:**
 ```js
-let appMode = localStorage.getItem('fh_mode') || 'auto'; // 'auto' | 'light' | 'dark' | 'nautical' | 'aurora' | 'colorblind'
-let appFlavor = localStorage.getItem('fh_flavor') || 'basic'; // 'basic' | 'tactile' — design-system axis, orthogonal to appMode
+let appMode = localStorage.getItem('fh_mode') || 'auto'; // 'auto' | 'light' | 'dark' | 'colorblind'
 ```
-**Auto mode (added 2026-09-17):** `'auto'` is the true default — before any explicit pick, the app already follows the device's `prefers-color-scheme`, and `'🌓 Auto'` in Settings → Look & Feel lets you opt back into that after picking something else. `resolveAppMode(mode)` maps `'auto'` to `'light'`/`'dark'` off `matchMedia('(prefers-color-scheme: light)')`; `applyAppMode()` applies classes off the *resolved* value while `appMode` itself keeps the logical `'auto'`. A `change` listener on that same media query reapplies whenever `appMode === 'auto'` — same pattern as the `'auto'` layout-orientation listener a bit further down the file. Auto only ever resolves to light/dark; Nautical/Aurora/Accessible stay manual-only picks, since they're not a day/night distinction.
+**Auto mode (added 2026-09-17):** `'auto'` is the true default — before any explicit pick, the app already follows the device's `prefers-color-scheme`, and `'🌓 Auto'` in Settings → Look & Feel lets you opt back into that after picking something else. `resolveAppMode(mode)` maps `'auto'` to `'light'`/`'dark'` off `matchMedia('(prefers-color-scheme: light)')`; `applyAppMode()` applies classes off the *resolved* value while `appMode` itself keeps the logical `'auto'`. A `change` listener on that same media query reapplies whenever `appMode === 'auto'` — same pattern as the `'auto'` layout-orientation listener a bit further down the file. Auto only ever resolves to light/dark; Accessible stays a manual-only pick, since they're not a day/night distinction.
 
 **Auto follows sunset (per device, added 2026-11-05):** Settings → Look & Feel → Theme → 🌇 Auto follows sunset (`#autoThemeSunToggle`, `autoThemeBySun`, `fh_autoThemeSun`, default off, never synced). Added because the Pi wall panel's OS never switches to dark, so plain Auto stayed light all night. When on, `resolveAppMode('auto')` returns dark between sunset and sunrise via `isNightNow()` and ignores `prefers-color-scheme`. `loadWeatherByCity()` calls `rememberSunTimes()` for the first weather location only, storing `{ rise, set }` as minutes after local midnight in `sunTimes`/`fh_sunTimes` so a stale value is only minutes off; with no weather ever loaded it falls back to 7:00 to 19:00. A one-minute `setInterval` reapplies Auto so the switch lands without a reload.
 
 **Key functions:**
 - `resolveAppMode(mode)` — `'auto'` → live `'light'`/`'dark'`; anything else passes through unchanged
 - `applyAppMode(mode)` — removes all mode classes, adds the one for `resolveAppMode(mode)`
-- `setAppMode(mode)` — calls `applyAppMode`, saves to localStorage, updates button highlights (including the Aurora button, which `openSettings()`'s equivalent highlight block was missing before this pass)
-- `applyFlavor(flavor)` — toggles `body.flavor-tactile` (basic = no class)
-- `setFlavor(flavor)` — calls `applyFlavor`, saves `fh_flavor`, updates button highlights. Tactile reads each theme's color tokens; CSS lives in the `✦ TACTILE FLAVOR` section of `family-hub.css` (self-hosted fonts in `fonts/`)
+- `setAppMode(mode)` — calls `applyAppMode`, saves to localStorage, updates button highlights
 
-**Nautical-specific CSS elements:**
-- `body.nautical-mode::before` — large ⚓ watermark (22% opacity), lower-right corner
-- `body.nautical-mode::after` — animated `clip-path` wave along bottom edge (`nauticalWave` keyframe)
-- Rope-style card header dividers (repeating-linear-gradient brass strands)
-- Compass rose radial gradient on calendar card body
-- Beige-gold DOW labels, today cell porthole glow, gradient brass buttons
+**Material (formerly the Tactile flavor):** paper surface gradient, grain, layered shadow, 16px radius, Fraunces display type and Hanken Grotesk body type (self-hosted in `fonts/`, pre-cached by `sw.js`). It reads each theme's color tokens; CSS lives in the `✦ MATERIAL` section of `family-hub.css`. It used to be opt-in under `body.flavor-tactile`; it is now unconditional, and `fh_flavor` is cleared on load.
 
-**localStorage:** `fh_mode` — migration: `'amazing'` is auto-upgraded to `'nautical'` on load
+**localStorage:** `fh_mode`. A saved `'nautical'`/`'aurora'` (or the older `'amazing'`/`'nautical-light'`) is removed on load, so the device falls back to Auto.
 
 **TV / Display Mode:**
 Activated via Settings → Look & Feel → 📺 TV / Display Mode toggle, or by appending `?tv=1` to the URL.
@@ -380,7 +372,7 @@ Activated via Settings → Look & Feel → 📺 TV / Display Mode toggle, or by 
 
 **Wall display (per device):** Settings → Look & Feel → 🖼 Wall display (`#wallDisplayToggle`, `wallDisplay`, `fh_wallDisplay`, default off, never synced). For a touchscreen read from across the room; it replaced zooming Chromium on the Pi panel, which made event titles huge before chips and sidebar text were legible. `applyWallDisplay()` (load listener + `saveSettings()`) toggles `html.wall-display`; `/* ── Wall display ── */` in family-hub.css sets the root to 20px (literal `rem` sizes and spacing grow 25%) and re-sets the `--text-*` ladder flatter so the small steps gain most (xs 11.2→15.6px, md 16→18.4px), drops event pills to medium weight, and widens the sidebar to 380px at ≥1200px. Event fills go through `eventFill(color)`, which under wall display darkens the color (×0.92 per step, same hue) until `relLuminance()` ≤ 0.30 so text is always white; `parseHexColor()`/`relLuminance()` are shared with `readableTextOn()`. Toggling it calls `renderCurrentView()` because fills are painted inline.
 
-**Motion switches (per device):** Settings → Look & Feel → Motion & effects lists every *endless* animation with its own on/off toggle, so a slow wall panel can stop the ones that keep the browser repainting (on the Pi 3B+ panel: ~33% idle CPU with them running, ~7% paused). `MOTION_ANIMS` (in `// ── Motion ──`, family-hub.js) is the list — `wxIcon`, `sunGlow`, `moonGlow`, `wxTicker` (forecast ticker + snarky line), `asstTicker`, `themeBg` (Nautical wave / Aurora shimmer), `statusPulse` (`.status-fix`), `choreBadge` (`.chore-redeem-btn`), plus `glass`, the one non-animation: `body.no-anim-glass` drops every `backdrop-filter` with a blanket `!important` (blur is set on too many selectors to outrank one by one). Measured on the panel, blur roughly doubled the longest frames of a calendar swipe (1.1s → 0.5s without it); shadows were left alone since focus and badge rings use them. Off keys live in `motionOff` / `fh_motionOff` — localStorage only, deliberately not Firestore-synced, since the panel and a phone want different answers. `applyMotion()` (load listener + `saveSettings()`) toggles `body.no-anim-<key>`; `renderMotionToggles()` (from `openSettings()`) builds the rows into `#motionToggles` as `#motion-<key>` checkboxes. CSS lives in `/* ── Motion switches ── */` at the end of family-hub.css: each `body.no-anim-<key> <selector>` outranks the animation's own rule on specificity, and a stopped ticker gets `overflow-x: auto` so its tail stays reachable by swipe. Transient animations (spinners, mic, assistant thinking, Easter eggs) are intentionally not listed. **Adding a new endless animation?** Add it to `MOTION_ANIMS` and the CSS block, or the panel can't turn it off.
+**Motion switches (per device):** Settings → Look & Feel → Motion & effects lists every *endless* animation with its own on/off toggle, so a slow wall panel can stop the ones that keep the browser repainting (on the Pi 3B+ panel: ~33% idle CPU with them running, ~7% paused). `MOTION_ANIMS` (in `// ── Motion ──`, family-hub.js) is the list — `wxIcon`, `sunGlow`, `moonGlow`, `wxTicker` (forecast ticker + snarky line), `asstTicker`, `statusPulse` (`.status-fix`), `choreBadge` (`.chore-redeem-btn`), plus `glass`, the one non-animation: `body.no-anim-glass` drops every `backdrop-filter` with a blanket `!important` (blur is set on too many selectors to outrank one by one). Measured on the panel, blur roughly doubled the longest frames of a calendar swipe (1.1s → 0.5s without it); shadows were left alone since focus and badge rings use them. Off keys live in `motionOff` / `fh_motionOff` — localStorage only, deliberately not Firestore-synced, since the panel and a phone want different answers. `applyMotion()` (load listener + `saveSettings()`) toggles `body.no-anim-<key>`; `renderMotionToggles()` (from `openSettings()`) builds the rows into `#motionToggles` as `#motion-<key>` checkboxes. CSS lives in `/* ── Motion switches ── */` at the end of family-hub.css: each `body.no-anim-<key> <selector>` outranks the animation's own rule on specificity, and a stopped ticker gets `overflow-x: auto` so its tail stays reachable by swipe. Transient animations (spinners, mic, assistant thinking, Easter eggs) are intentionally not listed. **Adding a new endless animation?** Add it to `MOTION_ANIMS` and the CSS block, or the panel can't turn it off.
 
 ---
 
@@ -459,7 +451,7 @@ const WIDGET_ORDER = [
 - `buildShoppingBody()` — formats the list into the message text (pending items only, if any are pending; otherwise everything)
 - `sendToContact(phone)` — opens an `sms:` URL with `buildShoppingBody()`'s text pre-filled
 
-**SMS popover:** `.sms-popover` uses a solid opaque background (`#1e2130` dark / `#f5f6fa` light / `#0e1e48` nautical) so it's readable over background photos.
+**SMS popover:** `.sms-popover` uses a solid opaque background (`#1e2130` dark / `#f5f6fa` light) so it's readable over background photos.
 
 **HTML anchors:** `#shopList`, `#shopInput`, `#shopEmpty`, `#smsPopover`, `#smsTriggerBtn`
 
@@ -903,11 +895,11 @@ let lastWxData    = null;  // set by renderWeatherData(); reused for the temp li
 
 **Night mode:** `#screensaver.night` — photos hidden/dropped, the pond iframe destroyed and the wake button hidden, info hidden, clock forced visible at 35% opacity (even if the clock toggle is off). Leaving the window re-mounts whichever mode is selected.
 
-**Pond Chimes mode:** the pond is vendored verbatim at `pond/` as a **git subtree** of `mattohara42/pond-chimes` (`git subtree pull --prefix=pond https://github.com/mattohara42/pond-chimes main --squash` to re-sync). It runs in a same-origin iframe so its globals and its `html, body` CSS reset stay in their own document — nothing in `pond/` is edited, and the two parent-side tweaks (audio, hiding the pond's own title card) reach in from the hub. Requires `frame-src 'self'` in the `family-hub.html` CSP **and** `X-Frame-Options = "SAMEORIGIN"` (not `DENY`) in `netlify.toml`. `pond/` is not in the service worker's `APP_SHELL` — the fetch handler runtime-caches it on first use, like the Tactile fonts.
+**Pond Chimes mode:** the pond is vendored verbatim at `pond/` as a **git subtree** of `mattohara42/pond-chimes` (`git subtree pull --prefix=pond https://github.com/mattohara42/pond-chimes main --squash` to re-sync). It runs in a same-origin iframe so its globals and its `html, body` CSS reset stay in their own document — nothing in `pond/` is edited, and the two parent-side tweaks (audio, hiding the pond's own title card) reach in from the hub. Requires `frame-src 'self'` in the `family-hub.html` CSP **and** `X-Frame-Options = "SAMEORIGIN"` (not `DENY`) in `netlify.toml`. `pond/` is not in the service worker's `APP_SHELL` — the fetch handler runtime-caches it on first use.
 
 **HTML anchors:** `#screensaver` (fixed overlay, `z-index: 20000` — above modals, below easter-egg layers), `#saverClock` / `#saverClockTime` / `#saverClockDate` / `#saverInfo` (`#saverInfoWx`, `#saverInfoEvent`), `#saverWakeBtn` (pond play-mode wake), `#saverPond` (created at runtime)
 
-**CSS:** `/* ── Screensaver ── */` section — `.saver-img` (crossfade + `saverKb0–3` keyframes), `#screensaver.active`, `#screensaver.active.pond` (restores the cursor the slideshow hides), `#screensaver.night`, `#saverPond`, `#saverWakeBtn`, `#saverInfo`, tactile flavor uses `--font-display` for the clock
+**CSS:** `/* ── Screensaver ── */` section — `.saver-img` (crossfade + `saverKb0–3` keyframes), `#screensaver.active`, `#screensaver.active.pond` (restores the cursor the slideshow hides), `#screensaver.night`, `#saverPond`, `#saverWakeBtn`, `#saverInfo`; the clock uses `--font-display`
 
 **Settings:** Screensaver/Background tab (General group) → Screensaver section: enable toggle, mode select (photos / pond), idle minutes (1–240), dwell seconds (5–600, photo mode), pond sound toggle + pond tap behavior (pond mode), clock toggle, weather & next event toggle, night dimming toggle + from/to times. Wired in `openSettings()` / `saveSettings()`; init armed from the `load` handler.
 
@@ -947,7 +939,7 @@ Secondary widgets (Chores, Word, Joke, Quotes, Countdown, News, Stock, Year-at-a
 
 **Day view all-day ＋:** a round `.day-allday-add` button at the right end of `.day-allday-row` (2026-11-06; 44px on the wall display). It used to be text inside the "All day" label, which overflowed the label column onto "No all-day events" at every width. Still `display: none` under the mobile query, since `#mobileAddFab` already opens the editor on the viewed day, with its own All-day toggle.
 
-**Edge-to-edge:** the 640px query zeroes `body` padding down to safe-area insets only (notch/home indicator stay — that's hardware, not decoration) and strips `.cal-card`'s border/radius/shadow with `!important` — needed because the nautical/aurora/tactile theme overrides target `.card.cal-card` with more classes in the selector, which otherwise outranks a plain `.cal-card` rule regardless of source order.
+**Edge-to-edge:** the 640px query zeroes `body` padding down to safe-area insets only (notch/home indicator stay — that's hardware, not decoration) and strips `.cal-card`'s border/radius/shadow with `!important` — needed because the material and theme overrides target `.card.cal-card` with more classes in the selector, which otherwise outranks a plain `.cal-card` rule regardless of source order.
 
 **Mobile type scale:** the `--text-xs/sm/base/md/lg` custom properties are overridden larger under the 640px query (e.g. `--text-xs` 0.70rem → 0.80rem) — one bump that reaches everything already using the tokens, instead of chasing individual font-size rules. `#settingsModal` gets its own larger bump on top (`.settings-panel` and its children forced to `1rem`/`line-height: var(--leading-normal)`, `!important` since most panel copy is inline-styled and nothing else beats that): `.settings-section-head`/`.lc-section-title` 1.05rem, helper copy (`.settings-hint`, `.toggle-sub`, `.settings-intro`) .9rem so labels and controls lead, `.settings-nav-item` 1.05rem, `.settings-nav-label` 0.8rem, the "⚙️ Settings" dialog title 1.4rem.
 
@@ -973,7 +965,7 @@ Two more mobile-only fixes in that same override block (2026-09-24): `#eventEdit
 
 **Month pill labels on mobile:** a phone-width cell fits about five characters, which for most titles was just a member's name. Member initials replaced that for a while and read as noise ("M J"), so under `isMobile`, `makeDayCell()` now takes the members out of the title instead: `eventMemberNames(ev)` (its `ev.members`, else every member named as a whole word in the title, via `memberNameRe()`), then `stripMemberNames(summary, names)` removes those names, any joiner that only sat between them (",", "&", "+", "and"), a trailing "with/for <name>", and dashes or colons left at either end ("Jack & Matt - Hockey" → "Hockey"; an "and" elsewhere stays; nothing left → full title). `applyMemberStripes(pill, names)` shows who as one 2px inset box-shadow stripe per member in their family color down the pill's left edge, and drops the separate member badges. Mobile pills wrap to two lines (`-webkit-line-clamp: 2`, hyphenated where the browser supports it) instead of clipping, and are no longer hidden under 400px. Golden test: `tests/member-names.test.js`. Events with no member, and holidays, keep their title. Bill pills drop the 💰 so the item's name comes first, and both pill types clip instead of ending in "..." (`text-overflow: clip`, in a 640px query placed after the base rules so it wins on source order). The `resize` listener re-renders Month when crossing the breakpoint, since the labels differ on each side.
 
-**Tactile/theming:** sheet/FAB chrome derives from tokens (`--line`, `--surface-solid/-hi`, `--accent`); Tactile mobile rules (`body.flavor-tactile .mobile-sheet`) use neutral tokens only (KTD-4-safe). Touch tap-target sizing lives inside `@media (hover: none)` per the CLAUDE.md invariant.
+**Tactile/theming:** sheet/FAB chrome derives from tokens (`--line`, `--surface-solid/-hi`, `--accent`); the material's mobile rules (`body .mobile-sheet`) use neutral tokens only (KTD-4-safe). Cards reparented into the sheet keep the paper material and border and only lose their rounded corners. Touch tap-target sizing lives inside `@media (hover: none)` per the CLAUDE.md invariant.
 
 **HTML anchors:** `.mobile-fab` / `#mobileAddFab`, `.cal-app-emoji` (Lists trigger), `#mobileListsOverlay` / `.mobile-sheet` / `#mobileListsTabs` / `#mobileListsBody` (containing `#mobileSheetShop` / `#mobileSheetTodo` / `#mobileSheetHome` / `#mobileSheetAssistant`) / `.mobile-sheet-footer`, `#calBudgetPrivacyBtn` (calendar header — §12), `#calSettingsBtn` / `.cal-header-settings-btn` (calendar header, top-right of row 1)
 
@@ -1029,8 +1021,7 @@ const HA_TOGGLE_DOMAINS = ['light', 'switch', 'fan', 'input_boolean'];
 | Key | Type | Feature | Notes |
 |---|---|---|---|
 | `fh_name` | string | Settings | Display name |
-| `fh_mode` | string | Theme | `'light'` \| `'dark'` \| `'nautical'` \| `'aurora'` \| `'colorblind'` |
-| `fh_flavor` | string | Flavor | `'basic'` \| `'tactile'` — design-system axis, orthogonal to theme |
+| `fh_mode` | string | Theme | `'auto'` (unset) \| `'light'` \| `'dark'` \| `'colorblind'` |
 | `fh_calView` | string | Calendar | `'month'` \| `'week'` \| `'day'` \| `'agenda'` — unset defaults to `'agenda'` on mobile, `'week'` on desktop (§20) |
 | `fh_calIds` | JSON array | Calendar | Google Calendar IDs |
 | `fh_calMeta` | JSON object | Calendar | `{ calId: { label, color } }` |

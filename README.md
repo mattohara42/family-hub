@@ -55,8 +55,8 @@ you edit is what the browser runs.
 - **Screensaver** — photo slideshow, clock, or the [Pond Chimes](https://github.com/mattohara42/pond-chimes) ambient pond, vendored in `pond/`
 
 **Presentation**
-- Five themes — Dark (default), Light, Nautical, Aurora, Colorblind — on a colour axis
-- Two flavors — Basic (flat glass) and Tactile (lush, hand-made material, self-hosted Fraunces/Hanken) — orthogonal to theme, so they stack
+- Themes: Auto (default, follows the device or sunset), Light, Dark, Accessible (colorblind-safe)
+- One hand-made material across every theme: paper-like cards, soft shadows, grain, self-hosted Fraunces/Hanken type
 - Configurable widget placement and ordering on desktop; a registry-driven bottom-tab layout on phones
 - Installable PWA with a network-first service worker, so the wall panel survives a flaky connection
 
@@ -104,7 +104,7 @@ Origins _and_ Firebase Console → Authorized Domains**, or sign-in silently fai
 
 ```
 family-hub.html        markup + CDN script tags (no inline CSS/JS)
-family-hub.css         all styling — vars, layout, components, themes, flavors
+family-hub.css         all styling — vars, layout, components, themes, material
 family-hub.js          all logic + the config block at the top
 config.js              Firebase + Google client ID (rewritten from env vars on deploy)
 manifest.json  sw.js   PWA manifest and service worker

@@ -248,7 +248,7 @@ All of these go in your Netlify site under **Project configuration → Environme
 
 Once all the above is done, open the app (your Netlify URL or `http://localhost:8080/family-hub.html`) and verify:
 
-- [ ] ⚙️ Settings → **Look & Feel**: Set your name and choose a theme and flavor (see Appearance Themes below)
+- [ ] ⚙️ Settings → **Look & Feel**: Set your name and choose a theme (see Appearance Themes below)
 - [ ] Click **Sign in with Google** → sign in with your Google account
 - [ ] Calendars appear in the **Calendars** sidebar card — toggle each on/off with the checkboxes
 - [ ] ⚙️ Settings → **🌤 Weather**: at least one location added (no key needed)
@@ -1039,13 +1039,10 @@ Six themes are available in ⚙️ **Settings → 🎨 Look & Feel → Appearanc
 | 🌓 Auto | Follows the device's light/dark setting and switches with it (default) |
 | ☀️ Light | Light grey background, dark text |
 | 🌙 Dark | Deep charcoal background, blue accents |
-| ⚓ Nautical | Navy blue hull with diagonal white stripes, beige-gold accents, animated anchor and wave decorations |
-| 🌌 Aurora | Light violet background with soft aurora glows, using a colorblind-safe orange/sky-blue palette |
 | 👁 Accessible | High-contrast dark theme with a colorblind-safe (Okabe-Ito) palette |
 
-Separately, **Flavor** changes the material rather than the colors: **◻ Basic** (default) is flat
-glass, and **✦ Tactile** adds a serif display font, softer shadows and surface grain. Any flavor
-works with any theme. Tactile's decoration is turned off under the Accessible theme.
+Every theme uses the same hand-made look: a serif display font, paper-like cards with soft
+shadows and a faint grain. The grain is turned off under the Accessible theme.
 
 ### Widget Placement
 

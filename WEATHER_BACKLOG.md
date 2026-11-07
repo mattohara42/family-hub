@@ -95,5 +95,5 @@ Leaflet radar panel in the weather card, using **RainViewer** tiles (keyless) in
 
 - **No paid endpoints.** One Call API (UV index, native alerts, minutely precip) is excluded — it now requires a separate paid subscription.
 - **No build step.** Any library must be a CDN `<script>`/`<link>` and respect the CSP in `family-hub.html`.
-- **Three themes.** Every visual feature must look correct in dark, light, and nautical modes.
+- **Every theme.** Every visual feature must look correct in dark, light, and Accessible modes.
 - **Card layout discipline.** New panels must not cause layout shift or break the sidebar/bottom-strip flex sizing.
