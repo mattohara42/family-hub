@@ -14770,12 +14770,141 @@ async function fetchAndUpdateEvents() {
       // Re-render
       renderEventsList(eventsData);
       updateEventsAgeLabel(Date.now());
+      loadThingsToDo(data.center, radius);
     } else {
       showEventsError(`Unable to fetch events: ${data.error}`);
     }
   } catch (err) {
     console.warn('[Events] Fetch failed:', err);
     showEventsError('Unable to fetch events. Using cached data.');
+  }
+}
+
+// ── Things to Do (OpenStreetMap, fetched by the browser) ──
+// Overpass never answers Netlify's servers (every mirror timed out,
+// 2026-11-07), so the browser asks it directly, around the point the events
+// function geocoded. Places rarely change: a result is kept per device for a
+// week, and an older one is still shown while Overpass is down.
+const OVERPASS_ENDPOINTS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter'
+];
+const THINGS_TO_DO_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+let thingsToDoStatus = 'idle';  // idle | loading | failed
+
+function osmCategoryInfo(tags) {
+  const cultural = { museum: 'Museum', gallery: 'Art gallery', arts_centre: 'Arts centre', theatre: 'Theatre', cinema: 'Cinema' };
+  const outdoor = { park: 'Park', nature_reserve: 'Nature reserve', garden: 'Garden', viewpoint: 'Scenic viewpoint' };
+  const fun = { zoo: 'Zoo', aquarium: 'Aquarium', theme_park: 'Theme park' };
+  const key = tags.tourism || tags.leisure || tags.amenity;
+  if (cultural[key]) return { type: 'art', label: cultural[key] };
+  if (outdoor[key]) return { type: 'hike', label: outdoor[key] };
+  if (fun[key]) return { type: 'activity', label: fun[key] };
+  return { type: 'activity', label: 'Place of interest' };
+}
+
+function milesBetween(lat1, lon1, lat2, lon2) {
+  const rad = d => d * Math.PI / 180;
+  const a = Math.sin(rad(lat2 - lat1) / 2) ** 2 +
+    Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(rad(lon2 - lon1) / 2) ** 2;
+  return 3958.8 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// Ask every mirror at once; the first good answer wins and the rest are cancelled
+async function fetchOverpass(query, budgetMs = 20000) {
+  const controllers = OVERPASS_ENDPOINTS.map(() => new AbortController());
+  const timer = setTimeout(() => controllers.forEach(c => c.abort()), budgetMs);
+  try {
+    return await Promise.any(OVERPASS_ENDPOINTS.map(async (url, i) => {
+      const r = await fetch(url, {
+        method: 'POST',
+        signal: controllers[i].signal,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'data=' + encodeURIComponent(query)
+      });
+      if (!r.ok) throw new Error(`${new URL(url).host} HTTP ${r.status}`);
+      const json = await r.json();
+      controllers.forEach((c, j) => { if (j !== i) c.abort(); });
+      return json;
+    }));
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function thingsFromOverpass(data, center) {
+  const seen = new Set();
+  const events = [];
+  for (const el of (data.elements || [])) {
+    const tags = el.tags || {};
+    const name = tags.name;
+    const lat = el.lat ?? el.center?.lat;
+    const lon = el.lon ?? el.center?.lon;
+    if (!name || lat == null || lon == null) continue;
+    // A park mapped as both a point and an area shows up twice
+    const nameKey = name.toLowerCase().trim();
+    if (seen.has(nameKey)) continue;
+    seen.add(nameKey);
+    const { type, label } = osmCategoryInfo(tags);
+    events.push({
+      id: `osm_${el.type}${el.id}`,
+      title: name,
+      type,
+      source: 'osm',
+      sourceUrl: tags.website || tags['contact:website'] || `https://www.openstreetmap.org/${el.type}/${el.id}`,
+      date: null, time: null, duration: null,
+      location: {
+        city: center.city, state: center.state,
+        address: tags['addr:street'] ? `${tags['addr:housenumber'] || ''} ${tags['addr:street']}`.trim() : label,
+        lat, lon,
+        distanceMiles: Math.round(milesBetween(center.lat, center.lon, lat, lon) * 10) / 10
+      },
+      description: tags.description || `${label} in ${tags['addr:city'] || center.city}`,
+      image: tags.image || null,
+      weather: null
+    });
+  }
+  return events;
+}
+
+function mergeThingsToDo(things) {
+  eventsRawData = eventsRawData.filter(e => e.source !== 'osm').concat(things);
+  eventsData = applyFiltersAndSort(eventsRawData);
+  updateSourceTabCounts(eventsRawData);
+  if (eventsModalOpen) renderEventsList(eventsData);
+}
+
+async function loadThingsToDo(center, radiusMinutes) {
+  if (!center || center.lat == null || center.lon == null) return;
+  // Day-trip range, capped at 25km: the search cost grows with the area
+  const radiusMeters = Math.min(Math.round((parseInt(radiusMinutes) || 120) / 60 * 70 * 1609), 25000);
+  const key = `${center.lat.toFixed(2)},${center.lon.toFixed(2)},${radiusMeters}`;
+  const cached = lsGet('fh_thingsToDo', null);
+  const usable = cached && cached.key === key ? cached : null;
+  if (usable) mergeThingsToDo(usable.events);
+  if (usable && Date.now() - usable.fetchedAt < THINGS_TO_DO_TTL_MS) return;
+
+  const around = `(around:${radiusMeters},${center.lat},${center.lon})`;
+  const query = `[out:json][timeout:15];
+(
+  nwr["tourism"~"^(museum|gallery|theme_park|zoo|aquarium|viewpoint)$"]["name"]${around};
+  nwr["leisure"~"^(park|nature_reserve)$"]["name"]["wikidata"]${around};
+  nwr["amenity"~"^(theatre|arts_centre|cinema)$"]["name"]${around};
+);
+out center tags 80;`;
+
+  thingsToDoStatus = 'loading';
+  if (!usable && eventsModalOpen && eventsSourceTab === 'osm') renderEventsList(eventsData);
+  try {
+    const things = thingsFromOverpass(await fetchOverpass(query), center);
+    thingsToDoStatus = 'idle';
+    try { localStorage.setItem('fh_thingsToDo', JSON.stringify({ key, fetchedAt: Date.now(), events: things })); } catch {}
+    mergeThingsToDo(things);
+  } catch (err) {
+    console.warn('[Events] Things to Do (Overpass) failed:', err.errors?.map(e => e.message).join('; ') || err.message);
+    thingsToDoStatus = 'failed';
+    if (eventsModalOpen && eventsSourceTab === 'osm') renderEventsList(eventsData);
   }
 }
 
@@ -14925,9 +15054,14 @@ function updateSourceTabCounts(rawEvents) {
 
 function renderEventsList(events) {
   const emptyLabels = { ticketmaster: 'live events', osm: 'things to do', libraryweb: 'library events', redwings: 'Red Wings home games', cityspark: 'local events', towns: 'town events' };
+  const empty = eventsSourceTab === 'osm' && thingsToDoStatus === 'loading'
+    ? 'Finding things to do nearby…'
+    : eventsSourceTab === 'osm' && thingsToDoStatus === 'failed'
+      ? 'Couldn’t reach OpenStreetMap for things to do. Try Refresh in a little while.'
+      : `No ${emptyLabels[eventsSourceTab] || 'events'} found nearby. Try expanding your distance or changing your location.`;
   const html = events.length > 0
     ? events.map(e => renderEventCard(e)).join('')
-    : `<p style="color:var(--muted);padding:20px;text-align:center">No ${emptyLabels[eventsSourceTab] || 'events'} found nearby. Try expanding your distance or changing your location.</p>`;
+    : `<p style="color:var(--muted);padding:20px;text-align:center">${empty}</p>`;
 
   document.getElementById('eventsList').innerHTML = html;
 }

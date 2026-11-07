@@ -784,7 +784,7 @@ A handful of triggers aren't tied to any franchise (birthday, politeness, dark-m
 
 **Data sources (multi-API aggregation):**
 1. **Ticketmaster Discovery API** — dated ticketed events (concerts, shows, sports)
-2. **OpenStreetMap / Overpass** — keyless POIs (museums, galleries, theatres, parks, zoos, viewpoints)
+2. **OpenStreetMap / Overpass ("Things to Do")** — keyless POIs (museums, galleries, theatres, notable parks, zoos, viewpoints). **Fetched by the browser, not the function** (2026-11-07): every Overpass mirror timed out from Netlify's servers. The function returns its geocoded `center`; `loadThingsToDo(center, radius)` in `family-hub.js` asks all of `OVERPASS_ENDPOINTS` at once (`fetchOverpass()`, first good answer wins, 20s budget), maps the result with `thingsFromOverpass()` (25km cap, parks/reserves only with a `wikidata` tag), and keeps it per device in `fh_thingsToDo` for a week; an older result is still shown while Overpass is down. `thingsToDoStatus` drives the tab's loading/failed message
 3. **LibraryWeb (LibCal)** — free Monroe County (Rochester NY) public library events via iCal feeds
 4. **Red Wings** — Rochester Red Wings (AAA baseball) home games via MLB Stats API
 5. **CitySpark ("Around Town")** — broad local events via aggregator (concerts, festivals, food, art, comedy, family)
@@ -819,7 +819,7 @@ let eventsModalOpen     = false;
 
 **Netlify backend function:** `netlify/functions/events.js` (400+ lines)
 - `geocodeLocation()` — city name → lat/lon via OpenWeatherMap
-- `fetchTicketmaster()`, `fetchOpenStreetMap()`, `fetchLibraryWeb()`, `fetchRedWings()`, `fetchCitySpark()`, `fetchFairport()`, `fetchPittsford()` — per-source fetchers
+- `fetchTicketmaster()`, `fetchLibraryWeb()`, `fetchRedWings()`, `fetchCitySpark()`, `fetchFairport()`, `fetchPittsford()` — per-source fetchers
 - `expandFairportSchedule()` / `addDaysISO()` — expand `FAIRPORT_SCHEDULE` (one-offs, `days` for multi-day runs) and `FAIRPORT_WEEKLY` (every 7 days between `start` and `end`) into one dated event per occurrence
 - `parsePittsfordEvents(html)` — pull the event list out of the town page's `drupal-settings-json` blob and drop the municipal noise (pure; unit-tested)
 - `calculateDistance()` — Haversine formula
