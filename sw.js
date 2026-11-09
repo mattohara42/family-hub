@@ -15,6 +15,7 @@ const CACHE_NAME    = `family-hub-${CACHE_VERSION}`;
 // available offline.
 const APP_SHELL = [
   '/family-hub.html',
+  '/hub-theme.css',
   '/family-hub.css',
   '/family-hub.js',
   '/config.js',

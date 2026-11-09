@@ -15,9 +15,9 @@
 
 ---
 
-A wall-display family dashboard — calendar, weather, shopping, meals, chores and more — built as **three plain files** with no build step, no npm install, and no framework.
+A wall-display family dashboard — calendar, weather, shopping, meals, chores and more — built as **four plain files** with no build step, no npm install, and no framework.
 
-`family-hub.html` + `family-hub.css` + `family-hub.js`. Drop them in a folder, serve them, done.
+`family-hub.html` + `family-hub.css` + `family-hub.js`, plus `hub-theme.css` for the theme tokens. Drop them in a folder, serve them, done.
 
 ---
 
@@ -104,7 +104,8 @@ Origins _and_ Firebase Console → Authorized Domains**, or sign-in silently fai
 
 ```
 family-hub.html        markup + CDN script tags (no inline CSS/JS)
-family-hub.css         all styling — vars, layout, components, themes, material
+hub-theme.css          theme tokens: fonts, palettes, material tokens (loads first)
+family-hub.css         all other styling — layout, components, theme structure
 family-hub.js          all logic + the config block at the top
 config.js              Firebase + Google client ID (rewritten from env vars on deploy)
 manifest.json  sw.js   PWA manifest and service worker
