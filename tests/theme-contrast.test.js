@@ -92,6 +92,10 @@ test('the checker fails closed on CSS it cannot model', () => {
   assert.throws(() => T.tokenBlocks('@media all { body { --x: #fff; } }'), /aren't modelled/);
   assert.throws(() => T.tokenBlocks('@import "x.css"; body { --x: #fff; }'), /"@import "x.css"" isn't modelled/);
   assert.equal(T.tokenBlocks('@charset "utf-8"; body { --x: #fff; }').length, 1);
+  assert.throws(() => T.tokenBlocks('body { --a: #fff; } @charset "utf-8"; body { --x: #fff; }'), /isn't modelled/);
+  // a bare CR ends a string in a browser, so it can't hide a rule here
+  assert.throws(() => T.tokenBlocks(":root { --f: 'A\rB'/*\n} body { --x: #000; } */; }"), /line break inside a string/);
+  assert.match(T.lint(":root { --f: 'A\rB'/* } body { color: red } */; }")[0], /line break inside a string/);
   assert.throws(() => T.colorsIn('linear-gradient(red, #fff)'), /can't read "red"/);
   assert.throws(() => T.colorsIn('linear-gradient(hsl(0 0% 0%), #fff)'), /can't read/);
   // single quotes or none on an attribute value both parse

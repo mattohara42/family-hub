@@ -122,12 +122,21 @@ const hex = (c) => '#' + c.slice(0, 3).map((v) => Math.round(Math.min(1, Math.ma
 
 // ── CSS ─────────────────────────────────────────────────────────────
 
-/** Drops comments, leaving strings alone (a "/*" inside a string is not a comment). */
-function stripComments(css) {
+/**
+ * Drops comments, leaving strings alone (a "/*" inside a string is not a
+ * comment). Line breaks are read as a browser reads them (CR, CRLF and FF
+ * become LF), and a line break inside a string throws: a browser ends the
+ * string there, so the rest would be read differently.
+ */
+function stripComments(input) {
+  const css = input.replace(/\r\n?|\f/g, '\n');
   let out = ''; let quote = null;
   for (let i = 0; i < css.length; i++) {
     const c = css[i];
-    if (quote) { out += c; if (c === quote) quote = null; continue; }
+    if (quote) {
+      if (c === '\n') throw new Error('theme-check: a line break inside a string');
+      out += c; if (c === quote) quote = null; continue;
+    }
     if (c === '"' || c === "'") { quote = c; out += c; continue; }
     if (c === '/' && css[i + 1] === '*') {
       const end = css.indexOf('*/', i + 2);
@@ -179,15 +188,19 @@ const SETS_TOKEN = /(^|[;{\s])--[\w-]+\s*:/;
  * sets custom properties, in order. Throws on tokens it can't place.
  */
 function tokenBlocks(css) {
-  const blocks = []; let order = 0;
+  const blocks = []; let order = 0; let first = true;
   for (const [prelude, body] of rules(css)) {
     // Statements such as @charset end in ";" and run into the next selector.
-    // @charset is harmless; anything else (an @import) isn't modelled.
+    // Only a leading @charset "utf-8"; is allowed (a browser honors
+    // @charset only at the start of the file); anything else isn't modelled.
     const parts = prelude.split(';');
     const sel = parts.pop().trim();
-    for (const st of parts.map((x) => x.trim()).filter(Boolean)) {
-      if (!/^@charset\s/i.test(st)) throw new Error(`theme-check: "${st.slice(0, 60)}" isn't modelled`);
-    }
+    parts.forEach((x, i) => {
+      const st = x.trim();
+      const leadingUtf8 = first && i === 0 && css.startsWith('@charset "utf-8";');
+      if (st && !(leadingUtf8 && /^@charset "utf-8"$/i.test(st))) throw new Error(`theme-check: "${st.slice(0, 60)}" isn't modelled`);
+    });
+    first = false;
     if (sel.startsWith('@')) {
       if (sel !== '@font-face' && SETS_TOKEN.test(body)) throw new Error(`theme-check: tokens inside "${sel.slice(0, 60)}" aren't modelled`);
       continue;
