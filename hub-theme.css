@@ -281,8 +281,9 @@ body {
   --chart: var(--accent);         /* the emphasized bar or line in a chart */
 
   /* An event with no calendar color. White text on it must clear the 3:1
-     bar readableTextOn() uses. --muted is tuned as text, which can make it
-     too pale under white text, so the fill darkens it. */
+     bar readableTextOn() uses. --muted is tuned as text, which makes it
+     too pale under white text in some dark and Accessible looks, so the
+     fill darkens it there. */
   --event-fallback: color-mix(in srgb, var(--muted) 65%, #000);
 }
 /* Tactile in light colors: warm shadows, multiply grain */

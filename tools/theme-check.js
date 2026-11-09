@@ -362,7 +362,9 @@ const SHARED_CHECKS = [
   ...[...STATUSES, '--ink', '--chart'].map((t) => ['graphic', t, 'track']),
   ['graphic', '--chart', 'card'],
   ...['page', 'card', 'modal'].map((s) => ['graphic', '--focus', s]),
-  ['event', '#fff', 'token:--event-fallback'], // an event with no calendar color
+  // An event with no calendar color: white text, as .agenda-event and
+  // readableTextOn() in the Hub draw it, on the fallback fill.
+  ['event', '#fff', 'token:--event-fallback'],
 ];
 
 /**
@@ -377,7 +379,7 @@ function check(css, combos, checks = SHARED_CHECKS, extra = () => undefined) {
   for (const combo of combos) {
     const s = surfaces(blocks, combo);
     for (const [kind, fgTok, where] of checks) {
-      const fg = fgTok.startsWith('#') ? parseColor(fgTok) : s.color(fgTok);
+      const fg = typeof fgTok === 'string' && fgTok.startsWith('#') ? parseColor(fgTok) : s.color(fgTok);
       let under = extra(s, where, combo);
       if (!under && where.startsWith('token:')) {
         const v = s.env[where.slice(6)];

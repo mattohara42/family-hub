@@ -44,6 +44,14 @@ test('the check has teeth: --muted as the event fill fails in dark looks', () =>
   for (const combo of ['tactile-dark', 'glass-dark', 'glass-accessible', 'tactile-accessible', 'paper-dark']) assert.ok(failing.has(combo), combo);
 });
 
+test('light looks keep --muted as the event fill', () => {
+  // body.light-mode resets the darkened fill: light grays already carry white text.
+  for (const look of T.looks(css).filter((l) => l.classes.has('light-mode'))) {
+    const env = T.computed(T.tokenBlocks(css), look);
+    assert.equal(env['--event-fallback'], env['--muted'], look.name);
+  }
+});
+
 test('every shared token resolves to a color in every look', () => {
   const names = ['--bg', '--text', '--muted', '--ink', '--ink-soft', '--accent', '--surface-solid', '--status-ok',
     '--status-watch', '--status-over', '--status-ink', '--track', '--link', '--focus', '--chart', '--event-fallback'];
