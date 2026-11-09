@@ -99,6 +99,9 @@ test('the checker fails closed on CSS it cannot model', () => {
   // an escaped quote doesn't end a string, and an unquoted url( hides no comment
   assert.ok(T.lint(':root { --q: "\\"/*"; } body { color: red } :root { --z: "*/"; }').includes('"body" sets color'));
   assert.ok(T.lint('@font-face { font-family: url(/*); } body { color: red } :root { --z: 1 */; }').includes('"body" sets color'));
+  // an escape outside a string doesn't start one; a spaced or commented !important still counts
+  assert.ok(T.lint(':root { --a: \\" x" /* "; } body { color: red } :root { --b: 1 */; }').includes('"body" sets color'));
+  assert.ok(T.lint('body { --a: #fff ! important; --b: #000 !/**/important; }').includes('!important'));
   assert.throws(() => T.colorsIn('linear-gradient(red, #fff)'), /can't read "red"/);
   assert.throws(() => T.colorsIn('linear-gradient(hsl(0 0% 0%), #fff)'), /can't read/);
   // single quotes or none on an attribute value both parse

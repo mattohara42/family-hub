@@ -128,7 +128,8 @@ const hex = (c) => '#' + c.slice(0, 3).map((v) => Math.round(Math.min(1, Math.ma
  * either is not a comment). Line breaks are read as a browser reads them
  * (CR, CRLF and FF become LF), and a line break inside a string throws: a
  * browser ends the string there, so the rest would be read differently.
- * A backslash escape inside a string keeps the next character.
+ * A backslash escape (in a string, in an unquoted url( or anywhere else)
+ * keeps the next character as it is.
  */
 function stripComments(input) {
   const css = input.replace(/\r\n?|\f/g, '\n');
@@ -140,12 +141,14 @@ function stripComments(input) {
       if (c === '\n') throw new Error('theme-check: a line break inside a string');
       out += c; if (c === quote) quote = null; continue;
     }
+    if (c === '\\') { out += c + (css[i + 1] ?? ''); i++; continue; }
     if (c === '"' || c === "'") { quote = c; out += c; continue; }
     // An unquoted url( runs to its ")" as one token, "/*" included.
     const unquoted = /^url\(\s*(?!['"\s])/i.exec(css.slice(i, i + 64));
     if (unquoted && !/[\w-]/.test(css[i - 1] || '')) {
-      const end = css.indexOf(')', i);
-      if (end < 0) throw new Error('theme-check: an unclosed url(');
+      let end = i + 4;
+      while (end < css.length && css[end] !== ')') end += css[end] === '\\' ? 2 : 1;
+      if (end >= css.length) throw new Error('theme-check: an unclosed url(');
       out += css.slice(i, end + 1); i = end; continue;
     }
     if (c === '/' && css[i + 1] === '*') {
@@ -421,7 +424,7 @@ function lint(css) {
   const problems = [];
   let text;
   try { text = stripComments(css); } catch (e) { return [e.message]; }
-  if (/!important/i.test(text)) problems.push('!important');
+  if (/!\s*important/i.test(text)) problems.push('!important');
   for (const m of text.matchAll(/url\(\s*(['"]?)(.*?)\1\s*\)/gs)) {
     if (!/^fonts\/[a-z0-9-]+\.woff2$/.test(m[2]) && !m[2].startsWith('data:image/svg+xml,')) problems.push(`url(${m[2].slice(0, 40)})`);
   }
