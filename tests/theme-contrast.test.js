@@ -36,9 +36,17 @@ test('the check has teeth: the old Glass dark gray fails', () => {
   assert.ok(failures.some((f) => f.what === '--muted on well'));
 });
 
+test('the check has teeth: --muted as the event fill fails in dark looks', () => {
+  // The fill once was --muted itself, which dark looks lighten for gray text.
+  const old = css.replace('--event-fallback: color-mix(in srgb, var(--muted) 65%, #000);', '--event-fallback: var(--muted);');
+  assert.notEqual(old, css, 'the --event-fallback rule moved; update this test');
+  const failing = new Set(T.check(old, T.looks(old)).failures.filter((f) => f.what === '#fff on token:--event-fallback').map((f) => f.combo));
+  for (const combo of ['tactile-dark', 'glass-dark', 'glass-accessible', 'tactile-accessible', 'paper-dark']) assert.ok(failing.has(combo), combo);
+});
+
 test('every shared token resolves to a color in every look', () => {
   const names = ['--bg', '--text', '--muted', '--ink', '--ink-soft', '--accent', '--surface-solid', '--status-ok',
-    '--status-watch', '--status-over', '--status-ink', '--track', '--link', '--focus', '--chart'];
+    '--status-watch', '--status-over', '--status-ink', '--track', '--link', '--focus', '--chart', '--event-fallback'];
   const blocks = T.tokenBlocks(css);
   for (const combo of T.looks(css)) {
     const env = T.computed(blocks, combo);
@@ -91,8 +99,9 @@ test('the checker fails closed on CSS it cannot model', () => {
   assert.throws(() => T.tokenBlocks('html.dark { --x: #fff; }'), /can't model the selector/);
   assert.throws(() => T.tokenBlocks('@media all { body { --x: #fff; } }'), /aren't modelled/);
   assert.throws(() => T.tokenBlocks('@import "x.css"; body { --x: #fff; }'), /"@import "x.css"" isn't modelled/);
-  assert.equal(T.tokenBlocks('@charset "utf-8"; body { --x: #fff; }').length, 1);
-  assert.throws(() => T.tokenBlocks('body { --a: #fff; } @charset "utf-8"; body { --x: #fff; }'), /isn't modelled/);
+  // lint() and tokenBlocks() agree: no statement is modelled, @charset included
+  assert.throws(() => T.tokenBlocks('@charset "utf-8"; body { --x: #fff; }'), /isn't modelled/);
+  assert.ok(T.lint('@charset "utf-8"; body { --x: #fff; }').some((p) => /@charset/.test(p)));
   // a bare CR ends a string in a browser, so it can't hide a rule here
   assert.throws(() => T.tokenBlocks(":root { --f: 'A\rB'/*\n} body { --x: #000; } */; }"), /line break inside a string/);
   assert.match(T.lint(":root { --f: 'A\rB'/* } body { color: red } */; }")[0], /line break inside a string/);

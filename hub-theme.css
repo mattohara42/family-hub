@@ -279,6 +279,11 @@ body {
   --link: color-mix(in srgb, var(--accent) var(--link-keep), var(--text));
   --focus: var(--accent);
   --chart: var(--accent);         /* the emphasized bar or line in a chart */
+
+  /* An event with no calendar color. White text on it must clear the 3:1
+     bar readableTextOn() uses. --muted is tuned as text, which can make it
+     too pale under white text, so the fill darkens it. */
+  --event-fallback: color-mix(in srgb, var(--muted) 65%, #000);
 }
 /* Tactile in light colors: warm shadows, multiply grain */
 body.light-mode {
@@ -305,6 +310,7 @@ body.light-mode {
   --status-watch-keep: 51%;
   --status-over-keep: 76%;
   --link-keep: 73%;
+  --event-fallback: var(--muted);  /* light grays are dark enough already */
 }
 /* Tactile in Accessible colors (beats body on specificity; Glass sets its own below) */
 body.colorblind-mode {

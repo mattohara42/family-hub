@@ -3872,7 +3872,7 @@ let evtEditing = null; // { ev, calId } when editing; null when creating
  *  under 3:1 contrast (luminance above 0.30), then dark, which always reads
  *  better there. That catches mid-tones like Okabe-Ito orange, not just
  *  Banana/Citron. Unparseable or missing colors get white, matching the
- *  var(--muted) fallback fill. */
+ *  var(--event-fallback) fill, which hub-theme.css keeps dark enough. */
 function readableTextOn(color) {
   const rgb = parseHexColor(color);
   return rgb && relLuminance(rgb) > 0.30 ? '#1f2328' : '#fff';
@@ -3906,7 +3906,7 @@ function eventFill(color) {
  *  calendar color (neutral if it has none) with text that reads on it. */
 function paintEventFill(el, color) {
   const fill = eventFill(color);
-  el.style.background = fill || 'var(--muted)';
+  el.style.background = fill || 'var(--event-fallback)';
   el.style.color = readableTextOn(fill);
 }
 

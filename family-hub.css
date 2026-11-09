@@ -862,14 +862,15 @@ html:not(.touch-input) .cal-month-nav button:hover  { background: var(--accent);
 /* Same color treatment as Month's .cal-event and Day's .day-event-pill: a
    solid fill of the event's own calendar color with white text, so one event
    reads the same in all three views. --event-color is set inline per event
-   (dynamic, can't be a class); events with no color fall back to --muted.
+   (dynamic, can't be a class); events with no color fall back to
+   --event-fallback (hub-theme.css), dark enough for white text.
    Margin-bottom (not gap on the parent) so fills don't visually merge. */
 .agenda-event {
   display: flex;
   align-items: flex-start;
   gap: 12px;
   padding: 8px 10px 8px 12px;
-  --event-color: var(--muted);
+  --event-color: var(--event-fallback);
   background: var(--event-color);
   color: #fff;
   border-radius: 8px;

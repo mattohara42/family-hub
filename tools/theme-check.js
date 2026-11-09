@@ -201,19 +201,13 @@ const SETS_TOKEN = /(^|[;{\s])--[\w-]+\s*:/;
  * sets custom properties, in order. Throws on tokens it can't place.
  */
 function tokenBlocks(css) {
-  const blocks = []; let order = 0; let first = true;
+  const blocks = []; let order = 0;
   for (const [prelude, body] of rules(css)) {
-    // Statements such as @charset end in ";" and run into the next selector.
-    // Only a leading @charset "utf-8"; is allowed (a browser honors
-    // @charset only at the start of the file); anything else isn't modelled.
+    // Statements such as @charset or @import end in ";" and run into the
+    // next selector. None is modelled, and lint() rejects them too.
     const parts = prelude.split(';');
     const sel = parts.pop().trim();
-    parts.forEach((x, i) => {
-      const st = x.trim();
-      const leadingUtf8 = first && i === 0 && css.startsWith('@charset "utf-8";');
-      if (st && !(leadingUtf8 && /^@charset "utf-8"$/i.test(st))) throw new Error(`theme-check: "${st.slice(0, 60)}" isn't modelled`);
-    });
-    first = false;
+    for (const x of parts) if (x.trim()) throw new Error(`theme-check: "${x.trim().slice(0, 60)}" isn't modelled`);
     if (sel.startsWith('@')) {
       if (sel !== '@font-face' && SETS_TOKEN.test(body)) throw new Error(`theme-check: tokens inside "${sel.slice(0, 60)}" aren't modelled`);
       continue;
@@ -350,10 +344,12 @@ function surfaces(blocks, combo) {
 // ── checks ──────────────────────────────────────────────────────────
 
 /**
- * The shared tokens' checks. Each is [kind, foreground token, surface name].
- * kind 'text' needs 4.5:1, 'graphic' 3:1. A surface name is one of the
- * surfaces() lists, or 'token:--x' for a token used as a fill (a translucent
- * one is laid over the card).
+ * The shared tokens' checks. Each is [kind, foreground, surface name].
+ * kind 'text' needs 4.5:1; 'graphic' and 'event' need 3:1 ('event' is event
+ * text on a calendar fill, held to readableTextOn()'s 3:1 bar). The
+ * foreground is a token, or a #hex color for text the app hard-codes. A
+ * surface name is one of the surfaces() lists, or 'token:--x' for a token
+ * used as a fill (a translucent one is laid over the card).
  */
 const STATUSES = ['--status-ok', '--status-watch', '--status-over'];
 const SHARED_CHECKS = [
@@ -366,6 +362,7 @@ const SHARED_CHECKS = [
   ...[...STATUSES, '--ink', '--chart'].map((t) => ['graphic', t, 'track']),
   ['graphic', '--chart', 'card'],
   ...['page', 'card', 'modal'].map((s) => ['graphic', '--focus', s]),
+  ['event', '#fff', 'token:--event-fallback'], // an event with no calendar color
 ];
 
 /**
@@ -380,7 +377,7 @@ function check(css, combos, checks = SHARED_CHECKS, extra = () => undefined) {
   for (const combo of combos) {
     const s = surfaces(blocks, combo);
     for (const [kind, fgTok, where] of checks) {
-      const fg = s.color(fgTok);
+      const fg = fgTok.startsWith('#') ? parseColor(fgTok) : s.color(fgTok);
       let under = extra(s, where, combo);
       if (!under && where.startsWith('token:')) {
         const v = s.env[where.slice(6)];
