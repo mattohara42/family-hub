@@ -2,7 +2,7 @@
 
 *Last updated: 2026-10-21*
 
-Family Hub is a web dashboard made of three files (`family-hub.html`, `family-hub.css` and `family-hub.js`), plus a small `config.js` that holds your Google and Firebase IDs. They run together in your browser. No installation is required, but a handful of free cloud accounts are needed to unlock the full feature set. This guide walks through every account, every step, and every value you need to configure.
+Family Hub is a web dashboard made of four files (`family-hub.html`, `hub-theme.css`, `family-hub.css` and `family-hub.js`) and a `fonts/` folder, plus a small `config.js` that holds your Google and Firebase IDs. They run together in your browser. No installation is required, but a handful of free cloud accounts are needed to unlock the full feature set. This guide walks through every account, every step, and every value you need to configure.
 
 ---
 
@@ -36,7 +36,7 @@ You don't need to change the code at all. On every deploy, the build step (`netl
 
 1. Make sure Python 3 is installed (it comes pre-installed on Mac)
 2. Open Terminal
-3. `cd` to the folder containing `family-hub.html`, `family-hub.css`, and `family-hub.js`
+3. `cd` to the folder containing `family-hub.html`, `hub-theme.css`, `family-hub.css` and `family-hub.js`
 4. Run:
    ```
    python3 -m http.server 8080
@@ -1175,8 +1175,8 @@ Family Hub can be shared in two ways:
 4. Shopping, To-Do, Budget, Meal Plans, Family Members, and Chore Chart sync automatically via Firebase
 
 **Option B — Each person runs it locally**
-1. Send each family member copies of `family-hub.html`, `family-hub.css`, and `family-hub.js`
-2. They put all three files in the same folder and run `python3 -m http.server 8080`
+1. Send each family member a copy of the whole folder: `family-hub.html`, `hub-theme.css`, `family-hub.css`, `family-hub.js`, `config.js` and the `fonts/` folder (without `hub-theme.css` the page loads with no colors)
+2. They keep everything in the same folder and run `python3 -m http.server 8080`
 3. Add their Google account as a Test User in Google Cloud Console (Step 1c)
 4. They sign in with their own Google account
 5. Shopping, To-Do, Budget, Meal Plans, Family Members, and Chore Chart sync automatically via Firebase

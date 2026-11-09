@@ -36,6 +36,11 @@
     Cache-Control = "no-cache"
 
 [[headers]]
+  for = "/hub-theme.css"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
   for = "/family-hub.css"
   [headers.values]
     Cache-Control = "no-cache"

@@ -286,9 +286,10 @@ localStorage.removeItem('fh_flavor');
 const _savedMode    = localStorage.getItem('fh_mode');
 let appMode         = _savedMode || 'auto';  // 'auto' | 'light' | 'dark' | 'colorblind'
 // Theme = the material/design axis, orthogonal to the Colors axis above.
-// To ship a theme, add an entry here AND a `body.theme-<id>` block in the
-// ✦ THEMES section of family-hub.css that sets the material tokens. Tactile
-// is the base CSS (no class). Per device, like fh_mode.
+// To ship a theme, add an entry here AND a `body.theme-<id>` block in
+// hub-theme.css that sets the material tokens (structural rules go in the
+// ✦ THEMES section of family-hub.css). Tactile is the base CSS (no class).
+// Per device, like fh_mode.
 const THEMES = [
   { id: 'tactile', icon: 'hand',     label: 'Tactile' },
   { id: 'glass',   icon: 'gem',      label: 'Glass' },
@@ -6115,7 +6116,7 @@ const CAL_SWIPE_THRESHOLD = 50;   // px of travel that commits the change
 const CAL_SWIPE_VELOCITY  = 0.5;  // px/ms flick that commits below the threshold
 const CAL_SWIPE_DAMPING   = 0.45; // finger-follow ratio (no neighbour behind it)
 const CAL_SWIPE_AXIS_LOCK = 8;    // px before the gesture is called horizontal
-const CAL_SLIDE_MS        = 260;  // must match --cal-slide in family-hub.css
+const CAL_SLIDE_MS        = 260;  // must match --cal-slide in hub-theme.css
 const CAL_SLIDE_GUTTER    = 20;   // px past the edge, clearing the card-body padding
 
 let calSliding = false;           // a period slide is mid-flight
