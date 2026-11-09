@@ -339,7 +339,8 @@ body.safe-palette-on {
    material tokens. Light/dark/accessible colors stay on the Colors axis:
    each theme gives values for dark (the default) and for body.light-mode,
    and may tune the palette for light/dark but leaves colorblind-mode's
-   alone. Registry: THEMES in family-hub.js. Structural rules tokens can't
+   alone. One exception: Glass sets its own Accessible gray, because
+   Accessible's #8899bb fails on clear glass. Registry: THEMES in family-hub.js. Structural rules tokens can't
    express live in family-hub.css's ✦ THEMES section.
    ════════════════════════════════════════════════════════════════ */
 

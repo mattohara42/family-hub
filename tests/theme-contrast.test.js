@@ -22,7 +22,10 @@ const report = (failures) => failures.map((f) => `${f.combo}: ${f.what} is ${f.w
 
 test('every look passes contrast', () => {
   const looks = T.looks(css);
-  assert.equal(looks.length, 9, 'three themes in dark, light and Accessible');
+  const names = looks.map((l) => l.name);
+  for (const theme of ['tactile', 'glass', 'paper']) for (const mode of ['dark', 'light', 'accessible']) {
+    assert.ok(names.includes(`${theme}-${mode}`), `${theme}-${mode} is checked`);
+  }
   assert.deepEqual(report(T.check(css, looks).failures), []);
 });
 
@@ -87,6 +90,8 @@ test('the checker fails closed on CSS it cannot model', () => {
   assert.throws(() => T.tokenBlocks('body[data-x^="1"] { --x: #fff; }'), /can't model the selector/);
   assert.throws(() => T.tokenBlocks('html.dark { --x: #fff; }'), /can't model the selector/);
   assert.throws(() => T.tokenBlocks('@media all { body { --x: #fff; } }'), /aren't modelled/);
+  assert.throws(() => T.tokenBlocks('@import "x.css"; body { --x: #fff; }'), /"@import "x.css"" isn't modelled/);
+  assert.equal(T.tokenBlocks('@charset "utf-8"; body { --x: #fff; }').length, 1);
   assert.throws(() => T.colorsIn('linear-gradient(red, #fff)'), /can't read "red"/);
   assert.throws(() => T.colorsIn('linear-gradient(hsl(0 0% 0%), #fff)'), /can't read/);
   // single quotes or none on an attribute value both parse

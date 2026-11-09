@@ -8,7 +8,7 @@ A living reference of every feature, its key functions, state variables, localSt
 
 ## Architecture
 
-- **Three files:** `family-hub.html` (structure), `family-hub.css` (all rules), `family-hub.js` (all logic), plus `hub-theme.css` (theme tokens only, loaded first; other apps may copy it unchanged)
+- **Four files:** `family-hub.html` (structure), `family-hub.css` (all rules), `family-hub.js` (all logic), plus `hub-theme.css` (theme tokens only, loaded first; other apps may copy it unchanged)
 - **Served via:** Netlify (production) or `python3 -m http.server 8080` → `http://localhost:8080/family-hub.html` (local dev)
 - **Config block:** `config.js` sets `window.FH_CONFIG` (Firebase config + Google client ID); `netlify-build.js` rewrites it from the `GOOGLE_CLIENT_ID`/`FIREBASE_CONFIG` env vars when both are set. Top of `family-hub.js` reads it into `FIREBASE_CONFIG`/`GOOGLE_CLIENT_ID` and holds the pinned API constants
 - **State:** Mix of `let` globals + `localStorage` + IndexedDB (photos only)

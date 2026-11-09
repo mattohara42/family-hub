@@ -180,8 +180,15 @@ const SETS_TOKEN = /(^|[;{\s])--[\w-]+\s*:/;
  */
 function tokenBlocks(css) {
   const blocks = []; let order = 0;
-  for (const [sel, body] of rules(css)) {
-    if (sel.startsWith('@') || sel.includes(';')) {
+  for (const [prelude, body] of rules(css)) {
+    // Statements such as @charset end in ";" and run into the next selector.
+    // @charset is harmless; anything else (an @import) isn't modelled.
+    const parts = prelude.split(';');
+    const sel = parts.pop().trim();
+    for (const st of parts.map((x) => x.trim()).filter(Boolean)) {
+      if (!/^@charset\s/i.test(st)) throw new Error(`theme-check: "${st.slice(0, 60)}" isn't modelled`);
+    }
+    if (sel.startsWith('@')) {
       if (sel !== '@font-face' && SETS_TOKEN.test(body)) throw new Error(`theme-check: tokens inside "${sel.slice(0, 60)}" aren't modelled`);
       continue;
     }
