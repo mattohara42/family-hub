@@ -15,9 +15,10 @@
  * translucent stop (Tactile's accent glow) at full strength over each opaque
  * stop: the glow is centred above the card, so it is strongest at the title.
  *
- * It fails closed: a rule that sets tokens but whose selector it can't read,
- * tokens inside an @-rule, or a color syntax it doesn't know all throw, so a
- * check can't pass by being skipped.
+ * It fails closed on honest mistakes: a rule that sets tokens but whose
+ * selector it can't read, tokens inside an @-rule, or a color syntax it
+ * doesn't know all throw, so a check can't pass by being skipped. It is not
+ * a security boundary: an app that copies the file should gate it itself.
  *
  * What it doesn't model: a background photo (has-bg), the calendar's cells
  * (--col-bg, --today-bg, --week-bg), the colors between two gradient stops
@@ -123,10 +124,11 @@ const hex = (c) => '#' + c.slice(0, 3).map((v) => Math.round(Math.min(1, Math.ma
 // ── CSS ─────────────────────────────────────────────────────────────
 
 /**
- * Drops comments, leaving strings alone (a "/*" inside a string is not a
- * comment). Line breaks are read as a browser reads them (CR, CRLF and FF
- * become LF), and a line break inside a string throws: a browser ends the
- * string there, so the rest would be read differently.
+ * Drops comments, leaving strings and unquoted url(...) alone (a "/*" in
+ * either is not a comment). Line breaks are read as a browser reads them
+ * (CR, CRLF and FF become LF), and a line break inside a string throws: a
+ * browser ends the string there, so the rest would be read differently.
+ * A backslash escape inside a string keeps the next character.
  */
 function stripComments(input) {
   const css = input.replace(/\r\n?|\f/g, '\n');
@@ -134,10 +136,18 @@ function stripComments(input) {
   for (let i = 0; i < css.length; i++) {
     const c = css[i];
     if (quote) {
+      if (c === '\\') { out += c + (css[i + 1] ?? ''); i++; continue; }
       if (c === '\n') throw new Error('theme-check: a line break inside a string');
       out += c; if (c === quote) quote = null; continue;
     }
     if (c === '"' || c === "'") { quote = c; out += c; continue; }
+    // An unquoted url( runs to its ")" as one token, "/*" included.
+    const unquoted = /^url\(\s*(?!['"\s])/i.exec(css.slice(i, i + 64));
+    if (unquoted && !/[\w-]/.test(css[i - 1] || '')) {
+      const end = css.indexOf(')', i);
+      if (end < 0) throw new Error('theme-check: an unclosed url(');
+      out += css.slice(i, end + 1); i = end; continue;
+    }
     if (c === '/' && css[i + 1] === '*') {
       const end = css.indexOf('*/', i + 2);
       if (end < 0) throw new Error('theme-check: an unclosed comment');
