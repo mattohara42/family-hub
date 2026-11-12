@@ -1185,16 +1185,106 @@ function onGsiLoad() {
 // also sent to Sentry. Otherwise they surface as a dismissible toast so
 // family members can report problems.
 window.addEventListener('unhandledrejection', e => {
-  const msg = e.reason?.message || String(e.reason) || 'Unknown error';
-  console.error('[Family Hub] Unhandled rejection:', e.reason);
+  logError('Unhandled rejection', e.reason);
   if (typeof Sentry !== 'undefined') Sentry.captureException(e.reason);
   if (typeof showToast === 'function') showToast('⚠️ Something went wrong — check the browser console.', 5000);
 });
 window.onerror = (msg, src, line, col, err) => {
   if (/ResizeObserver loop/.test(msg || '')) return; // benign browser quirk, not a real error
-  console.error('[Family Hub] Uncaught error:', msg, `${src}:${line}:${col}`);
+  const file = String(src || '').split('/').pop();
+  logError('Uncaught error', `${msg} (${file}:${line}:${col})`);
   if (typeof Sentry !== 'undefined') Sentry.captureException(err || new Error(msg));
 };
+
+// ── Error log ──
+// The wall panel runs unattended, so an error that only reaches the console
+// is never seen. The last ERROR_LOG_MAX are kept per device (fh_errorLog) and
+// listed in the control card's status rows. A load that dies before it
+// settles (a crash, a freeze, running out of memory) can't log itself, so each
+// load leaves fh_bootPhase behind until it has run for BOOT_SETTLE_MS, and the
+// next load reports the phase it found. Added 2026-11-12, after the panel went
+// white and a phone crash-looped with nothing recorded on either.
+const ERROR_LOG_KEY  = 'fh_errorLog';
+const ERROR_LOG_MAX  = 30;
+const BOOT_PHASE_KEY = 'fh_bootPhase';
+const BOOT_SETTLE_MS = 10000;
+
+function readErrorLog() {
+  const log = lsGet(ERROR_LOG_KEY, []);
+  return Array.isArray(log) ? log : [];
+}
+
+/** Record an error on this device. `err` may be an Error, a string or anything
+    thrown. A repeat of the newest entry bumps its count instead of filling the
+    log with one error from an interval. */
+function logError(where, err) {
+  const msg = String((err && err.message) || err || 'Unknown error').slice(0, 300);
+  console.error(`[Family Hub] ${where}:`, err);
+  try {
+    const log  = readErrorLog();
+    const last = log[log.length - 1];
+    if (last && last.where === where && last.msg === msg) { last.n = (last.n || 1) + 1; last.t = Date.now(); }
+    else log.push({ t: Date.now(), where, msg });
+    localStorage.setItem(ERROR_LOG_KEY, JSON.stringify(log.slice(-ERROR_LOG_MAX)));
+  } catch {}
+  try { if (controlCardOpen) renderCtrlStatusView(); } catch {}
+}
+
+/** The control card's "Problems on this device" rows: newest first, five at most. */
+function renderErrorLogRows() {
+  const log = readErrorLog();
+  if (!log.length) return '';
+  const when = t => new Date(t).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const rows = log.slice(-5).reverse().map(e => `
+    <li><span class="ctrl-error-when">${esc(when(e.t))}${e.n > 1 ? ` (×${e.n})` : ''}</span>
+      ${esc(e.where)}: ${esc(e.msg)}</li>`).join('');
+  return `
+    <div class="ctrl-status-row">
+      <span class="ctrl-status-dot fail"></span>
+      <div class="ctrl-status-text">
+        <span class="ctrl-status-label">Problems on this device (${log.length})</span>
+        <ul class="ctrl-error-list">${rows}</ul>
+        <button class="btn btn-sm" onclick="event.stopPropagation();clearErrorLog()">Clear</button>
+      </div>
+    </div>`;
+}
+
+function clearErrorLog() {
+  try { localStorage.removeItem(ERROR_LOG_KEY); } catch {}
+  renderCtrlStatusView();
+}
+
+function setBootPhase(phase) {
+  try { localStorage.setItem(BOOT_PHASE_KEY, phase); } catch {}
+}
+function clearBootPhase() {
+  try { localStorage.removeItem(BOOT_PHASE_KEY); } catch {}
+}
+
+(() => {
+  let prev = null;
+  try { prev = localStorage.getItem(BOOT_PHASE_KEY); } catch {}
+  if (prev) logError('Previous load', `stopped during "${prev}" before it settled (the tab crashed or froze)`);
+  setBootPhase('loading scripts');
+})();
+// A deliberate close, reload or switch away isn't a crash
+window.addEventListener('pagehide', clearBootPhase);
+document.addEventListener('visibilitychange', () => { if (document.hidden) clearBootPhase(); });
+
+/** Run one startup step so a throw is logged and skipped instead of aborting
+    every step after it (one bad saved setting used to leave the whole hub
+    half-started). A returned promise's rejection is logged too. */
+const _bootFailures = [];
+function bootStep(name, fn) {
+  setBootPhase(`startup: ${name}`);
+  try {
+    const r = fn();
+    if (r && typeof r.catch === 'function') r.catch(e => logError(`Startup: ${name}`, e));
+  } catch (e) {
+    _bootFailures.push(name);
+    logError(`Startup: ${name}`, e);
+  }
+}
 
 // ── Remote panel reload ──
 // Settings → Look → "Update wall panel now" (usable from a phone) bumps
@@ -1282,7 +1372,8 @@ document.addEventListener('pointerdown', e => {
 }, { capture: true, passive: true });
 
 window.addEventListener('load', () => {
-  if ('serviceWorker' in navigator) {
+  bootStep('service worker', () => {
+    if (!('serviceWorker' in navigator)) return;
     // A new SW taking control = a fresh deploy, so reload-when-idle. The one
     // exception is the very first install, whose clients.claim() also fires
     // controllerchange. That's told apart by whether a worker was already
@@ -1301,68 +1392,78 @@ window.addEventListener('load', () => {
       .then(reg => { setInterval(() => reg.update().catch(() => {}), 15 * 60000); })
       .catch(err => console.warn('[SW] Registration failed:', err));
     setInterval(maybeReloadForUpdate, 20000);
-  }
-  probeEventsBackend();
-  if (!isConfigured) return;
+  });
+  bootStep('events backend probe', probeEventsBackend);
+  if (!isConfigured) { settleBoot(); return; }
   // GSI may already be ready (cached) or will call onGsiLoad when it loads
-  if (typeof google !== 'undefined' && google.accounts) {
-    gsiReady = true;
-    initGoogleAuth();
-  }
-  applyAppMode(appMode);
-  applyTheme(appTheme);
-  renderThemeButtons();
-  applyMotion();
-  applyWallDisplay();
-  applyAppTitle();
-  applyAssistantName();
-  applyCalPalette();
-  applyLayoutMode();
-  if (new URLSearchParams(location.search).get('tv') === '1') tvMode = true;
-  applyTvMode();
-  lockPortraitOrientation();
-  if (!db) migrateSmsContactsToMembers(); // with Firestore this runs on the first members snapshot instead
-  resetSaverIdleTimer(); // arm the screensaver idle timer (no-op when disabled)
-  try {
-    _saverResumePending = sessionStorage.getItem('fh_saverResume') === '1';
-    sessionStorage.removeItem('fh_saverResume');
-  } catch {}
-  resumeSaverAfterReload();  // pond mode starts now; photo mode waits for loadBgFromDb()
-  updateStatusPill();
-  if (weatherLocations.length) showWeatherLocation(0);
-  else if (weatherCity) { weatherLocations = [weatherCity]; showWeatherLocation(0); }
-  switchCalView(calView);   // sets up tabs + renders the right view
-  renderYearStrip();
-  setupCalSwipe();
-  setupMobileSheetDrag();
+  bootStep('Google sign-in', () => {
+    if (typeof google !== 'undefined' && google.accounts) {
+      gsiReady = true;
+      initGoogleAuth();
+    }
+  });
+  bootStep('colors',          () => applyAppMode(appMode));
+  bootStep('theme',           () => { applyTheme(appTheme); renderThemeButtons(); });
+  bootStep('motion',          applyMotion);
+  bootStep('wall display',    applyWallDisplay);
+  bootStep('app title',       applyAppTitle);
+  bootStep('assistant name',  applyAssistantName);
+  bootStep('calendar palette', applyCalPalette);
+  bootStep('layout mode',     applyLayoutMode);
+  bootStep('TV mode', () => {
+    if (new URLSearchParams(location.search).get('tv') === '1') tvMode = true;
+    applyTvMode();
+  });
+  bootStep('orientation lock', lockPortraitOrientation);
+  if (!db) bootStep('SMS contacts migration', migrateSmsContactsToMembers); // with Firestore this runs on the first members snapshot instead
+  bootStep('screensaver timer', resetSaverIdleTimer); // no-op when disabled
+  bootStep('status pill',     updateStatusPill);
+  bootStep('weather', () => {
+    if (weatherLocations.length) showWeatherLocation(0);
+    else if (weatherCity) { weatherLocations = [weatherCity]; showWeatherLocation(0); }
+  });
+  bootStep('calendar view',   () => switchCalView(calView));   // sets up tabs + renders the right view
+  bootStep('year strip',      renderYearStrip);
+  bootStep('calendar swipe',  setupCalSwipe);
+  bootStep('mobile sheet',    setupMobileSheetDrag);
   // Load ICS subs even without Google auth; loadAllCalendars also calls this for signed-in users
   if (icsSubs.length && !googleToken) {
-    loadIcsSubs().then(() => { renderCalendarTabs(); renderCurrentView(); renderYearStrip(); });
+    bootStep('ICS subscriptions', () =>
+      loadIcsSubs().then(() => { renderCalendarTabs(); renderCurrentView(); renderYearStrip(); }));
   }
-  setupListeners();
-  loadBgFromDb();
-  populateTodoAssigneeDropdown();
-  applyWidgetPlacement();   // moves cards to sidebar/bottom, then calls applyWidgetVisibility
-  initWidgetDragDrop();
-  renderBudgetCard();
-  renderChoreCard();
-  loadWotd();
-  loadDadJoke();
-  loadQuote();
-  loadNewsFeeds();
-  loadStockQuotes();
-  initHomeAssistant();
-  if (eggCategories.ui) setupKonamiCode();
-  if (eggCategories.ui) setupEmojiFireworks();
-  initAssistantVoice();
-  initOnScreenKeyboard();       // touch keyboard for keyboardless wall displays (opt-in)
-  updateAssistantTtsBtn();      // set the 🔊/🔇 voice-output toggle state
-  renderAssistantMessages();   // render empty-state welcome + quick-prompt chips
+  bootStep('Firestore listeners', setupListeners);
+  bootStep('screensaver resume flag', () => {
+    _saverResumePending = sessionStorage.getItem('fh_saverResume') === '1';
+    sessionStorage.removeItem('fh_saverResume');
+  });
+  bootStep('photos',          loadBgFromDb);   // resumes a photo-mode screensaver once the pool is read
+  bootStep('to-do assignees', populateTodoAssigneeDropdown);
+  bootStep('widget placement', applyWidgetPlacement);   // moves cards to sidebar/bottom, then calls applyWidgetVisibility
+  bootStep('widget drag',     initWidgetDragDrop);
+  bootStep('budget card',     renderBudgetCard);
+  bootStep('chore card',      renderChoreCard);
+  bootStep('word of the day', loadWotd);
+  bootStep('dad joke',        loadDadJoke);
+  bootStep('quote',           loadQuote);
+  bootStep('news',            loadNewsFeeds);
+  bootStep('stocks',          loadStockQuotes);
+  bootStep('Home Assistant',  initHomeAssistant);
+  if (eggCategories.ui) {
+    bootStep('Konami code',     setupKonamiCode);
+    bootStep('emoji fireworks', setupEmojiFireworks);
+  }
+  bootStep('assistant voice', initAssistantVoice);
+  bootStep('on-screen keyboard', initOnScreenKeyboard);   // touch keyboard for keyboardless wall displays (opt-in)
+  bootStep('assistant TTS button', updateAssistantTtsBtn); // set the 🔊/🔇 voice-output toggle state
+  bootStep('assistant messages', renderAssistantMessages); // render empty-state welcome + quick-prompt chips
   // Daily briefing: open once per day, after weather/calendar have had time to
   // load; re-check hourly so a long-open kiosk shows a fresh one each morning.
-  setTimeout(maybeAutoBriefing, 6000);
+  setTimeout(() => bootStep('daily briefing', maybeAutoBriefing), 6000);
   setInterval(maybeAutoBriefing, 60 * 60000);
-  renderCountdownCard(); // generate after page settles + weather/cal data loads
+  bootStep('countdowns',      renderCountdownCard); // generate after page settles + weather/cal data loads
+  // Last, so a screensaver that can't start never holds up the rest. Pond
+  // mode starts now; photo mode waits for loadBgFromDb() to read the pool.
+  bootStep('screensaver resume', resumeSaverAfterReload);
   // Close SMS popover on outside click
   document.addEventListener('click', e => {
     const pop = document.getElementById('smsPopover');
@@ -1391,7 +1492,18 @@ window.addEventListener('load', () => {
       setTimeout(() => t.remove(), 2000);
     }
   });
+  if (_bootFailures.length) {
+    showToast(`⚠️ Some parts didn't start (${_bootFailures.join(', ')}). The rest is running; details are under Status.`, 8000);
+  }
+  settleBoot();
 });
+
+/** Startup ran to the end. The load counts as healthy once it has also run
+    BOOT_SETTLE_MS, which is when the "did the last load die?" marker clears. */
+function settleBoot() {
+  setBootPhase('settling after startup');
+  setTimeout(clearBootPhase, BOOT_SETTLE_MS);
+}
 
 function initGoogleAuth() {
   if (!isConfigured) return;   // empty client_id makes GIS throw; the banner explains
@@ -1593,7 +1705,7 @@ function renderCtrlStatusView() {
         <span class="ctrl-status-desc">${c.desc}</span>
       </div>
     </div>
-  `).join('');
+  `).join('') + renderErrorLogRows();
 
   // Sign-in / sign-out button visibility
   const signIn  = document.getElementById('signInBtn');
@@ -13757,13 +13869,16 @@ function openBgDb() {
     refresh the settings preview, and (re)start the slideshow. */
 async function rebuildBgPhotosFromDb() {
   const db  = await openBgDb();
+  try { await migrateBgRecordsToBlobs(db); }
+  catch (e) { logError('Photo storage upgrade', e); }   // old records still load below, just heavier
   const all = await new Promise((res, rej) => {
     const req = db.transaction(BG_STORE_NAME, 'readonly').objectStore(BG_STORE_NAME).getAll();
     req.onsuccess = () => res(req.result);
     req.onerror   = () => rej(req.error);
   });
   bgPhotos.forEach(u => URL.revokeObjectURL(u));
-  bgPhotos = all.map(r => URL.createObjectURL(new Blob([r.data], { type: r.type })));
+  bgPhotos = all.map(r => URL.createObjectURL(
+    r.data instanceof Blob ? r.data : new Blob([r.data], { type: r.type })));
   for (let i = bgPhotos.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [bgPhotos[i], bgPhotos[j]] = [bgPhotos[j], bgPhotos[i]];
@@ -13771,6 +13886,61 @@ async function rebuildBgPhotosFromDb() {
   renderBgPreview();
   if (bgPhotos.length) startSlideshow();
   return bgPhotos.length;
+}
+
+// ── Photo storage: Blobs, not ArrayBuffers ──
+// Photos used to be stored as raw ArrayBuffers. getAll() pulls those into
+// memory all at once, and every load then copied each into a Blob: a 177 MB
+// pool added ~500 MB at peak and kept ~175 MB (measured 2026-11-12), enough to
+// threaten a phone or the Pi. A Blob stored in IndexedDB stays on disk until an
+// <img> reads it, so the same pool now costs ~2 MB to load.
+
+/** Add photo records ({ type, data: Blob }). If the browser won't store a Blob
+    (some older Safari builds refused them in private windows), fall back to
+    the old ArrayBuffer records, which still load, just heavier. */
+async function addBgRecords(db, records) {
+  const put = recs => new Promise((res, rej) => {
+    const tx    = db.transaction(BG_STORE_NAME, 'readwrite');
+    const store = tx.objectStore(BG_STORE_NAME);
+    recs.forEach(r => store.add(r));
+    tx.oncomplete = res;
+    tx.onerror = tx.onabort = () => rej(tx.error);
+  });
+  try { await put(records); }
+  catch (e) {
+    logError('Saving photos as Blobs', e);
+    await put(await Promise.all(records.map(async r => ({ type: r.type, data: await r.data.arrayBuffer() }))));
+  }
+}
+
+/** One-time rewrite of old ArrayBuffer records as Blobs, ten per transaction
+    so the conversion never holds the whole pool in memory. fh_bgBlobs marks it
+    done; rebuildBgPhotosFromDb() still reads either shape. */
+async function migrateBgRecordsToBlobs(db) {
+  if (localStorage.getItem('fh_bgBlobs') === '1') return;
+  const keys = await new Promise((res, rej) => {
+    const req = db.transaction(BG_STORE_NAME, 'readonly').objectStore(BG_STORE_NAME).getAllKeys();
+    req.onsuccess = () => res(req.result);
+    req.onerror   = () => rej(req.error);
+  });
+  for (let i = 0; i < keys.length; i += 10) {
+    await new Promise((res, rej) => {
+      const tx    = db.transaction(BG_STORE_NAME, 'readwrite');
+      const store = tx.objectStore(BG_STORE_NAME);
+      keys.slice(i, i + 10).forEach(k => {
+        const get = store.get(k);
+        get.onsuccess = () => {
+          const r = get.result;
+          if (r && !(r.data instanceof Blob)) {
+            store.put({ ...r, data: new Blob([r.data], { type: r.type || 'image/jpeg' }) });
+          }
+        };
+      });
+      tx.oncomplete = res;
+      tx.onerror = tx.onabort = () => rej(tx.error);
+    });
+  }
+  localStorage.setItem('fh_bgBlobs', '1');
 }
 
 /** Delete the oldest photos beyond BG_MAX_PHOTOS (auto-increment ids preserve
@@ -13817,13 +13987,8 @@ async function saveBgFiles(files) {
   try {
     const db = await openBgDb();
     // Additive: new images join the pool; oldest are evicted beyond the cap
-    const blobs = await Promise.all(files.map(f => f.arrayBuffer().then(buf => ({ type: f.type, data: buf }))));
-    await new Promise((res, rej) => {
-      const tx    = db.transaction(BG_STORE_NAME, 'readwrite');
-      const store = tx.objectStore(BG_STORE_NAME);
-      blobs.forEach(b => store.add(b));
-      tx.oncomplete = res; tx.onerror = rej;
-    });
+    const blobs = files.map(f => ({ type: f.type, data: f }));   // a File is a Blob
+    await addBgRecords(db, blobs);
     const evicted = await evictBgOverflow();
     localStorage.setItem('fh_photosImportedAt', String(Date.now()));
     const total = await rebuildBgPhotosFromDb();
@@ -14016,8 +14181,8 @@ async function openPhotosPicker() {
           const r = await fetch(url, { headers: { Authorization: `Bearer ${googleToken}` } });
           if (!r.ok) { console.warn('[Photos] Download failed', r.status, url); continue; }
           const contentType = r.headers.get('content-type') || 'image/jpeg';
-          const buf = await r.arrayBuffer();
-          blobs.push({ type: contentType, data: buf });
+          const blob = await r.blob();
+          blobs.push({ type: contentType, data: blob.type ? blob : new Blob([blob], { type: contentType }) });
         } catch (dlErr) {
           console.error('[Photos] Download error for item', item, dlErr);
         } finally {
@@ -14036,12 +14201,7 @@ async function openPhotosPicker() {
     //       oldest photos are evicted beyond BG_MAX_PHOTOS) ─────────
     statusEl.textContent = 'Saving to local storage…';
     const idb = await openBgDb();
-    await new Promise((res, rej) => {
-      const tx    = idb.transaction(BG_STORE_NAME, 'readwrite');
-      const store = tx.objectStore(BG_STORE_NAME);
-      blobs.forEach(b => store.add(b));
-      tx.oncomplete = res; tx.onerror = rej;
-    });
+    await addBgRecords(idb, blobs);
     const evicted = await evictBgOverflow();
     localStorage.setItem('fh_photosImportedAt', String(Date.now()));
 

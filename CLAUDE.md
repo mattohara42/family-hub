@@ -71,6 +71,8 @@ Shared state (shopping, todo, budget) lives in Firebase Firestore. Photos are bl
 | SMS popover clipping | `backdrop-filter` on `.card` traps `position: fixed`; append popover to `<body>` then position via `getBoundingClientRect()` |
 | Sidebar card compression | `.sidebar > *` must have `flex-shrink: 0` |
 | Day stepping by `86400000` ms breaks on DST | A fall-back day is 25 hours, so `new Date(midnight.getTime() + 86400000)` lands at 23:00 the same date: Week view showed Nov 1 twice and dropped Saturday (2026-10-26). Step calendar days with `addDays(date, n)` (`setDate`-based). Dividing a difference by `86400000` is fine if it's `Math.round`ed or UTC-based |
+| Photos must be Blobs in IndexedDB | Write photo records through `addBgRecords()` as `{ type, data: Blob }`, never ArrayBuffers. ArrayBuffer records get pulled into memory all at once on every load: 150 photos added ~370 MB at peak (measured 2026-11-12), enough to threaten a phone or the Pi. Old records are migrated once (`fh_bgBlobs`) |
+| Errors on the panel go nowhere unless logged | Nobody watches the panel's console. `logError(where, err)` keeps a per-device log (`fh_errorLog`) shown in the control card's status rows, and a load that crashed or froze is reported by the next one (`fh_bootPhase`). Log caught errors that matter there rather than only `console.error` (FEATURES.md §22) |
 | `budgetDatesInRange()` returns strings | Returns `YYYY-MM-DD` strings, not Date objects — don't call Date methods on them |
 | Budget pill hidden by default | `#budgetTotalCard` starts `display:none`; `renderBudgetCard()` shows it when items exist |
 | Budget uses Firestore | Collection `budget` ordered by `createdAt`; `onSnapshot` keeps `budgetItems[]` live |
@@ -112,7 +114,7 @@ Shared state (shopping, todo, budget) lives in Firebase Firestore. Photos are bl
 4. **JS:** `// ── Feature Name ──` section in `family-hub.js`
 5. **Widget?** add to `WIDGET_DEFAULTS`, `WIDGET_PLACEMENT_DEFAULTS`, `WIDGET_ORDER`. Most widgets have no mobile surface at all (Settings-only, like Budget/Chores/Word of the Day); if this one genuinely needs day-to-day phone use, add it to `MOBILE_SHEET_SECTIONS` and give it a tab in the Lists sheet markup (§20) instead of inventing new mobile chrome
 6. **Settings?** add a `modal-tab` + `settings-panel`; wire into `openSettings()` (populate) and `saveSettings()` (persist). In `saveSettings()`, persist + `closeSettings()` **before** any re-render that could throw.
-7. **Init:** call setup from `window.addEventListener('load', ...)`
+7. **Init:** call setup from `window.addEventListener('load', ...)` as its own `bootStep('name', fn)`, so a throw is logged and skipped instead of stopping every step after it (FEATURES.md §22)
 8. **Docs:** update `FEATURES.md` (function/state/anchor/key) + `CLAUDE.md` if architecture changed
 
 ---

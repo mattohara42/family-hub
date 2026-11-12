@@ -321,7 +321,7 @@ let sunArcEnabled       = lsGet('fh_sunArc', true);   // sun-path arc on/off
 ### 4. Google Photos Background Slideshow
 
 **API:** Google Photos Picker API (session-based, OAuth token required)
-**Storage:** IndexedDB database `fh_bgImages` (stores downloaded blobs). **Imports are additive** (Picker picks and local uploads join the existing pool); beyond `BG_MAX_PHOTOS` (200) the oldest photos are evicted (auto-increment ids = import order). "Clear background images" resets the pool.
+**Storage:** IndexedDB database `fh_bgImages`. Each record is `{ type, data: Blob }`, written through `addBgRecords()`. A Blob in IndexedDB stays on disk until an image reads it; the old ArrayBuffer records were pulled into memory all at once on every load and copied again into Blobs (150 photos added ~370 MB at peak and held ~170 MB, measured 2026-11-12). `migrateBgRecordsToBlobs()` rewrites old records ten per transaction, once per device (`fh_bgBlobs`), and `rebuildBgPhotosFromDb()` still reads either shape. If a browser refuses to store a Blob, `addBgRecords()` logs it and falls back to ArrayBuffers. **Imports are additive** (Picker picks and local uploads join the existing pool); beyond `BG_MAX_PHOTOS` (200) the oldest photos are evicted (auto-increment ids = import order). "Clear background images" resets the pool.
 **State:**
 ```js
 const BG_MAX_PHOTOS = 200;  // pool cap — oldest evicted beyond this
@@ -1031,6 +1031,16 @@ const HA_TOGGLE_DOMAINS = ['light', 'switch', 'fan', 'input_boolean'];
 
 **Testing without hardware:** `node tests/ha-mock.js` starts a fake HA on `http://localhost:8123` (flags for `--reject-auth` and `--no-cors`). `http://localhost:8123` is in the dev CSP alongside the Netlify dev port. `node --test tests/home-assistant.test.js` covers the pure helpers.
 
+### 22. Startup & Error Log
+
+**Why:** the wall panel runs unattended, so errors that only reached the console were never seen. On 2026-11-12 the panel went white and a phone crash-looped (fine in incognito), and neither device had recorded anything.
+
+**Startup steps:** every call in the `load` handler goes through `bootStep(name, fn)`, which catches a throw (and a returned promise's rejection), logs it and moves on. Before this, one throwing step aborted every step after it and left the hub half-started. Failed step names collect in `_bootFailures`; if any failed, one toast names them. Add new startup work as another `bootStep()`.
+
+**Error log:** `logError(where, err)` keeps the last `ERROR_LOG_MAX` (30) entries per device in `fh_errorLog` as `{ t, where, msg, n? }`; a repeat of the newest entry bumps `n`. `window.onerror` and `unhandledrejection` feed it. The control card's status view lists the newest five under "Problems on this device" (`renderErrorLogRows()`, selectable text), with a Clear button (`clearErrorLog()`). Phones have no control card, so their log is only in localStorage for now.
+
+**Loads that died:** a crash, freeze or out-of-memory kill can't log itself. `setBootPhase()` keeps the current phase in `fh_bootPhase` (`loading scripts`, then `startup: <step>`, then `settling after startup`); `settleBoot()` clears it `BOOT_SETTLE_MS` (10s) after startup, and so do `pagehide` and the page being hidden, since a deliberate close or switch away isn't a crash. A load that finds the marker still set logs "Previous load: stopped during …", which says how far the dead load got.
+
 ---
 
 ## localStorage Key Index
@@ -1103,6 +1113,9 @@ const HA_TOGGLE_DOMAINS = ['light', 'switch', 'fan', 'input_boolean'];
 | `fh_eventLocation` | string | Event Discovery | Default search location (default `'Rochester'`) |
 | `fh_eventMaxDistance` | number | Event Discovery | Max distance in minutes driving time (default 120) |
 | `fh_eventsEnabled` | boolean | Event Discovery | Show the 💡 button on this device (default `true`); hidden regardless when the function reports no `OWM_KEY` |
+| `fh_errorLog` | JSON array | Error log | Last 30 `{ t, where, msg, n? }` on this device (§22) |
+| `fh_bootPhase` | string | Error log | Set while a load is starting; still set at the next load means that load died (§22) |
+| `fh_bgBlobs` | `'1'` | Photos | Old ArrayBuffer photo records have been rewritten as Blobs (§4) |
 
 **Firestore collections:**
 

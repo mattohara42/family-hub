@@ -94,12 +94,13 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 
-  <!-- Google API -->
-  <script src="https://apis.google.com/js/api.js"></script>
-
-  <!-- Leaflet (precipitation radar map) -->
+  <!-- Leaflet (precipitation radar map, event editor location map). Deferred:
+       it only runs inside functions, and deferred scripts finish before the
+       load event that first calls them, so it no longer holds up first paint.
+       (apis.google.com/js/api.js used to sit here too; nothing read gapi, so
+       it was removed 2026-11-12.) -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <!-- Theme tokens first (other apps may copy them), then the rules that read them -->
   <link rel="stylesheet" href="hub-theme.css" />
