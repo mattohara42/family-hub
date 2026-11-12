@@ -49,6 +49,12 @@
                  font-src 'self' data:;
                  frame-src 'self';" />   <!-- 'self' only: the Pond Chimes screensaver runs in a same-origin iframe (pond/index.html) -->
 
+  <!-- Dark first paint. The render-blocking scripts below hold off the
+       stylesheets, and until they load the page is the browser's white. On
+       the wall panel every kiosk reload flashed that white over a dark room.
+       family-hub.css sets html back to transparent so body's own --bg shows. -->
+  <style>html { background: #0f1117; }</style>
+
   <!-- Earliest possible error catcher — runs before any other script, so a
        crash anywhere (including inside family-hub.js before its own
        window.onerror is registered) still shows something on screen instead

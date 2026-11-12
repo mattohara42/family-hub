@@ -14,6 +14,7 @@ html {
   height: 100%;
   overflow: hidden;
   overscroll-behavior: none;
+  background: transparent;  /* undo family-hub.html's dark first-paint fill so body's --bg reaches the canvas */
 }
 
 body {

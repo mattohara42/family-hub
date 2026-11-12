@@ -1211,7 +1211,7 @@ function onPanelReloadSnapshot(doc) {
   if (_panelReloadSeen === undefined) { _panelReloadSeen = v; return; }
   if (v === _panelReloadSeen) return;
   _panelReloadSeen = v;
-  if (wallDisplay) location.reload();
+  if (wallDisplay) reloadKeepingSaver();
 }
 
 async function requestPanelReload() {
@@ -1247,7 +1247,28 @@ function maybeReloadForUpdate() {
   try { lastReload = Number(sessionStorage.getItem('fh_lastAutoReload')) || 0; } catch {}
   if (Date.now() - lastReload < RELOAD_COOLDOWN_MS) return;
   try { sessionStorage.setItem('fh_lastAutoReload', String(Date.now())); } catch {}
+  reloadKeepingSaver();
+}
+
+// A running screensaver counts as idle, so the two reloads above usually land
+// while it's up. Without this the panel came back on the bright dashboard and
+// sat there until the idle delay ran out again, which read as the screensaver
+// "going white". The flag lives in sessionStorage so it only survives this
+// one reload of this tab.
+let _saverResumePending = false;
+function reloadKeepingSaver() {
+  try { if (saverActive) sessionStorage.setItem('fh_saverResume', '1'); } catch {}
   location.reload();
+}
+
+/** Called on load, and again once the photo pool is read from IndexedDB:
+    photo mode can't start until then. `final` means the photos are as loaded
+    as they'll get, so start (or re-arm the idle timer) either way. */
+function resumeSaverAfterReload(final = false) {
+  if (!_saverResumePending) return;
+  if (saverMode !== 'pond' && !bgPhotos.length && !final) return;
+  _saverResumePending = false;
+  startScreensaver(true);   // manual: it was up before, even if 💤 started it
 }
 
 // ── Touch hover suppression ──
@@ -1302,6 +1323,11 @@ window.addEventListener('load', () => {
   lockPortraitOrientation();
   if (!db) migrateSmsContactsToMembers(); // with Firestore this runs on the first members snapshot instead
   resetSaverIdleTimer(); // arm the screensaver idle timer (no-op when disabled)
+  try {
+    _saverResumePending = sessionStorage.getItem('fh_saverResume') === '1';
+    sessionStorage.removeItem('fh_saverResume');
+  } catch {}
+  resumeSaverAfterReload();  // pond mode starts now; photo mode waits for loadBgFromDb()
   updateStatusPill();
   if (weatherLocations.length) showWeatherLocation(0);
   else if (weatherCity) { weatherLocations = [weatherCity]; showWeatherLocation(0); }
@@ -13771,6 +13797,7 @@ async function loadBgFromDb() {
   try {
     await rebuildBgPhotosFromDb();
   } catch(e) { console.warn('loadBgFromDb', e); }
+  resumeSaverAfterReload(true);
 }
 
 function handleBgFiles(files) {
