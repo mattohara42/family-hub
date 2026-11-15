@@ -289,6 +289,7 @@ let sunArcEnabled       = lsGet('fh_sunArc', true);   // sun-path arc on/off
 - `addRainViewerLayer(map)` — fetches RainViewer's latest radar frame and adds it as a Leaflet tile layer (keyless)
 - `renderWeatherData(data)` — populates all weather DOM elements from a data object
 - `renderSunArc(data)` — draws the optional sun-path arc (SVG): sun position between sunrise/sunset, daylight-remaining readout, golden-hour + day/night states. Gated by `sunArcEnabled`. Pure local compute (uses `sunriseTs`/`sunsetTs` epochs, no extra API call).
+- Background refresh (top-level `setInterval` after `renderSunArc`): every minute re-runs `renderSunArc(lastWxData)` so the sun keeps moving, and refetches the shown location via `loadWeatherByCity(city, { quiet: true })` once its cache is older than `WX_CACHE_TTL`. `quiet` skips `showWxError()` so a failed background fetch keeps the last good card instead of showing the setup form. Before this, weather loaded once at boot and the whole card froze on the wall panel.
 - `renderWeatherTicker(data)` — scrolling ticker; shows severe-weather **alerts first** (bold, severity-colored), then precip/humidity/wind/visibility/sunrise/sunset/AQI.
 - `fetchNwsAlerts(lat, lon)` — active severe-weather alerts from NWS `api.weather.gov` (free, keyless, **US-only**); returns `[{ event, headline, severity }]` sorted by severity; `[]` on failure/non-US. Stored as `data.alerts`.
 - `renderWeatherNav()` — draws prev/next buttons and dot indicators in `#wxLocNav`
