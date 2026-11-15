@@ -229,7 +229,7 @@ let weatherCity     = WEATHER_CITY     || localStorage.getItem('fh_wcity') || ''
 let weatherLocations    = lsGet('fh_wlocations', []);
 let weatherLocIdx       = 0;                   // currently-displayed location index
 const weatherCache      = {};                  // { cityKey: { ts, data } }
-const WX_CACHE_TTL      = 30 * 60 * 1000;     // 30 minutes
+const WX_CACHE_TTL      = 30 * 60 * 1000;     // 30 minutes; also how often every weather piece (card, radar) reloads
 let weatherForecastMode = localStorage.getItem('fh_wxForecastMode') || '5day'; // '5day' | 'hourly'
 let sunArcEnabled       = lsGet('fh_sunArc', true);        // sun-path arc visibility
 let snarkyMode          = lsGet('fh_snarkyMode', false);   // WTF/snarky forecast toggle
@@ -5817,7 +5817,6 @@ setInterval(async () => {
 let _radarMap     = null;
 let _radarLayer   = null;
 let _radarLayerTs = 0;      // when _radarLayer's frame was fetched (ms)
-const RADAR_REFRESH_MS = 10 * 60 * 1000;   // RainViewer publishes a frame every 10 min
 let _radarLat     = null;
 let _radarLon     = null;
 
@@ -5843,15 +5842,15 @@ async function addRainViewerLayer(map) {
   }
 }
 
-/** Swap in RainViewer's newest frame once the one shown is RADAR_REFRESH_MS
- *  old. The radar used to load its frame once when the map was built, so a
+/** Swap in RainViewer's newest frame once the one shown is WX_CACHE_TTL old,
+ *  the same interval as the rest of the weather card. The radar used to load its frame once when the map was built, so a
  *  wall panel left on Radar showed hours-old rain. The new layer goes on before
  *  the old one comes off, so the map never flashes empty, and a failed fetch
  *  keeps the old frame. Called by renderRadarMap() and the weather minute timer.
  */
 async function refreshRadarLayerIfStale() {
   const map = _radarMap;
-  if (!map || Date.now() - _radarLayerTs < RADAR_REFRESH_MS) return;
+  if (!map || Date.now() - _radarLayerTs < WX_CACHE_TTL) return;
   _radarLayerTs = Date.now();   // claim the slot so overlapping calls don't double-fetch
   const layer = await addRainViewerLayer(map);
   if (!layer) { _radarLayerTs = 0; return; }   // try again next minute
