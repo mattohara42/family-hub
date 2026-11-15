@@ -5803,7 +5803,11 @@ setInterval(async () => {
   if (document.hidden || !lastWxData || _wxRefreshing || !weatherLocations.length) return;
   const city = weatherLocations[weatherLocIdx];
   const cached = city && weatherCache[city.toLowerCase().trim()];
-  if (cached && Date.now() - cached.ts < WX_CACHE_TTL) { renderSunArc(lastWxData); return; }
+  if (cached && Date.now() - cached.ts < WX_CACHE_TTL) {
+    renderSunArc(lastWxData);
+    if (weatherForecastMode === 'radar') refreshRadarLayerIfStale();
+    return;
+  }
   _wxRefreshing = true;
   try { await loadWeatherByCity(city, { quiet: true }); }
   finally { _wxRefreshing = false; }
@@ -5812,6 +5816,8 @@ setInterval(async () => {
 // Leaflet map instance + state (persisted across mode switches to avoid re-init)
 let _radarMap     = null;
 let _radarLayer   = null;
+let _radarLayerTs = 0;      // when _radarLayer's frame was fetched (ms)
+const RADAR_REFRESH_MS = 10 * 60 * 1000;   // RainViewer publishes a frame every 10 min
 let _radarLat     = null;
 let _radarLon     = null;
 
@@ -5835,6 +5841,23 @@ async function addRainViewerLayer(map) {
     console.warn('RainViewer radar unavailable', e);
     return null;
   }
+}
+
+/** Swap in RainViewer's newest frame once the one shown is RADAR_REFRESH_MS
+ *  old. The radar used to load its frame once when the map was built, so a
+ *  wall panel left on Radar showed hours-old rain. The new layer goes on before
+ *  the old one comes off, so the map never flashes empty, and a failed fetch
+ *  keeps the old frame. Called by renderRadarMap() and the weather minute timer.
+ */
+async function refreshRadarLayerIfStale() {
+  const map = _radarMap;
+  if (!map || Date.now() - _radarLayerTs < RADAR_REFRESH_MS) return;
+  _radarLayerTs = Date.now();   // claim the slot so overlapping calls don't double-fetch
+  const layer = await addRainViewerLayer(map);
+  if (!layer) { _radarLayerTs = 0; return; }   // try again next minute
+  if (map !== _radarMap) { layer.remove(); return; }   // map destroyed meanwhile
+  if (_radarLayer) _radarLayer.remove();
+  _radarLayer = layer;
 }
 
 /** Show/update the Leaflet precipitation radar panel.
@@ -5877,7 +5900,7 @@ function renderRadarMap(data) {
 
       // RainViewer precipitation overlay (keyless). The tile path for the most
       // recent radar frame is fetched from RainViewer's index, then added async.
-      addRainViewerLayer(_radarMap).then(layer => { _radarLayer = layer; });
+      refreshRadarLayerIfStale();
 
       _radarLat = lat; _radarLon = lon;
     } else {
@@ -5887,6 +5910,7 @@ function renderRadarMap(data) {
         _radarLat = lat; _radarLon = lon;
       }
       _radarMap.invalidateSize();
+      refreshRadarLayerIfStale();   // back on Radar after a while: show the latest frame
     }
   };
 
@@ -5897,7 +5921,7 @@ function renderRadarMap(data) {
 
 /** Reset the radar map so it re-initializes on the next location. */
 function destroyRadarMap() {
-  if (_radarMap) { _radarMap.remove(); _radarMap = null; _radarLayer = null; }
+  if (_radarMap) { _radarMap.remove(); _radarMap = null; _radarLayer = null; _radarLayerTs = 0; }
   _radarLat = null; _radarLon = null;
   const el = document.getElementById('wxRadarMap');
   if (el) el.style.display = 'none';
