@@ -5339,11 +5339,12 @@ async function fetchNwsAlerts(lat, lon) {
   } catch { return []; }
 }
 
-async function loadWeatherByCity(city) {
+async function loadWeatherByCity(city, { quiet = false } = {}) {
   try {
     // 1) Resolve the city name to coordinates (keyless Open-Meteo geocoder).
     const place = await geocodeCity(city);
     if (!place) {
+      if (quiet) return;   // background refresh: keep the last good card on screen
       showWxError(`Couldn't find “${city}”. Try “City, ST” or “City, Country”.`, city);
       return;
     }
@@ -5507,6 +5508,7 @@ async function loadWeatherByCity(city) {
 
   } catch(e) {
     console.error(e);
+    if (quiet) return;   // background refresh: keep the last good card on screen
     showWxError('Could not load weather right now — please try again.');
   }
 }
@@ -5789,6 +5791,23 @@ function renderSunArc(data) {
     <div class="wx-sun-readout">${emoji} ${readout}</div>
   `;
 }
+
+// Background refresh. Weather used to load once at boot and never again, so
+// on an all-day wall panel the whole card froze, most visibly the sun-path
+// arc's position and countdown. Each minute, re-place the sun from the payload
+// on screen (pure compute), and refetch once that payload is older than
+// WX_CACHE_TTL. A failed refetch is quiet so a blip doesn't swap the card for
+// the setup form.
+let _wxRefreshing = false;
+setInterval(async () => {
+  if (document.hidden || !lastWxData || _wxRefreshing || !weatherLocations.length) return;
+  const city = weatherLocations[weatherLocIdx];
+  const cached = city && weatherCache[city.toLowerCase().trim()];
+  if (cached && Date.now() - cached.ts < WX_CACHE_TTL) { renderSunArc(lastWxData); return; }
+  _wxRefreshing = true;
+  try { await loadWeatherByCity(city, { quiet: true }); }
+  finally { _wxRefreshing = false; }
+}, 60 * 1000);
 
 // Leaflet map instance + state (persisted across mode switches to avoid re-init)
 let _radarMap     = null;
