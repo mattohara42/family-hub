@@ -1979,7 +1979,7 @@ function renderWeekGrid() {
     const evts = Object.entries(calEventCache)
       .filter(([calId]) => !disabledCals.has(calId))
       .flatMap(([, byDate]) => byDate[dateKey] || [])
-      .sort((a, b) => (a.startDT || '') < (b.startDT || '') ? -1 : 1);
+      .sort(compareEventStart);
 
     const weekEventPill = ev => {
       const pill = document.createElement('div');
@@ -2182,7 +2182,7 @@ function renderDayGrid() {
 
   const allDayEvts = evts.filter(ev => ev.allDay);
   const timedEvts  = evts.filter(ev => !ev.allDay && ev.startDT)
-    .sort((a, b) => a.startDT < b.startDT ? -1 : 1);
+    .sort(compareEventStart);
 
   const wrap = document.createElement('div');
   wrap.className = 'day-view-wrap';
@@ -2681,7 +2681,8 @@ function makeDayCell(year, month, day, otherMonth, isToday) {
   cell.dataset.date = key; // used by overlay renderer and DnD drop
   const evts = Object.entries(calEventCache)
     .filter(([calId]) => !disabledCals.has(calId))
-    .flatMap(([, byDate]) => byDate[key] || []);
+    .flatMap(([, byDate]) => byDate[key] || [])
+    .sort(compareEventStart);
   // Cell-level click opens new event editor (desktop) or that day's Day view
   // (mobile, where the cell is too small to show the day's events)
   if (isMobile || (!otherMonth && googleToken)) {
@@ -2971,11 +2972,7 @@ function renderAgendaView() {
     const evts = Object.entries(calEventCache)
       .filter(([calId]) => !disabledCals.has(calId))
       .flatMap(([, byDate]) => byDate[key] || [])
-      .sort((a, b) => {
-        if (a.allDay && !b.allDay) return -1;
-        if (!a.allDay && b.allDay) return 1;
-        return (a.startDT || '') < (b.startDT || '') ? -1 : 1;
-      });
+      .sort(compareEventStart);
 
     const bills = budgetEventsForDate(key);   // [] while 👁 hides amounts
     if (!evts.length && !bills.length) continue;
@@ -3326,6 +3323,17 @@ function parseIcs(text) {
 
 // Zero-pad a number to `len` digits (default 2).
 function pad(n, len = 2) { return String(n).padStart(len, '0'); }
+
+// Order events within one day: all-day first, then by real start time.
+// Compare as times, not strings: Google sends a local offset
+// ("T16:00:00-05:00") while ICS feeds send UTC ("T18:00:00Z"), so a string
+// sort put a 1 PM feed event after 6 PM Google ones.
+function compareEventStart(a, b) {
+  if (a.allDay !== b.allDay) return a.allDay ? -1 : 1;
+  const ta = a.startDT ? Date.parse(a.startDT) : 0;
+  const tb = b.startDT ? Date.parse(b.startDT) : 0;
+  return (ta || 0) - (tb || 0);
+}
 
 // Format a Date as a local YYYY-MM-DD key (NOT UTC — avoids day-shift bugs).
 function localDateKey(d) {
