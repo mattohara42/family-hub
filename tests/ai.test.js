@@ -21,7 +21,7 @@ test.beforeEach(() => {
   process.env.GEMINI_KEY = 'k';
   fetched = [];
   global.fetch = async (url, opts) => {
-    fetched.push({ url, body: JSON.parse(opts.body) });
+    fetched.push({ url, headers: opts.headers || {}, body: JSON.parse(opts.body) });
     return { status: 200, text: async () => '{"candidates":[]}' };
   };
 });
@@ -31,7 +31,8 @@ test('same-origin request is proxied to Gemini without the model field', async (
   assert.equal(res.statusCode, 200);
   assert.equal(res.body, '{"candidates":[]}');
   assert.equal(fetched.length, 1);
-  assert.match(fetched[0].url, /gemini-2\.5-flash:generateContent\?key=k$/);
+  assert.match(fetched[0].url, /gemini-2\.5-flash:generateContent$/);
+  assert.equal(fetched[0].headers['x-goog-api-key'], 'k');   // the key rides in a header, never the URL
   assert.deepEqual(fetched[0].body, { contents: [1] });
 });
 

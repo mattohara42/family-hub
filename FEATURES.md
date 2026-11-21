@@ -1048,6 +1048,24 @@ const HA_TOGGLE_DOMAINS = ['light', 'switch', 'fan', 'input_boolean'];
 
 **Loads that died:** a crash, freeze or out-of-memory kill can't log itself. `setBootPhase()` keeps the current phase in `fh_bootPhase` (`loading scripts`, then `startup: <step>`, then `settling after startup`); `settleBoot()` clears it `BOOT_SETTLE_MS` (10s) after startup, and so do `pagehide` and the page being hidden, since a deliberate close or switch away isn't a crash. A load that finds the marker still set logs "Previous load: stopped during …", which says how far the dead load got.
 
+### 23. Email Scan (school dates from ParentSquare)
+
+**What it is:** a Google Apps Script in the owner's Google account, not Hub code. Source in `tools/email-scan/` (`Code.gs`, `dedupe.gs`, `appsscript.json`), pasted into the Apps Script editor. Twice a day (about 6:45am and 4:45pm) it reads new ParentSquare mail plus anything the owner tagged with a Gmail label `Hub`. It asks Gemini for dated school items and writes the new ones to a **"From Email"** Google calendar. The Hub shows that calendar like any other, so the Hub has no code for this feature. Design: `docs/brainstorms/2026-11-21-email-scan-requirements.md`; plan and rollout: `docs/plans/2026-11-21-001-feat-email-scan-plan.md`.
+
+**Access:** Gmail is read-only (`gmail.readonly`, through the Advanced Gmail service), so the script never changes the mailbox. No Hub device's token gains a mail scope. Every link is stripped from the email text before it goes to Gemini, because ParentSquare's links carry per-user sign-in tokens.
+
+**Kinds:** `no-school`, `half-day`, `early-dismissal`, `conference` (the day-level kinds, always all-day events, with any time in the title) and `event` (timed if the email gives a time).
+
+**Dedupe:** each event carries private Calendar tags: `fhKind`, `fhDate`, `fhTitle`, `fhStart`, `fhEnd`, `fhEndDate`, and `fhSig`, a fingerprint of the title and times as Calendar saved them. A date holds one of each day-level kind. Events match on title overlap (`titleTokens_`/`jaccard_`, threshold `TITLE_MATCH_MIN`). A repeat only gains a source link (at most three). A changed time updates the event and notes "Changed from …". An event whose `fhSig` no longer matches was edited by hand and is never touched again. One day inside a break already on the calendar counts as a repeat and leaves the break as it is. Rules: `decideItem_()` in `dedupe.gs`.
+
+**State (Script Properties):** `GEMINI_KEY` (set by hand), `CALENDAR_ID`, `SKIP_SUBJECTS`, optional `EXTRA_QUERY`, `seenIds` (message ID to first-handled time, pruned after 10 days; a message is marked only after its extraction and writes succeeded), `zeroStreak`, `lastRun`/`lastNew`/`lastResult`/`lastError`.
+
+**Alarms:** a run that throws gets Google's failed-trigger email to the owner. The script throws on purpose when every message failed, when `ZERO_STREAK_LIMIT` (10) digests in a row produced nothing (a retired model or a broken prompt looks like this), or when there has been no ParentSquare mail for `QUIET_DAYS` (7) outside July and August.
+
+**Editor functions:** `setup()` (idempotent), `teardown()` (removes the triggers), `run()`, `backfill()` (60 days, resumable: rerun until nothing is left), `resetSeen()`, `previewIntake()` (prints what Gemini would receive), `status()`.
+
+**Model pin:** `GEMINI_MODEL` in `Code.gs` must match `GEMINI_MODEL` in `family-hub.js` and `DEFAULT_MODEL` in `netlify/functions/ai.js`; `tests/email-scan.test.js` fails if they drift.
+
 ---
 
 ## localStorage Key Index

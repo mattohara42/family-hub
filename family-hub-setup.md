@@ -1104,6 +1104,20 @@ Tracks a school's internal rotating day (e.g. a 4-day A/B/C/D schedule), shown a
 3. Optionally add **Class Schedule by Day** entries: a subject, which day number(s) it falls on, and which family members have it — e.g. "Gym, Day 1 & 3, Kate" — these show as small chips under the Day N badge
 4. The same panel also holds **🏫 Hourly Class Schedule**, a separate, older feature for weekly recurring class periods with specific times (e.g. "Math, 9:00–9:50, Mon/Wed/Fri") — unrelated to the day-rotation cycle, just grouped in the same Settings tab
 
+### School Dates from Email (optional)
+
+A small Google Apps Script reads your ParentSquare mail twice a day and puts school dates (no-school days, half days, early dismissals, conferences, one-off events) on a **From Email** calendar that the Hub shows. It runs in your own Google account; the Hub needs no changes. Sports schedules don't need it: subscribe to the team's calendar feed instead (LeagueApps: the app's **My Account**, your player, **Subscribe to Calendar**; TeamSnap: **Schedule**, **Sync Calendar / Export**) and add the link in the Hub as a calendar subscription.
+
+1. Get a Gemini key from Google AI Studio (a billing-free project; see Troubleshooting if the free tier is disabled)
+2. Go to script.google.com and create a new project. Name it "Family Hub email scan"
+3. Paste `tools/email-scan/Code.gs` into `Code.gs`. Add a script file named `dedupe` and paste `tools/email-scan/dedupe.gs` into it
+4. **Project Settings**: tick **Show "appsscript.json" manifest file in editor**, then paste `tools/email-scan/appsscript.json` over it. Under **Script Properties**, add `GEMINI_KEY` with your key
+5. Select `setup` in the toolbar and click **Run**. Approve the consent screen; it asks to read Gmail, manage calendars, call Gemini and run on a schedule. The script never sends, deletes or labels mail
+6. Optional: in Gmail, create a label named `Hub`. Anything you tag with it gets scanned too, whoever sent it
+7. **First run.** In the Hub, hide the new **From Email** calendar. Run `backfill` in the editor; it covers the last 60 days and stops itself after about 4.5 minutes, so run it again until the log says nothing is left. Check the calendar in Google Calendar: each date should be there once. Then unhide it in the Hub and give it its own color
+
+Wrong events: fix or delete them in the Hub like any other event. Once you've edited an event, the scan leaves it alone. To turn the scan off, run `teardown`. Deleting the calendar removes everything it added. If the scan stops working, Google emails you about a failed run; `status` in the editor shows the last result.
+
 ### Shopping List — Clear Options
 
 The Shopping card header has two clear buttons:

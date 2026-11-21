@@ -61,12 +61,12 @@ exports.handler = async (event) => {
   if (model !== DEFAULT_MODEL) {
     return json(400, `Model "${model}" isn't allowed by the AI proxy; update DEFAULT_MODEL in netlify/functions/ai.js`);
   }
-  const url = `${GEMINI_BASE}/${model}:generateContent?key=${key}`;
+  const url = `${GEMINI_BASE}/${model}:generateContent`;
 
   try {
     const r    = await fetch(url, {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },   // not in the URL, which upstream logs can record
       body:    JSON.stringify(body),
     });
     const text = await r.text();
