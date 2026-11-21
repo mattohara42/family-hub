@@ -33,8 +33,15 @@ const GEMINI_MODEL = 'gemini-2.5-flash';
 const RUN_HOURS  = [6, 16];
 const RUN_MINUTE = 45;
 
-const BASE_QUERY            = '(from:parentsquare.com OR label:Hub)';
+const BASE_SOURCES          = ['from:parentsquare.com', 'label:Hub'];
+const BASE_QUERY            = '(' + BASE_SOURCES.join(' OR ') + ')';
 const DEFAULT_SKIP_SUBJECTS = 'Attendance Notification|Library (Tomorrow|Monday)';
+
+const RUN_WINDOW_DAYS      = 3;    // lets a skipped trigger catch up
+const BACKFILL_WINDOW_DAYS = 60;
+const SEEN_TTL_DAYS        = 10;   // longer than the run window, so nothing is read twice
+const MAX_MESSAGES         = 200;  // per pass; far above real volume
+const MAX_BODY_CHARS       = 8000;
 
 function props_() {
   return PropertiesService.getScriptProperties();
@@ -71,15 +78,34 @@ function teardown() {
   console.log('Removed %s trigger(s). Run setup() to turn the scan back on.', removed);
 }
 
-/** The scheduled entry point. Intake, extraction and dedupe arrive in U2 to U4. */
+/**
+ * The scheduled entry point. Until extraction lands (U3) this only reports
+ * what it would scan, and deliberately does not mark anything as seen: a
+ * message marked seen before it was extracted would be skipped for good.
+ */
 function run() {
   props_().setProperty('lastRun', new Date().toISOString());
-  console.log('run(): not implemented yet (U2).');
+  const msgs = collectMessages_(RUN_WINDOW_DAYS, { skipSeen: true });
+  console.log('run(): %s new message(s) to scan. Extraction arrives in U3; nothing marked seen.', msgs.length);
+  msgs.forEach(m => console.log('  %s  %s', m.sentAt.toISOString().slice(0, 10), m.subject));
 }
 
-/** One-time pass over the last 60 days, used during rollout. Arrives with U2. */
+/** One-time pass over the last 60 days, used during rollout. Ignores seenIds. */
 function backfill() {
-  console.log('backfill(): not implemented yet (U2).');
+  const msgs = collectMessages_(BACKFILL_WINDOW_DAYS, { skipSeen: false });
+  console.log('backfill(): %s message(s) in %s days. Extraction arrives in U3.', msgs.length, BACKFILL_WINDOW_DAYS);
+}
+
+/**
+ * Run from the editor to see exactly what the scan would send to Gemini:
+ * each message's subject, date and the start of its cleaned text.
+ */
+function previewIntake() {
+  const msgs = collectMessages_(RUN_WINDOW_DAYS, { skipSeen: false });
+  console.log('%s message(s) in the last %s days (seen or not):', msgs.length, RUN_WINDOW_DAYS);
+  msgs.forEach(m => {
+    console.log('--- %s | %s | %s chars\n%s', m.sentAt.toISOString(), m.subject, m.body.length, m.body.slice(0, 600));
+  });
 }
 
 /** Prints the scan's state for a quick look from the editor. */
@@ -95,6 +121,140 @@ function status() {
   ['SKIP_SUBJECTS', 'EXTRA_QUERY', 'lastRun', 'lastNew', 'lastError'].forEach(k => {
     console.log('%s %s', (k + ':').padEnd(14), p[k] || '(none)');
   });
+}
+
+// ── Intake ──
+
+/**
+ * New mail to scan, oldest first (so when two emails disagree, the newer one
+ * is applied last and wins). Each item: { id, threadId, subject, sentAt, body, link }.
+ */
+function collectMessages_(days, opts) {
+  const p = props_();
+  const q = buildQuery_(days, p.getProperty('EXTRA_QUERY'));
+  const skip = skipPattern_(p.getProperty('SKIP_SUBJECTS'));
+  const seen = opts.skipSeen ? loadSeen_() : {};
+
+  const out = [];
+  listMessageIds_(q).forEach(id => {
+    if (seen[id]) return;
+    const msg = Gmail.Users.Messages.get('me', id, { format: 'full' });
+    const subject = header_(msg.payload, 'Subject');
+    if (skip && skip.test(subject)) return;
+    out.push({
+      id,
+      threadId: msg.threadId,
+      subject,
+      sentAt:   new Date(Number(msg.internalDate)),
+      body:     messageText_(msg.payload),
+      link:     'https://mail.google.com/mail/u/0/#all/' + msg.threadId,
+    });
+  });
+  return out.sort((a, b) => a.sentAt - b.sentAt);
+}
+
+/** Gmail search string. EXTRA_QUERY adds sources, e.g. "from:school.org". */
+function buildQuery_(days, extra) {
+  const sources = BASE_SOURCES.concat(extra && extra.trim() ? [extra.trim()] : []);
+  return '(' + sources.join(' OR ') + ') newer_than:' + days + 'd';
+}
+
+function skipPattern_(src) {
+  return src && src.trim() ? new RegExp(src.trim(), 'i') : null;
+}
+
+function listMessageIds_(q) {
+  const ids = [];
+  let pageToken;
+  do {
+    const res = Gmail.Users.Messages.list('me', { q, maxResults: 100, pageToken });
+    (res.messages || []).forEach(m => ids.push(m.id));
+    pageToken = res.nextPageToken;
+  } while (pageToken && ids.length < MAX_MESSAGES);
+  return ids.slice(0, MAX_MESSAGES);
+}
+
+function header_(payload, name) {
+  const h = (payload.headers || []).find(x => x.name.toLowerCase() === name.toLowerCase());
+  return h ? h.value : '';
+}
+
+/** Plain text of a message: its text/plain part, else its HTML with tags stripped. */
+function messageText_(payload) {
+  const plain = findPart_(payload, 'text/plain');
+  if (plain) return cleanBody_(decodePart_(plain));
+  const html = findPart_(payload, 'text/html');
+  return html ? cleanBody_(htmlToText_(decodePart_(html))) : '';
+}
+
+/** Depth-first search of a MIME tree for the first part of a type with data. */
+function findPart_(part, mimeType) {
+  if (!part) return null;
+  if (part.mimeType === mimeType && part.body && part.body.data) return part.body.data;
+  for (const child of part.parts || []) {
+    const found = findPart_(child, mimeType);
+    if (found) return found;
+  }
+  return null;
+}
+
+function decodePart_(data) {
+  return Utilities.newBlob(Utilities.base64DecodeWebSafe(data)).getDataAsString('UTF-8');
+}
+
+function htmlToText_(html) {
+  return String(html)
+    .replace(/<(style|script)[\s\S]*?<\/\1>/gi, '')
+    .replace(/<br\s*\/?>|<\/(p|div|li|tr|h\d)>/gi, '\n')
+    .replace(/<[^>]+>/g, '');
+}
+
+/**
+ * Text sent to Gemini. Links are removed entirely: they carry no dates, and
+ * ParentSquare's carry per-user sign-in tokens that have no business leaving
+ * the mailbox. The unsubscribe footer goes too.
+ */
+function cleanBody_(text) {
+  return String(text || '')
+    .replace(/To see the post and comment, please visit the following link:?/gi, '')
+    .replace(/You received this email because[\s\S]*$/i, '')
+    .replace(/https?:\/\/\S+/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&(#39|#x27|apos);/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\r/g, '')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/ *\n */g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+    .slice(0, MAX_BODY_CHARS);
+}
+
+// ── Seen messages ──
+// A JSON map of Gmail message ID to the time it was first handled, kept in
+// Script Properties and pruned after SEEN_TTL_DAYS. Marking happens in U3,
+// only after a message's extraction succeeded.
+
+function loadSeen_() {
+  try {
+    return JSON.parse(props_().getProperty('seenIds') || '{}');
+  } catch (e) {
+    return {};
+  }
+}
+
+function pruneSeen_(seen, nowMs) {
+  const cutoff = nowMs - SEEN_TTL_DAYS * 86400000;
+  const kept = {};
+  Object.keys(seen).forEach(id => { if (seen[id] >= cutoff) kept[id] = seen[id]; });
+  return kept;
+}
+
+function saveSeen_(seen) {
+  props_().setProperty('seenIds', JSON.stringify(pruneSeen_(seen, Date.now())));
 }
 
 // ── Helpers ──

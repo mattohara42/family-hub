@@ -62,6 +62,8 @@ Each run also records `lastRun`, `lastNew` and `lastError` in Script Properties,
 
 ### U2: Intake
 
+**Done 2026-11-21.** Covered by `tests/email-scan.test.js` against fake services; not yet run against real Gmail. Until U3 lands, `run()` only lists what it would scan and marks nothing as seen, so pasting U2 early loses no mail. `previewIntake()` prints the cleaned text of the last three days' messages, for checking exactly what Gemini will receive. Cleaning removes every link, not only boilerplate: ParentSquare's links carry per-user sign-in tokens, which should not leave the mailbox.
+
 - Query: `(from:parentsquare.com OR label:Hub) newer_than:3d`, then skip any message ID in the `seenIds` Script Property (a JSON map of ID to first-seen time, pruned after 10 days; a few hundred bytes at this volume). The three-day window lets a skipped trigger catch up.
 - Per message: skip `SKIP_SUBJECTS`; take the plain-text part of the message, strip ParentSquare's link and unsubscribe boilerplate, truncate to 8 KB. Keep the sent date and the Gmail permalink.
 - After the message is fully handled (U3 succeeded, even if it found nothing), add its ID to `seenIds`. A message that failed extraction is left out and retried on the next run.
