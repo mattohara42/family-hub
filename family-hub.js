@@ -130,8 +130,10 @@ function omEpoch(isoLocal, offsetSec) {
 
 function geminiFetch(body) {
   if (mealAiKey) {
-    return fetch(`${GEMINI_API_BASE}/${GEMINI_MODEL}:generateContent?key=${mealAiKey}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    // The key goes in a header, not the URL, so it stays out of history and logs.
+    return fetch(`${GEMINI_API_BASE}/${GEMINI_MODEL}:generateContent`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': mealAiKey },
+      body: JSON.stringify(body),
     });
   }
   return fetch('/.netlify/functions/ai', {
