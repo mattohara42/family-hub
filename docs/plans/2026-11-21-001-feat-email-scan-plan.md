@@ -23,12 +23,12 @@ status: planned
 | Question | Decision | Why |
 |---|---|---|
 | Where it runs | Apps Script in the owner's Google account, time-triggered | Keeps Gmail access off every Hub device; no stored refresh token; no Google verification for a personal script |
-| Input | `from:parentsquare.com OR label:Hub`, not yet labeled `Hub/Scanned` | The survey showed school mail comes from one platform. The `Hub` label is the hand-picked escape hatch for anything else |
+| Input | `from:parentsquare.com OR label:Hub`, skipping message IDs already processed | The survey showed school mail comes from one platform. The `Hub` label is the hand-picked escape hatch for anything else |
 | Output | Events on a "From Email" calendar via `CalendarApp` | The Hub already renders any Google calendar; bulk undo is "delete the calendar" |
 | Review | By exception. Correct events stay; wrong ones get fixed or deleted in the Hub | A queue UI is heavy for a few items a week |
 | AI | Gemini free tier, called directly with a key in Script Properties | The Netlify `ai` proxy only answers same-origin requests. Free-tier privacy accepted by the owner |
 
-### Proposed, needs a yes (the brainstorm's two open questions)
+### Dedupe and heartbeat rules (accepted by the owner, 2026-11-21)
 
 **Dedupe rule (U3).** Every event the script writes carries two private tags (`CalendarEvent.setTag`): `fhKind` and `fhKey`. Before writing an item, the script lists "From Email" events on the item's start date and treats it as a repeat when either:
 
@@ -50,17 +50,21 @@ Each run also records `lastRun`, `lastNew` and `lastError` in Script Properties,
 
 ### U1: Project skeleton and one-time setup
 
-- `tools/email-scan/appsscript.json`: `timeZone: "America/New_York"`, `runtimeVersion: "V8"`, explicit `oauthScopes` (`gmail.modify` for labels, `calendar`, `script.external_request`, `script.scriptapp`). Listing them keeps the consent screen honest about exactly what the script can do.
-- `tools/email-scan/Code.gs`: entry points `setup()`, `run()`, `backfill()`.
-- `setup()` (run once from the editor) creates the "From Email" calendar if missing, creates the `Hub` and `Hub/Scanned` labels, stores the calendar ID in Script Properties, and installs two time triggers (about 6:45am and 4:45pm, so results are in before the morning rush and before dinner). Idempotent: rerunning it replaces the triggers instead of doubling them.
-- Script Properties (set by hand, never in source): `GEMINI_KEY`, `GEMINI_MODEL`, optional `EXTRA_QUERY` (more senders later), optional `SKIP_SUBJECTS` (default: `Attendance Notification|Library (Tomorrow|Monday)`).
+**Done 2026-11-21.** Exercised against fake Google services only; not yet run in a real Apps Script project.
+
+- `tools/email-scan/appsscript.json`: `timeZone: "America/New_York"`, `runtimeVersion: "V8"`, the Advanced Gmail service, and explicit `oauthScopes`: `gmail.readonly`, `calendar`, `script.external_request`, `script.scriptapp`. Listing them keeps the consent screen honest about exactly what the script can do.
+- **Read-only Gmail (changed from the first draft).** The draft labeled each handled thread `Hub/Scanned`, which needs a scope that can modify mail, and the built-in `GmailApp` service asks for full mail access (`https://mail.google.com/`) regardless. Instead the script reads mail through the Advanced Gmail service under `gmail.readonly` and remembers processed message IDs in Script Properties (U2). The script never changes your mailbox. The optional `Hub` label is created by hand in Gmail.
+- `tools/email-scan/Code.gs`: `setup()`, `teardown()` (the off switch: removes the triggers, keeps the calendar), `run()`, `backfill()` and `status()`. `run()` and `backfill()` are stubs until U2.
+- `setup()` (run once from the editor) finds or creates the "From Email" calendar, stores its ID, seeds `SKIP_SUBJECTS`, installs two daily triggers (about 6:45am and 4:45pm, so results are in before the morning rush and before dinner), and makes one Gmail call so the consent prompt happens then. Idempotent: rerunning it replaces the triggers instead of doubling them.
+- `GEMINI_MODEL` is a constant in `Code.gs` (changed from the first draft's Script Property), so a grep for the model name finds all three pins in the repo. U5 adds a test that fails if they drift apart.
+- Script Properties (set by hand, never in source): `GEMINI_KEY`, optional `EXTRA_QUERY` (more senders later), optional `SKIP_SUBJECTS` (seeded with `Attendance Notification|Library (Tomorrow|Monday)`).
 - **Nothing personal goes in the source**: no names, addresses, school IDs or calendar IDs. The repo is the source of truth; the editor copy is a paste of it.
 
 ### U2: Intake
 
-- Query: `(from:parentsquare.com OR label:Hub) -label:Hub/Scanned newer_than:3d`. The three-day window lets one missed run (panel-independent, but triggers can be skipped by Google) catch up.
-- Per message: skip `SKIP_SUBJECTS`; take `getPlainBody()`, strip ParentSquare's link and unsubscribe boilerplate, truncate to 8 KB. Keep the sent date and the Gmail permalink.
-- After the message is fully handled (U3 succeeded, even if it found nothing), label the thread `Hub/Scanned`. A message that failed extraction is left unlabeled and retried on the next run.
+- Query: `(from:parentsquare.com OR label:Hub) newer_than:3d`, then skip any message ID in the `seenIds` Script Property (a JSON map of ID to first-seen time, pruned after 10 days; a few hundred bytes at this volume). The three-day window lets a skipped trigger catch up.
+- Per message: skip `SKIP_SUBJECTS`; take the plain-text part of the message, strip ParentSquare's link and unsubscribe boilerplate, truncate to 8 KB. Keep the sent date and the Gmail permalink.
+- After the message is fully handled (U3 succeeded, even if it found nothing), add its ID to `seenIds`. A message that failed extraction is left out and retried on the next run.
 - `backfill()` runs the same pipeline over `newer_than:60d` once, pausing between Gemini calls to stay under the free tier's per-minute limit. Used once during rollout (below).
 
 ### U3: Extraction and dedupe
@@ -69,7 +73,7 @@ Each run also records `lastRun`, `lastNew` and `lastError` in Script Properties,
   `items: [{ date, endDate?, startTime?, endTime?, kind, title, confidence }]`, `kind` in `no-school | half-day | early-dismissal | conference | event`.
 - The prompt carries the email's sent date and the time zone, asks only for items dated after the sent date, and tells Gemini to ignore recurring routine (library days, weekly specials) and anything that isn't a date a parent needs to plan around.
 - Items whose date is already past at run time are dropped.
-- Dedupe per the proposed rule above. Writes:
+- Dedupe per the rule above. Writes:
   - day-level kinds and items with no time become all-day events; ranges (`endDate`) become multi-day all-day events;
   - timed items become timed events;
   - title is the item title, prefixed by a short marker for day-level kinds (e.g. "Half day: …") so the Hub's pill reads well;
@@ -78,8 +82,8 @@ Each run also records `lastRun`, `lastNew` and `lastError` in Script Properties,
 
 ### U4: Heartbeat and error handling
 
-- Per the proposed rule above. `run()` wraps the whole pass; any caught per-message error is recorded and the message is left for retry, but a run that hit errors on every message throws at the end so Google's failure email fires.
-- A `status()` function prints the Script Properties summary for a quick look from the editor.
+- Per the heartbeat rule above. `run()` wraps the whole pass; any caught per-message error is recorded and the message is left for retry, but a run that hit errors on every message throws at the end so Google's failure email fires.
+- `status()` (written in U1) prints the Script Properties summary for a quick look from the editor.
 
 ### U5: Tests
 
@@ -89,7 +93,8 @@ The dedupe rule and the title normalizer are the logic most likely to be subtly 
 - title overlap thresholds ("3rd grade musical" vs "Third Grade Musical performance" is a repeat; "Musical" vs "Book fair" is not);
 - a changed time is reported as an update, not a repeat or a new event;
 - a hand-edited event (`fhSig` mismatch) is never updated;
-- past-dated items are dropped.
+- past-dated items are dropped;
+- `GEMINI_MODEL` in `Code.gs`, `GEMINI_MODEL` in `family-hub.js` and `DEFAULT_MODEL` in `netlify/functions/ai.js` are the same string.
 
 Gmail, Calendar and Gemini calls are not mocked; they are exercised by the rollout below.
 
