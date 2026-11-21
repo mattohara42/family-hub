@@ -1,12 +1,12 @@
 ---
-title: School Dates from Email — ParentSquare Apps Script Writing to a "From Email" Calendar
+title: School Dates from Email: ParentSquare Apps Script Writing to a "From Email" Calendar
 type: feat
 origin: docs/brainstorms/2026-11-21-email-scan-requirements.md
 date: 2026-11-21
 status: planned
 ---
 
-# School Dates from Email — Implementation Plan
+# School Dates from Email: Implementation Plan
 
 **Scope:** Small. A Google Apps Script in the owner's account reads new ParentSquare mail (and anything hand-labeled `Hub`) twice a day, asks Gemini for dated school items, removes repeats, and writes the rest to a dedicated "From Email" Google calendar. The Hub shows that calendar like any other and needs no code change.
 
@@ -48,7 +48,7 @@ Each run also records `lastRun`, `lastNew` and `lastError` in Script Properties,
 
 ## Implementation Units
 
-### U1 — Project skeleton and one-time setup
+### U1: Project skeleton and one-time setup
 
 - `tools/email-scan/appsscript.json`: `timeZone: "America/New_York"`, `runtimeVersion: "V8"`, explicit `oauthScopes` (`gmail.modify` for labels, `calendar`, `script.external_request`, `script.scriptapp`). Listing them keeps the consent screen honest about exactly what the script can do.
 - `tools/email-scan/Code.gs`: entry points `setup()`, `run()`, `backfill()`.
@@ -56,14 +56,14 @@ Each run also records `lastRun`, `lastNew` and `lastError` in Script Properties,
 - Script Properties (set by hand, never in source): `GEMINI_KEY`, `GEMINI_MODEL`, optional `EXTRA_QUERY` (more senders later), optional `SKIP_SUBJECTS` (default: `Attendance Notification|Library (Tomorrow|Monday)`).
 - **Nothing personal goes in the source**: no names, addresses, school IDs or calendar IDs. The repo is the source of truth; the editor copy is a paste of it.
 
-### U2 — Intake
+### U2: Intake
 
 - Query: `(from:parentsquare.com OR label:Hub) -label:Hub/Scanned newer_than:3d`. The three-day window lets one missed run (panel-independent, but triggers can be skipped by Google) catch up.
 - Per message: skip `SKIP_SUBJECTS`; take `getPlainBody()`, strip ParentSquare's link and unsubscribe boilerplate, truncate to 8 KB. Keep the sent date and the Gmail permalink.
 - After the message is fully handled (U3 succeeded, even if it found nothing), label the thread `Hub/Scanned`. A message that failed extraction is left unlabeled and retried on the next run.
 - `backfill()` runs the same pipeline over `newer_than:60d` once, pausing between Gemini calls to stay under the free tier's per-minute limit. Used once during rollout (below).
 
-### U3 — Extraction and dedupe
+### U3: Extraction and dedupe
 
 - Gemini `generateContent` with `responseMimeType: application/json` and a `responseSchema` of:
   `items: [{ date, endDate?, startTime?, endTime?, kind, title, confidence }]`, `kind` in `no-school | half-day | early-dismissal | conference | event`.
@@ -76,12 +76,12 @@ Each run also records `lastRun`, `lastNew` and `lastError` in Script Properties,
   - description: source link(s), confidence, and "Added by the email scan" so anyone looking at the event on the wall knows where it came from.
 - Low confidence (under 0.6) still writes, with "(check)" appended to the title. Review by exception only works if doubtful items are visibly doubtful.
 
-### U4 — Heartbeat and error handling
+### U4: Heartbeat and error handling
 
 - Per the proposed rule above. `run()` wraps the whole pass; any caught per-message error is recorded and the message is left for retry, but a run that hit errors on every message throws at the end so Google's failure email fires.
 - A `status()` function prints the Script Properties summary for a quick look from the editor.
 
-### U5 — Tests
+### U5: Tests
 
 The dedupe rule and the title normalizer are the logic most likely to be subtly wrong, and they don't need Google to run. Put them in `tools/email-scan/dedupe.gs` written as plain functions (no Apps Script services), and load that file into Node with `vm` from `tests/email-scan.test.js` so `npm test` covers:
 
@@ -93,7 +93,7 @@ The dedupe rule and the title normalizer are the logic most likely to be subtly 
 
 Gmail, Calendar and Gemini calls are not mocked; they are exercised by the rollout below.
 
-### U6 — Docs
+### U6: Docs
 
 - `family-hub-setup.md`: a new optional step: create the Apps Script project, paste the three files, set Script Properties, run `setup()`, authorize, color the "From Email" calendar in the Hub.
 - `FEATURES.md`: a short section (what it reads, where it writes, the tags, how to turn it off).

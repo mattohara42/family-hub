@@ -1,4 +1,4 @@
-# Email to Calendar — Requirements
+# Email to Calendar: Requirements
 
 **Date:** 2026-11-21 (revised same day after an inbox survey)
 **Status:** Direction chosen, ready for planning
