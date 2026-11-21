@@ -10,8 +10,8 @@
  * paste of it, so a merged change does nothing until it is pasted in again.
  *
  * One-time setup, in the Apps Script editor:
- *   1. Paste Code.gs (and later dedupe.gs). Turn on "Show appsscript.json" in
- *      Project Settings and paste appsscript.json over it.
+ *   1. Paste Code.gs and dedupe.gs (add a script file named "dedupe"). Turn on
+ *      "Show appsscript.json" in Project Settings and paste appsscript.json over it.
  *   2. Project Settings > Script Properties: add GEMINI_KEY (an AI Studio key).
  *   3. Run setup() and approve the consent screen.
  *   4. In the Hub, give the "From Email" calendar its own color.
@@ -42,6 +42,16 @@ const BACKFILL_WINDOW_DAYS = 60;
 const SEEN_TTL_DAYS        = 10;   // longer than the run window, so nothing is read twice
 const MAX_MESSAGES         = 200;  // per pass; far above real volume
 const MAX_BODY_CHARS       = 8000;
+
+const GEMINI_URL      = 'https://generativelanguage.googleapis.com/v1beta/models/';
+const GEMINI_PAUSE_MS = 6500;            // between calls: the free tier allows about 10 a minute
+const TIME_BUDGET_MS  = 4.5 * 60 * 1000; // Apps Script stops a run at 6 minutes
+
+// Heartbeat alarms (accepted 2026-11-21). A run that trips one throws, and
+// Google emails the owner about a failed trigger run.
+const QUIET_DAYS        = 7;       // no ParentSquare mail at all for this long...
+const QUIET_OFF_MONTHS  = [6, 7];  // ...outside July and August (0-based months)
+const ZERO_STREAK_LIMIT = 10;      // digests in a row with nothing extracted
 
 function props_() {
   return PropertiesService.getScriptProperties();
@@ -78,22 +88,26 @@ function teardown() {
   console.log('Removed %s trigger(s). Run setup() to turn the scan back on.', removed);
 }
 
-/**
- * The scheduled entry point. Until extraction lands (U3) this only reports
- * what it would scan, and deliberately does not mark anything as seen: a
- * message marked seen before it was extracted would be skipped for good.
- */
+/** The scheduled entry point: scans the last few days of new mail. */
 function run() {
-  props_().setProperty('lastRun', new Date().toISOString());
-  const msgs = collectMessages_(RUN_WINDOW_DAYS, { skipSeen: true });
-  console.log('run(): %s new message(s) to scan. Extraction arrives in U3; nothing marked seen.', msgs.length);
-  msgs.forEach(m => console.log('  %s  %s', m.sentAt.toISOString().slice(0, 10), m.subject));
+  scan_(RUN_WINDOW_DAYS, new Date());
 }
 
-/** One-time pass over the last 60 days, used during rollout. Ignores seenIds. */
+/**
+ * One-time pass over the last 60 days, used during rollout. A run stops
+ * after about 4.5 minutes; run it again until it reports nothing left.
+ * To redo a backfill from scratch, delete the calendar's events and run
+ * resetSeen() first.
+ */
 function backfill() {
-  const msgs = collectMessages_(BACKFILL_WINDOW_DAYS, { skipSeen: false });
-  console.log('backfill(): %s message(s) in %s days. Extraction arrives in U3.', msgs.length, BACKFILL_WINDOW_DAYS);
+  scan_(BACKFILL_WINDOW_DAYS, new Date());
+}
+
+/** Forgets which messages were handled, so the next backfill() rereads everything. */
+function resetSeen() {
+  props_().deleteProperty('seenIds');
+  props_().deleteProperty('zeroStreak');
+  console.log('Seen messages cleared.');
 }
 
 /**
@@ -118,9 +132,197 @@ function status() {
   console.log('Triggers:      %s', triggers.length);
   console.log('GEMINI_KEY:    %s', p.GEMINI_KEY ? 'set' : 'NOT SET');
   console.log('Model:         %s', GEMINI_MODEL);
-  ['SKIP_SUBJECTS', 'EXTRA_QUERY', 'lastRun', 'lastNew', 'lastError'].forEach(k => {
+  console.log('Seen:          %s message(s)', Object.keys(loadSeen_()).length);
+  ['SKIP_SUBJECTS', 'EXTRA_QUERY', 'lastRun', 'lastNew', 'lastResult', 'lastError', 'zeroStreak'].forEach(k => {
     console.log('%s %s', (k + ':').padEnd(14), p[k] || '(none)');
   });
+}
+
+// ── Scan ──
+
+/**
+ * One pass: read new mail, extract, write. A message is marked seen only
+ * after its extraction and writes succeeded, so a failure is retried next run.
+ */
+function scan_(days, now) {
+  const started = Date.now();
+  const p = props_();
+  const key = p.getProperty('GEMINI_KEY');
+  if (!key) throw new Error('GEMINI_KEY is not set (Project Settings > Script Properties).');
+  const cal = CalendarApp.getCalendarById(p.getProperty('CALENDAR_ID') || '');
+  if (!cal) throw new Error('The "' + CALENDAR_NAME + '" calendar is missing. Run setup().');
+
+  const tz = Session.getScriptTimeZone();
+  const today = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
+  const seen = loadSeen_();
+  let zeroStreak = Number(p.getProperty('zeroStreak') || 0);
+
+  const msgs = collectMessages_(days, { skipSeen: true });
+  const counts = {};
+  const errors = [];
+  let handled = 0;
+  let left = 0;
+
+  for (let i = 0; i < msgs.length; i++) {
+    if (Date.now() - started > TIME_BUDGET_MS) { left = msgs.length - i; break; }
+    const m = msgs[i];
+    try {
+      if (i > 0) Utilities.sleep(GEMINI_PAUSE_MS);
+      const items = extractItems_(m, key, tz);
+      items.forEach(item => {
+        const result = applyItem_(cal, item, m, today);
+        counts[result] = (counts[result] || 0) + 1;
+      });
+      if (/digest/i.test(m.subject)) zeroStreak = items.length ? 0 : zeroStreak + 1;
+      seen[m.id] = Date.now();
+      handled++;
+    } catch (e) {
+      errors.push(m.subject + ': ' + e.message);
+    }
+  }
+
+  saveSeen_(seen);
+  const summary = msgs.length + ' message(s), ' + handled + ' handled, ' + errors.length + ' failed'
+    + (left ? ', ' + left + ' left for the next run' : '')
+    + '. Items: ' + (Object.keys(counts).map(k => k + ' ' + counts[k]).join(', ') || 'none');
+  p.setProperties({
+    lastRun:    now.toISOString(),
+    lastNew:    String(counts.create || 0),
+    lastResult: summary,
+    lastError:  errors[0] || '',
+    zeroStreak: String(zeroStreak),
+  });
+  console.log(summary);
+  errors.forEach(e => console.warn(e));
+
+  const alarms = heartbeatAlarms_({ msgs: msgs.length, handled, errors, zeroStreak, now });
+  if (alarms.length) throw new Error(alarms.join(' '));
+}
+
+/**
+ * The quiet failures that wouldn't otherwise throw. Returned as messages;
+ * scan_ throws with them so Google's failed-run email reaches the owner.
+ */
+function heartbeatAlarms_(r) {
+  const alarms = [];
+  if (r.errors.length && r.handled === 0) {
+    alarms.push('Every message failed this run. First error: ' + r.errors[0]);
+  }
+  if (r.zeroStreak >= ZERO_STREAK_LIMIT) {
+    alarms.push(r.zeroStreak + ' digests in a row produced no dates. Check the model (' + GEMINI_MODEL
+      + ') and the prompt; previewIntake() shows what Gemini receives.');
+  }
+  if (QUIET_OFF_MONTHS.indexOf(r.now.getMonth()) < 0) {
+    const res = Gmail.Users.Messages.list('me', { q: 'from:parentsquare.com newer_than:' + QUIET_DAYS + 'd', maxResults: 1 });
+    if (!(res.messages || []).length) {
+      alarms.push('No ParentSquare mail at all in ' + QUIET_DAYS + ' days. Has the school\'s email address or your subscription changed?');
+    }
+  }
+  return alarms;
+}
+
+// ── Extraction ──
+
+function extractItems_(m, key, tz) {
+  const sentLocal = Utilities.formatDate(m.sentAt, tz, 'EEEE, yyyy-MM-dd');
+  const res = UrlFetchApp.fetch(GEMINI_URL + GEMINI_MODEL + ':generateContent', {
+    method:             'post',
+    contentType:        'application/json',
+    headers:            { 'x-goog-api-key': key },   // a header, so the key never appears in a URL or log
+    payload:            JSON.stringify(geminiRequest_(buildPrompt_(m.subject, sentLocal, tz, m.body))),
+    muteHttpExceptions: true,
+  });
+  const code = res.getResponseCode();
+  if (code !== 200) throw new Error('Gemini HTTP ' + code + ': ' + res.getContentText().slice(0, 200));
+  return parseGeminiItems_(res.getContentText());
+}
+
+// ── Calendar writes ──
+// Every event the scan writes carries private tags: fhKind, fhDate, fhTitle
+// (the item title before the display prefix), fhStart, fhEnd, fhEndDate, and
+// fhSig (a fingerprint of title and times; see signature_ in dedupe.gs).
+
+/** Applies one item and returns what happened: create | touch | update | locked | past | far. */
+function applyItem_(cal, item, m, today) {
+  const existing = cal.getEventsForDay(eventTimes_(item).start)
+    .filter(ev => ev.getTag('fhKind'))
+    .map(toExisting_);
+  const decision = decideItem_(item, existing, today);
+
+  if (decision.action === 'create') {
+    createEvent_(cal, item, newDescription_(item, m.link));
+  } else if (decision.action === 'touch') {
+    const ev = decision.target.ev;
+    ev.setDescription(addSource_(ev.getDescription(), m.link));
+  } else if (decision.action === 'update') {
+    updateEvent_(cal, decision.target, item, m);
+  }
+  return decision.action;
+}
+
+function toExisting_(ev) {
+  return {
+    ev,
+    date:       ev.getTag('fhDate') || null,
+    kind:       ev.getTag('fhKind'),
+    baseTitle:  ev.getTag('fhTitle') || '',
+    startTime:  ev.getTag('fhStart') || null,
+    endTime:    ev.getTag('fhEnd') || null,
+    endDate:    ev.getTag('fhEndDate') || null,
+    storedSig:  ev.getTag('fhSig') || '',
+    currentSig: eventSig_(ev),
+  };
+}
+
+function createEvent_(cal, item, description) {
+  const t = eventTimes_(item);
+  const title = displayTitle_(item);
+  const ev = t.allDay
+    ? cal.createAllDayEvent(title, t.start, t.end, { description })
+    : cal.createEvent(title, t.start, t.end, { description });
+  tagEvent_(ev, item);
+  return ev;
+}
+
+/** The newer email wins: new title and times, with a note of what changed. */
+function updateEvent_(cal, target, item, m) {
+  const ev = target.ev;
+  const t = eventTimes_(item);
+  const description = (ev.getDescription() || '') + '\nChanged from ' + slotLabel_(target) + ', per ' + m.link;
+
+  if (ev.isAllDayEvent() !== t.allDay) {
+    // Calendar can't turn an all-day event into a timed one in place.
+    ev.deleteEvent();
+    createEvent_(cal, item, description);
+    return;
+  }
+  ev.setTitle(displayTitle_(item));
+  if (t.allDay) ev.setAllDayDates(t.start, t.end);
+  else ev.setTime(t.start, t.end);
+  ev.setDescription(description);
+  tagEvent_(ev, item);
+}
+
+/**
+ * Tags are written last, and fhSig is read back from the event Calendar
+ * actually stored, so a rounding or time zone quirk can't make a fresh
+ * event look hand-edited.
+ */
+function tagEvent_(ev, item) {
+  ev.setTag('fhKind', item.kind);
+  ev.setTag('fhDate', item.date);
+  ev.setTag('fhTitle', item.title || '');
+  ev.setTag('fhStart', item.startTime || '');
+  ev.setTag('fhEnd', item.endTime || '');
+  ev.setTag('fhEndDate', item.endDate || '');
+  ev.setTag('fhSig', eventSig_(ev));
+}
+
+function eventSig_(ev) {
+  const allDay = ev.isAllDayEvent();
+  const start = allDay ? ev.getAllDayStartDate() : ev.getStartTime();
+  const end = allDay ? ev.getAllDayEndDate() : ev.getEndTime();
+  return signature_(ev.getTitle(), start.getTime(), end.getTime(), allDay);
 }
 
 // ── Intake ──
@@ -235,8 +437,8 @@ function cleanBody_(text) {
 
 // ── Seen messages ──
 // A JSON map of Gmail message ID to the time it was first handled, kept in
-// Script Properties and pruned after SEEN_TTL_DAYS. Marking happens in U3,
-// only after a message's extraction succeeded.
+// Script Properties and pruned after SEEN_TTL_DAYS. scan_() marks a message
+// only after its extraction and calendar writes succeeded.
 
 function loadSeen_() {
   try {

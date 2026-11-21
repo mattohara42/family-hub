@@ -71,6 +71,14 @@ Each run also records `lastRun`, `lastNew` and `lastError` in Script Properties,
 
 ### U3: Extraction and dedupe
 
+**Done 2026-11-21**, with U4 and U5 in the same pass; tested against fakes only. The pure rules live in `dedupe.gs`, and the Gmail, Calendar and Gemini calls are in `Code.gs`. Additions beyond the plan:
+
+- **One day of a break doesn't shrink the break.** If the calendar holds "No school, Nov 25 to 27" and a later email says only "no school Nov 26", that is a repeat, not an update. The first draft of the rule would have cut the break down to one day. Each event stores its start date in an `fhDate` tag for this check.
+- `fhSig` is read back from the event Calendar actually saved, not computed from what the script asked for. If the two ever differ, the event would look hand-edited and would just be left alone. That's the safe way to fail.
+- Items more than 400 days out are dropped as a misread year.
+- The Gemini key goes in a request header, so it never appears in a URL or a log. The prompt says the email text is data, not instructions. Gemini's output is also forced into a fixed shape and only ever lands on the review calendar, so a hostile email could at worst add an odd event there.
+- `backfill()` pauses 6.5 seconds between Gemini calls (the free tier allows about 10 a minute) and stops itself after 4.5 minutes, because Apps Script ends a run at 6. Rerun it until it reports nothing left. `resetSeen()` clears the memory of handled messages, for redoing a backfill from scratch.
+
 - Gemini `generateContent` with `responseMimeType: application/json` and a `responseSchema` of:
   `items: [{ date, endDate?, startTime?, endTime?, kind, title, confidence }]`, `kind` in `no-school | half-day | early-dismissal | conference | event`.
 - The prompt carries the email's sent date and the time zone, asks only for items dated after the sent date, and tells Gemini to ignore recurring routine (library days, weekly specials) and anything that isn't a date a parent needs to plan around.
@@ -84,12 +92,12 @@ Each run also records `lastRun`, `lastNew` and `lastError` in Script Properties,
 
 ### U4: Heartbeat and error handling
 
-- Per the heartbeat rule above. `run()` wraps the whole pass; any caught per-message error is recorded and the message is left for retry, but a run that hit errors on every message throws at the end so Google's failure email fires.
+- Per the heartbeat rule above. "Digests in a row" counts only messages whose subject contains "Digest", because a standalone post with no dates is normal. The count is kept in the `zeroStreak` property. Both thresholds are constants at the top of `Code.gs`; tune them after the backfill. `run()` wraps the whole pass; any caught per-message error is recorded and the message is left for retry, but a run that hit errors on every message throws at the end so Google's failure email fires.
 - `status()` (written in U1) prints the Script Properties summary for a quick look from the editor.
 
 ### U5: Tests
 
-The dedupe rule and the title normalizer are the logic most likely to be subtly wrong, and they don't need Google to run. Put them in `tools/email-scan/dedupe.gs` written as plain functions (no Apps Script services), and load that file into Node with `vm` from `tests/email-scan.test.js` so `npm test` covers:
+The dedupe rule and the title normalizer are the logic most likely to be subtly wrong, and they don't need Google to run. Done: 34 tests in `tests/email-scan.test.js`, covering the cases below plus full `run()` passes against fake Gmail, Calendar and Gemini. Put them in `tools/email-scan/dedupe.gs` written as plain functions (no Apps Script services), and load that file into Node with `vm` from `tests/email-scan.test.js` so `npm test` covers:
 
 - same day-level kind on the same date is a repeat; a different kind on the same date is not;
 - title overlap thresholds ("3rd grade musical" vs "Third Grade Musical performance" is a repeat; "Musical" vs "Book fair" is not);
@@ -112,7 +120,7 @@ Gmail, Calendar and Gemini calls are not mocked; they are exercised by the rollo
 
 1. Run `setup()`, then hide "From Email" in the Hub.
 2. Run `backfill()` once over 60 days. Compare the calendar against what the survey found (the upcoming conference days, the half day, the early dismissal, Thanksgiving break). Every one should appear exactly once.
-3. Fix the prompt or the dedupe thresholds if needed, delete the calendar's events, repeat step 2.
+3. Fix the prompt or the dedupe thresholds if needed, delete the calendar's events, run `resetSeen()`, repeat step 2.
 4. Unhide the calendar in the Hub. Let the triggers run for two weeks, then decide whether to keep review-by-exception or move on to phase 2 (deliveries).
 
 ## Risks
