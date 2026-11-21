@@ -3,7 +3,7 @@ title: School Dates from Email: ParentSquare Apps Script Writing to a "From Emai
 type: feat
 origin: docs/brainstorms/2026-11-21-email-scan-requirements.md
 date: 2026-11-21
-status: planned
+status: built, awaiting rollout
 ---
 
 # School Dates from Email: Implementation Plan
@@ -109,6 +109,8 @@ The dedupe rule and the title normalizer are the logic most likely to be subtly 
 Gmail, Calendar and Gemini calls are not mocked; they are exercised by the rollout below.
 
 ### U6: Docs
+
+**Done 2026-11-21.** FEATURES.md §23, a "School Dates from Email" section in the setup guide's Feature Configuration Reference, and two CLAUDE.md rows (the three-way model pin, and "runs outside the deploy").
 
 - `family-hub-setup.md`: a new optional step: create the Apps Script project, paste the three files, set Script Properties, run `setup()`, authorize, color the "From Email" calendar in the Hub.
 - `FEATURES.md`: a short section (what it reads, where it writes, the tags, how to turn it off).
