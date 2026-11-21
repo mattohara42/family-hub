@@ -47,7 +47,9 @@ const sourceStatus = {
   redwings: { ok: true, count: 0, error: null },
   cityspark: { ok: true, count: 0, error: null },
   towns: { ok: true, count: 0, error: null },
-  pittsford: { ok: true, count: 0, error: null }
+  pittsford: { ok: true, count: 0, error: null },
+  jcc: { ok: true, count: 0, error: null },
+  collectorfest: { ok: true, count: 0, error: null }
 };
 
 // CitySpark local-events aggregator (powers RocCityMag's calendar). Public
@@ -122,6 +124,28 @@ const PITTSFORD_SKIP_TITLE = /board|meeting|closure|closed|cancell?ed|committee|
 let pittsfordCache = { events: null, timestamp: 0 };
 const PITTSFORD_CACHE_TTL = 6 * 60 * 60 * 1000;  // 6 hours (municipal calendar changes rarely)
 
+// Louis S. Wolk JCC of Greater Rochester. Their calendar is the Modern Events
+// Calendar WordPress plugin: no iCal feed, but its month-view AJAX endpoint
+// takes a category filter and returns each day's events as HTML. Two
+// requests per month: the family categories keep everything, Jewish Life
+// keeps only one-offs (holidays, talks), since most of it is weekly adult
+// courses (Hebrew, Torah study). Gym rentals and fitness classes sit in
+// categories we never ask for.
+const JCC_AJAX_URL = 'https://jccrochester.org/wp-admin/admin-ajax.php';
+const JCC_VENUE = { name: 'Louis S. Wolk JCC', lat: 43.1208, lon: -77.5655 };  // 1200 Edgewood Ave
+const JCC_FAMILY_CATS = '73,139,185';  // Arts + Culture, Youth (incl. Family), PJ Library
+const JCC_ONEOFF_CATS = '80';          // Jewish Life
+const JCC_ONEOFF_MAX = 1;              // more occurrences than this in the window = a course (Cafe Ivrit is biweekly)
+const JCC_SKIP_TITLE = /open gym|pickleball|volleyball|registration/i;
+let jccCache = { events: null, timestamp: 0 };
+const JCC_CACHE_TTL = 6 * 60 * 60 * 1000;
+
+// CollectorFest Monthly: a sports card and collectibles show held at the JCC
+// about once a month. Its site exports a clean iCal feed (All-in-One Event
+// Calendar); each show's SUMMARY is just its date, so the title is ours.
+const COLLECTORFEST_ICS = 'https://collectorfestmonthly.com/?plugin=all-in-one-event-calendar&controller=ai1ec_exporter_controller&action=export_events&no_html=true';
+let collectorfestCache = { events: null, timestamp: 0 };
+
 // Retry configuration
 const RETRY_CONFIG = {
   maxRetries: 2,
@@ -166,13 +190,15 @@ exports.handler = async (event) => {
       if (sourceStatus[name]) { sourceStatus[name].ok = false; sourceStatus[name].error = err.message; }
       throw err;
     });
-    const [tmEvents, libEvents, rwEvents, csEvents, fpEvents, pfEvents] = await Promise.allSettled([
+    const [tmEvents, libEvents, rwEvents, csEvents, fpEvents, pfEvents, jccEvents, cfEvents] = await Promise.allSettled([
       capped(fetchTicketmaster(city, state, lat, lon, { keyword, attractionId, venueId }), 'ticketmaster'),
       capped(fetchLibraryWeb(city, state, lat, lon), 'libraryweb'),
       capped(fetchRedWings(city, state, lat, lon), 'redwings'),
       capped(fetchCitySpark(city, state, lat, lon), 'cityspark'),
       capped(fetchFairport(city, state, lat, lon), 'towns'),
-      capped(fetchPittsford(city, state, lat, lon), 'pittsford')
+      capped(fetchPittsford(city, state, lat, lon), 'pittsford'),
+      capped(fetchJcc(city, state, lat, lon), 'jcc'),
+      capped(fetchCollectorFest(city, state, lat, lon), 'collectorfest')
     ]);
 
     // Collect all results
@@ -182,7 +208,9 @@ exports.handler = async (event) => {
       ...extractSettledValue(rwEvents, 'redwings'),
       ...extractSettledValue(csEvents, 'cityspark'),
       ...extractSettledValue(fpEvents, 'towns'),
-      ...extractSettledValue(pfEvents, 'pittsford')
+      ...extractSettledValue(pfEvents, 'pittsford'),
+      ...extractSettledValue(jccEvents, 'jcc'),
+      ...extractSettledValue(cfEvents, 'collectorfest')
     ];
 
     // Step 3: Remove duplicates by title + date + venue
@@ -219,7 +247,9 @@ exports.handler = async (event) => {
         redwings: sourceStatus.redwings.count,
         cityspark: sourceStatus.cityspark.count,
         towns: sourceStatus.towns.count,
-        pittsford: sourceStatus.pittsford.count
+        pittsford: sourceStatus.pittsford.count,
+        jcc: sourceStatus.jcc.count,
+        collectorfest: sourceStatus.collectorfest.count
       },
       warnings: Object.entries(sourceStatus)
         .filter(([, status]) => !status.ok)
@@ -725,6 +755,215 @@ async function fetchPittsford(city, state, lat, lon) {
 }
 
 // ────────────────────────────────────────────────────────────────
+// JCC OF GREATER ROCHESTER (Modern Events Calendar month view) + COLLECTORFEST
+// Both share the "JCC" tab: CollectorFest is a show held in the JCC building.
+// ────────────────────────────────────────────────────────────────
+
+// WordPress titles carry numeric entities (&#8211; &#038;) stripHtml leaves alone
+function decodeNumericEntities(s) {
+  return s.replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n));
+}
+
+// "9:30 AM" → "09:30"
+function to24h(s) {
+  const m = String(s || '').match(/(\d{1,2}):(\d{2})\s*([AP])M/i);
+  if (!m) return null;
+  let h = +m[1] % 12;
+  if (m[3].toUpperCase() === 'P') h += 12;
+  return `${String(h).padStart(2, '0')}:${m[2]}`;
+}
+
+/**
+ * One month of the JCC's MEC month view → raw occurrences
+ * { id, title, url, date, time, duration, place }. Pure, for tests. Reads
+ * the `events_side` HTML: one section per day (data-mec-cell="YYYYMMDD"),
+ * one <article> per event. Throws if the shape is gone (plugin update).
+ */
+function parseJccMonth(payload) {
+  const html = payload?.events_side;
+  if (typeof html !== 'string') throw new Error('JCC month view had no events_side (plugin changed?)');
+  const out = [];
+  for (const sec of html.split('class="mec-calendar-events-sec"').slice(1)) {
+    const cell = sec.match(/data-mec-cell="(\d{4})(\d{2})(\d{2})"/);
+    if (!cell) continue;
+    const date = `${cell[1]}-${cell[2]}-${cell[3]}`;
+    for (const art of sec.split('<article').slice(1)) {
+      const a = art.match(/data-event-id="(\d+)"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/);
+      if (!a) continue;
+      const timeText = stripHtml(art.match(/class="mec-event-time[^"]*">([\s\S]*?)<\/div>/)?.[1]);
+      const [startText, endText] = timeText.split(/\s+-\s+/);
+      const time = to24h(startText), end = to24h(endText);
+      const duration = (time && end)
+        ? Math.round((new Date(`${date}T${end}`) - new Date(`${date}T${time}`)) / 60000) || null
+        : null;
+      out.push({
+        id: a[1], url: a[2].replace(/&amp;/g, '&'), title: decodeNumericEntities(stripHtml(a[3])).replace(/^UPDATE\s*[–-]\s*/i, ''), date, time, duration,
+        place: decodeNumericEntities(stripHtml(art.match(/class="mec-event-loc-place">([\s\S]*?)<\/div>/)?.[1]))
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Family-category occurrences are all kept; Jewish Life ones only when they
+ * happen at most JCC_ONEOFF_MAX times in the window (a weekly Hebrew class
+ * doesn't belong in a family discovery list). A recurring program then
+ * collapses to its next session so it shows one card, not eight.
+ */
+function selectJccEvents(familyOccs, oneoffOccs, city, state, todayStr = new Date().toISOString().split('T')[0]) {
+  // Adjacent months overlap (a month grid shows the edges of its neighbours),
+  // so drop repeat id+date pairs before counting anything.
+  const seen = new Set();
+  const upcoming = occs => occs.filter(o => {
+    const k = `${o.id}|${o.date}`;
+    if (seen.has(k) || o.date < todayStr || !o.title || JCC_SKIP_TITLE.test(o.title)) return false;
+    seen.add(k);
+    return true;
+  });
+  const fam = upcoming(familyOccs);
+  const famIds = new Set(fam.map(o => o.id));
+  const oneoff = upcoming(oneoffOccs).filter(o => !famIds.has(o.id));
+  const oneoffCount = {};
+  for (const o of oneoff) oneoffCount[o.id] = (oneoffCount[o.id] || 0) + 1;
+
+  const byId = new Map();
+  for (const o of [...fam, ...oneoff.filter(o => oneoffCount[o.id] <= JCC_ONEOFF_MAX)]) {
+    const cur = byId.get(o.id);
+    const key = `${o.date}${o.time || ''}`;
+    if (!cur) byId.set(o.id, { first: o, key, dates: new Set([o.date]) });
+    else {
+      cur.dates.add(o.date);
+      if (key < cur.key) { cur.first = o; cur.key = key; }
+    }
+  }
+
+  const events = [];
+  for (const { first: o, dates } of byId.values()) {
+    const where = o.place && o.place !== 'JCC' ? `${JCC_VENUE.name} · ${o.place}` : JCC_VENUE.name;
+    events.push({
+      id: `jcc_${o.id}`,
+      title: o.title,
+      type: /concert|tribute|sing\b|music/i.test(o.title) ? 'concert'
+          : /dance|film|festival|comedy|just for us|stories and songs/i.test(o.title) ? 'show'
+          : 'activity',
+      source: 'jcc',
+      sourceUrl: o.url || 'https://jccrochester.org/',
+      date: o.date,
+      time: o.time,
+      duration: o.duration,
+      location: { city, state, address: JCC_VENUE.name, lat: JCC_VENUE.lat, lon: JCC_VENUE.lon, distanceMiles: null },
+      description: dates.size > 1 ? `${where}. ${dates.size} dates coming up, the next one is shown.` : `${where}.`,
+      image: null,
+      weather: null
+    });
+  }
+  events.sort((a, b) => `${a.date}${a.time || ''}`.localeCompare(`${b.date}${b.time || ''}`));
+  return events;
+}
+
+async function fetchJcc(city, state, lat, lon) {
+  try {
+    if (calculateDistance(lat, lon, JCC_VENUE.lat, JCC_VENUE.lon) > PITTSFORD_MAX_MILES) {
+      sourceStatus.jcc.count = 0;
+      return [];
+    }
+    if (jccCache.events && Date.now() - jccCache.timestamp < JCC_CACHE_TTL) {
+      sourceStatus.jcc.count = jccCache.events.length;
+      return jccCache.events;
+    }
+
+    // This month and next cover the 30-day window the results are cut to
+    const now = new Date();
+    const months = [0, 1].map(k => {
+      const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + k, 1));
+      return { year: d.getUTCFullYear(), month: String(d.getUTCMonth() + 1).padStart(2, '0') };
+    });
+    const loadMonth = (m, cats) => fetchWithRetry(async () => {
+      const body = new URLSearchParams({ action: 'mec_monthly_view_load_month', mec_year: m.year, mec_month: m.month, id: 'mec1', 'atts[category]': cats });
+      const r = await fetch(JCC_AJAX_URL, { method: 'POST', body, headers: { 'User-Agent': 'FamilyHub/1.0 (event discovery)' } });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return parseJccMonth(await r.json());
+    }, 'JCC', 1);
+
+    const [fam, oneoff] = await Promise.all([JCC_FAMILY_CATS, JCC_ONEOFF_CATS].map(async cats =>
+      (await Promise.all(months.map(m => loadMonth(m, cats)))).flat()));
+    const events = selectJccEvents(fam, oneoff, city, state);
+
+    jccCache = { events, timestamp: Date.now() };
+    sourceStatus.jcc.count = events.length;
+    sourceStatus.jcc.ok = true;
+    sourceStatus.jcc.error = null;
+    return events;
+  } catch (err) {
+    console.warn('[Events] JCC error:', err);
+    sourceStatus.jcc.ok = false;
+    sourceStatus.jcc.error = err.message;
+    return [];
+  }
+}
+
+/** CollectorFest iCal text → upcoming shows. Pure, for tests. */
+function parseCollectorFest(text, city, state, todayStr = new Date().toISOString().split('T')[0]) {
+  const events = [];
+  for (const ve of parseICal(text)) {
+    if (!ve.DTSTART) continue;
+    const s = icalToLocal(ve.DTSTART);
+    if (!s.date || s.date < todayStr) continue;
+    const e = ve.DTEND ? icalToLocal(ve.DTEND) : {};
+    const duration = (s.time && e.time && e.date === s.date)
+      ? Math.round((new Date(`${e.date}T${e.time}`) - new Date(`${s.date}T${s.time}`)) / 60000) || null
+      : null;
+    events.push({
+      id: `cf_${(ve.UID || s.date).replace(/@.*/, '')}`,
+      title: 'CollectorFest Monthly card show',
+      type: 'sale',
+      source: 'jcc',
+      sourceUrl: ve.URL || 'https://collectorfestmonthly.com/calendar/',
+      date: s.date,
+      time: s.time,
+      duration,
+      location: { city, state, address: JCC_VENUE.name, lat: JCC_VENUE.lat, lon: JCC_VENUE.lon, distanceMiles: null },
+      description: `Sports cards, comics, coins and collectibles. ${icalUnescape(ve.DESCRIPTION)}`.trim(),
+      image: null,
+      weather: null
+    });
+  }
+  return events.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+async function fetchCollectorFest(city, state, lat, lon) {
+  try {
+    if (calculateDistance(lat, lon, JCC_VENUE.lat, JCC_VENUE.lon) > PITTSFORD_MAX_MILES) {
+      sourceStatus.collectorfest.count = 0;
+      return [];
+    }
+    if (collectorfestCache.events && Date.now() - collectorfestCache.timestamp < JCC_CACHE_TTL) {
+      sourceStatus.collectorfest.count = collectorfestCache.events.length;
+      return collectorfestCache.events;
+    }
+    const text = await fetchWithRetry(async () => {
+      // Their mod_security answers 406 to some clients; a UA plus an Accept passes
+      const r = await fetch(COLLECTORFEST_ICS, { headers: { 'User-Agent': 'FamilyHub/1.0 (event discovery)', Accept: 'text/calendar' } });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.text();
+    }, 'CollectorFest', 1);
+    const events = parseCollectorFest(text, city, state);
+
+    collectorfestCache = { events, timestamp: Date.now() };
+    sourceStatus.collectorfest.count = events.length;
+    sourceStatus.collectorfest.ok = true;
+    sourceStatus.collectorfest.error = null;
+    return events;
+  } catch (err) {
+    console.warn('[Events] CollectorFest error:', err);
+    sourceStatus.collectorfest.ok = false;
+    sourceStatus.collectorfest.error = err.message;
+    return [];
+  }
+}
+
+// ────────────────────────────────────────────────────────────────
 // ROCHESTER RED WINGS (AAA baseball home games — MLB Stats API)
 // ────────────────────────────────────────────────────────────────
 
@@ -1199,5 +1438,8 @@ exports._test = {
   expandFairportSchedule,
   fetchFairport,
   stripHtml,
-  parsePittsfordEvents
+  parsePittsfordEvents,
+  parseJccMonth,
+  selectJccEvents,
+  parseCollectorFest
 };

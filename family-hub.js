@@ -14913,7 +14913,7 @@ let eventsData = [];           // Current displayed events
 let eventsRawData = [];        // Full result set from backend
 let eventsFetchTimestamp = 0;  // When we last fetched
 let eventsSort = 'distance';   // Current sort mode
-let eventsSourceTab = lsGet('fh_eventsTab', 'libraryweb');  // Active source tab, per device: ticketmaster | osm | libraryweb | redwings | cityspark | towns
+let eventsSourceTab = lsGet('fh_eventsTab', 'libraryweb');  // Active source tab, per device: ticketmaster | osm | libraryweb | redwings | cityspark | towns | jcc
 let eventsSubTab = 'all';              // Active category sub-tab within the source
 let eventsTabFilter = 'all';   // Current tab filter
 let eventsCategoryFilter = null;  // Category filter (null = all)
@@ -15321,7 +15321,7 @@ function selectEventSubTab(btn) {
 
 // Update the count badge on each source tab from the full result set
 function updateSourceTabCounts(rawEvents) {
-  const counts = { ticketmaster: 0, osm: 0, libraryweb: 0, redwings: 0, cityspark: 0, towns: 0 };
+  const counts = { ticketmaster: 0, osm: 0, libraryweb: 0, redwings: 0, cityspark: 0, towns: 0, jcc: 0 };
   for (const e of (rawEvents || [])) {
     if (counts[e.source] !== undefined) counts[e.source]++;
   }
@@ -15332,7 +15332,7 @@ function updateSourceTabCounts(rawEvents) {
 }
 
 function renderEventsList(events) {
-  const emptyLabels = { ticketmaster: 'live events', osm: 'things to do', libraryweb: 'library events', redwings: 'Red Wings home games', cityspark: 'local events', towns: 'town events' };
+  const emptyLabels = { ticketmaster: 'live events', osm: 'things to do', libraryweb: 'library events', redwings: 'Red Wings home games', cityspark: 'local events', towns: 'town events', jcc: 'JCC events' };
   const empty = eventsSourceTab === 'osm' && thingsToDoStatus === 'loading'
     ? 'Finding things to do nearby…'
     : eventsSourceTab === 'osm' && thingsToDoStatus === 'failed'
@@ -15407,7 +15407,7 @@ function renderEventCard(event) {
     const timeLabel = event.time ? ` ${formatTime12(event.time)}` : '';
     // Sources whose venue matters more than the distance (every Fairport
     // festival is in the same village, so the park name is the useful bit).
-    const rightMeta = (event.source === 'libraryweb' || event.source === 'towns')
+    const rightMeta = (event.source === 'libraryweb' || event.source === 'towns' || event.source === 'jcc')
       ? escapeHtml(event.location.address || 'Library')
       : distLabel;
     return `
