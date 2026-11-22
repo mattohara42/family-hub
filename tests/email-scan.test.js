@@ -66,6 +66,7 @@ function fakeCalendar() {
     getName: () => 'From Email',
     createAllDayEvent: (t, s, e, o) => make(t, s, e, true, o),
     createEvent: (t, s, e, o) => make(t, s, e, false, o),
+    getEvents: (start, end) => events.filter(ev => ev.start < end && ev.end > start),
     getEventsForDay: d => {
       const start = new Date(d.getFullYear(), d.getMonth(), d.getDate());
       const end = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
@@ -315,6 +316,24 @@ test('decideItem_: one day inside a break already on the calendar does not shrin
   assert.equal(ctx.decideItem_(oneDay, [existing], daysFromNow(0)).action, 'touch');
 });
 
+test('decideItem_: something the scan made before but is no longer on the calendar was removed', () => {
+  const { ctx } = load();
+  const today = daysFromNow(0);
+  const brk = item({ date: daysFromNow(10), endDate: daysFromNow(14), kind: 'no-school', title: 'Winter break' });
+  const made = [{ date: brk.date, endDate: brk.endDate, kind: 'no-school', baseTitle: 'Winter break' }];
+  assert.equal(ctx.decideItem_(brk, [], today, made).action, 'removed');
+  // One day inside the removed break counts too; a different kind that day does not.
+  assert.equal(ctx.decideItem_(item({ date: daysFromNow(12), kind: 'no-school' }), [], today, made).action, 'removed');
+  assert.equal(ctx.decideItem_(item({ date: daysFromNow(12), kind: 'conference' }), [], today, made).action, 'create');
+  assert.equal(ctx.decideItem_(item({ date: daysFromNow(15), kind: 'no-school' }), [], today, made).action, 'create');
+});
+
+test('wantedKinds_: blank means every kind; unknown names are ignored', () => {
+  const { ctx } = load();
+  assert.deepEqual(Array.from(ctx.wantedKinds_('')), ['no-school', 'half-day', 'early-dismissal', 'conference', 'event']);
+  assert.deepEqual(Array.from(ctx.wantedKinds_(' no-school ,half-day, nope')), ['no-school', 'half-day']);
+});
+
 test('decideItem_: past dates and misread years are dropped', () => {
   const { ctx } = load();
   const today = daysFromNow(0);
@@ -531,11 +550,55 @@ test('heartbeat: a week with no ParentSquare mail alarms, except in July and Aug
   assert.equal(ok.ctx.heartbeatAlarms_({ ...r, now: new Date(2026, 10, 21) }).length, 0);
 });
 
-test('resetSeen() clears seen messages and the empty-digest streak', () => {
-  const { ctx, store } = load({ props: { seenIds: '{"a":1}', zeroStreak: '4' } });
+test('scan: an event you delete is not added back by a later email', () => {
+  const d = daysFromNow(9);
+  const conf = { date: d, kind: 'conference', title: '', confidence: 0.9 };
+  const messages = { a: digest('a', 3, 'first') };
+  const { ctx, cal } = load({ props: READY, messages, gemini: [[conf], [conf]] });
+  ctx.run();
+  assert.equal(cal.events.length, 1);
+  cal.events[0].deleteEvent();            // the owner deletes it in the Hub
+  messages.b = digest('b', 1, 'reminder');
+  ctx.run();
+  assert.equal(cal.events.length, 0);
+});
+
+test('scan: events already on the calendar before the list existed are remembered', () => {
+  const d = daysFromNow(9);
+  const half = { date: d, kind: 'half-day', title: '', confidence: 0.9 };
+  const messages = { a: digest('a', 3, 'first') };
+  const { ctx, cal, store } = load({ props: READY, messages, gemini: [[half], [], [half]] });
+  ctx.run();
+  delete store.madeEvents;                // as if made by the version before this list
+  messages.b = digest('b', 2, 'nothing new');
+  ctx.run();
+  cal.events[0].deleteEvent();
+  messages.c = digest('c', 1, 'reminder');
+  ctx.run();
+  assert.equal(cal.events.length, 0);
+});
+
+test('scan: ADD_KINDS leaves out the kinds you turned off', () => {
+  const d = daysFromNow(9);
+  const { ctx, cal, store } = load({
+    props: { ...READY, ADD_KINDS: 'no-school, early-dismissal' },
+    messages: { a: digest('a', 1, 'x') },
+    gemini: [[
+      { date: d, kind: 'no-school', title: '', confidence: 0.9 },
+      { date: d, kind: 'event', title: 'Book fair', confidence: 0.9 },
+    ]],
+  });
+  ctx.run();
+  assert.deepEqual(cal.events.map(e => e.tags.fhKind), ['no-school']);
+  assert.match(store.lastResult, /kind off 1/);
+});
+
+test('resetSeen() clears seen messages, the empty-digest streak and remembered events', () => {
+  const { ctx, store } = load({ props: { seenIds: '{"a":1}', zeroStreak: '4', madeEvents: '[]' } });
   ctx.resetSeen();
   assert.equal(store.seenIds, undefined);
   assert.equal(store.zeroStreak, undefined);
+  assert.equal(store.madeEvents, undefined);
 });
 
 // ── The model pin ──

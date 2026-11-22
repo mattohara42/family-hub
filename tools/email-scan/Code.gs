@@ -70,6 +70,7 @@ function setup() {
   const cal = ensureCalendar_();
   p.setProperty('CALENDAR_ID', cal.getId());
   if (!p.getProperty('SKIP_SUBJECTS')) p.setProperty('SKIP_SUBJECTS', DEFAULT_SKIP_SUBJECTS);
+  if (!p.getProperty('ADD_KINDS')) p.setProperty('ADD_KINDS', KINDS.join(', '));
 
   installTriggers_();
 
@@ -105,11 +106,16 @@ function backfill() {
   scan_(BACKFILL_WINDOW_DAYS, new Date());
 }
 
-/** Forgets which messages were handled, so the next backfill() rereads everything. */
+/**
+ * Forgets which messages were handled and which events the scan made, so the
+ * next backfill() rereads everything and re-adds what's missing, including
+ * events you deleted.
+ */
 function resetSeen() {
   props_().deleteProperty('seenIds');
   props_().deleteProperty('zeroStreak');
-  console.log('Seen messages cleared.');
+  props_().deleteProperty('madeEvents');
+  console.log('Seen messages and remembered events cleared.');
 }
 
 /**
@@ -135,6 +141,8 @@ function status() {
   console.log('GEMINI_KEY:    %s', p.GEMINI_KEY ? 'set' : 'NOT SET');
   console.log('Model:         %s', GEMINI_MODEL);
   console.log('Seen:          %s message(s)', Object.keys(loadSeen_()).length);
+  console.log('Adding:        %s', wantedKinds_(p.ADD_KINDS).join(', '));
+  console.log('Remembered:    %s event(s) made by the scan', loadMade_().length);
   ['SKIP_SUBJECTS', 'EXTRA_QUERY', 'lastRun', 'lastNew', 'lastResult', 'lastError', 'zeroStreak'].forEach(k => {
     console.log('%s %s', (k + ':').padEnd(14), p[k] || '(none)');
   });
@@ -157,6 +165,13 @@ function scan_(days, now) {
   const tz = Session.getScriptTimeZone();
   const today = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
   const seen = loadSeen_();
+  const kinds = wantedKinds_(p.getProperty('ADD_KINDS'));
+  // Anything on the calendar now was made by the scan, so remember it too:
+  // that covers events from before this list existed.
+  const horizon = new Date(now.getFullYear(), now.getMonth(), now.getDate() + MAX_DAYS_AHEAD);
+  const onCal = cal.getEvents(new Date(now.getFullYear(), now.getMonth(), now.getDate()), horizon)
+    .filter(ev => ev.getTag('fhKind')).map(toExisting_);
+  let made = mergeMade_(loadMade_(), onCal, today);
   let zeroStreak = Number(p.getProperty('zeroStreak') || 0);
 
   const msgs = collectMessages_(days, { skipSeen: true });
@@ -173,12 +188,14 @@ function scan_(days, now) {
       const t0 = Date.now();
       const items = extractItems_(m, key, tz);
       items.forEach(item => {
-        const result = applyItem_(cal, item, m, today);
+        const result = kinds.indexOf(item.kind) < 0 ? 'kind off' : applyItem_(cal, item, m, today, madeEntries_(made));
+        if (result === 'create') made = mergeMade_(made, [{ ...item, baseTitle: item.title }], today);
         counts[result] = (counts[result] || 0) + 1;
       });
       if (/digest/i.test(m.subject)) zeroStreak = items.length ? 0 : zeroStreak + 1;
       seen[m.id] = Date.now();
       saveSeen_(seen); // now, not after the loop: a run killed at 6 minutes keeps what it finished
+      saveMade_(made);
       handled++;
       console.log('%s: %s item(s) in %ss', m.subject, items.length, Math.round((Date.now() - t0) / 1000));
     } catch (e) {
@@ -248,11 +265,11 @@ function extractItems_(m, key, tz) {
 // fhSig (a fingerprint of title and times; see signature_ in dedupe.gs).
 
 /** Applies one item and returns what happened: create | touch | update | locked | past | far. */
-function applyItem_(cal, item, m, today) {
+function applyItem_(cal, item, m, today, made) {
   const existing = cal.getEventsForDay(eventTimes_(item).start)
     .filter(ev => ev.getTag('fhKind'))
     .map(toExisting_);
-  const decision = decideItem_(item, existing, today);
+  const decision = decideItem_(item, existing, today, made);
 
   if (decision.action === 'create') {
     createEvent_(cal, item, newDescription_(item, m.link));
@@ -465,6 +482,19 @@ function pruneSeen_(seen, nowMs) {
 
 function saveSeen_(seen) {
   props_().setProperty('seenIds', JSON.stringify(pruneSeen_(seen, Date.now())));
+}
+
+/** Events the scan has created, as [date, endDate, kind, title] (see mergeMade_). */
+function loadMade_() {
+  try {
+    return JSON.parse(props_().getProperty('madeEvents') || '[]');
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveMade_(made) {
+  props_().setProperty('madeEvents', JSON.stringify(made));
 }
 
 // ── Helpers ──

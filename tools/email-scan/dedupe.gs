@@ -13,6 +13,8 @@
  *   - A repeat at the same time only gains a source link. A repeat at a
  *     different time is an update: the newer email wins.
  *   - An event someone edited by hand is never touched again.
+ *   - An event someone deleted (or moved off its date) stays gone: the scan
+ *     remembers what it made, and a later repeat of a removed one is dropped.
  */
 
 const DAY_KINDS = ['no-school', 'half-day', 'early-dismissal', 'conference'];
@@ -29,6 +31,11 @@ const TITLE_MATCH_MIN  = 0.5;
 const LOW_CONFIDENCE   = 0.6;
 const MAX_SOURCE_LINKS = 3;
 const MAX_DAYS_AHEAD   = 400;   // a date further out is a misread year
+
+// ponytail: one Script Property holds about 9 KB, roughly 150 remembered
+// events. Past dates are pruned each run; split it across properties if a
+// year of school dates ever outgrows that.
+const MADE_TITLE_MAX = 40;
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -166,19 +173,20 @@ function sameSlot_(item, slot) {
  * What to do with one extracted item, given the scan's existing events on
  * that date. Each existing entry: { date, kind, baseTitle, startTime, endTime,
  * endDate, storedSig, currentSig }. today is "YYYY-MM-DD".
- * Returns { action, target }, action one of past | far | create | touch | update | locked.
+ * made is what the scan has created before ({ date, endDate, kind, baseTitle }).
+ * Returns { action, target }, action one of past | far | create | removed | touch | update | locked.
  */
-function decideItem_(item, existing, today) {
+function decideItem_(item, existing, today, made) {
   if ((item.endDate || item.date) < today) return { action: 'past' };
   if (daysBetween_(today, item.date) > MAX_DAYS_AHEAD) return { action: 'far' };
 
-  const isDayKind = DAY_KINDS.indexOf(item.kind) >= 0;
-  const tokens = titleTokens_(item.title);
-  const target = existing.find(e => isDayKind
-    ? e.kind === item.kind
-    : e.kind === 'event' && jaccard_(tokens, titleTokens_(e.baseTitle)) >= TITLE_MATCH_MIN);
+  const target = existing.find(e => sameThing_(item, e));
 
-  if (!target) return { action: 'create' };
+  if (!target) {
+    // Not on the calendar, but the scan made it once: someone removed it.
+    const gone = (made || []).some(e => e.date <= item.date && item.date <= (e.endDate || e.date) && sameThing_(item, e));
+    return { action: gone ? 'removed' : 'create' };
+  }
   if (target.storedSig !== target.currentSig) return { action: 'locked', target };
   // A later day inside a range that started earlier (one day of a break
   // already on the calendar) is covered by it. Treating it as an update
@@ -186,6 +194,34 @@ function decideItem_(item, existing, today) {
   if (target.date && target.date < item.date) return { action: 'touch', target };
   if (sameSlot_(item, target)) return { action: 'touch', target };
   return { action: 'update', target };
+}
+
+/** A day-level kind matches on kind alone; an event on title overlap. */
+function sameThing_(item, e) {
+  if (DAY_KINDS.indexOf(item.kind) >= 0) return e.kind === item.kind;
+  return e.kind === 'event' && jaccard_(titleTokens_(item.title), titleTokens_(e.baseTitle)) >= TITLE_MATCH_MIN;
+}
+
+/**
+ * The made-events list after adding entries and dropping past ones. Entries
+ * are [date, endDate, kind, title], compact because they share one property.
+ */
+function mergeMade_(made, entries, today) {
+  const out = {};
+  made.concat(entries.map(e => [e.date, e.endDate || '', e.kind, String(e.baseTitle || '').slice(0, MADE_TITLE_MAX)]))
+    .filter(e => (e[1] || e[0]) >= today)
+    .forEach(e => { out[e.join('|')] = e; });
+  return Object.keys(out).map(k => out[k]);
+}
+
+function madeEntries_(made) {
+  return made.map(e => ({ date: e[0], endDate: e[1] || null, kind: e[2], baseTitle: e[3] }));
+}
+
+/** ADD_KINDS ("no-school, half-day") as a list; blank means every kind. */
+function wantedKinds_(src) {
+  const list = String(src || '').split(',').map(k => k.trim()).filter(k => KINDS.indexOf(k) >= 0);
+  return list.length ? list : KINDS.slice();
 }
 
 function daysBetween_(fromYmd, toYmd) {
