@@ -45,7 +45,9 @@ const MAX_BODY_CHARS       = 8000;
 
 const GEMINI_URL      = 'https://generativelanguage.googleapis.com/v1beta/models/';
 const GEMINI_PAUSE_MS = 6500;            // between calls: the free tier allows about 10 a minute
-const TIME_BUDGET_MS  = 4.5 * 60 * 1000; // Apps Script stops a run at 6 minutes
+// Apps Script kills a run at 6 minutes. A message can take 30s+ on a thinking
+// model, so stop starting new ones early enough to leave room for a slow one.
+const TIME_BUDGET_MS  = 3.5 * 60 * 1000;
 
 // Heartbeat alarms (accepted 2026-11-21). A run that trips one throws, and
 // Google emails the owner about a failed trigger run.
@@ -95,7 +97,7 @@ function run() {
 
 /**
  * One-time pass over the last 60 days, used during rollout. A run stops
- * after about 4.5 minutes; run it again until it reports nothing left.
+ * after about 4 minutes; run it again until it reports nothing left.
  * To redo a backfill from scratch, delete the calendar's events and run
  * resetSeen() first.
  */
@@ -168,6 +170,7 @@ function scan_(days, now) {
     const m = msgs[i];
     try {
       if (i > 0) Utilities.sleep(GEMINI_PAUSE_MS);
+      const t0 = Date.now();
       const items = extractItems_(m, key, tz);
       items.forEach(item => {
         const result = applyItem_(cal, item, m, today);
@@ -175,7 +178,9 @@ function scan_(days, now) {
       });
       if (/digest/i.test(m.subject)) zeroStreak = items.length ? 0 : zeroStreak + 1;
       seen[m.id] = Date.now();
+      saveSeen_(seen); // now, not after the loop: a run killed at 6 minutes keeps what it finished
       handled++;
+      console.log('%s: %s item(s) in %ss', m.subject, items.length, Math.round((Date.now() - t0) / 1000));
     } catch (e) {
       errors.push(m.subject + ': ' + e.message);
     }

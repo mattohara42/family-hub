@@ -388,6 +388,24 @@ test('scan: a date repeated in two digests lands once, with both sources', () =>
   assert.equal(store.lastNew, '1');
 });
 
+test('scan: each message is marked seen as soon as it is handled', () => {
+  // Apps Script kills a run at 6 minutes without running anything after the
+  // loop, so progress must already be saved when the next message starts.
+  const seenAtCall = [];
+  let st;
+  const { ctx, store } = load({
+    props: READY,
+    messages: { a: digest('a', 2, 'one'), b: digest('b', 1, 'two') },
+    gemini: () => {
+      seenAtCall.push(Object.keys(JSON.parse((st && st.seenIds) || '{}')));
+      return { code: 200, body: geminiReply([]) };
+    },
+  });
+  st = store;
+  ctx.run();
+  assert.deepEqual(seenAtCall, [[], ['a']]); // 'a' is older, so it goes first
+});
+
 test('scan: the prompt carries the sent date and no links', () => {
   const { ctx, prompts } = load({
     props: READY,

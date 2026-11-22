@@ -1114,7 +1114,7 @@ A small Google Apps Script reads your ParentSquare mail twice a day and puts sch
 4. **Project Settings**: tick **Show "appsscript.json" manifest file in editor**, then paste `tools/email-scan/appsscript.json` over it. Under **Script Properties**, add `GEMINI_KEY` with your key
 5. Select `setup` in the toolbar and click **Run**. Approve the consent screen; it asks to read Gmail, manage calendars, call Gemini and run on a schedule. The script never sends, deletes or labels mail
 6. Optional: in Gmail, create a label named `Hub`. Anything you tag with it gets scanned too, whoever sent it
-7. **First run.** In the Hub, hide the new **From Email** calendar. Run `backfill` in the editor; it covers the last 60 days and stops itself after about 4.5 minutes, so run it again until the log says nothing is left. Check the calendar in Google Calendar: each date should be there once. Then unhide it in the Hub and give it its own color
+7. **First run.** In the Hub, hide the new **From Email** calendar. Run `backfill` in the editor; it covers the last 60 days and stops itself after about 4 minutes (each email takes 20–30 seconds), so run it again until the log says nothing is left. Progress is kept even if Google cuts a run off. Check the calendar in Google Calendar: each date should be there once. Then unhide it in the Hub and give it its own color
 
 Wrong events: fix or delete them in the Hub like any other event. Once you've edited an event, the scan leaves it alone. To turn the scan off, run `teardown`. Deleting the calendar removes everything it added. If the scan stops working, Google emails you about a failed run; `status` in the editor shows the last result.
 
