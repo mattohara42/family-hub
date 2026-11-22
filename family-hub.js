@@ -14644,6 +14644,15 @@ function wireSaverPondWake(frame) {
     ? ['pointerdown', 'touchstart', 'keydown', 'wheel']
     : ['keydown'];
   events.forEach(t => doc.addEventListener(t, saverActivity, { passive: true }));
+  // applySaverPondSound() calls the pond's initAudio() before any tap, which
+  // marks its audio ready even when the browser refuses to start it. The pond's
+  // own tap handler then skips initAudio(), so it would stay silent all session.
+  // Resuming the context on a tap lets the gesture start it after all.
+  doc.addEventListener('pointerdown', () => {
+    if (!saverPondSound) return;
+    const tone = frame.contentWindow?.Tone;
+    if (tone?.getContext().state === 'suspended') tone.start().catch(() => {});
+  }, { passive: true });
 }
 
 function advanceSaverPhoto() {
