@@ -24,6 +24,8 @@ const DIR = path.join(__dirname, '../tools/email-scan');
 const SRC = ['dedupe.gs', 'Code.gs'].map(f => fs.readFileSync(path.join(DIR, f), 'utf8')).join('\n');
 
 const b64url = s => Buffer.from(s, 'utf8').toString('base64url');
+// What the advanced Gmail service really returns for body.data: Java's signed bytes.
+const gmailBytes = s => Array.from(Buffer.from(s, 'utf8'), b => (b > 127 ? b - 256 : b));
 
 const pad = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
@@ -96,7 +98,10 @@ function load({ props = {}, messages = {}, listPages, gemini = [], quietMail } =
       getProperties: () => ({ ...store }),
     }) },
     Utilities: {
-      base64DecodeWebSafe: s => Buffer.from(s, 'base64url'),
+      base64DecodeWebSafe: s => {
+        if (typeof s !== 'string') throw new Error('Could not decode string.'); // as Apps Script does
+        return Buffer.from(s, 'base64url');
+      },
       newBlob: bytes => ({ getDataAsString: () => Buffer.from(bytes).toString('utf8') }),
       sleep() {},
       formatDate: (d, _tz, fmt) => fmt === 'yyyy-MM-dd' ? ymd(d)
@@ -131,8 +136,8 @@ const READY = { GEMINI_KEY: 'test-key', CALENDAR_ID: 'cal-from-email' };
 
 function gmailMessage({ id, subject, sentMs, text, html }) {
   const parts = [];
-  if (text) parts.push({ mimeType: 'text/plain', body: { data: b64url(text) } });
-  if (html) parts.push({ mimeType: 'text/html', body: { data: b64url(html) } });
+  if (text) parts.push({ mimeType: 'text/plain', body: { data: gmailBytes(text) } });
+  if (html) parts.push({ mimeType: 'text/html', body: { data: gmailBytes(html) } });
   return {
     id,
     threadId: 't' + id,
@@ -186,6 +191,14 @@ test('messageText_ prefers text/plain inside nested parts', () => {
   const { ctx } = load();
   const msg = gmailMessage({ id: 'a', subject: 's', sentMs: 0, text: 'plain wins', html: '<p>html loses</p>' });
   assert.equal(ctx.messageText_(msg.payload), 'plain wins');
+});
+
+test('messageText_ reads Gmail byte arrays (with non-ASCII) and base64url strings', () => {
+  const { ctx } = load();
+  const bytes = { mimeType: 'text/plain', body: { data: gmailBytes('No school – Dec 4 ✓') } };
+  assert.equal(ctx.messageText_(bytes), 'No school – Dec 4 ✓');
+  const str = { mimeType: 'text/plain', body: { data: b64url('plain string') } };
+  assert.equal(ctx.messageText_(str), 'plain string');
 });
 
 test('messageText_ falls back to HTML with tags and styles stripped', () => {

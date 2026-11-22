@@ -400,8 +400,11 @@ function findPart_(part, mimeType) {
   return null;
 }
 
+// The advanced Gmail service returns body.data already decoded, as a byte
+// array; only the raw REST API hands back a base64url string. Accept both.
 function decodePart_(data) {
-  return Utilities.newBlob(Utilities.base64DecodeWebSafe(data)).getDataAsString('UTF-8');
+  const bytes = typeof data === 'string' ? Utilities.base64DecodeWebSafe(data) : data;
+  return Utilities.newBlob(bytes).getDataAsString('UTF-8');
 }
 
 function htmlToText_(html) {
