@@ -121,7 +121,7 @@ mealPlan['YYYY-MM-DD'] = { breakfast: { name, description, cuisine, prepTime,
 ## Pinned API Constants (top of `family-hub.js`)
 
 ```js
-const GEMINI_MODEL     = 'gemini-2.5-flash';      // pinned 2026-05-31
+const GEMINI_MODEL     = 'gemini-3.8-flash';      // pinned 2026-11-22
 const GEMINI_API_BASE  = 'https://generativelanguage.googleapis.com/v1beta/models';
 const OPENAI_MODEL     = 'gpt-4o-mini';            // pinned 2026-05-31
 const OPENAI_API_BASE  = 'https://api.openai.com/v1';

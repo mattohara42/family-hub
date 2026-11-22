@@ -13,7 +13,7 @@
 
 const GEMINI_BASE  = 'https://generativelanguage.googleapis.com/v1beta/models';
 // Keep in step with GEMINI_MODEL in family-hub.js; a mismatch is rejected loudly.
-const DEFAULT_MODEL = 'gemini-2.5-flash';
+const DEFAULT_MODEL = 'gemini-3.8-flash';
 // The Assistant's spoken replies go through the newer Interactions API
 // (`{ tts: true, model, ...interaction }`). Keep in step with GEMINI_TTS_MODEL
 // in family-hub.js.
