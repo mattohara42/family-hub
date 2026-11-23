@@ -442,6 +442,25 @@ test('scan: each message is marked seen as soon as it is handled', () => {
   assert.deepEqual(seenAtCall, [[], ['a']]); // 'a' is older, so it goes first
 });
 
+test('scan: a message a run died on goes last, and is skipped after KILL_LIMIT deaths', () => {
+  // A Gemini call that never answers can't be timed out: Apps Script kills
+  // the run with inFlight still set, so the next run knows which message did it.
+  const msgs = () => ({ a: digest('a', 2, 'one'), b: digest('b', 1, 'two') });
+  const order = prompts => prompts.map(t => t.match(/Subject: Daily Digest (\w)/)[1]);
+
+  const once = load({ props: { ...READY, inFlight: 'a' }, messages: msgs(), gemini: [[], []] });
+  once.ctx.run();
+  assert.deepEqual(order(once.prompts), ['b', 'a']); // 'a' is older but died once
+  assert.equal(once.store.inFlight, undefined);
+
+  const twice = load({ props: { ...READY, inFlight: 'a', killedOn: '{"a":1}' }, messages: msgs(), gemini: [[]] });
+  twice.ctx.run();
+  assert.deepEqual(order(twice.prompts), ['b']);
+  assert.ok(JSON.parse(twice.store.seenIds).a); // skipped for good
+  assert.match(twice.store.lastResult, /1 failed/);
+  assert.match(twice.store.lastError, /Daily Digest a: skipped/);
+});
+
 test('scan: the prompt carries the sent date and no links', () => {
   const { ctx, prompts } = load({
     props: READY,

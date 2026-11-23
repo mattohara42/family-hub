@@ -106,7 +106,9 @@ function geminiRequest_(prompt, schema) {
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
     generationConfig: { responseMimeType: 'application/json', responseSchema: schema || ITEM_SCHEMA, temperature: 0,
       // 3.x thinks at 'high' by default: one digest took ~4 minutes and ran a backfill into the 6-minute kill.
-      thinkingConfig: { thinkingLevel: 'low' } },
+      thinkingConfig: { thinkingLevel: 'low' },
+      // No cap means ~65k tokens: a reply stuck repeating itself ran for minutes. Real answers are a few hundred.
+      maxOutputTokens: 8192 },
   };
 }
 
@@ -118,6 +120,7 @@ function geminiJson_(responseText) {
   if (!parts || !parts.length) {
     throw new Error('Gemini returned no answer (' + ((cand && cand.finishReason) || 'no candidates') + ')');
   }
+  if (cand.finishReason === 'MAX_TOKENS') throw new Error('Gemini reply hit maxOutputTokens (runaway output)');
   return JSON.parse(parts.map(p => p.text || '').join(''));
 }
 
