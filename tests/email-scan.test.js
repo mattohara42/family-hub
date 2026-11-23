@@ -21,7 +21,7 @@ const path = require('path');
 const vm = require('vm');
 
 const DIR = path.join(__dirname, '../tools/email-scan');
-const SRC = ['dedupe.gs', 'Code.gs'].map(f => fs.readFileSync(path.join(DIR, f), 'utf8')).join('\n');
+const SRC = ['dedupe.gs', 'deliveries.gs', 'Code.gs'].map(f => fs.readFileSync(path.join(DIR, f), 'utf8')).join('\n');
 
 const b64url = s => Buffer.from(s, 'utf8').toString('base64url');
 // What the advanced Gmail service really returns for body.data: Java's signed bytes.
@@ -37,7 +37,7 @@ function daysFromNow(n) {
 }
 
 /** A fake Calendar with just the calls the script makes. */
-function fakeCalendar() {
+function fakeCalendar(id = 'cal-from-email', name = 'From Email') {
   const events = [];
   const make = (title, start, end, allDay, opts) => {
     const ev = {
@@ -62,8 +62,8 @@ function fakeCalendar() {
   };
   return {
     events,
-    getId: () => 'cal-from-email',
-    getName: () => 'From Email',
+    getId: () => id,
+    getName: () => name,
     createAllDayEvent: (t, s, e, o) => make(t, s, e, true, o),
     createEvent: (t, s, e, o) => make(t, s, e, false, o),
     getEvents: (start, end) => events.filter(ev => ev.start < end && ev.end > start),
@@ -76,18 +76,21 @@ function fakeCalendar() {
 }
 
 /** A Gemini generateContent response body carrying these items. */
-const geminiReply = items => JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify({ items }) }] } }] });
+// An array is a school reply ({ items }); an object is sent as-is (a delivery reply).
+const geminiReply = x => JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(Array.isArray(x) ? { items: x } : x) }] } }] });
 
 /**
  * A fresh script context. `messages` maps id to a Gmail API message.
  * `gemini` is a function (prompt) => { code, body } or a list of item arrays,
  * one per call.
  */
-function load({ props = {}, messages = {}, listPages, gemini = [], quietMail } = {}) {
+function load({ props = {}, messages = {}, shipping = {}, listPages, gemini = [], quietMail } = {}) {
   const store = { ...props };
   const queries = [];
   const prompts = [];
   const cal = fakeCalendar();
+  const dcal = fakeCalendar('cal-deliveries', 'Deliveries');
+  const triggers = [];
   const geminiQueue = Array.isArray(gemini) ? gemini.slice() : null;
   const ctx = {
     console: { log() {}, warn() {} },
@@ -109,7 +112,20 @@ function load({ props = {}, messages = {}, listPages, gemini = [], quietMail } =
         : d.toLocaleDateString('en-US', { weekday: 'long' }) + ', ' + ymd(d),
     },
     Session: { getScriptTimeZone: () => 'America/New_York' },
-    CalendarApp: { getCalendarById: id => (id === 'cal-from-email' ? cal : null) },
+    CalendarApp: {
+      getCalendarById: id => ({ 'cal-from-email': cal, 'cal-deliveries': dcal })[id] || null,
+      getOwnedCalendarsByName: () => [],
+      createCalendar: name => (name === 'Deliveries' ? dcal : cal),
+    },
+    ScriptApp: {
+      getProjectTriggers: () => triggers.slice(),
+      deleteTrigger: t => { triggers.splice(triggers.indexOf(t), 1); },
+      newTrigger: fn => {
+        const b = { timeBased: () => b, everyDays: () => b, atHour: () => b, nearMinute: () => b,
+          create: () => { triggers.push({ getHandlerFunction: () => fn }); } };
+        return b;
+      },
+    },
     UrlFetchApp: { fetch: (_url, opts) => {
       const prompt = JSON.parse(opts.payload).contents[0].parts[0].text;
       prompts.push(prompt);
@@ -122,15 +138,16 @@ function load({ props = {}, messages = {}, listPages, gemini = [], quietMail } =
         if (/^from:parentsquare\.com newer_than:\d+d$/.test(opts.q) && quietMail !== undefined) {
           return { messages: quietMail ? [{ id: 'q' }] : [] };
         }
+        if (/out for delivery/.test(opts.q)) return { messages: Object.keys(shipping).map(id => ({ id })) };
         if (listPages) return listPages(opts.pageToken);
         return { messages: Object.keys(messages).map(id => ({ id })) };
       },
-      get: (_me, id) => messages[id],
+      get: (_me, id) => messages[id] || shipping[id],
     } } },
   };
   vm.createContext(ctx);
   vm.runInContext(SRC, ctx);
-  return { ctx, store, queries, prompts, cal };
+  return { ctx, store, queries, prompts, cal, dcal };
 }
 
 const READY = { GEMINI_KEY: 'test-key', CALENDAR_ID: 'cal-from-email' };
@@ -608,6 +625,115 @@ test('resetSeen() clears seen messages, the empty-digest streak and remembered e
   assert.equal(store.seenIds, undefined);
   assert.equal(store.zeroStreak, undefined);
   assert.equal(store.madeEvents, undefined);
+});
+
+// ── deliveries.gs ──
+
+const READY_D = { ...READY, DELIVERY_CALENDAR_ID: 'cal-deliveries' };
+const UPS = '1Z999AA10123456784';
+const shipMail = (id, daysAgo, text) => gmailMessage({ id, subject: 'Update on your order', sentMs: Date.now() - daysAgo * 86400000, text });
+const ship = o => ({ isShipment: true, merchant: 'Zappos', status: 'shipped', arrivalDate: null, items: null,
+  orderNumber: null, trackingNumber: null, carrier: null, ...o });
+
+test('sanitizeDelivery_: no shipment, no event; numbers only if the email prints them', () => {
+  const { ctx } = load();
+  assert.equal(ctx.sanitizeDelivery_({ isShipment: false }, ''), null);
+  assert.equal(ctx.sanitizeDelivery_(ship({ status: 'teleported' }), ''), null);
+  const d = ctx.sanitizeDelivery_(ship({ orderNumber: '#11-2233', trackingNumber: '1Z 999 AA1 0123456784' }),
+    'Order 11-2233 shipped. UPS tracking 1Z999AA10123456784');
+  assert.equal(d.orderNumber, '11-2233');
+  assert.equal(d.trackingNumber, UPS);
+  const guessed = ctx.sanitizeDelivery_(ship({ trackingNumber: '1Z000000000000000000' }), 'Your order shipped');
+  assert.equal(guessed.trackingNumber, null);
+});
+
+test('trackingUrl_: links a number only when it has the carrier\'s shape', () => {
+  const { ctx } = load();
+  assert.match(ctx.trackingUrl_(null, UPS), /ups\.com\/track\?tracknum=1Z999/);
+  assert.equal(ctx.trackingUrl_(null, '123456789012'), null);           // 12 digits could be anything
+  assert.match(ctx.trackingUrl_('fedex', '123456789012'), /fedex\.com/);
+  assert.equal(ctx.trackingUrl_('ups', '123456789012'), null);
+});
+
+test('decideDelivery_: an email with no shared number joins the one open package from that store', () => {
+  const { ctx } = load();
+  const today = daysFromNow(0);
+  const open = { keys: ['o:zappos:1'], merchant: 'zappos', status: 'shipped', date: daysFromNow(3), storedSig: 's', currentSig: 's' };
+  const other = { ...open, keys: ['o:zappos:2'] };
+  const ofd = ctx.sanitizeDelivery_(ship({ status: 'out-for-delivery', arrivalDate: daysFromNow(3) }), '');
+  assert.equal(ctx.decideDelivery_(ofd, [open], [], today).action, 'update');
+  assert.equal(ctx.decideDelivery_(ofd, [open, other], [], today).action, 'create');   // which one? neither
+  const newOrder = ctx.sanitizeDelivery_(ship({ orderNumber: '333', arrivalDate: daysFromNow(5) }), 'order 333');
+  assert.equal(ctx.decideDelivery_(newOrder, [open], [], today).action, 'create');      // its own order number
+});
+
+test('scan: shipped, out for delivery and delivered land on one event', () => {
+  const shipping = { a: shipMail('a', 3, 'Order 11-2233 shipped. UPS tracking ' + UPS) };
+  const { ctx, dcal } = load({
+    props: READY_D, shipping, quietMail: true,
+    gemini: [
+      ship({ orderNumber: '11-2233', trackingNumber: UPS, carrier: 'ups', arrivalDate: daysFromNow(2), items: 'running shoes' }),
+      ship({ merchant: 'UPS', status: 'out-for-delivery', trackingNumber: UPS, carrier: 'ups', arrivalDate: daysFromNow(2) }),
+      ship({ status: 'delivered', orderNumber: '11-2233', arrivalDate: daysFromNow(2) }),
+    ],
+  });
+  ctx.run();
+  assert.equal(dcal.events.length, 1);
+  assert.equal(dcal.events[0].title, '📦 Zappos arriving (running shoes)');
+  assert.match(dcal.events[0].description, /Tracking: https:\/\/www\.ups\.com\/track\?tracknum=1Z999AA10123456784/);
+  assert.equal(ymd(dcal.events[0].start), daysFromNow(2));
+
+  shipping.b = shipMail('b', 2, 'UPS: out for delivery today ' + UPS);
+  ctx.run();
+  shipping.c = shipMail('c', 1, 'Your order 11-2233 was delivered');
+  ctx.run();
+  assert.equal(dcal.events.length, 1);
+  assert.equal(dcal.events[0].title, '📦 Zappos delivered ✓ (running shoes)');   // the carrier's email kept the store's name
+  assert.equal((dcal.events[0].description.match(/^Source: /gm) || []).length, 3);
+});
+
+test('scan: a delivery you delete is not added back by the next email about it', () => {
+  const shipping = { a: shipMail('a', 2, 'Order 7788 shipped') };
+  const { ctx, dcal } = load({
+    props: READY_D, shipping, quietMail: true,
+    gemini: [ship({ orderNumber: '7788', arrivalDate: daysFromNow(4) }), ship({ orderNumber: '7788', status: 'delayed', arrivalDate: daysFromNow(6) })],
+  });
+  ctx.run();
+  dcal.events[0].deleteEvent();
+  shipping.b = shipMail('b', 1, 'Order 7788 is delayed');
+  ctx.run();
+  assert.equal(dcal.events.length, 0);
+});
+
+test('scan: an ad about delivery adds nothing and is not read again', () => {
+  const { ctx, dcal, store } = load({
+    quietMail: true, props: READY_D, shipping: { a: shipMail('a', 1, 'Free delivery on everything this weekend!') },
+    gemini: [{ isShipment: false }],
+  });
+  ctx.run();
+  assert.equal(dcal.events.length, 0);
+  assert.ok(JSON.parse(store.seenIds).a);
+  assert.match(store.lastResult, /delivery not one 1/);
+});
+
+test('scan: deliveries are skipped without "delivery" in ADD_KINDS, and look back 7 days even in backfill', () => {
+  const off = load({ props: { ...READY_D, ADD_KINDS: 'no-school' }, quietMail: true });
+  off.ctx.run();
+  assert.ok(!off.queries.some(q => /out for delivery/.test(q)));
+  const on = load({ props: READY_D, quietMail: true });
+  on.ctx.backfill();
+  assert.ok(on.queries.some(q => /out for delivery.*newer_than:7d$/.test(q)));
+  assert.ok(on.queries.some(q => /parentsquare.*newer_than:60d$/.test(q)));
+});
+
+test('setup(): makes the Deliveries calendar and adds "delivery" to a list saved before it existed, once', () => {
+  const { ctx, store } = load({ props: { ADD_KINDS: 'no-school, half-day' } });
+  ctx.setup();
+  assert.equal(store.DELIVERY_CALENDAR_ID, 'cal-deliveries');
+  assert.equal(store.ADD_KINDS, 'no-school, half-day, delivery');
+  store.ADD_KINDS = 'no-school';            // turned off afterwards: setup leaves it off
+  ctx.setup();
+  assert.equal(store.ADD_KINDS, 'no-school');
 });
 
 // ── The model pin ──

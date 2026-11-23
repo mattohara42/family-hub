@@ -69,10 +69,19 @@ function props_() {
 function setup() {
   const p = props_();
 
-  const cal = ensureCalendar_();
+  const cal = ensureCalendar_(CALENDAR_NAME, 'CALENDAR_ID',
+    'School dates found in email by the Family Hub email scan. Fix or delete anything wrong; deleting this calendar removes everything the scan added.');
   p.setProperty('CALENDAR_ID', cal.getId());
+  const firstDeliveries = !p.getProperty('DELIVERY_CALENDAR_ID');
+  const dcal = ensureCalendar_(DELIVERY_CALENDAR_NAME, 'DELIVERY_CALENDAR_ID',
+    'Package deliveries found in email by the Family Hub email scan, on the day each is expected.');
+  p.setProperty('DELIVERY_CALENDAR_ID', dcal.getId());
   if (!p.getProperty('SKIP_SUBJECTS')) p.setProperty('SKIP_SUBJECTS', DEFAULT_SKIP_SUBJECTS);
-  if (!p.getProperty('ADD_KINDS')) p.setProperty('ADD_KINDS', KINDS.join(', '));
+  const kinds = p.getProperty('ADD_KINDS');
+  if (!kinds) p.setProperty('ADD_KINDS', KINDS.concat(['delivery']).join(', '));
+  // A list saved before deliveries existed gets them once, the first time
+  // setup() makes the calendar. Remove "delivery" afterwards to turn them off.
+  else if (firstDeliveries && !wantsDeliveries_(kinds)) p.setProperty('ADD_KINDS', kinds + ', delivery');
 
   installTriggers_();
 
@@ -80,6 +89,7 @@ function setup() {
   const recent = (probe.messages || []).length;
 
   console.log('Calendar: "%s"', cal.getName());
+  console.log('Deliveries: "%s" (%s)', dcal.getName(), wantsDeliveries_(p.getProperty('ADD_KINDS')) ? 'on' : 'off');
   console.log('Triggers: daily at about %s', RUN_HOURS.map(h => h + ':' + RUN_MINUTE).join(' and '));
   console.log('Gmail: %s matching message(s) in the last 7 days (capped at 5)', recent);
   if (!p.getProperty('GEMINI_KEY')) {
@@ -117,6 +127,7 @@ function resetSeen() {
   props_().deleteProperty('seenIds');
   props_().deleteProperty('zeroStreak');
   props_().deleteProperty('madeEvents');
+  props_().deleteProperty('madeDeliveries');
   console.log('Seen messages and remembered events cleared.');
 }
 
@@ -144,6 +155,9 @@ function status() {
   console.log('Model:         %s', GEMINI_MODEL);
   console.log('Seen:          %s message(s)', Object.keys(loadSeen_()).length);
   console.log('Adding:        %s', wantedKinds_(p.ADD_KINDS).join(', '));
+  const dcal = p.DELIVERY_CALENDAR_ID ? CalendarApp.getCalendarById(p.DELIVERY_CALENDAR_ID) : null;
+  console.log('Deliveries:    %s', !wantsDeliveries_(p.ADD_KINDS) ? 'off (add "delivery" to ADD_KINDS)'
+    : dcal ? 'on, "' + dcal.getName() + '"' : 'calendar missing (run setup())');
   console.log('Remembered:    %s event(s) made by the scan', loadMade_().length);
   ['SKIP_SUBJECTS', 'EXTRA_QUERY', 'lastRun', 'lastNew', 'lastResult', 'lastError', 'zeroStreak'].forEach(k => {
     console.log('%s %s', (k + ':').padEnd(14), p[k] || '(none)');
@@ -175,8 +189,18 @@ function scan_(days, now) {
     .filter(ev => ev.getTag('fhKind')).map(toExisting_);
   let made = mergeMade_(loadMade_(), onCal, today);
   let zeroStreak = Number(p.getProperty('zeroStreak') || 0);
+  const dcal = deliveryCalendar_(p);
+  let dMade = loadDeliveryMade_();
 
-  const msgs = collectMessages_(days, { skipSeen: true });
+  // School mail, then shipping mail that isn't also school mail, oldest first.
+  const school = collectMessages_(days, { skipSeen: true });
+  const ids = {};
+  school.forEach(m => { ids[m.id] = true; });
+  const shipping = dcal
+    ? collectMessages_(Math.min(days, DELIVERY_WINDOW_DAYS), { skipSeen: true, query: deliveryQuery_(p) })
+      .filter(m => !ids[m.id]).map(m => ({ ...m, delivery: true }))
+    : [];
+  const msgs = school.concat(shipping).sort((a, b) => a.sentAt - b.sentAt);
   const counts = {};
   const errors = [];
   let handled = 0;
@@ -188,6 +212,18 @@ function scan_(days, now) {
     try {
       if (i > 0) Utilities.sleep(GEMINI_PAUSE_MS);
       const t0 = Date.now();
+      if (m.delivery) {
+        const d = extractDelivery_(m, key, tz);
+        const result = d ? applyDelivery_(dcal, d, m, today, dMade.map(e => e[0])) : 'not one';
+        if (['create', 'update', 'touch'].indexOf(result) >= 0) dMade = mergeDeliveryMade_(dMade, deliveryKeys_(d), today);
+        counts['delivery ' + result] = (counts['delivery ' + result] || 0) + 1;
+        seen[m.id] = Date.now();
+        saveSeen_(seen);
+        saveDeliveryMade_(dMade);
+        handled++;
+        console.log('%s: delivery %s in %ss', m.subject, result, Math.round((Date.now() - t0) / 1000));
+        continue;
+      }
       const items = extractItems_(m, key, tz);
       items.forEach(item => {
         const result = kinds.indexOf(item.kind) < 0 ? 'kind off' : applyItem_(cal, item, m, today, madeEntries_(made));
@@ -249,16 +285,21 @@ function heartbeatAlarms_(r) {
 
 function extractItems_(m, key, tz) {
   const sentLocal = Utilities.formatDate(m.sentAt, tz, 'EEEE, yyyy-MM-dd');
+  return parseGeminiItems_(geminiCall_(key, geminiRequest_(buildPrompt_(m.subject, sentLocal, tz, m.body))));
+}
+
+/** One generateContent call; returns the response body, or throws with the status. */
+function geminiCall_(key, request) {
   const res = UrlFetchApp.fetch(GEMINI_URL + GEMINI_MODEL + ':generateContent', {
     method:             'post',
     contentType:        'application/json',
     headers:            { 'x-goog-api-key': key },   // a header, so the key never appears in a URL or log
-    payload:            JSON.stringify(geminiRequest_(buildPrompt_(m.subject, sentLocal, tz, m.body))),
+    payload:            JSON.stringify(request),
     muteHttpExceptions: true,
   });
   const code = res.getResponseCode();
   if (code !== 200) throw new Error('Gemini HTTP ' + code + quotaNote_(res.getContentText()) + ': ' + res.getContentText().slice(0, 200));
-  return parseGeminiItems_(res.getContentText());
+  return res.getContentText();
 }
 
 // ── Calendar writes ──
@@ -372,7 +413,7 @@ function quotaNote_(text) {
  */
 function collectMessages_(days, opts) {
   const p = props_();
-  const q = buildQuery_(days, p.getProperty('EXTRA_QUERY'));
+  const q = opts.query ? opts.query + ' newer_than:' + days + 'd' : buildQuery_(days, p.getProperty('EXTRA_QUERY'));
   const skip = skipPattern_(p.getProperty('SKIP_SUBJECTS'));
   const seen = opts.skipSeen ? loadSeen_() : {};
 
@@ -516,19 +557,16 @@ function saveMade_(made) {
 
 // ── Helpers ──
 
-/** Finds the scan's calendar by stored ID, then by name, else creates it. */
-function ensureCalendar_() {
-  const id = props_().getProperty('CALENDAR_ID');
+/** Finds one of the scan's calendars by stored ID, then by name, else creates it. */
+function ensureCalendar_(name, idProp, summary) {
+  const id = props_().getProperty(idProp);
   const byId = id && CalendarApp.getCalendarById(id);
   if (byId) return byId;
 
-  const byName = CalendarApp.getOwnedCalendarsByName(CALENDAR_NAME)[0];
+  const byName = CalendarApp.getOwnedCalendarsByName(name)[0];
   if (byName) return byName;
 
-  return CalendarApp.createCalendar(CALENDAR_NAME, {
-    summary:  'School dates found in email by the Family Hub email scan. Fix or delete anything wrong; deleting this calendar removes everything the scan added.',
-    timeZone: Session.getScriptTimeZone(),
-  });
+  return CalendarApp.createCalendar(name, { summary, timeZone: Session.getScriptTimeZone() });
 }
 
 /** Replaces the daily triggers, so rerunning setup() never doubles them. */

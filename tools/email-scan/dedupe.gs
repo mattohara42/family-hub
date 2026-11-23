@@ -101,22 +101,26 @@ function buildPrompt_(subject, sentLocal, tz, body) {
   ].join('\n');
 }
 
-function geminiRequest_(prompt) {
+function geminiRequest_(prompt, schema) {
   return {
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    generationConfig: { responseMimeType: 'application/json', responseSchema: ITEM_SCHEMA, temperature: 0 },
+    generationConfig: { responseMimeType: 'application/json', responseSchema: schema || ITEM_SCHEMA, temperature: 0 },
   };
 }
 
-/** Items from a generateContent response body. Throws if Gemini returned no answer at all. */
-function parseGeminiItems_(responseText) {
+/** The JSON answer in a generateContent response body. Throws if Gemini returned no answer at all. */
+function geminiJson_(responseText) {
   const res = JSON.parse(responseText);
   const cand = res.candidates && res.candidates[0];
   const parts = cand && cand.content && cand.content.parts;
   if (!parts || !parts.length) {
     throw new Error('Gemini returned no answer (' + ((cand && cand.finishReason) || 'no candidates') + ')');
   }
-  return sanitizeItems_(JSON.parse(parts.map(p => p.text || '').join('')));
+  return JSON.parse(parts.map(p => p.text || '').join(''));
+}
+
+function parseGeminiItems_(responseText) {
+  return sanitizeItems_(geminiJson_(responseText));
 }
 
 /** Keeps only well-formed items, with every field in the shape the rest of the script expects. */
