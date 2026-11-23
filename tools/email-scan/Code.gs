@@ -46,7 +46,7 @@ const MAX_MESSAGES         = 200;  // per pass; far above real volume
 const MAX_BODY_CHARS       = 8000;
 
 const GEMINI_URL      = 'https://generativelanguage.googleapis.com/v1beta/models/';
-const GEMINI_PAUSE_MS = 6500;            // between calls: the free tier allows about 10 a minute
+const GEMINI_PAUSE_MS = 12000;           // between calls: 6.5s drew 429s on gemini-3.6-flash's free tier (about 5 a minute)
 // Apps Script kills a run at 6 minutes. A message can take 30s+ on a thinking
 // model, so stop starting new ones early enough to leave room for a slow one.
 const TIME_BUDGET_MS  = 3.5 * 60 * 1000;
