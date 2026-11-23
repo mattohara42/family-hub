@@ -212,6 +212,7 @@ function scan_(days, now) {
     try {
       if (i > 0) Utilities.sleep(GEMINI_PAUSE_MS);
       const t0 = Date.now();
+      console.log('Reading: %s', m.subject); // so a run killed mid-call names the message
       if (m.delivery) {
         const d = extractDelivery_(m, key, tz);
         const result = d ? applyDelivery_(dcal, d, m, today, dMade.map(e => e[0])) : 'not one';
