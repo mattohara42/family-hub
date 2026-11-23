@@ -257,7 +257,7 @@ function extractItems_(m, key, tz) {
     muteHttpExceptions: true,
   });
   const code = res.getResponseCode();
-  if (code !== 200) throw new Error('Gemini HTTP ' + code + ': ' + res.getContentText().slice(0, 200));
+  if (code !== 200) throw new Error('Gemini HTTP ' + code + quotaNote_(res.getContentText()) + ': ' + res.getContentText().slice(0, 200));
   return parseGeminiItems_(res.getContentText());
 }
 
@@ -347,6 +347,21 @@ function eventSig_(ev) {
   const start = allDay ? ev.getAllDayStartDate() : ev.getStartTime();
   const end = allDay ? ev.getAllDayEndDate() : ev.getEndTime();
   return signature_(ev.getTitle(), start.getTime(), end.getTime(), allDay);
+}
+
+/**
+ * " (GenerateRequestsPerDayPerProjectPerModel-FreeTier)" for a quota 429, so
+ * a daily cap reads differently from a per-minute one. The id sits past the
+ * 200 characters of body the error keeps.
+ */
+function quotaNote_(text) {
+  try {
+    const ids = (JSON.parse(text).error.details || [])
+      .flatMap(d => d.violations || []).map(v => v.quotaId).filter(Boolean);
+    return ids.length ? ' (' + ids.join(', ') + ')' : '';
+  } catch (e) {
+    return '';
+  }
 }
 
 // ── Intake ──

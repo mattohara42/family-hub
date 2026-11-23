@@ -550,6 +550,15 @@ test('heartbeat: a week with no ParentSquare mail alarms, except in July and Aug
   assert.equal(ok.ctx.heartbeatAlarms_({ ...r, now: new Date(2026, 10, 21) }).length, 0);
 });
 
+test('scan: a quota 429 names the quota that ran out', () => {
+  const body = JSON.stringify({ error: { code: 429, message: 'You exceeded your current quota, ' + 'x'.repeat(300),
+    details: [{ '@type': 'type.googleapis.com/google.rpc.QuotaFailure',
+      violations: [{ quotaId: 'GenerateRequestsPerDayPerProjectPerModel-FreeTier' }] }] } });
+  const { ctx, store } = load({ props: READY, messages: { a: digest('a', 1, 'x') }, gemini: () => ({ code: 429, body }) });
+  assert.throws(() => ctx.run(), /Every message failed/);
+  assert.match(store.lastError, /HTTP 429 \(GenerateRequestsPerDayPerProjectPerModel-FreeTier\)/);
+});
+
 test('scan: an event you delete is not added back by a later email', () => {
   const d = daysFromNow(9);
   const conf = { date: d, kind: 'conference', title: '', confidence: 0.9 };
