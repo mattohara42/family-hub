@@ -26,7 +26,9 @@ const CALENDAR_NAME = 'From Email';
 
 // Third place the model is pinned. Keep in step with GEMINI_MODEL in
 // family-hub.js and DEFAULT_MODEL in netlify/functions/ai.js.
-const GEMINI_MODEL = 'gemini-2.5-flash';
+// On its own pin, not the Hub's (FEATURES.md §23). 3.6 because 3.7/3.8 were
+// overloaded on 2026-11-22 (503s, calls queued past the 6-minute limit).
+const GEMINI_MODEL = 'gemini-3.6-flash';
 
 // Daily run times in the script's time zone (appsscript.json). Apps Script
 // fires within about 15 minutes of nearMinute.
@@ -44,8 +46,10 @@ const MAX_MESSAGES         = 200;  // per pass; far above real volume
 const MAX_BODY_CHARS       = 8000;
 
 const GEMINI_URL      = 'https://generativelanguage.googleapis.com/v1beta/models/';
-const GEMINI_PAUSE_MS = 6500;            // between calls: the free tier allows about 10 a minute
-const TIME_BUDGET_MS  = 4.5 * 60 * 1000; // Apps Script stops a run at 6 minutes
+const GEMINI_PAUSE_MS = 12000;           // between calls: 6.5s drew 429s on gemini-3.6-flash's free tier (about 5 a minute)
+// Apps Script kills a run at 6 minutes. A message can take 30s+ on a thinking
+// model, so stop starting new ones early enough to leave room for a slow one.
+const TIME_BUDGET_MS  = 3.5 * 60 * 1000;
 
 // Heartbeat alarms (accepted 2026-11-21). A run that trips one throws, and
 // Google emails the owner about a failed trigger run.
@@ -68,6 +72,7 @@ function setup() {
   const cal = ensureCalendar_();
   p.setProperty('CALENDAR_ID', cal.getId());
   if (!p.getProperty('SKIP_SUBJECTS')) p.setProperty('SKIP_SUBJECTS', DEFAULT_SKIP_SUBJECTS);
+  if (!p.getProperty('ADD_KINDS')) p.setProperty('ADD_KINDS', KINDS.join(', '));
 
   installTriggers_();
 
@@ -95,7 +100,7 @@ function run() {
 
 /**
  * One-time pass over the last 60 days, used during rollout. A run stops
- * after about 4.5 minutes; run it again until it reports nothing left.
+ * after about 4 minutes; run it again until it reports nothing left.
  * To redo a backfill from scratch, delete the calendar's events and run
  * resetSeen() first.
  */
@@ -103,11 +108,16 @@ function backfill() {
   scan_(BACKFILL_WINDOW_DAYS, new Date());
 }
 
-/** Forgets which messages were handled, so the next backfill() rereads everything. */
+/**
+ * Forgets which messages were handled and which events the scan made, so the
+ * next backfill() rereads everything and re-adds what's missing, including
+ * events you deleted.
+ */
 function resetSeen() {
   props_().deleteProperty('seenIds');
   props_().deleteProperty('zeroStreak');
-  console.log('Seen messages cleared.');
+  props_().deleteProperty('madeEvents');
+  console.log('Seen messages and remembered events cleared.');
 }
 
 /**
@@ -133,6 +143,8 @@ function status() {
   console.log('GEMINI_KEY:    %s', p.GEMINI_KEY ? 'set' : 'NOT SET');
   console.log('Model:         %s', GEMINI_MODEL);
   console.log('Seen:          %s message(s)', Object.keys(loadSeen_()).length);
+  console.log('Adding:        %s', wantedKinds_(p.ADD_KINDS).join(', '));
+  console.log('Remembered:    %s event(s) made by the scan', loadMade_().length);
   ['SKIP_SUBJECTS', 'EXTRA_QUERY', 'lastRun', 'lastNew', 'lastResult', 'lastError', 'zeroStreak'].forEach(k => {
     console.log('%s %s', (k + ':').padEnd(14), p[k] || '(none)');
   });
@@ -155,6 +167,13 @@ function scan_(days, now) {
   const tz = Session.getScriptTimeZone();
   const today = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
   const seen = loadSeen_();
+  const kinds = wantedKinds_(p.getProperty('ADD_KINDS'));
+  // Anything on the calendar now was made by the scan, so remember it too:
+  // that covers events from before this list existed.
+  const horizon = new Date(now.getFullYear(), now.getMonth(), now.getDate() + MAX_DAYS_AHEAD);
+  const onCal = cal.getEvents(new Date(now.getFullYear(), now.getMonth(), now.getDate()), horizon)
+    .filter(ev => ev.getTag('fhKind')).map(toExisting_);
+  let made = mergeMade_(loadMade_(), onCal, today);
   let zeroStreak = Number(p.getProperty('zeroStreak') || 0);
 
   const msgs = collectMessages_(days, { skipSeen: true });
@@ -168,14 +187,19 @@ function scan_(days, now) {
     const m = msgs[i];
     try {
       if (i > 0) Utilities.sleep(GEMINI_PAUSE_MS);
+      const t0 = Date.now();
       const items = extractItems_(m, key, tz);
       items.forEach(item => {
-        const result = applyItem_(cal, item, m, today);
+        const result = kinds.indexOf(item.kind) < 0 ? 'kind off' : applyItem_(cal, item, m, today, madeEntries_(made));
+        if (result === 'create') made = mergeMade_(made, [{ ...item, baseTitle: item.title }], today);
         counts[result] = (counts[result] || 0) + 1;
       });
       if (/digest/i.test(m.subject)) zeroStreak = items.length ? 0 : zeroStreak + 1;
       seen[m.id] = Date.now();
+      saveSeen_(seen); // now, not after the loop: a run killed at 6 minutes keeps what it finished
+      saveMade_(made);
       handled++;
+      console.log('%s: %s item(s) in %ss', m.subject, items.length, Math.round((Date.now() - t0) / 1000));
     } catch (e) {
       errors.push(m.subject + ': ' + e.message);
     }
@@ -233,7 +257,7 @@ function extractItems_(m, key, tz) {
     muteHttpExceptions: true,
   });
   const code = res.getResponseCode();
-  if (code !== 200) throw new Error('Gemini HTTP ' + code + ': ' + res.getContentText().slice(0, 200));
+  if (code !== 200) throw new Error('Gemini HTTP ' + code + quotaNote_(res.getContentText()) + ': ' + res.getContentText().slice(0, 200));
   return parseGeminiItems_(res.getContentText());
 }
 
@@ -243,11 +267,11 @@ function extractItems_(m, key, tz) {
 // fhSig (a fingerprint of title and times; see signature_ in dedupe.gs).
 
 /** Applies one item and returns what happened: create | touch | update | locked | past | far. */
-function applyItem_(cal, item, m, today) {
+function applyItem_(cal, item, m, today, made) {
   const existing = cal.getEventsForDay(eventTimes_(item).start)
     .filter(ev => ev.getTag('fhKind'))
     .map(toExisting_);
-  const decision = decideItem_(item, existing, today);
+  const decision = decideItem_(item, existing, today, made);
 
   if (decision.action === 'create') {
     createEvent_(cal, item, newDescription_(item, m.link));
@@ -325,6 +349,21 @@ function eventSig_(ev) {
   return signature_(ev.getTitle(), start.getTime(), end.getTime(), allDay);
 }
 
+/**
+ * " (GenerateRequestsPerDayPerProjectPerModel-FreeTier)" for a quota 429, so
+ * a daily cap reads differently from a per-minute one. The id sits past the
+ * 200 characters of body the error keeps.
+ */
+function quotaNote_(text) {
+  try {
+    const ids = (JSON.parse(text).error.details || [])
+      .flatMap(d => d.violations || []).map(v => v.quotaId).filter(Boolean);
+    return ids.length ? ' (' + ids.join(', ') + ')' : '';
+  } catch (e) {
+    return '';
+  }
+}
+
 // ── Intake ──
 
 /**
@@ -400,8 +439,11 @@ function findPart_(part, mimeType) {
   return null;
 }
 
+// The advanced Gmail service returns body.data already decoded, as a byte
+// array; only the raw REST API hands back a base64url string. Accept both.
 function decodePart_(data) {
-  return Utilities.newBlob(Utilities.base64DecodeWebSafe(data)).getDataAsString('UTF-8');
+  const bytes = typeof data === 'string' ? Utilities.base64DecodeWebSafe(data) : data;
+  return Utilities.newBlob(bytes).getDataAsString('UTF-8');
 }
 
 function htmlToText_(html) {
@@ -457,6 +499,19 @@ function pruneSeen_(seen, nowMs) {
 
 function saveSeen_(seen) {
   props_().setProperty('seenIds', JSON.stringify(pruneSeen_(seen, Date.now())));
+}
+
+/** Events the scan has created, as [date, endDate, kind, title] (see mergeMade_). */
+function loadMade_() {
+  try {
+    return JSON.parse(props_().getProperty('madeEvents') || '[]');
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveMade_(made) {
+  props_().setProperty('madeEvents', JSON.stringify(made));
 }
 
 // ── Helpers ──

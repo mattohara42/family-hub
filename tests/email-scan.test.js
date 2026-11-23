@@ -24,6 +24,8 @@ const DIR = path.join(__dirname, '../tools/email-scan');
 const SRC = ['dedupe.gs', 'Code.gs'].map(f => fs.readFileSync(path.join(DIR, f), 'utf8')).join('\n');
 
 const b64url = s => Buffer.from(s, 'utf8').toString('base64url');
+// What the advanced Gmail service really returns for body.data: Java's signed bytes.
+const gmailBytes = s => Array.from(Buffer.from(s, 'utf8'), b => (b > 127 ? b - 256 : b));
 
 const pad = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
@@ -64,6 +66,7 @@ function fakeCalendar() {
     getName: () => 'From Email',
     createAllDayEvent: (t, s, e, o) => make(t, s, e, true, o),
     createEvent: (t, s, e, o) => make(t, s, e, false, o),
+    getEvents: (start, end) => events.filter(ev => ev.start < end && ev.end > start),
     getEventsForDay: d => {
       const start = new Date(d.getFullYear(), d.getMonth(), d.getDate());
       const end = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
@@ -96,7 +99,10 @@ function load({ props = {}, messages = {}, listPages, gemini = [], quietMail } =
       getProperties: () => ({ ...store }),
     }) },
     Utilities: {
-      base64DecodeWebSafe: s => Buffer.from(s, 'base64url'),
+      base64DecodeWebSafe: s => {
+        if (typeof s !== 'string') throw new Error('Could not decode string.'); // as Apps Script does
+        return Buffer.from(s, 'base64url');
+      },
       newBlob: bytes => ({ getDataAsString: () => Buffer.from(bytes).toString('utf8') }),
       sleep() {},
       formatDate: (d, _tz, fmt) => fmt === 'yyyy-MM-dd' ? ymd(d)
@@ -131,8 +137,8 @@ const READY = { GEMINI_KEY: 'test-key', CALENDAR_ID: 'cal-from-email' };
 
 function gmailMessage({ id, subject, sentMs, text, html }) {
   const parts = [];
-  if (text) parts.push({ mimeType: 'text/plain', body: { data: b64url(text) } });
-  if (html) parts.push({ mimeType: 'text/html', body: { data: b64url(html) } });
+  if (text) parts.push({ mimeType: 'text/plain', body: { data: gmailBytes(text) } });
+  if (html) parts.push({ mimeType: 'text/html', body: { data: gmailBytes(html) } });
   return {
     id,
     threadId: 't' + id,
@@ -186,6 +192,14 @@ test('messageText_ prefers text/plain inside nested parts', () => {
   const { ctx } = load();
   const msg = gmailMessage({ id: 'a', subject: 's', sentMs: 0, text: 'plain wins', html: '<p>html loses</p>' });
   assert.equal(ctx.messageText_(msg.payload), 'plain wins');
+});
+
+test('messageText_ reads Gmail byte arrays (with non-ASCII) and base64url strings', () => {
+  const { ctx } = load();
+  const bytes = { mimeType: 'text/plain', body: { data: gmailBytes('No school – Dec 4 ✓') } };
+  assert.equal(ctx.messageText_(bytes), 'No school – Dec 4 ✓');
+  const str = { mimeType: 'text/plain', body: { data: b64url('plain string') } };
+  assert.equal(ctx.messageText_(str), 'plain string');
 });
 
 test('messageText_ falls back to HTML with tags and styles stripped', () => {
@@ -302,6 +316,24 @@ test('decideItem_: one day inside a break already on the calendar does not shrin
   assert.equal(ctx.decideItem_(oneDay, [existing], daysFromNow(0)).action, 'touch');
 });
 
+test('decideItem_: something the scan made before but is no longer on the calendar was removed', () => {
+  const { ctx } = load();
+  const today = daysFromNow(0);
+  const brk = item({ date: daysFromNow(10), endDate: daysFromNow(14), kind: 'no-school', title: 'Winter break' });
+  const made = [{ date: brk.date, endDate: brk.endDate, kind: 'no-school', baseTitle: 'Winter break' }];
+  assert.equal(ctx.decideItem_(brk, [], today, made).action, 'removed');
+  // One day inside the removed break counts too; a different kind that day does not.
+  assert.equal(ctx.decideItem_(item({ date: daysFromNow(12), kind: 'no-school' }), [], today, made).action, 'removed');
+  assert.equal(ctx.decideItem_(item({ date: daysFromNow(12), kind: 'conference' }), [], today, made).action, 'create');
+  assert.equal(ctx.decideItem_(item({ date: daysFromNow(15), kind: 'no-school' }), [], today, made).action, 'create');
+});
+
+test('wantedKinds_: blank means every kind; unknown names are ignored', () => {
+  const { ctx } = load();
+  assert.deepEqual(Array.from(ctx.wantedKinds_('')), ['no-school', 'half-day', 'early-dismissal', 'conference', 'event']);
+  assert.deepEqual(Array.from(ctx.wantedKinds_(' no-school ,half-day, nope')), ['no-school', 'half-day']);
+});
+
 test('decideItem_: past dates and misread years are dropped', () => {
   const { ctx } = load();
   const today = daysFromNow(0);
@@ -373,6 +405,24 @@ test('scan: a date repeated in two digests lands once, with both sources', () =>
   assert.equal((cal.events[0].description.match(/^Source: /gm) || []).length, 2);
   assert.deepEqual(Object.keys(JSON.parse(store.seenIds)).sort(), ['a', 'b']);
   assert.equal(store.lastNew, '1');
+});
+
+test('scan: each message is marked seen as soon as it is handled', () => {
+  // Apps Script kills a run at 6 minutes without running anything after the
+  // loop, so progress must already be saved when the next message starts.
+  const seenAtCall = [];
+  let st;
+  const { ctx, store } = load({
+    props: READY,
+    messages: { a: digest('a', 2, 'one'), b: digest('b', 1, 'two') },
+    gemini: () => {
+      seenAtCall.push(Object.keys(JSON.parse((st && st.seenIds) || '{}')));
+      return { code: 200, body: geminiReply([]) };
+    },
+  });
+  st = store;
+  ctx.run();
+  assert.deepEqual(seenAtCall, [[], ['a']]); // 'a' is older, so it goes first
 });
 
 test('scan: the prompt carries the sent date and no links', () => {
@@ -500,20 +550,78 @@ test('heartbeat: a week with no ParentSquare mail alarms, except in July and Aug
   assert.equal(ok.ctx.heartbeatAlarms_({ ...r, now: new Date(2026, 10, 21) }).length, 0);
 });
 
-test('resetSeen() clears seen messages and the empty-digest streak', () => {
-  const { ctx, store } = load({ props: { seenIds: '{"a":1}', zeroStreak: '4' } });
+test('scan: a quota 429 names the quota that ran out', () => {
+  const body = JSON.stringify({ error: { code: 429, message: 'You exceeded your current quota, ' + 'x'.repeat(300),
+    details: [{ '@type': 'type.googleapis.com/google.rpc.QuotaFailure',
+      violations: [{ quotaId: 'GenerateRequestsPerDayPerProjectPerModel-FreeTier' }] }] } });
+  const { ctx, store } = load({ props: READY, messages: { a: digest('a', 1, 'x') }, gemini: () => ({ code: 429, body }) });
+  assert.throws(() => ctx.run(), /Every message failed/);
+  assert.match(store.lastError, /HTTP 429 \(GenerateRequestsPerDayPerProjectPerModel-FreeTier\)/);
+});
+
+test('scan: an event you delete is not added back by a later email', () => {
+  const d = daysFromNow(9);
+  const conf = { date: d, kind: 'conference', title: '', confidence: 0.9 };
+  const messages = { a: digest('a', 3, 'first') };
+  const { ctx, cal } = load({ props: READY, messages, gemini: [[conf], [conf]] });
+  ctx.run();
+  assert.equal(cal.events.length, 1);
+  cal.events[0].deleteEvent();            // the owner deletes it in the Hub
+  messages.b = digest('b', 1, 'reminder');
+  ctx.run();
+  assert.equal(cal.events.length, 0);
+});
+
+test('scan: events already on the calendar before the list existed are remembered', () => {
+  const d = daysFromNow(9);
+  const half = { date: d, kind: 'half-day', title: '', confidence: 0.9 };
+  const messages = { a: digest('a', 3, 'first') };
+  const { ctx, cal, store } = load({ props: READY, messages, gemini: [[half], [], [half]] });
+  ctx.run();
+  delete store.madeEvents;                // as if made by the version before this list
+  messages.b = digest('b', 2, 'nothing new');
+  ctx.run();
+  cal.events[0].deleteEvent();
+  messages.c = digest('c', 1, 'reminder');
+  ctx.run();
+  assert.equal(cal.events.length, 0);
+});
+
+test('scan: ADD_KINDS leaves out the kinds you turned off', () => {
+  const d = daysFromNow(9);
+  const { ctx, cal, store } = load({
+    props: { ...READY, ADD_KINDS: 'no-school, early-dismissal' },
+    messages: { a: digest('a', 1, 'x') },
+    gemini: [[
+      { date: d, kind: 'no-school', title: '', confidence: 0.9 },
+      { date: d, kind: 'event', title: 'Book fair', confidence: 0.9 },
+    ]],
+  });
+  ctx.run();
+  assert.deepEqual(cal.events.map(e => e.tags.fhKind), ['no-school']);
+  assert.match(store.lastResult, /kind off 1/);
+});
+
+test('resetSeen() clears seen messages, the empty-digest streak and remembered events', () => {
+  const { ctx, store } = load({ props: { seenIds: '{"a":1}', zeroStreak: '4', madeEvents: '[]' } });
   ctx.resetSeen();
   assert.equal(store.seenIds, undefined);
   assert.equal(store.zeroStreak, undefined);
+  assert.equal(store.madeEvents, undefined);
 });
 
 // ── The model pin ──
 
-test('the Gemini model is the same in the Hub, the proxy and the email scan', () => {
+// The Hub and its proxy must agree (the proxy rejects any other model). The
+// email scan may differ: it runs on its own key, and in 2026-11 its new key
+// could no longer use gemini-2.5-flash while the Hub's older key still could,
+// and the Hub can't move to a 3.x model until its reply caps allow for thinking
+// (FEATURES.md §23, Model pin).
+test('the Hub and the proxy pin the same Gemini model; the email scan pins one too', () => {
   const read = f => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
   const pin = (src, name) => (src.match(new RegExp('const ' + name + "\\s*=\\s*'([^']+)'")) || [])[1];
   const hub = pin(read('family-hub.js'), 'GEMINI_MODEL');
   assert.ok(hub, 'GEMINI_MODEL not found in family-hub.js');
   assert.equal(pin(read('netlify/functions/ai.js'), 'DEFAULT_MODEL'), hub);
-  assert.equal(pin(read('tools/email-scan/Code.gs'), 'GEMINI_MODEL'), hub);
+  assert.match(pin(read('tools/email-scan/Code.gs'), 'GEMINI_MODEL') || '', /^gemini-/);
 });
