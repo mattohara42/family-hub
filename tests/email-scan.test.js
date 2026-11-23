@@ -606,7 +606,7 @@ test('resetSeen() clears seen messages, the empty-digest streak and remembered e
 // The Hub and its proxy must agree (the proxy rejects any other model). The
 // email scan may differ: it runs on its own key, and in 2026-11 its new key
 // could no longer use gemini-2.5-flash while the Hub's older key still could,
-// and the Hub can't move to 3.8-flash until its reply caps allow for thinking
+// and the Hub can't move to a 3.x model until its reply caps allow for thinking
 // (FEATURES.md §23, Model pin).
 test('the Hub and the proxy pin the same Gemini model; the email scan pins one too', () => {
   const read = f => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');

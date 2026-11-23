@@ -26,7 +26,9 @@ const CALENDAR_NAME = 'From Email';
 
 // Third place the model is pinned. Keep in step with GEMINI_MODEL in
 // family-hub.js and DEFAULT_MODEL in netlify/functions/ai.js.
-const GEMINI_MODEL = 'gemini-3.8-flash';
+// On its own pin, not the Hub's (FEATURES.md §23). 3.6 because 3.7/3.8 were
+// overloaded on 2026-11-22 (503s, calls queued past the 6-minute limit).
+const GEMINI_MODEL = 'gemini-3.6-flash';
 
 // Daily run times in the script's time zone (appsscript.json). Apps Script
 // fires within about 15 minutes of nearMinute.
