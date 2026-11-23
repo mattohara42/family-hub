@@ -50,6 +50,9 @@ const GEMINI_PAUSE_MS = 12000;           // between calls: 6.5s drew 429s on gem
 // Apps Script kills a run at 6 minutes. A message can take 30s+ on a thinking
 // model, so stop starting new ones early enough to leave room for a slow one.
 const TIME_BUDGET_MS  = 3.5 * 60 * 1000;
+// A Gemini call can't be timed out in Apps Script, and one that never answers
+// kills the run mid-call. A message gets this many killed runs, then it's skipped.
+const KILL_LIMIT      = 2;
 
 // Heartbeat alarms (accepted 2026-11-21). A run that trips one throws, and
 // Google emails the owner about a failed trigger run.
@@ -128,6 +131,8 @@ function resetSeen() {
   props_().deleteProperty('zeroStreak');
   props_().deleteProperty('madeEvents');
   props_().deleteProperty('madeDeliveries');
+  props_().deleteProperty('killedOn');
+  props_().deleteProperty('inFlight');
   console.log('Seen messages and remembered events cleared.');
 }
 
@@ -181,6 +186,14 @@ function scan_(days, now) {
   const tz = Session.getScriptTimeZone();
   const today = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
   const seen = loadSeen_();
+  // inFlight is still set only if the last run was killed during that message's call.
+  const killed = JSON.parse(p.getProperty('killedOn') || '{}');
+  const stuck = p.getProperty('inFlight');
+  if (stuck) {
+    killed[stuck] = (killed[stuck] || 0) + 1;
+    p.setProperty('killedOn', JSON.stringify(killed));
+    p.deleteProperty('inFlight');
+  }
   const kinds = wantedKinds_(p.getProperty('ADD_KINDS'));
   // Anything on the calendar now was made by the scan, so remember it too:
   // that covers events from before this list existed.
@@ -200,9 +213,18 @@ function scan_(days, now) {
     ? collectMessages_(Math.min(days, DELIVERY_WINDOW_DAYS), { skipSeen: true, query: deliveryQuery_(p) })
       .filter(m => !ids[m.id]).map(m => ({ ...m, delivery: true }))
     : [];
-  const msgs = school.concat(shipping).sort((a, b) => a.sentAt - b.sentAt);
+  const kills = m => killed[m.id] || 0;
+  const all = school.concat(shipping).sort((a, b) => a.sentAt - b.sentAt);
+  const skipped = all.filter(m => kills(m) >= KILL_LIMIT);
+  // A message that killed a run goes last, so everything else is done first.
+  const msgs = all.filter(m => kills(m) < KILL_LIMIT).sort((a, b) => kills(a) - kills(b));
   const counts = {};
   const errors = [];
+  skipped.forEach(m => {
+    seen[m.id] = Date.now();
+    delete killed[m.id];
+    errors.push(m.subject + ': skipped, ' + KILL_LIMIT + ' runs ran out of time waiting for Gemini on it');
+  });
   let handled = 0;
   let left = 0;
 
@@ -213,6 +235,7 @@ function scan_(days, now) {
       if (i > 0) Utilities.sleep(GEMINI_PAUSE_MS);
       const t0 = Date.now();
       console.log('Reading: %s', m.subject); // so a run killed mid-call names the message
+      p.setProperty('inFlight', m.id);
       if (m.delivery) {
         const d = extractDelivery_(m, key, tz);
         const result = d ? applyDelivery_(dcal, d, m, today, dMade.map(e => e[0])) : 'not one';
@@ -240,9 +263,11 @@ function scan_(days, now) {
     } catch (e) {
       errors.push(m.subject + ': ' + e.message);
     }
+    p.deleteProperty('inFlight');
   }
 
   saveSeen_(seen);
+  p.setProperty('killedOn', JSON.stringify(killed));
   const summary = msgs.length + ' message(s), ' + handled + ' handled, ' + errors.length + ' failed'
     + (left ? ', ' + left + ' left for the next run' : '')
     + '. Items: ' + (Object.keys(counts).map(k => k + ' ' + counts[k]).join(', ') || 'none');
