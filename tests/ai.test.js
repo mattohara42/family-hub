@@ -27,11 +27,11 @@ test.beforeEach(() => {
 });
 
 test('same-origin request is proxied to Gemini without the model field', async () => {
-  const res = await post({ origin: `https://${SITE}`, host: SITE }, { model: 'gemini-3.8-flash', contents: [1] });
+  const res = await post({ origin: `https://${SITE}`, host: SITE }, { model: 'gemini-2.5-flash', contents: [1] });
   assert.equal(res.statusCode, 200);
   assert.equal(res.body, '{"candidates":[]}');
   assert.equal(fetched.length, 1);
-  assert.match(fetched[0].url, /gemini-3\.8-flash:generateContent$/);
+  assert.match(fetched[0].url, /gemini-2\.5-flash:generateContent$/);
   assert.equal(fetched[0].headers['x-goog-api-key'], 'k');   // the key rides in a header, never the URL
   assert.deepEqual(fetched[0].body, { contents: [1] });
 });

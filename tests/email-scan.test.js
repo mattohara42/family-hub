@@ -603,11 +603,16 @@ test('resetSeen() clears seen messages, the empty-digest streak and remembered e
 
 // ── The model pin ──
 
-test('the Gemini model is the same in the Hub, the proxy and the email scan', () => {
+// The Hub and its proxy must agree (the proxy rejects any other model). The
+// email scan may differ: it runs on its own key, and in 2026-11 its new key
+// could no longer use gemini-2.5-flash while the Hub's older key still could,
+// and the Hub can't move to 3.8-flash until its reply caps allow for thinking
+// (FEATURES.md §23, Model pin).
+test('the Hub and the proxy pin the same Gemini model; the email scan pins one too', () => {
   const read = f => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
   const pin = (src, name) => (src.match(new RegExp('const ' + name + "\\s*=\\s*'([^']+)'")) || [])[1];
   const hub = pin(read('family-hub.js'), 'GEMINI_MODEL');
   assert.ok(hub, 'GEMINI_MODEL not found in family-hub.js');
   assert.equal(pin(read('netlify/functions/ai.js'), 'DEFAULT_MODEL'), hub);
-  assert.equal(pin(read('tools/email-scan/Code.gs'), 'GEMINI_MODEL'), hub);
+  assert.match(pin(read('tools/email-scan/Code.gs'), 'GEMINI_MODEL') || '', /^gemini-/);
 });

@@ -121,7 +121,7 @@ mealPlan['YYYY-MM-DD'] = { breakfast: { name, description, cuisine, prepTime,
 ## Pinned API Constants (top of `family-hub.js`)
 
 ```js
-const GEMINI_MODEL     = 'gemini-3.8-flash';      // pinned 2026-11-22
+const GEMINI_MODEL     = 'gemini-2.5-flash';      // pinned 2026-05-31
 const GEMINI_API_BASE  = 'https://generativelanguage.googleapis.com/v1beta/models';
 const OPENAI_MODEL     = 'gpt-4o-mini';            // pinned 2026-05-31
 const OPENAI_API_BASE  = 'https://api.openai.com/v1';
@@ -1064,7 +1064,7 @@ const HA_TOGGLE_DOMAINS = ['light', 'switch', 'fan', 'input_boolean'];
 
 **Editor functions:** `setup()` (idempotent), `teardown()` (removes the triggers), `run()`, `backfill()` (60 days, resumable: rerun until nothing is left), `resetSeen()` (also clears `madeEvents`, so deleted events can come back), `previewIntake()` (prints what Gemini would receive), `status()`.
 
-**Model pin:** `GEMINI_MODEL` in `Code.gs` must match `GEMINI_MODEL` in `family-hub.js` and `DEFAULT_MODEL` in `netlify/functions/ai.js`; `tests/email-scan.test.js` fails if they drift.
+**Model pin:** `GEMINI_MODEL` in `Code.gs` is pinned on its own, at `gemini-3.8-flash`, while the Hub stays on `gemini-2.5-flash` (2026-11-22). The scan's newer AI Studio key got a 404 for 2.5-flash ("no longer available to new users"); the Hub's older Netlify key still has it. The Hub can't simply follow: 3.8-flash ignores `thinkingBudget: 0` (and rejects `thinkingLevel: 'minimal'`), and its thinking counts against `maxOutputTokens`, so the Hub's 512–1024 caps cut a ~100-word briefing to 15–27 words, at 7–9 s instead of 1–2 s. Moving the Hub means raising every cap to allow for ~1–2k thinking tokens first. `tests/email-scan.test.js` still requires the Hub and proxy to match each other.
 
 ---
 
