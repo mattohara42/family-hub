@@ -104,7 +104,9 @@ function buildPrompt_(subject, sentLocal, tz, body) {
 function geminiRequest_(prompt, schema) {
   return {
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    generationConfig: { responseMimeType: 'application/json', responseSchema: schema || ITEM_SCHEMA, temperature: 0 },
+    generationConfig: { responseMimeType: 'application/json', responseSchema: schema || ITEM_SCHEMA, temperature: 0,
+      // 3.x thinks at 'high' by default: one digest took ~4 minutes and ran a backfill into the 6-minute kill.
+      thinkingConfig: { thinkingLevel: 'low' } },
   };
 }
 
