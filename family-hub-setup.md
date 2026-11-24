@@ -1106,7 +1106,7 @@ Tracks a school's internal rotating day (e.g. a 4-day A/B/C/D schedule), shown a
 
 ### School Dates from Email (optional)
 
-A small Google Apps Script reads your ParentSquare mail twice a day and puts school dates (no-school days, half days, early dismissals, conferences, one-off events) on a **From Email** calendar that the Hub shows. It runs in your own Google account; the Hub needs no changes. Sports schedules don't need it: subscribe to the team's calendar feed instead (LeagueApps: the app's **My Account**, your player, **Subscribe to Calendar**; TeamSnap: **Schedule**, **Sync Calendar / Export**) and add the link in the Hub as a calendar subscription.
+A small Google Apps Script reads your ParentSquare mail twice a day and puts school dates (no-school days, half days, early dismissals, conferences, one-off events) on a **From Email** calendar that the Hub shows. It runs in your own Google account; the Hub needs no changes. Sports schedules don't need it: subscribe to the team's calendar feed instead (LeagueApps: the app's **My Account**, your player, **Subscribe to Calendar**; other team apps usually have a Subscribe or Sync Calendar option on their schedule page) and add the link in the Hub as a calendar subscription.
 
 1. Get a Gemini key from Google AI Studio (a billing-free project; see Troubleshooting if the free tier is disabled)
 2. Go to script.google.com and create a new project. Name it "Family Hub email scan"

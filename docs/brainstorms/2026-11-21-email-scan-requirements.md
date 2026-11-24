@@ -16,7 +16,7 @@ The first draft designed a general email classifier: an Apps Script, Gmail filte
 |---|---|---|---|
 | School | ParentSquare: a daily digest most days, plus "Library tomorrow" reminders and attendance notices | Important dates (conferences, half days, early dismissal, breaks) are buried in teachers' free-text weekly posts, often as an "Upcoming Dates" list. The same date repeats across several posts | No. No `.ics` attachments, no add-to-calendar links |
 | Sports | LeagueApps (Little League): weekly practice/game reminders, plus "event changed" and "game cancelled" notices | Structured, consistent templates | **Yes.** LeagueApps offers a subscribe link from the schedule view (or app: My Account, member, Subscribe to Calendar), covering one month back and six months forward |
-| Sports | TeamSnap (crew, new this month) | Structured | **Yes.** Schedule, Sync Calendar / Export gives an iCal link, including an all-teams schedule |
+| Sports | TeamSnap | Structured | Not in use. Its mail came from the owner's research, not a team (corrected 2026-11-24) |
 | Deliveries | About six orders across Zappos, adidas, Newegg, Harry's, Barnes & Noble; almost nothing from Amazon | Three to four emails per order (confirmed, shipped, out for delivery, delivered). Carrier tracking numbers appear in plain text (e.g. a UPS `1Z…`) | n/a |
 
 No district-wide calendar feed turned up in a web search; the district site has a calendar page but no subscribe link was found.
@@ -27,7 +27,7 @@ Three parts, in this order.
 
 ### 1. Sports: subscribe, don't parse
 
-Add the LeagueApps and TeamSnap iCal links as ICS subscriptions in the Hub (Settings, existing `icsSubs`). No code. For LeagueApps, use the per-player link (app: My Account, the player under Members, Subscribe to Calendar), which carries only that player's team; a league-wide schedule link would need filtering the Hub can't do. **Done for Little League, 2026-11-21.** This covers practices, games, time changes and cancellations, which were the sports cases the email scan was meant to catch. Subscribing in the Hub rather than in Google Calendar avoids Google's slow feed polling (TeamSnap warns of up to 24 hours there), since the Hub fetches the feed itself on load. Feeds that block CORS go through the existing `netlify/functions/ics.js` proxy.
+Add the LeagueApps iCal link as an ICS subscription in the Hub (Settings, existing `icsSubs`). No code. For LeagueApps, use the per-player link (app: My Account, the player under Members, Subscribe to Calendar), which carries only that player's team; a league-wide schedule link would need filtering the Hub can't do. **Done for Little League, 2026-11-21.** This covers practices, games, time changes and cancellations, which were the sports cases the email scan was meant to catch. Subscribing in the Hub rather than in Google Calendar avoids Google's slow feed polling (team apps warn of up to 24 hours there), since the Hub fetches the feed itself on load. Feeds that block CORS go through the existing `netlify/functions/ics.js` proxy.
 
 ### 2. School: a ParentSquare-only Apps Script writing to a "From Email" calendar
 
