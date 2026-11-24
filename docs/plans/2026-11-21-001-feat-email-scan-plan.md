@@ -14,7 +14,7 @@ status: built, awaiting rollout
 
 **Out of scope:** deliveries (phase 2 in the brainstorm), other family members' inboxes, a Hub review widget, PDF attachments (the weekly agenda), and patching events on any calendar other than "From Email".
 
-**Already done (no code):** Little League is subscribed in the Hub through its per-player LeagueApps feed. TeamSnap (crew) is the same kind of subscription, still to add.
+**Already done (no code):** Little League is subscribed in the Hub through its per-player LeagueApps feed. (TeamSnap turned up in the inbox survey only because of the owner's own research; the family doesn't use it.)
 
 ---
 
