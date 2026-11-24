@@ -21,7 +21,7 @@ const path = require('path');
 const vm = require('vm');
 
 const DIR = path.join(__dirname, '../tools/email-scan');
-const SRC = ['dedupe.gs', 'deliveries.gs', 'Code.gs'].map(f => fs.readFileSync(path.join(DIR, f), 'utf8')).join('\n');
+const SRC = ['dedupe.gs', 'deliveries.gs', 'dmv.gs', 'Code.gs'].map(f => fs.readFileSync(path.join(DIR, f), 'utf8')).join('\n');
 
 const b64url = s => Buffer.from(s, 'utf8').toString('base64url');
 // What the advanced Gmail service really returns for body.data: Java's signed bytes.
@@ -84,10 +84,13 @@ const geminiReply = x => JSON.stringify({ candidates: [{ content: { parts: [{ te
  * `gemini` is a function (prompt) => { code, body } or a list of item arrays,
  * one per call.
  */
-function load({ props = {}, messages = {}, shipping = {}, listPages, gemini = [], quietMail } = {}) {
+// `dmv` maps id to a Gmail message from the DMV. `firestore` is (writes) => { code, body } and
+// defaults to success; every commit's writes land in `commits`.
+function load({ props = {}, messages = {}, shipping = {}, dmv = {}, firestore, listPages, gemini = [], quietMail } = {}) {
   const store = { ...props };
   const queries = [];
   const prompts = [];
+  const commits = [];
   const cal = fakeCalendar();
   const dcal = fakeCalendar('cal-deliveries', 'Deliveries');
   const triggers = [];
@@ -118,6 +121,7 @@ function load({ props = {}, messages = {}, shipping = {}, listPages, gemini = []
       createCalendar: name => (name === 'Deliveries' ? dcal : cal),
     },
     ScriptApp: {
+      getOAuthToken: () => 'owner-token',
       getProjectTriggers: () => triggers.slice(),
       deleteTrigger: t => { triggers.splice(triggers.indexOf(t), 1); },
       newTrigger: fn => {
@@ -126,7 +130,13 @@ function load({ props = {}, messages = {}, shipping = {}, listPages, gemini = []
         return b;
       },
     },
-    UrlFetchApp: { fetch: (_url, opts) => {
+    UrlFetchApp: { fetch: (url, opts) => {
+      if (/firestore\.googleapis\.com/.test(url)) {
+        const writes = JSON.parse(opts.payload).writes;
+        commits.push({ url, headers: opts.headers, writes });
+        const r = firestore ? firestore(writes) : { code: 200, body: '{}' };
+        return { getResponseCode: () => r.code, getContentText: () => r.body };
+      }
       const prompt = JSON.parse(opts.payload).contents[0].parts[0].text;
       prompts.push(prompt);
       const r = geminiQueue ? { code: 200, body: geminiReply(geminiQueue.shift() || []) } : gemini(prompt);
@@ -138,16 +148,17 @@ function load({ props = {}, messages = {}, shipping = {}, listPages, gemini = []
         if (/^from:parentsquare\.com newer_than:\d+d$/.test(opts.q) && quietMail !== undefined) {
           return { messages: quietMail ? [{ id: 'q' }] : [] };
         }
+        if (/^from:dmv\.ny\.gov /.test(opts.q)) return { messages: Object.keys(dmv).map(id => ({ id })) };
         if (/out for delivery/.test(opts.q)) return { messages: Object.keys(shipping).map(id => ({ id })) };
         if (listPages) return listPages(opts.pageToken);
         return { messages: Object.keys(messages).map(id => ({ id })) };
       },
-      get: (_me, id) => messages[id] || shipping[id],
+      get: (_me, id) => messages[id] || shipping[id] || dmv[id],
     } } },
   };
   vm.createContext(ctx);
   vm.runInContext(SRC, ctx);
-  return { ctx, store, queries, prompts, cal, dcal };
+  return { ctx, store, queries, prompts, commits, cal, dcal };
 }
 
 const READY = { GEMINI_KEY: 'test-key', CALENDAR_ID: 'cal-from-email' };
@@ -753,6 +764,168 @@ test('setup(): makes the Deliveries calendar and adds "delivery" to a list saved
   store.ADD_KINDS = 'no-school';            // turned off afterwards: setup leaves it off
   ctx.setup();
   assert.equal(store.ADD_KINDS, 'no-school');
+});
+
+// ── dmv.gs: NY DMV notices to dated to-dos ──
+// Invented plates and cars, in DMV's two real templates (notifications@ until
+// 2025, eservices@ since), with each template's spacing.
+
+const usDate = ymdStr => { const [y, m, d] = ymdStr.split('-'); return Number(m) + '/' + Number(d) + '/' + y; };
+const DMV = {
+  regNew: (plate, due, state = 'available for renewal') => [
+    '**Do not reply to this email. You will not receive a response.**', '', 'Reminder For Registration Renewal', '',
+    'Hello :', '', 'Your New York State registration shown below is ' + (state === 'expired' ? 'now expired' : 'available for renewal') + '.', '',
+    'Expires: ' + usDate(due), '', 'Plate: ' + plate, '', 'Class: PAS', '', 'Make: TOYOT', '', 'Year: 2019', '',
+    'Renew your registration [ https://transact3.dmv.ny.gov/registrationrenew/ ] now.',
+  ].join('\n'),
+  regOld: (plate, due) => [
+    'NYS DMV electronic notification reminder', '', 'Dear Someone:', '',
+    'Your New York State registration shown below is now available for renewal.', '',
+    'Expires: ' + usDate(due).replace(/^(\d)\//, '0$1/'), 'Plate: ' + plate, 'Class: PAS', 'Make: TOYOT', 'Year: 2019',
+  ].join('\n'),
+  inspDue: (plate, due) => [
+    'Reminder For Inspection', '', 'Hello :', '',
+    'The required annual New York State inspection is due by ' + usDate(due) + ' for the registration listed below.', '',
+    'Plate: ' + plate, '', 'Class: PAS', '', 'Make: HONDA', '', 'Year: 2021',
+  ].join('\n'),
+  inspExpired: (plate, due) => [
+    'Reminder For Inspection', '',
+    'The required annual New York State inspection for the registration listed below expired on ' + usDate(due) + '.', '',
+    'Plate: ' + plate, '', 'Make: HONDA', '', 'Year: 2021',
+  ].join('\n'),
+  renewed: plate => [
+    'YOU CANNOT CANCEL THIS TRANSACTION.', '', 'INFORMATION ABOUT YOUR TRANSACTION:', '',
+    'REGISTRATION RENEWAL PROCESSED', '', 'Transaction: NYS DMV – Registration Renewal', '',
+    'Plate: ' + plate + ' Class: PAS', '', 'Transaction Processing Date: 11/24/2026',
+  ].join('\n'),
+};
+const dmvMsg = (id, subject, sentMs, text) => gmailMessage({ id, subject, sentMs, text });
+const DMV_READY = { FIREBASE_PROJECT_ID: 'hub-test', TODO_ASSIGNEE: 'Alex' };
+
+test('parseDmv_ reads both templates and every notice kind', () => {
+  const { ctx } = load();
+  const due = '2026-10-05';
+  const reg = { kind: 'registration', plate: 'ABC1234', due, make: 'TOYOT', year: '2019' };
+  assert.deepEqual({ ...ctx.parseDmv_('Reminder — Registration Renewal Available', DMV.regNew('ABC1234', due)) }, reg);
+  assert.deepEqual({ ...ctx.parseDmv_('Notification — Registration Expired', DMV.regNew('ABC1234', due, 'expired')) }, reg);
+  assert.deepEqual({ ...ctx.parseDmv_('1st Registration Reminder for ABC1234', DMV.regOld('ABC1234', due)) }, reg);
+  const insp = { kind: 'inspection', plate: 'XYZ9876', due: '2026-11-30', make: 'HONDA', year: '2021' };
+  assert.deepEqual({ ...ctx.parseDmv_('Reminder — Vehicle Inspection', DMV.inspDue('XYZ9876', '2026-11-30')) }, insp);
+  assert.deepEqual({ ...ctx.parseDmv_('Notification — Inspection Expired', DMV.inspExpired('XYZ9876', '2026-11-30')) }, insp);
+  assert.deepEqual({ ...ctx.parseDmv_('Confirmation - DMV Transaction Completed', DMV.renewed('ABC1234')) }, { kind: 'renewed', plate: 'ABC1234' });
+});
+
+test('parseDmv_ ignores other DMV mail and flags a reminder it cannot read', () => {
+  const { ctx } = load();
+  assert.equal(ctx.parseDmv_('Automatic reply: Peeling Plate Replacement', 'We got your message.'), null);
+  assert.equal(ctx.parseDmv_('NYSDMV Transaction Status', 'Your transaction is pending.'), null);
+  assert.equal(ctx.parseDmv_('Reminder — Something New', 'A template DMV has never sent.').kind, 'unrecognized');
+});
+
+test('dmvTitle_ names the car and plate', () => {
+  const { ctx } = load();
+  assert.equal(ctx.dmvTitle_({ kind: 'registration', plate: 'ABC1234', make: 'TOYOT', year: '2019' }), 'Renew registration: 2019 TOYOT (ABC1234)');
+  assert.equal(ctx.dmvTitle_({ kind: 'inspection', plate: 'XYZ9876' }), 'Get inspected: XYZ9876');
+});
+
+test('scan: three reminders and an expired notice for one deadline make one to-do', () => {
+  const due = daysFromNow(30);
+  const dmv = {
+    a: dmvMsg('a', '1st Registration Reminder for ABC1234', 1000, DMV.regOld('ABC1234', due)),
+    b: dmvMsg('b', 'Reminder — Registration Renewal Available', 2000, DMV.regNew('ABC1234', due)),
+    c: dmvMsg('c', 'Notification — Registration Expired', 3000, DMV.regNew('ABC1234', due, 'expired')),
+  };
+  const { ctx, commits, store } = load({ props: DMV_READY, dmv });
+  ctx.scanDmv_(60, new Date());
+  assert.equal(commits.length, 1);
+  const w = commits[0].writes[0];
+  assert.equal(w.update.name, 'projects/hub-test/databases/(default)/documents/todo/dmv-registration-ABC1234-' + due);
+  assert.deepEqual(JSON.parse(JSON.stringify(w.update.fields)), {
+    text: { stringValue: 'Renew registration: 2019 TOYOT (ABC1234)' },
+    done: { booleanValue: false },
+    by: { stringValue: 'Email scan' },
+    dueDate: { stringValue: due },
+    source: { stringValue: 'email-scan' },
+    assignedTo: { stringValue: 'Alex' },
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(w.currentDocument)), { exists: false });
+  assert.equal(w.updateTransforms[0].fieldPath, 'createdAt'); // the Hub's list query orders by it
+  assert.equal(commits[0].headers['x-goog-user-project'], 'hub-test');
+  assert.equal(commits[0].headers.Authorization, 'Bearer owner-token');
+  assert.deepEqual(Object.keys(JSON.parse(store.seenIds)).sort(), ['a', 'b', 'c']);
+});
+
+test('scan: a to-do you delete is not added back by the next reminder', () => {
+  const due = daysFromNow(20);
+  const first = { a: dmvMsg('a', 'Reminder — Vehicle Inspection', 1000, DMV.inspDue('XYZ9876', due)) };
+  const { ctx, commits, store } = load({ props: DMV_READY, dmv: first });
+  ctx.scanDmv_(3, new Date());
+  assert.equal(commits.length, 1);
+  // Same store, a later reminder; the to-do was deleted in the Hub in between.
+  const later = load({ props: { ...store }, dmv: { b: dmvMsg('b', 'Notification — Inspection Expired', 2000, DMV.inspExpired('XYZ9876', due)) } });
+  later.ctx.scanDmv_(3, new Date());
+  assert.equal(later.commits.length, 0);
+  assert.match(later.store.lastDmv, /repeat 1/);
+});
+
+test('scan: a renewal receipt checks off the registration to-do, never recreating a deleted one', () => {
+  const due = daysFromNow(10);
+  const { ctx, store } = load({ props: DMV_READY, dmv: { a: dmvMsg('a', 'Reminder', 1000, DMV.regNew('ABC1234', due)) } });
+  ctx.scanDmv_(3, new Date());
+  const next = load({
+    props: { ...store },
+    dmv: { r: dmvMsg('r', 'Confirmation - DMV Transaction Completed', 2000, DMV.renewed('ABC1234')) },
+    firestore: () => ({ code: 404, body: JSON.stringify({ error: { status: 'NOT_FOUND', message: 'No document to update' } }) }),
+  });
+  next.ctx.scanDmv_(3, new Date()); // deleted in the Hub: NOT_FOUND is fine, not an error
+  const w = next.commits[0].writes[0];
+  assert.match(w.update.name, new RegExp('todo/dmv-registration-ABC1234-' + due + '$'));
+  assert.deepEqual(JSON.parse(JSON.stringify(w)).updateMask, { fieldPaths: ['done'] });
+  assert.deepEqual(JSON.parse(JSON.stringify(w)).currentDocument, { exists: true });
+  assert.match(next.store.lastDmv, /checked off 1/);
+});
+
+test('scan: a backfill over a renewal adds nothing for that registration', () => {
+  const due = daysFromNow(-50);
+  const dmv = {
+    a: dmvMsg('a', 'Notification — Registration Expired', 1000, DMV.regNew('ABC1234', due, 'expired')),
+    r: dmvMsg('r', 'Confirmation - DMV Transaction Completed', 2000, DMV.renewed('ABC1234')),
+    i: dmvMsg('i', 'Reminder — Vehicle Inspection', 1500, DMV.inspDue('XYZ9876', daysFromNow(6))),
+  };
+  const { ctx, commits, store } = load({ props: DMV_READY, dmv });
+  ctx.scanDmv_(60, new Date());
+  assert.deepEqual(commits.map(c => c.writes[0].update.name.split('/').pop()), ['dmv-inspection-XYZ9876-' + daysFromNow(6)]);
+  assert.match(store.lastDmv, /already renewed 1/);
+});
+
+test('scan: a to-do already in Firestore is remembered, not an error', () => {
+  const { ctx, store } = load({
+    props: DMV_READY,
+    dmv: { a: dmvMsg('a', 'Reminder', 1000, DMV.regNew('ABC1234', daysFromNow(5))) },
+    firestore: () => ({ code: 409, body: JSON.stringify({ error: { status: 'ALREADY_EXISTS', message: 'Document already exists' } }) }),
+  });
+  ctx.scanDmv_(3, new Date());
+  assert.equal(JSON.parse(store.madeDmv).length, 1);
+});
+
+test('scan: a Firestore failure throws, leaves the mail unseen, and the school scan still runs', () => {
+  const { ctx, store, queries } = load({
+    props: { ...READY, ...DMV_READY },
+    quietMail: true,
+    dmv: { a: dmvMsg('a', 'Reminder', 1000, DMV.regNew('ABC1234', daysFromNow(5))) },
+    firestore: () => ({ code: 403, body: JSON.stringify({ error: { status: 'PERMISSION_DENIED', message: 'Missing permission' } }) }),
+  });
+  assert.throws(() => ctx.run(), /DMV to-dos: .*403 Missing permission/);
+  assert.ok(queries.some(q => /parentsquare/.test(q)), 'school scan ran');
+  assert.ok(!store.seenIds || !JSON.parse(store.seenIds).a);
+  assert.equal(store.madeDmv, '[]');
+});
+
+test('scan: DMV to-dos are off without FIREBASE_PROJECT_ID', () => {
+  const { ctx, commits, queries } = load({ dmv: { a: dmvMsg('a', 'Reminder', 1000, DMV.regNew('ABC1234', daysFromNow(5))) } });
+  assert.equal(ctx.scanDmv_(3, new Date()), null);
+  assert.equal(commits.length, 0);
+  assert.equal(queries.length, 0);
 });
 
 // ── The model pin ──
