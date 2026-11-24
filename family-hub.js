@@ -10911,7 +10911,7 @@ const EASTER_EGG_FRANCHISES = [
     t => {
       if (!/you can'?t handle the truth/.test(t)) return null;
       const today = localDateKey(new Date());
-      const overdue = todoItems.filter(i => !i.done && i.date && i.date < today);
+      const overdue = todoItems.filter(i => !i.done && i.dueDate && i.dueDate < today);
       const uncheckedShop = shopItemsCache.filter(i => !i.done);
       const unplanned = !((mealPlan[today] || {}).breakfast || (mealPlan[today] || {}).lunch || (mealPlan[today] || {}).dinner);
       const lines = [];
@@ -10938,7 +10938,7 @@ const EASTER_EGG_FRANCHISES = [
     t => {
       if (!/houston,? we (have|'?ve got) a problem/.test(t)) return null;
       const today = localDateKey(new Date());
-      const overdue = todoItems.filter(i => !i.done && i.date && i.date < today);
+      const overdue = todoItems.filter(i => !i.done && i.dueDate && i.dueDate < today);
       const uncheckedShop = shopItemsCache.filter(i => !i.done);
       const unplanned = !((mealPlan[today] || {}).breakfast || (mealPlan[today] || {}).lunch || (mealPlan[today] || {}).dinner);
       const lines = [];

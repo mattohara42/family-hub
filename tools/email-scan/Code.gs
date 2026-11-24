@@ -10,11 +10,15 @@
  * paste of it, so a merged change does nothing until it is pasted in again.
  *
  * One-time setup, in the Apps Script editor:
- *   1. Paste Code.gs and dedupe.gs (add a script file named "dedupe"). Turn on
+ *   1. Paste Code.gs, dedupe.gs, deliveries.gs and dmv.gs (a script file for
+ *      each, named without the .gs). Turn on
  *      "Show appsscript.json" in Project Settings and paste appsscript.json over it.
  *   2. Project Settings > Script Properties: add GEMINI_KEY (an AI Studio key).
  *   3. Run setup() and approve the consent screen.
  *   4. In the Hub, give the "From Email" calendar its own color.
+ * Optional, NY DMV to-dos (dmv.gs): add FIREBASE_PROJECT_ID (the Hub's
+ * Firebase project) and TODO_ASSIGNEE (your name as Family Members shows it),
+ * run setup() again to approve Firestore access, then run probeFirestore().
  * Optional: create a Gmail label named "Hub" by hand. Anything you tag with it
  * gets scanned too.
  *
@@ -108,7 +112,19 @@ function teardown() {
 
 /** The scheduled entry point: scans the last few days of new mail. */
 function run() {
-  scan_(RUN_WINDOW_DAYS, new Date());
+  withDmv_(RUN_WINDOW_DAYS, new Date());
+}
+
+/**
+ * DMV to-dos first (quick, no Gemini), then the school and delivery scan.
+ * A DMV failure doesn't stop the main scan; it's thrown afterwards so
+ * Google's failed-run email still reaches the owner.
+ */
+function withDmv_(days, now) {
+  let dmvError = null;
+  try { scanDmv_(days, now); } catch (e) { dmvError = e; props_().setProperty('lastDmv', 'Error: ' + e.message); }
+  scan_(days, now);
+  if (dmvError) throw dmvError;
 }
 
 /**
@@ -118,7 +134,12 @@ function run() {
  * resetSeen() first.
  */
 function backfill() {
-  scan_(BACKFILL_WINDOW_DAYS, new Date());
+  withDmv_(BACKFILL_WINDOW_DAYS, new Date());
+}
+
+/** The DMV half of backfill() alone: 60 days of DMV mail, no Gemini, no school mail. */
+function backfillDmv() {
+  if (!scanDmv_(BACKFILL_WINDOW_DAYS, new Date())) console.warn('DMV to-dos are off: set FIREBASE_PROJECT_ID first.');
 }
 
 /**
@@ -131,6 +152,7 @@ function resetSeen() {
   props_().deleteProperty('zeroStreak');
   props_().deleteProperty('madeEvents');
   props_().deleteProperty('madeDeliveries');
+  props_().deleteProperty('madeDmv');
   props_().deleteProperty('killedOn');
   props_().deleteProperty('inFlight');
   console.log('Seen messages and remembered events cleared.');
@@ -164,6 +186,9 @@ function status() {
   console.log('Deliveries:    %s', !wantsDeliveries_(p.ADD_KINDS) ? 'off (add "delivery" to ADD_KINDS)'
     : dcal ? 'on, "' + dcal.getName() + '"' : 'calendar missing (run setup())');
   console.log('Remembered:    %s event(s) made by the scan', loadMade_().length);
+  console.log('DMV to-dos:    %s', p.FIREBASE_PROJECT_ID ? 'on, ' + loadDmvMade_().length + ' made, assigned to '
+    + (p.TODO_ASSIGNEE || 'nobody (set TODO_ASSIGNEE)') : 'off (set FIREBASE_PROJECT_ID)');
+  console.log('lastDmv:       %s', p.lastDmv || '(none)');
   ['SKIP_SUBJECTS', 'EXTRA_QUERY', 'lastRun', 'lastNew', 'lastResult', 'lastError', 'zeroStreak'].forEach(k => {
     console.log('%s %s', (k + ':').padEnd(14), p[k] || '(none)');
   });
@@ -275,9 +300,11 @@ function scan_(days, now) {
     lastRun:    now.toISOString(),
     lastNew:    String(counts.create || 0),
     lastResult: summary,
-    lastError:  errors[0] || '',
     zeroStreak: String(zeroStreak),
   });
+  // Deleted, not blanked, when there's none: the Script Properties page won't save a blank row.
+  if (errors.length) p.setProperty('lastError', errors[0]);
+  else p.deleteProperty('lastError');
   console.log(summary);
   errors.forEach(e => console.warn(e));
 
