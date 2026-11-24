@@ -921,6 +921,23 @@ test('scan: a Firestore failure throws, leaves the mail unseen, and the school s
   assert.equal(store.madeDmv, '[]');
 });
 
+test('backfillDmv() looks back 60 days at DMV mail only, without Gemini', () => {
+  const { ctx, commits, queries, prompts } = load({
+    props: { ...READY, ...DMV_READY },
+    dmv: { a: dmvMsg('a', 'Reminder — Vehicle Inspection', 1000, DMV.inspDue('XYZ9876', daysFromNow(6))) },
+  });
+  ctx.backfillDmv();
+  assert.equal(commits.length, 1);
+  assert.deepEqual(queries, ['from:dmv.ny.gov newer_than:60d']);
+  assert.equal(prompts.length, 0);
+});
+
+test('scan: a clean run removes lastError instead of leaving it blank', () => {
+  const { ctx, store } = load({ props: { ...READY, lastError: 'old failure' }, quietMail: true });
+  ctx.run();
+  assert.ok(!('lastError' in store));
+});
+
 test('scan: DMV to-dos are off without FIREBASE_PROJECT_ID', () => {
   const { ctx, commits, queries } = load({ dmv: { a: dmvMsg('a', 'Reminder', 1000, DMV.regNew('ABC1234', daysFromNow(5))) } });
   assert.equal(ctx.scanDmv_(3, new Date()), null);

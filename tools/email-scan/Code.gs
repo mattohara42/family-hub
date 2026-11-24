@@ -137,6 +137,11 @@ function backfill() {
   withDmv_(BACKFILL_WINDOW_DAYS, new Date());
 }
 
+/** The DMV half of backfill() alone: 60 days of DMV mail, no Gemini, no school mail. */
+function backfillDmv() {
+  if (!scanDmv_(BACKFILL_WINDOW_DAYS, new Date())) console.warn('DMV to-dos are off: set FIREBASE_PROJECT_ID first.');
+}
+
 /**
  * Forgets which messages were handled and which events the scan made, so the
  * next backfill() rereads everything and re-adds what's missing, including
@@ -295,9 +300,11 @@ function scan_(days, now) {
     lastRun:    now.toISOString(),
     lastNew:    String(counts.create || 0),
     lastResult: summary,
-    lastError:  errors[0] || '',
     zeroStreak: String(zeroStreak),
   });
+  // Deleted, not blanked, when there's none: the Script Properties page won't save a blank row.
+  if (errors.length) p.setProperty('lastError', errors[0]);
+  else p.deleteProperty('lastError');
   console.log(summary);
   errors.forEach(e => console.warn(e));
 
