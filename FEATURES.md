@@ -258,6 +258,7 @@ let gsiReady = false;
 - `onGsiLoad()` — called by GIS script `onload`
 - `signIn()`: interactive sign-in (`prompt: 'consent'`)
 - `silentTokenRefresh()`: background renewal, at startup (session restore) and ~5 min before expiry via `scheduleTokenRefresh()`
+- `quietTokenRequest()`: options for both quiet paths (`silentTokenRefresh()`, `ensureFreshToken()`): `prompt: ''` plus `login_hint` = the signed-in email, so Google can skip the account chooser that stranded the panel's pop-up. Not on `signIn()`, so a tap there can still pick another account
 - `ensureFreshToken()` / `calFetch()`: refresh-first wrapper for calendar writes (see CLAUDE.md, GIS token expires)
 - `signOut()` — clears token, clears calendar events, hides `#calendarCard`
 

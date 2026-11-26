@@ -1140,6 +1140,17 @@ let silentRefreshPopup   = null;
 let silentRefreshTimer   = null;       // watchdog; non-null while a renewal is in flight
 let googleSignInLapsed   = false;      // renewal failed; a person has to sign in
 
+// Options for a quiet renewal. login_hint names the signed-in account, so
+// Google can skip the account chooser when the browser holds more than one
+// Google login or its session needs re-confirming (the chooser is what
+// stranded the panel's pop-up on 2026-11-26). Untested on the Pi: if the
+// chooser still appears, silentTokenRefresh()'s watchdog still catches it.
+function quietTokenRequest() {
+  const opts = { prompt: '' };
+  if (currentUser && currentUser.email) opts.login_hint = currentUser.email;
+  return opts;
+}
+
 function silentTokenRefresh() {
   if (!tokenClient) return;
   endSilentRefresh();
@@ -1148,7 +1159,7 @@ function silentTokenRefresh() {
     silentRefreshPopup = realOpen.apply(window, args);
     return silentRefreshPopup;
   };
-  try { tokenClient.requestAccessToken({ prompt: '' }); }
+  try { tokenClient.requestAccessToken(quietTokenRequest()); }
   finally { window.open = realOpen; }
   silentRefreshTimer = setTimeout(() => silentRefreshFailed('no answer in 30 s'), SILENT_REFRESH_WAIT_MS);
 }
@@ -1205,7 +1216,7 @@ function ensureFreshToken() {
     }, 20000);
     tokenWaiters.push(waiter);
     endSilentRefresh();   // GIS reuses one pop-up window; don't let the watchdog close this one
-    tokenClient.requestAccessToken({ prompt: '' });
+    tokenClient.requestAccessToken(quietTokenRequest());
   });
 }
 
