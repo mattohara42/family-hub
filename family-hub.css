@@ -1364,6 +1364,23 @@ html:not(.touch-input) .wx-loc-dot:hover { opacity: 0.75; transform: scale(1.2);
   transform: scale(1.3);
 }
 
+/* ── Calendar: sign-in lapsed bar ──
+   Shown by setGoogleSignInLapsed() when a background renewal failed. */
+.cal-signin-lapsed {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-solid));
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
 /* ── Calendar ── */
 #calendarList { list-style: none; }
 #calendarList li {
