@@ -257,6 +257,11 @@
         <div id="calNotSignedIn" style="color:var(--muted);font-size:.9rem;margin-bottom:12px">
           Sign in with Google to view your calendar events.
         </div>
+        <!-- Background sign-in renewal failed (setGoogleSignInLapsed()) -->
+        <div id="calSignInLapsed" class="cal-signin-lapsed" style="display:none">
+          <span>Google sign-in ran out, so the calendar may be out of date.</span>
+          <button class="btn btn-primary btn-sm" onclick="signIn()">Sign in again</button>
+        </div>
         <!-- Swipe/slide transition wrapper — the drag target for setupCalSwipe()
              and the positioning context for the outgoing-period ghost. -->
         <div class="cal-views" id="calViews">

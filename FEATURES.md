@@ -254,10 +254,15 @@ let tokenClient;
 let gsiReady = false;
 ```
 **Key functions:**
-- `initGoogleAuth()` — initializes GIS token client
+- `initGoogleAuth()`: initializes GIS token client (once: `onGsiLoad()` and the load handler both call it, and a second client meant a second pop-up at every startup)
 - `onGsiLoad()` — called by GIS script `onload`
-- `requestGoogleToken()` — prompts OAuth consent / silent refresh
+- `signIn()`: interactive sign-in (`prompt: 'consent'`)
+- `silentTokenRefresh()`: background renewal, at startup (session restore) and ~5 min before expiry via `scheduleTokenRefresh()`
+- `quietTokenRequest()`: options for both quiet paths (`silentTokenRefresh()`, `ensureFreshToken()`): `prompt: ''` plus `login_hint` = the signed-in email, so Google can skip the account chooser that stranded the panel's pop-up. Not on `signIn()`, so a tap there can still pick another account
+- `ensureFreshToken()` / `calFetch()`: refresh-first wrapper for calendar writes (see CLAUDE.md, GIS token expires)
 - `signOut()` — clears token, clears calendar events, hides `#calendarCard`
+
+**Stuck renewal pop-up (2026-11-26):** a renewal still opens a GIS pop-up, and when Google wants a tap (account chooser) it waits forever. On the wall panel it opened maximized at 12:47 AM and by morning had gone stale into Google's bare "400, malformed" page, with no way to dismiss it by touch. `silentTokenRefresh()` captures the pop-up handle by wrapping `window.open` around `requestAccessToken()` (GIS opens it synchronously), and if no token arrives within `SILENT_REFRESH_WAIT_MS` (30 s; a good renewal takes ~5 s) or GIS's `error_callback` fires (pop-up blocked or closed), `silentRefreshFailed()` closes the pop-up, logs it to the error log, and `setGoogleSignInLapsed(true)` shows `#calSignInLapsed` ("Sign in again" above the calendar) and turns the status row red. No further renewal is scheduled until someone signs in, so the panel doesn't get a new pop-up every hour. Only background renewals are watched: `signIn()` and `ensureFreshToken()` call `endSilentRefresh()` first, since GIS reuses one pop-up window and the watchdog must not close one a person is using. Closing works because Google's accounts pages send COOP only as report-only, so the opener keeps its handle; the error log says "could NOT close its window" if that ever changes.
 
 **Control card:** `#controlCard` in sidebar — contains `#userInfo`, sign-in/sign-out buttons, ⚙️ settings button.
 

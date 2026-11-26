@@ -1123,9 +1123,77 @@ function scheduleTokenRefresh() {
   clearTimeout(tokenRefreshTimer);
   if (!tokenExpiresAt) return;
   const delay = Math.max(0, tokenExpiresAt - TOKEN_SKEW_MS - Date.now());
-  tokenRefreshTimer = setTimeout(() => {
-    if (tokenClient) tokenClient.requestAccessToken({ prompt: '' });
-  }, delay);
+  tokenRefreshTimer = setTimeout(silentTokenRefresh, delay);
+}
+
+// A background renewal still opens a Google pop-up. Normally it closes itself
+// within seconds, but when Google wants a tap (account chooser, consent) the
+// pop-up just waits, and on the wall panel it opens maximized over the hub.
+// One sat there from 12:47 AM until morning on 2026-11-26 and went stale into
+// Google's bare "400, malformed" page, which can't be dismissed by touch.
+// So we keep a handle on the pop-up (GIS calls window.open synchronously
+// inside requestAccessToken), close it if no token arrives in time, and show
+// our own "Sign in again" bar instead. Only for background renewals: a sign-in
+// someone started (signIn(), a write via ensureFreshToken()) is left alone.
+const SILENT_REFRESH_WAIT_MS = 30000;  // a good renewal takes ~5 s on the Pi
+let silentRefreshPopup   = null;
+let silentRefreshTimer   = null;       // watchdog; non-null while a renewal is in flight
+let googleSignInLapsed   = false;      // renewal failed; a person has to sign in
+
+// Options for a quiet renewal. login_hint names the signed-in account, so
+// Google can skip the account chooser when the browser holds more than one
+// Google login or its session needs re-confirming (the chooser is what
+// stranded the panel's pop-up on 2026-11-26). Untested on the Pi: if the
+// chooser still appears, silentTokenRefresh()'s watchdog still catches it.
+function quietTokenRequest() {
+  const opts = { prompt: '' };
+  if (currentUser && currentUser.email) opts.login_hint = currentUser.email;
+  return opts;
+}
+
+function silentTokenRefresh() {
+  if (!tokenClient) return;
+  endSilentRefresh();
+  const realOpen = window.open;
+  window.open = function (...args) {
+    silentRefreshPopup = realOpen.apply(window, args);
+    return silentRefreshPopup;
+  };
+  try { tokenClient.requestAccessToken(quietTokenRequest()); }
+  finally { window.open = realOpen; }
+  silentRefreshTimer = setTimeout(() => silentRefreshFailed('no answer in 30 s'), SILENT_REFRESH_WAIT_MS);
+}
+
+// Stop watching the current renewal; close its pop-up if it's still up.
+// Returns true if a pop-up was still open and we closed it.
+function endSilentRefresh() {
+  clearTimeout(silentRefreshTimer);
+  silentRefreshTimer = null;
+  const popup = silentRefreshPopup;
+  silentRefreshPopup = null;
+  if (!popup || popup.closed) return false;
+  popup.close();
+  return true;
+}
+
+function silentRefreshFailed(reason) {
+  if (!silentRefreshTimer) return;     // not a background renewal
+  const hadPopup = !!silentRefreshPopup && !silentRefreshPopup.closed;
+  const popup = silentRefreshPopup;
+  endSilentRefresh();
+  // popup.closed reads true right after close() when it worked; false would
+  // mean Google cut the window off from us and it may still be on screen.
+  const closeNote = hadPopup ? (popup.closed ? ', closed its window' : ', could NOT close its window') : '';
+  logError('Google sign-in', `Background renewal failed (${reason})${closeNote}`);
+  setGoogleSignInLapsed(true);
+  settleTokenWaiters(new Error('Google sign-in needs a tap. Use "Sign in again".'));
+}
+
+function setGoogleSignInLapsed(lapsed) {
+  googleSignInLapsed = lapsed;
+  const bar = document.getElementById('calSignInLapsed');
+  if (bar) bar.style.display = lapsed && currentUser ? '' : 'none';
+  updateStatusPill();
 }
 
 // Resolve with a valid access token, silently refreshing first if the current
@@ -1147,7 +1215,8 @@ function ensureFreshToken() {
       reject(new Error('Sign-in timed out — please sign in with Google again.'));
     }, 20000);
     tokenWaiters.push(waiter);
-    tokenClient.requestAccessToken({ prompt: '' });
+    endSilentRefresh();   // GIS reuses one pop-up window; don't let the watchdog close this one
+    tokenClient.requestAccessToken(quietTokenRequest());
   });
 }
 
@@ -1509,15 +1578,22 @@ function settleBoot() {
 
 function initGoogleAuth() {
   if (!isConfigured) return;   // empty client_id makes GIS throw; the banner explains
+  // Both onGsiLoad() and the load handler call this; when GIS loads first
+  // (it's usually cached) the second call made a second client and a second
+  // sign-in pop-up at every startup.
+  if (tokenClient) return;
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: GOOGLE_CLIENT_ID,
     scope: GOOGLE_SCOPES,
     callback: async (resp) => {
       if (resp.error) {
         console.error('OAuth error', resp);
+        silentRefreshFailed(resp.error);
         settleTokenWaiters(new Error(resp.error));   // unblock any pending write
         return;
       }
+      endSilentRefresh();
+      setGoogleSignInLapsed(false);
       googleToken = resp.access_token;
       // Track expiry so we can refresh before it lapses. expires_in is seconds.
       const ttl = Number(resp.expires_in) || 3600;
@@ -1550,6 +1626,13 @@ function initGoogleAuth() {
         } catch(e) { console.error('userinfo fetch failed', e); }
       }
       loadAllCalendars();
+    },
+    // Pop-up blocked, or closed before it answered. Without this a blocked
+    // renewal left nothing on screen and the calendar quietly went stale.
+    error_callback: (err) => {
+      console.warn('OAuth pop-up error', err);
+      silentRefreshFailed(err && err.type || 'pop-up error');
+      settleTokenWaiters(new Error(err && err.message || 'Google sign-in pop-up failed'));
     }
   });
 
@@ -1559,7 +1642,7 @@ function initGoogleAuth() {
     currentUser = saved;
     onSignedIn();
     // Silently refresh token (no prompt)
-    tokenClient.requestAccessToken({ prompt: '' });
+    silentTokenRefresh();
   }
 }
 
@@ -1569,6 +1652,7 @@ function signIn() {
     alert('Google sign-in is still loading, please try again in a moment.');
     return;
   }
+  endSilentRefresh();     // GIS reuses one pop-up window; don't let the watchdog close this one
   tokenClient.requestAccessToken({ prompt: 'consent' });
 }
 
@@ -1576,9 +1660,11 @@ function signOut() {
   if (googleToken) google.accounts.oauth2.revoke(googleToken);
   firebase.auth().signOut().catch(() => {});
   clearTimeout(tokenRefreshTimer);
+  endSilentRefresh();
   tokenExpiresAt = 0;
   settleTokenWaiters(new Error('Signed out'));
   currentUser = null; googleToken = null;
+  setGoogleSignInLapsed(false);
   localStorage.removeItem('fh_user');
   document.getElementById('calNotSignedIn').style.display = '';
   calEventCache = {};
@@ -1611,7 +1697,7 @@ function updateStatusPill() {
   const googleOk   = !!currentUser;
   const calOk      = googleOk && (typeof calendarMeta !== 'undefined') && calendarMeta.length > 0;
   const weatherOk  = !!(typeof weatherLocations !== 'undefined' && weatherLocations.length > 0);
-  const allOk      = firebaseOk && googleOk && calOk && weatherOk;
+  const allOk      = firebaseOk && googleOk && !googleSignInLapsed && calOk && weatherOk;
 
   const pill = document.getElementById('statusPill');
   if (!pill) return;
@@ -1675,10 +1761,12 @@ function renderCtrlStatusView() {
     },
     {
       label: 'Google Sign-in',
-      desc:  googleOk
-        ? `Signed in as ${currentUser.name || currentUser.email}`
-        : 'Required for Calendar access and Google Photos',
-      ok: googleOk
+      desc:  googleOk && googleSignInLapsed
+        ? 'Sign-in ran out and couldn\'t renew by itself. Tap Sign in with Google'
+        : googleOk
+          ? `Signed in as ${currentUser.name || currentUser.email}`
+          : 'Required for Calendar access and Google Photos',
+      ok: googleOk && !googleSignInLapsed
     },
     {
       label: 'Google Calendar',
@@ -1712,7 +1800,7 @@ function renderCtrlStatusView() {
   // Sign-in / sign-out button visibility
   const signIn  = document.getElementById('signInBtn');
   const signOut = document.getElementById('signOutBtn');
-  if (signIn)  signIn.style.display  = googleOk ? 'none' : '';
+  if (signIn)  signIn.style.display  = googleOk && !googleSignInLapsed ? 'none' : '';
   if (signOut) signOut.style.display = googleOk ? ''     : 'none';
 }
 
